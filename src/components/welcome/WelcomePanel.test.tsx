@@ -93,7 +93,7 @@ describe('WelcomePanel', () => {
       expect(screen.getByText('Features')).toBeInTheDocument();
     });
 
-    it('should render all 10 feature cards', () => {
+    it('should render feature cards', () => {
       renderWithProviders(<WelcomePanel onStartTour={mockOnStartTour} />);
       expect(screen.getByText('Export')).toBeInTheDocument();
       expect(screen.getByText('Purge')).toBeInTheDocument();
@@ -104,7 +104,6 @@ describe('WelcomePanel', () => {
       expect(screen.getByText('Themes')).toBeInTheDocument();
       expect(screen.getByText('Status Log')).toBeInTheDocument();
       expect(screen.getByText('Pause & Resume')).toBeInTheDocument();
-      expect(screen.getByText('Supporter Wall')).toBeInTheDocument();
     });
 
     it('should render feature descriptions', () => {

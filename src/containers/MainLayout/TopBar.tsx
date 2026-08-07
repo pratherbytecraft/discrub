@@ -46,7 +46,6 @@ const TopBar = () => {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector(selectCurrentUser);
   const cachedUserMap = useAppSelector(selectCachedUserMap);
-  const showKofiFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const themeMode = useAppSelector(selectSetting(DiscrubSetting.APP_THEME_MODE)) || 'auto';
   const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
   const operationSummary = useAppSelector(selectOperationSummary);
@@ -70,15 +69,6 @@ const TopBar = () => {
 
   const themeIcon = themeMode === 'light' ? <LightModeIcon /> : themeMode === 'dark' ? <DarkModeIcon /> : <AutoModeIcon />;
   const themeLabel = themeMode === 'light' ? 'Light mode' : themeMode === 'dark' ? 'Dark mode' : 'Auto (system)';
-
-  const handleToggleKofi = () => {
-    dispatch(
-      updateSetting({
-        key: DiscrubSetting.APP_SHOW_KOFI_FEED,
-        value: showKofiFeed === 'true' ? 'false' : 'true',
-      }),
-    );
-  };
 
   const handleLogout = () => {
     dispatch(clearToken());
@@ -257,26 +247,6 @@ const TopBar = () => {
               onClose={() => setMoreMenuAnchor(null)}
               PaperProps={{ sx: { bgcolor: 'background.paper', minWidth: 200 } }}
             >
-              <MenuItem
-                onClick={() => {
-                  handleToggleKofi();
-                  setMoreMenuAnchor(null);
-                }}
-              >
-                <ListItemIcon>
-                  <Box
-                    component="img"
-                    src="/kofi.svg"
-                    alt="Ko-Fi"
-                    sx={{
-                      width: 20,
-                      height: 20,
-                      filter: showKofiFeed === 'true' ? 'none' : 'grayscale(1)',
-                    }}
-                  />
-                </ListItemIcon>
-                <ListItemText>Supporter Wall</ListItemText>
-              </MenuItem>
               <MenuItem
                 component="a"
                 href="https://www.reddit.com/r/discrub"

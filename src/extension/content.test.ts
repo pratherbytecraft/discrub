@@ -13,6 +13,32 @@ function fireAnimationEnd(el: Element): void {
   el.dispatchEvent(new Event('animationend'));
 }
 
+function createStorageMock(values: Record<string, string | null>): Storage {
+  return {
+    getItem: vi.fn((key: string) => values[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      values[key] = value;
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete values[key];
+    }),
+    clear: vi.fn(() => {
+      Object.keys(values).forEach((key) => delete values[key]);
+    }),
+    key: vi.fn((index: number) => Object.keys(values)[index] ?? null),
+    get length() {
+      return Object.keys(values).length;
+    },
+  } as unknown as Storage;
+}
+
+function installLocalStorageMock(values: Record<string, string | null>): void {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: createStorageMock(values),
+  });
+}
+
 describe('Content Script', () => {
   let mockChrome: ReturnType<typeof installChromeMocks>;
   let messageListener: (
@@ -987,7 +1013,7 @@ describe('Content Script', () => {
     it('should extract and clean token from localStorage', () => {
       const sendResponse = vi.fn();
 
-      vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('"test-token-123"');
+      installLocalStorageMock({ token: '"test-token-123"' });
 
       messageListener(
         { action: 'getToken' },
@@ -1004,9 +1030,7 @@ describe('Content Script', () => {
     it('should return null when token not in localStorage', () => {
       const sendResponse = vi.fn();
 
-      vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
-      // Mock Object.keys to return empty array (no alternate keys)
-      vi.spyOn(Object, 'keys').mockReturnValue([]);
+      installLocalStorageMock({});
 
       messageListener(
         { action: 'getToken' },
@@ -1024,18 +1048,11 @@ describe('Content Script', () => {
       const sendResponse = vi.fn();
 
       const longToken = '"' + 'a'.repeat(60) + '"';
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(
-        (key: string) => {
-          if (key === 'token') return null;
-          if (key === 'user_token') return longToken;
-          return null;
-        }
-      );
-      vi.spyOn(Object, 'keys').mockReturnValue([
-        'user_token',
-        'push_token',
-        'other_key',
-      ]);
+      installLocalStorageMock({
+        user_token: longToken,
+        push_token: '"' + 'b'.repeat(60) + '"',
+        other_key: null,
+      });
 
       messageListener(
         { action: 'getToken' },
@@ -1052,14 +1069,7 @@ describe('Content Script', () => {
     it('should skip push_token keys', () => {
       const sendResponse = vi.fn();
 
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(
-        (key: string) => {
-          if (key === 'token') return null;
-          if (key === 'push_token') return '"' + 'b'.repeat(60) + '"';
-          return null;
-        }
-      );
-      vi.spyOn(Object, 'keys').mockReturnValue(['push_token']);
+      installLocalStorageMock({ push_token: '"' + 'b'.repeat(60) + '"' });
 
       messageListener(
         { action: 'getToken' },
@@ -1076,8 +1086,13 @@ describe('Content Script', () => {
     it('should handle localStorage access errors', () => {
       const sendResponse = vi.fn();
 
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      const storage = createStorageMock({});
+      vi.mocked(storage.getItem).mockImplementation(() => {
         throw new Error('Access denied');
+      });
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        value: storage,
       });
 
       messageListener(

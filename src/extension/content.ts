@@ -10,6 +10,8 @@
  * 6. Minimize overlay to floating tab and restore it
  */
 
+import { getDiscordToken } from './tokenExtraction';
+
 /**
  * Overlay state management
  */
@@ -544,42 +546,6 @@ window.addEventListener('message', (event) => {
     }
   }
 });
-
-/**
- * Extract Discord authentication token from localStorage
- * @returns Discord token without quotes, or null if not found
- */
-function getDiscordToken(): string | null {
-  try {
-    // Primary location: direct token key
-    let token = localStorage.getItem('token');
-
-    if (token) {
-      // Remove surrounding quotes if present
-      return token.replace(/^"|"$/g, '');
-    }
-
-    // Fallback: Check other possible locations
-    // (Discord may change storage structure over time)
-    const keys = Object.keys(localStorage);
-
-    for (const key of keys) {
-      if (key.includes('token') && !key.includes('push')) {
-        const value = localStorage.getItem(key);
-        if (value && value.length > 50) {
-          console.log(`[Discrub Content] Found token in alternate location: ${key}`);
-          return value.replace(/^"|"$/g, '');
-        }
-      }
-    }
-
-    console.warn('[Discrub Content] Discord token not found in localStorage');
-    return null;
-  } catch (error) {
-    console.error('[Discrub Content] Failed to retrieve Discord token:', error);
-    return null;
-  }
-}
 
 /**
  * Inject Discrub button into Discord's toolbar (matching Classic's placement)

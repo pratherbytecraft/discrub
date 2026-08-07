@@ -48,7 +48,7 @@ export const tourCatalog: Record<string, TourCatalogEntry> = {
   },
   more: {
     title: 'More',
-    content: 'Access the Supporter Wall, Ideas & Contact, and Announcements from here.',
+    content: 'Access Ideas & Contact, the subreddit, and Announcements from here.',
   },
   'status-panel': {
     title: 'Status Log',

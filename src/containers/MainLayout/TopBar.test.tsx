@@ -164,42 +164,6 @@ describe('TopBar', () => {
     });
   });
 
-  describe('Ko-Fi Toggle', () => {
-    it('should show Supporter Wall menu item when More menu is opened', () => {
-      renderWithProviders(<TopBar />, {
-        preloadedState: createBaseState({
-          user: { currentUser, isLoading: false, error: null },
-        }),
-      });
-      fireEvent.click(screen.getByLabelText('More options'));
-      expect(screen.getByText('Supporter Wall')).toBeInTheDocument();
-    });
-
-    it('should render Ko-Fi icon image in More menu', () => {
-      renderWithProviders(<TopBar />, {
-        preloadedState: createBaseState({
-          user: { currentUser, isLoading: false, error: null },
-        }),
-      });
-      fireEvent.click(screen.getByLabelText('More options'));
-      expect(screen.getByAltText('Ko-Fi')).toBeInTheDocument();
-    });
-
-    it('should dispatch setting update on click', () => {
-      const { store } = renderWithProviders(<TopBar />, {
-        preloadedState: createBaseState({
-          user: { currentUser, isLoading: false, error: null },
-          app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, sidebarView: 'server' as const, task: { status: 'idle', message: '' }, settings: null },
-        }),
-      });
-      fireEvent.click(screen.getByLabelText('More options'));
-      fireEvent.click(screen.getByText('Supporter Wall'));
-      const actions = store.getState();
-      // The updateSetting thunk will have been dispatched
-      expect(actions).toBeDefined();
-    });
-  });
-
   describe('Logout', () => {
     it('should show logout button when user is logged in', () => {
       renderWithProviders(<TopBar />, {

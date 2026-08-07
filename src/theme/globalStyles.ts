@@ -104,10 +104,6 @@ export const globalStyles = (theme: Theme) => ({
     '50%': { boxShadow: '0 6px 40px rgba(185, 242, 255, 0.4), 0 0 48px rgba(0, 212, 255, 0.25)' },
     '100%': { boxShadow: '0 6px 32px rgba(0, 212, 255, 0.2)' },
   },
-  '@keyframes kofi-pulse': {
-    '0%, 100%': { boxShadow: '0 4px 16px rgba(255, 94, 91, 0.3)' },
-    '50%': { boxShadow: '0 4px 24px rgba(255, 94, 91, 0.5), 0 0 8px rgba(255, 94, 91, 0.2)' },
-  },
   /* Shimmer loading utility */
   '.shimmer-loading': {
     background: `linear-gradient(90deg, ${theme.palette.background.paper} 0%, ${theme.palette.backgroundElevated} 50%, ${theme.palette.background.paper} 100%)`,

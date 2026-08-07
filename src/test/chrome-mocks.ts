@@ -247,6 +247,38 @@ export function createActionMock() {
 }
 
 /**
+ * Mock Chrome scripting API (MV3)
+ */
+export function createScriptingMock() {
+  return {
+    executeScript: vi.fn(
+      (
+        _injection: chrome.scripting.ScriptInjection<[], unknown>,
+        callback?: (results?: chrome.scripting.InjectionResult<unknown>[]) => void
+      ) => {
+        if (callback) {
+          callback([]);
+        }
+        return Promise.resolve([]);
+      }
+    ),
+  };
+}
+
+/**
+ * Mock Chrome webRequest API
+ */
+export function createWebRequestMock() {
+  return {
+    onBeforeSendHeaders: {
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      hasListener: vi.fn(),
+    },
+  };
+}
+
+/**
  * Create full Chrome API mock
  */
 export function createChromeMocks() {
@@ -255,6 +287,8 @@ export function createChromeMocks() {
     tabs: createTabsMock(),
     storage: createStorageMock(),
     action: createActionMock(),
+    scripting: createScriptingMock(),
+    webRequest: createWebRequestMock(),
   };
 }
 

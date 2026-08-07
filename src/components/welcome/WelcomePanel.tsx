@@ -12,7 +12,6 @@ import {
   Palette as ThemeIcon,
   Terminal as StatusIcon,
   PauseCircle as PauseIcon,
-  Favorite as DonationIcon,
   Explore as TourIcon,
   ArrowForward as ArrowIcon,
   GitHub as GitHubIcon,
@@ -102,12 +101,6 @@ const FEATURE_CARDS: FeatureCard[] = [
     icon: <PauseIcon />,
     title: 'Pause & Resume',
     description: 'All long-running operations support pause, resume, and cancel. Controls appear in the status bar.',
-  },
-  {
-    id: 'donations',
-    icon: <DonationIcon />,
-    title: 'Supporter Wall',
-    description: 'Ko-Fi supporter feed with tier system, leaderboard, and subscriber flame progression.',
   },
 ];
 

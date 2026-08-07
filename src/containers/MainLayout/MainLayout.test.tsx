@@ -51,11 +51,6 @@ vi.mock('@containers/ServerView/ServerView', () => ({
   default: () => <div data-testid="serverview">ServerView</div>,
 }));
 
-vi.mock('@components/donations/DonationDrawer', () => ({
-  default: () => <div data-testid="donation-drawer">DonationDrawer</div>,
-  DRAWER_WIDTH: 320,
-}));
-
 vi.mock('@components/ui/StatusPanel', () => ({
   default: () => <div data-testid="status-panel">StatusPanel</div>,
 }));
@@ -86,13 +81,6 @@ describe('MainLayout', () => {
     expect(screen.getByTestId('serverview')).toBeInTheDocument();
   });
 
-  it('should render DonationDrawer', () => {
-    renderWithProviders(<MainLayout />, {
-      preloadedState: createBaseState(),
-    });
-    expect(screen.getByTestId('donation-drawer')).toBeInTheDocument();
-  });
-
   it('should render all components together', () => {
     renderWithProviders(<MainLayout />, {
       preloadedState: createBaseState(),
@@ -100,7 +88,6 @@ describe('MainLayout', () => {
     expect(screen.getByTestId('topbar')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('serverview')).toBeInTheDocument();
-    expect(screen.getByTestId('donation-drawer')).toBeInTheDocument();
   });
 
   describe('focus mode', () => {
@@ -109,14 +96,13 @@ describe('MainLayout', () => {
         app: { ...initialAppState, focusedView: true },
       });
 
-    it('hides TopBar, Sidebar, StatusPanel, and DonationDrawer while keeping ServerView', () => {
+    it('hides TopBar, Sidebar, and StatusPanel while keeping ServerView', () => {
       renderWithProviders(<MainLayout />, {
         preloadedState: focusedState(),
       });
       expect(screen.queryByTestId('topbar')).not.toBeInTheDocument();
       expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
       expect(screen.queryByTestId('status-panel')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('donation-drawer')).not.toBeInTheDocument();
       expect(screen.getByTestId('serverview')).toBeInTheDocument();
     });
 

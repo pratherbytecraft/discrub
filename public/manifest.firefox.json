@@ -6,7 +6,10 @@
   "description": "Manage, search, and export your Discord messages with ease.",
 
   "permissions": [
-    "storage"
+    "storage",
+    "scripting",
+    "activeTab",
+    "webRequest"
   ],
 
   "host_permissions": [

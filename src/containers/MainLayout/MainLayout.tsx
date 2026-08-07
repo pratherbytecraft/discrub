@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { Joyride } from 'react-joyride';
-import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppSelector, useAppDispatch } from '@/app/hooks';
 import {
-  selectSetting,
   selectSettings,
   selectSidebarView,
   selectFocusedView,
@@ -21,7 +19,6 @@ import TopBar from './TopBar';
 import Sidebar from '@components/navigation/Sidebar';
 import ServerView from '@containers/ServerView/ServerView';
 import PackageView from '@components/package/PackageView';
-import DonationDrawer, { DRAWER_WIDTH } from '@components/donations/DonationDrawer';
 import AnnouncementModal from '@components/modals/AnnouncementModal';
 import HotkeysReferenceModal from '@components/modals/HotkeysReferenceModal';
 import { useBeforeUnloadWarning } from '@/hooks/useBeforeUnloadWarning';
@@ -38,14 +35,12 @@ import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 
 /**
  * MainLayout component - main application shell
- * Contains TopBar, Sidebar, content area, and DonationDrawer
+ * Contains TopBar, Sidebar, and content area.
  */
 const MainLayout = () => {
   const dispatch = useAppDispatch();
-  const showFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const sidebarView = useAppSelector(selectSidebarView);
   const focusedView = useAppSelector(selectFocusedView);
-  const drawerOpen = showFeed === 'true' && !focusedView;
   const hasNewAnnouncement = useAppSelector(selectHasNewAnnouncement);
   const announcementMarkdown = useAppSelector(selectAnnouncementMarkdown);
   const isLoadingMarkdown = useAppSelector(selectIsLoadingMarkdown);
@@ -191,8 +186,6 @@ const MainLayout = () => {
           display: 'flex',
           flexDirection: 'column',
           height: '100vh',
-          marginRight: drawerOpen ? `${DRAWER_WIDTH}px` : 0,
-          transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
         }}
       >
         {!focusedView && <TopBar />}
@@ -217,8 +210,6 @@ const MainLayout = () => {
 
         {!focusedView && <StatusPanel />}
       </Box>
-
-      {!focusedView && <DonationDrawer />}
 
       <AnnouncementModal
         open={hasNewAnnouncement}

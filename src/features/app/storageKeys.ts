@@ -53,7 +53,7 @@ export const defaultSettings: AppSettings = {
   // Display Options
   [DiscrubSetting.DATE_FORMAT]: DateFormat.MMDDYYYY,
   [DiscrubSetting.TIME_FORMAT]: TimeFormat._12HOUR,
-  [DiscrubSetting.APP_SHOW_KOFI_FEED]: 'true',
+  [DiscrubSetting.APP_SHOW_KOFI_FEED]: 'false',
   [DiscrubSetting.APP_THEME_MODE]: 'auto',
 
   // Purge Behavior

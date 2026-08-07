@@ -23,11 +23,10 @@ export const fetchAnnouncement = createAsyncThunk(
       if (!settings) {
         return rejectWithValue('Settings not loaded yet — try again');
       }
-      // Settings can also be PARTIAL during boot if a `updateSetting`
-      // landed before `loadSettings.fulfilled` (the dispatch in
-      // openDonationDrawer cypress helper, for example). Fall back to
-      // the default rev when the key is missing so a partial-state
-      // race doesn't manifest as cachedRev='' → "new announcement".
+      // Settings can also be PARTIAL during boot if an `updateSetting`
+      // landed before `loadSettings.fulfilled`. Fall back to the default
+      // rev when the key is missing so a partial-state race doesn't
+      // manifest as cachedRev='' -> "new announcement".
       const cachedRev =
         settings[DiscrubSetting.CACHED_ANNOUNCEMENT_REV] ??
         defaultSettings[DiscrubSetting.CACHED_ANNOUNCEMENT_REV] ??

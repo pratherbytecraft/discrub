@@ -86,6 +86,21 @@ describe('Background Script', () => {
         expect.any(Function)
       );
     });
+
+    it('should register Discord API auth header listener', () => {
+      expect(mockChrome.webRequest.onBeforeSendHeaders.addListener).toHaveBeenCalledWith(
+        expect.any(Function),
+        {
+          urls: [
+            '*://discord.com/api/*',
+            '*://*.discord.com/api/*',
+            '*://discordapp.com/api/*',
+            '*://*.discordapp.com/api/*',
+          ],
+        },
+        ['requestHeaders', 'extraHeaders'],
+      );
+    });
   });
 
   describe('requestToken message', () => {
@@ -122,6 +137,73 @@ describe('Background Script', () => {
       expect(sendResponse).toHaveBeenCalledWith({
         success: true,
         token: 'abc123',
+      });
+    });
+
+    it('should prefer a channels tab over a stale Discord login tab', () => {
+      const sendResponse = vi.fn();
+      const loginTab = createMockTab({
+        id: 1,
+        active: true,
+        url: 'https://discord.com/login',
+      });
+      const channelsTab = createMockTab({
+        id: 2,
+        active: false,
+        url: 'https://discord.com/channels/@me',
+      });
+
+      (mockChrome.tabs.query as any).mockImplementation(
+        (_q: any, cb: Function) => cb([loginTab, channelsTab])
+      );
+      (mockChrome.tabs.sendMessage as any).mockImplementation(
+        (_id: number, _msg: any, cb: Function) =>
+          cb({ success: true, token: 'abc123' })
+      );
+
+      messageListener(
+        { action: 'requestToken' },
+        {} as chrome.runtime.MessageSender,
+        sendResponse
+      );
+
+      expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(
+        2,
+        { action: 'getToken' },
+        expect.any(Function)
+      );
+    });
+
+    it('should return cached Authorization header token when content extraction fails', () => {
+      const sendResponse = vi.fn();
+      const tab = createMockTab();
+      const headerListener = (mockChrome.webRequest.onBeforeSendHeaders.addListener as any)
+        .mock.calls[0][0];
+
+      headerListener({
+        requestHeaders: [
+          { name: 'Authorization', value: 'a'.repeat(70) },
+        ],
+      });
+
+      (mockChrome.tabs.query as any).mockImplementation(
+        (_q: any, cb: Function) => cb([tab])
+      );
+      (mockChrome.tabs.sendMessage as any).mockImplementation(
+        (_id: number, _msg: any, cb: Function) =>
+          cb({ success: false, token: null })
+      );
+
+      messageListener(
+        { action: 'requestToken' },
+        {} as chrome.runtime.MessageSender,
+        sendResponse
+      );
+
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: true,
+        token: 'a'.repeat(70),
+        source: 'webRequest',
       });
     });
 
