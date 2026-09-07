@@ -20,6 +20,7 @@ describe('Content Script', () => {
     sender: chrome.runtime.MessageSender,
     sendResponse: (response?: any) => void
   ) => boolean | void;
+  let disconnectListeners: Array<() => void>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -27,6 +28,13 @@ describe('Content Script', () => {
     document.body.innerHTML = '';
 
     mockChrome = installChromeMocks();
+    // #251: content.ts holds a port open to notice extension reloads.
+    disconnectListeners = [];
+    (mockChrome.runtime as any).connect = vi.fn(() => ({
+      onDisconnect: { addListener: (l: () => void) => disconnectListeners.push(l) },
+      disconnect: vi.fn(),
+      postMessage: vi.fn(),
+    }));
 
     // Capture the message listener registered by content.ts
     mockChrome.runtime.onMessage.addListener = vi.fn((listener) => {
@@ -85,14 +93,84 @@ describe('Content Script', () => {
     });
   });
 
+  describe('Extension update or reload (#251)', () => {
+    const openOverlay = () => {
+      messageListener({ action: 'injectOverlay' }, {} as any, vi.fn());
+      expect(document.getElementById('discrub-overlay')).not.toBeNull();
+    };
+
+    it('holds a port open to the background on load', () => {
+      expect((mockChrome.runtime as any).connect).toHaveBeenCalledWith({ name: 'discrub-content' });
+      expect(disconnectListeners).toHaveLength(1);
+    });
+
+    it('removes UI left behind by a previous copy of the script on load', async () => {
+      const staleDialog = document.createElement('dialog');
+      staleDialog.id = 'discrub-overlay';
+      document.body.appendChild(staleDialog);
+      const staleTab = document.createElement('div');
+      staleTab.id = 'discrub-floating-tab';
+      document.body.appendChild(staleTab);
+      expect(document.querySelectorAll('#discrub-floating-button')).toHaveLength(1);
+
+      vi.resetModules();
+      vi.useFakeTimers();
+      await import('./content');
+      vi.runAllTimers();
+      vi.useRealTimers();
+
+      expect(document.getElementById('discrub-overlay')).toBeNull();
+      expect(document.getElementById('discrub-floating-tab')).toBeNull();
+      expect(document.querySelectorAll('#discrub-floating-button')).toHaveLength(1);
+    });
+
+    it('tears down the open overlay and button when the port drops and the runtime is gone', () => {
+      openOverlay();
+      delete (mockChrome.runtime as any).id;
+
+      disconnectListeners[0]();
+
+      expect(document.getElementById('discrub-overlay')).toBeNull();
+      expect(document.getElementById('discrub-floating-button')).toBeNull();
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('updated or reloaded'));
+    });
+
+    it('reconnects instead of tearing down when the port drops but the runtime is alive', () => {
+      openOverlay();
+      vi.useFakeTimers();
+
+      disconnectListeners[0]();
+      expect(document.getElementById('discrub-overlay')).not.toBeNull();
+      vi.advanceTimersByTime(1000);
+      vi.useRealTimers();
+
+      expect((mockChrome.runtime as any).connect).toHaveBeenCalledTimes(2);
+      expect(document.getElementById('discrub-overlay')).not.toBeNull();
+    });
+
+    it('button click on an orphaned script removes the dead UI instead of opening', () => {
+      delete (mockChrome.runtime as any).id;
+      const button = document.getElementById('discrub-floating-button')!;
+
+      button.click();
+
+      expect(document.getElementById('discrub-overlay')).toBeNull();
+      expect(document.getElementById('discrub-floating-button')).toBeNull();
+    });
+  });
+
   describe('Floating Button', () => {
     it('should not inject duplicate button', async () => {
-      // Import again — should not create a second button
+      // Import again (a re-injection, #251): the old button is replaced,
+      // never doubled.
       vi.resetModules();
+      vi.useFakeTimers();
       mockChrome.runtime.onMessage.addListener = vi.fn((listener) => {
         messageListener = listener;
       });
       await import('./content');
+      vi.runAllTimers();
+      vi.useRealTimers();
 
       const buttons = document.querySelectorAll('#discrub-floating-button');
       expect(buttons.length).toBe(1);

@@ -97,6 +97,95 @@ function getExtensionOrigin(): string {
   }
 }
 
+/** Every element this script puts on the Discord page. */
+const DISCRUB_ELEMENT_IDS = [
+  'discrub-overlay',
+  'discrub-floating-tab',
+  'discrub-floating-button',
+  'discrub-tab-styles',
+];
+
+/**
+ * True while this script still belongs to a live extension. When the
+ * extension updates, reloads or is disabled, Chrome removes every
+ * chrome-extension:// iframe from the page but leaves this script running
+ * with a dead runtime (`chrome.runtime.id` becomes undefined). That is the
+ * open-but-empty overlay from #251: the dialog is still open, its iframe is
+ * gone, and every click just re-focuses the empty dialog.
+ */
+function isExtensionContextValid(): boolean {
+  try {
+    return typeof chrome !== 'undefined' && !!chrome.runtime?.id;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Remove anything a previous copy of this script left on the page. Runs at
+ * startup so a fresh injection starts clean instead of stacking a second
+ * button next to an orphaned one.
+ */
+function removeLeftoverUi(): void {
+  for (const id of DISCRUB_ELEMENT_IDS) {
+    document.getElementById(id)?.remove();
+  }
+}
+
+/**
+ * This script has been orphaned by an extension update or reload. Take the
+ * dead UI off the page and reset state. Discrub comes back on the next page
+ * load; there is no re-injection, since that would need the scripting
+ * permission and the page is fine without it.
+ */
+let orphanedTeardownDone = false;
+function teardownOrphanedUi(): void {
+  if (orphanedTeardownDone) return;
+  orphanedTeardownDone = true;
+  console.warn('[Discrub Content] Extension was updated or reloaded; removing the old Discrub UI from this page. Reload Discord to get it back.');
+  const dialog = overlayState.dialogElement;
+  if (dialog) {
+    try {
+      if (dialog.open) dialog.close();
+    } catch {
+      // Detached dialogs can throw on close; removal is what matters.
+    }
+  }
+  removeLeftoverUi();
+  overlayState.isOpen = false;
+  overlayState.isMinimized = false;
+  overlayState.isAnimating = false;
+  overlayState.currentView = null;
+  overlayState.dialogElement = null;
+  overlayState.iframeElement = null;
+  overlayState.floatingTabElement = null;
+}
+
+/**
+ * Hold a port open to the background so an extension update or reload is
+ * noticed the moment it happens, not on the next click. A port also drops
+ * whenever the MV3 service worker goes idle, so a disconnect only counts as
+ * orphaning when the runtime id is gone; otherwise reconnect after a beat.
+ */
+const RECONNECT_DELAY_MS = 1000;
+function watchForExtensionReload(): void {
+  if (!isExtensionContextValid() || typeof chrome.runtime.connect !== 'function') return;
+  let port: chrome.runtime.Port;
+  try {
+    port = chrome.runtime.connect({ name: 'discrub-content' });
+  } catch {
+    teardownOrphanedUi();
+    return;
+  }
+  port.onDisconnect.addListener(() => {
+    if (!isExtensionContextValid()) {
+      teardownOrphanedUi();
+      return;
+    }
+    setTimeout(watchForExtensionReload, RECONNECT_DELAY_MS);
+  });
+}
+
 /**
  * Check if overlay is currently open
  */
@@ -724,6 +813,10 @@ function injectFloatingButton(): void {
   // Click handler
   button.addEventListener('click', () => {
     console.log('[Discrub Content] Button clicked');
+    if (!isExtensionContextValid()) {
+      teardownOrphanedUi();
+      return;
+    }
     if (isOverlayStale()) {
       discardStaleOverlay();
     }
@@ -798,11 +891,13 @@ function injectFloatingButton(): void {
 /**
  * Initialize content script when DOM is ready
  */
+removeLeftoverUi();
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', injectFloatingButton);
 } else {
   injectFloatingButton();
 }
+watchForExtensionReload();
 
 /**
  * Listen for messages from extension (background script or app)

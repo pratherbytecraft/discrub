@@ -307,5 +307,12 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
+/**
+ * Content scripts hold a port open so they notice an extension update or
+ * reload and take their dead overlay off the page (#251). Nothing travels
+ * over it; accepting the connection is enough.
+ */
+chrome.runtime.onConnect?.addListener(() => {});
+
 // Module export to allow dynamic import in tests
 export {};
