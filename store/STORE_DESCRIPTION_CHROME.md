@@ -1,12 +1,12 @@
-Discrub is a Discord data management tool. It runs as a browser extension that activates on Discord, letting you export messages, search and filter conversations, purge messages and reactions, work with offline data packages, and analyze your message history.
+Discrub is a Discord data management tool. It runs as a browser extension on Discord. It exports messages, searches and filters conversations, purges messages and reactions, works with offline data packages, and analyzes your message history.
 
 Discord Data Package
 - Drop the official Discord ZIP (Privacy & Safety, Request All My Data) directly into Discrub
 - Handles large packages (multi-gigabyte, tens of thousands of entries) and packages from any Discord locale
 - Browse every server, channel, and DM in your archive without touching the Discord API
-- Rich rendering: markdown, mentions, custom emojis, reply quotes, embed previews
+- Renders markdown, mentions, custom emojis, reply quotes, and embed previews
 - Multi-attachment messages render every attachment, not just the first
-- Optional rehydration to fetch reactions, edits, and replies from Discord, with smart caching
+- Optional rehydration fetches reactions, edits, and replies from Discord, cached so the API cost is paid once
 - Bulk delete or bulk edit straight from the package
 - Export package channels to HTML for portable archives
 - Mention analytics across an entire package
@@ -24,10 +24,10 @@ Message Feed
 - Discord-style chunked feed with role colors, role icons, reply indicators, and inline system messages (pins, joins, boosts, thread-created)
 - Forwarded messages render their full content (text, attachments, embeds), in the feed and in exports
 - Voice and Stage channel chat browsable alongside text channels
-- Virtualization for smooth scrolling on large channels
+- Virtualized feed for large channels
 - Click-to-jump on reply bars, pinned-message notices, and thread-created notices
 - Find threads even when their starter message has been deleted, via the Load Thread modal
-- Focused view mode that hides chrome for full-width reading
+- Focused view hides the sidebar and status panel for full-width reading
 
 Search and Filter
 - Search hits Discord's API: filter by content, author, mentions, has-types (image, video, link, file, embed, sound, sticker, snapshot, poll, forward), date range with time-of-day precision, pinned status, author type
@@ -57,7 +57,7 @@ Privacy
 - One optional exception. If you apply a supporter key, the extension checks in with api.pratherbytecraft.com about once a day to keep that key current. Only the key itself is sent, never an email address or any Discord data, and removing your key stops this entirely.
 
 Supporter themes
-- Every feature is free and always will be. Supporters unlock a pack of extra cosmetic themes as a thank you.
+- Every feature is free and stays free. Supporters unlock a pack of extra cosmetic themes.
 
 Additional
 - Interface in English or German, auto-detected on first run and switchable in Settings
@@ -65,7 +65,7 @@ Additional
 - Forum channel support showing both active and archived posts
 - Guided tour and contextual help icons
 - Pause, resume, and cancel for long operations
-- Status log with real-time operation feedback
+- Status log with live operation feedback
 - Configurable operation delays and automatic rest breaks on long runs
 - Discrub Classic (v1) built in for legacy users
 
