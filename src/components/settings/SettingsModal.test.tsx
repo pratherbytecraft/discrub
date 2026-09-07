@@ -238,6 +238,81 @@ describe('SettingsModal', () => {
     });
   });
 
+  describe('After a save (#260 edges)', () => {
+    const render = (onClose = vi.fn()) => renderWithProviders(<SettingsModal open onClose={onClose} />, {
+      preloadedState: createBaseState({
+        app: {
+          discrubPaused: false,
+          discrubCancelled: false,
+          isMinimized: false,
+          focusedView: false,
+          kofiOverlayOpen: false,
+          sidebarView: 'server' as const,
+          task: { status: 'idle', message: '' },
+          settings: defaultSettings as any,
+          previewThemeId: null,
+        },
+      }),
+    });
+    const editAndSave = async () => {
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Rest breaks' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Settings saved'));
+    };
+
+    it('Esc closes without the discard prompt once the edit is saved', async () => {
+      const onClose = vi.fn();
+      render(onClose);
+      await editAndSave();
+
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+
+      expect(screen.queryByText('Discard unsaved changes?')).not.toBeInTheDocument();
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('Reset to defaults after a save clears the confirmation and makes the form dirty again', async () => {
+      const onClose = vi.fn();
+      render(onClose);
+      await editAndSave();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }));
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('a background settings write after a save reseeds the untouched form', async () => {
+      const { store } = render();
+      await editAndSave();
+      expect(screen.getByRole('checkbox', { name: 'Rest breaks' })).not.toBeChecked();
+
+      const { setSettings } = await import('@features/app/appSlice');
+      store.dispatch(setSettings({ ...defaultSettings, [DiscrubSetting.REST_BREAKS]: 'true' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('checkbox', { name: 'Rest breaks' })).toBeChecked();
+      });
+    });
+
+    it('a failed save keeps the dialog open with the error and no confirmation', async () => {
+      const onClose = vi.fn();
+      const { store } = render(onClose);
+      const storage = (await import('@/extension/storage')).storage as any;
+      storage.settings.setMany.mockRejectedValueOnce(new Error('disk full'));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Rest breaks' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+
+      await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Save Settings' })).toBeEnabled();
+      void store;
+    });
+  });
+
   describe('Background settings writes while open (#256)', () => {
     it('keeps an in-progress edit when an unrelated setting changes underneath the form', async () => {
       const { store } = renderSettings();

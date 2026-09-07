@@ -5818,6 +5818,99 @@ describe('purgeSlice thunks', () => {
       expect(mockDeleteMessage).not.toHaveBeenCalled();
     });
 
+    it('a cancel that lands during the final pass keeps the partial count in the summary', async () => {
+      setupSearchResults([[mockMessage('m1')], []]);
+      mockFetchMessageData.mockResolvedValue({
+        success: true,
+        data: [mockMessage('fresh-1'), mockMessage('fresh-2'), mockMessage('fresh-3')],
+      });
+      // Cancel once the first final-pass delete has gone out.
+      (checkCancelled as Mock).mockImplementation(() => mockDeleteMessage.mock.calls.length >= 2);
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      const entries = store.getState().status.entries as Array<{ level: string; message: string }>;
+      const cancelled = entries.find((e) => e.level === 'warning' && e.message.includes('Cancelled'));
+      expect(cancelled?.message).toContain('2 messages deleted, 1 from the final pass');
+    });
+
+    it('rolls the final-pass count into the multi-server summary', async () => {
+      mockFetchChannels.mockReset();
+      mockFetchGuildUser.mockReset();
+      mockFetchGuildUser.mockResolvedValue({ success: true, status: 200, data: { roles: [] } });
+      mockFetchChannels.mockImplementation((_t: string, guildId: string) => Promise.resolve({
+        success: true,
+        status: 200,
+        data: [{ id: guildId === 'g1' ? 'c1' : 'c2', name: 'general', type: 0 }],
+      }));
+      setupSearchResults([[mockMessage('m1')], []]);
+      mockFetchMessageData.mockImplementation((_t: string, _l: string, channelId: string) => Promise.resolve({
+        success: true,
+        data: [mockMessage(`fresh-${channelId}`)],
+      }));
+      const guild = (id: string, name: string): Guild =>
+        ({ id, name, icon: null, permissions: String((1n << 10n) | (1n << 16n)) } as unknown as Guild);
+
+      await store.dispatch(
+        purgeGuilds({ guilds: [guild('g1', 'Alpha'), guild('g2', 'Beta')], config: messagesConfig([CURRENT_USER.id]) }),
+      );
+
+      const deleted = mockDeleteMessage.mock.calls.map((c) => c[1]);
+      expect(deleted).toEqual(expect.arrayContaining(['fresh-c1', 'fresh-c2']));
+      const messages = store.getState().status.entries.map((e) => e.message);
+      expect(messages.some((m) => m.startsWith('Purge: Complete · 2 of 2 servers') && m.includes('2 from the final pass'))).toBe(true);
+    });
+
+    it('attachments-only mode edits a final-pass message instead of deleting it and reports no final-pass deletions', async () => {
+      const attachment = { id: 'att1', filename: 'photo.png', url: 'https://cdn.example.com/photo.png' };
+      setupSearchResults([[], []]);
+      mockFetchMessageData.mockResolvedValue({ success: true, data: [mockMessage('fresh', 0, [attachment])] });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id], false, true),
+          guildId: 'guild1',
+        }),
+      );
+
+      expect(mockEditMessage).toHaveBeenCalledWith(TOKEN, 'fresh', { attachments: [] }, 'ch1');
+      expect(mockDeleteMessage).not.toHaveBeenCalled();
+      const messages = store.getState().status.entries.map((e) => e.message);
+      expect(messages.some((m) => m.includes('Final pass over the newest messages in #general: found 1 more'))).toBe(true);
+      expect(messages.some((m) => m.includes('from the final pass'))).toBe(false);
+    });
+
+    it('final-pass messages still go through the pinned and preserve gates', async () => {
+      const link = { ...mockMessage('linked'), content: 'see https://example.com' } as Message;
+      const pinned = { ...mockMessage('pinned'), pinned: true } as Message;
+      setupSearchResults([[], []]);
+      mockFetchMessageData.mockResolvedValue({ success: true, data: [link, pinned, mockMessage('plain')] });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: { ...messagesConfig([CURRENT_USER.id]), preserveMediaAndLinks: true },
+          guildId: 'guild1',
+          searchCriteria: { isPinned: IsPinnedType.NO } as unknown as SearchCriteria,
+        }),
+      );
+
+      expect(mockDeleteMessage.mock.calls.map((c) => c[1])).toEqual(['plain']);
+      const messages = store.getState().status.entries.map((e) => e.message);
+      // The pinned message never reaches the loop (the isPinned=NO criteria
+      // drops it client-side on the final pass); the linked one is skipped
+      // by the preserve gate and counted.
+      expect(messages.some((m) => m.includes('Completed #general') && m.includes('1 deleted, 1 from the final pass, 1 skipped'))).toBe(true);
+      expect(messages.some((m) => m.includes('Preserved 1 message with files or links'))).toBe(true);
+    });
+
     it('warns and finishes cleanly when the newest page cannot be read', async () => {
       setupSearchResults([[mockMessage('m1')], []]);
       mockFetchMessageData.mockResolvedValue({ success: false, status: 403 });
