@@ -117,6 +117,10 @@ describe('Hotkeys (#144)', () => {
       cy.window().should((win) => {
         expect((win as any).__store__.getState().hotkeys.enabled).to.equal(false);
       });
+      // The dialog stays open after Save (#260); close it before testing keys.
+      cy.get('[role="dialog"]').contains('Settings saved').should('be.visible');
+      cy.get('[role="dialog"]').contains('button', /^Cancel$/).click();
+      cy.get('[role="dialog"]').should('not.exist');
       cy.get('body').trigger('keydown', { key: 'f' });
       cy.window().then((win) => {
         const after = (win as any).__store__.getState().app.focusedView;

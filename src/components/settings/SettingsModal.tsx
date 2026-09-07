@@ -33,6 +33,7 @@ import ResetDiscrubButton from './ResetDiscrubButton';
 import { forgetRememberedToken, selectTokenRemembered } from '@features/auth/authSlice';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { hasUnsavedSettingsChanges } from './dirtyDetection';
+import { CheckCircleOutline } from '@mui/icons-material';
 import { useFullScreenDialog } from '@/hooks/useFullScreenDialog';
 import { useTranslation } from 'react-i18next';
 
@@ -76,6 +77,9 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
   const [activeTab, setActiveTab] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // #260: Save keeps the dialog open (people keep editing after a save)
+  // and confirms inline instead. Cleared by the next edit or close.
+  const [justSaved, setJustSaved] = useState(false);
   // Discard-confirmation dialog state (#164). Shown only when the
   // user attempts to close while there are unsaved edits — otherwise
   // close skips the prompt entirely so the typical "open, peek, close"
@@ -95,6 +99,7 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
   useEffect(() => {
     if (!open) {
       seededRef.current = null;
+      setJustSaved(false);
       return;
     }
     const next = settings || defaultSettings;
@@ -117,10 +122,16 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
       ...prev,
       [key]: value,
     }));
+    setJustSaved(false);
     // Clear errors when user makes changes
     if (errors.length > 0) {
       setErrors([]);
     }
+  };
+
+  const handleHotkeysChange = (next: HotkeysState) => {
+    setFormHotkeys(next);
+    setJustSaved(false);
   };
 
   const handleSave = async () => {
@@ -142,8 +153,11 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
       // Reinitialize Discord service with new settings
       getDiscordService(formValues);
 
-      // Close modal
-      onClose();
+      // Stay open and confirm inline (#260). The saved values are the new
+      // dirty baseline, so Cancel and X close without the discard prompt
+      // and a later background write can reseed an untouched form.
+      seededRef.current = { settings: formValues, hotkeys: formHotkeys };
+      setJustSaved(true);
     } catch {
       setErrors([t('settings.saveFailed')]);
     } finally {
@@ -163,6 +177,7 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
         defaultSettings[DiscrubSetting.APP_THEME_ANIMATIONS],
     });
     setErrors([]);
+    setJustSaved(false);
   };
 
   // Actually discard edits + close. Routed through whenever close is
@@ -176,10 +191,8 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
   };
 
   // Public close-request entry point. Wired to Cancel, the X icon,
-  // backdrop click, and Esc — every close path except a successful
-  // Save Settings (which calls onClose() directly after the dispatch
-  // succeeds, bypassing the dirty check because the changes were
-  // saved, not discarded).
+  // backdrop click, and Esc. After a successful Save the form equals
+  // the stored settings, so these close without the discard prompt.
   const handleClose = () => {
     const dirty = hasUnsavedSettingsChanges({
       formValues,
@@ -255,7 +268,7 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
         </TabPanel>
 
         <TabPanel value={activeTab} index={5}>
-          <HotkeysTab formHotkeys={formHotkeys} onHotkeysChange={setFormHotkeys} />
+          <HotkeysTab formHotkeys={formHotkeys} onHotkeysChange={handleHotkeysChange} />
         </TabPanel>
 
         <TabPanel value={activeTab} index={6}>
@@ -293,6 +306,16 @@ const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
       </DialogContent>
 
       <DialogActions sx={{ flexWrap: 'wrap', gap: 1, '& > :not(:first-of-type)': { ml: 0 } }}>
+        {justSaved && (
+          <Typography
+            role="status"
+            variant="body2"
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mr: 'auto', color: 'success.main' }}
+          >
+            <CheckCircleOutline fontSize="small" />
+            {t('settings.saved')}
+          </Typography>
+        )}
         <Button variant="outlined" onClick={handleReset} disabled={saving}>
           {t('settings.resetToDefaults')}
         </Button>

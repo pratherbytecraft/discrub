@@ -168,6 +168,7 @@
     "resetHelp": "Clear all data Discrub stores in your browser. Useful if you're hitting persistent issues that signing out and back in doesn't fix. You'll be returned to the sign-in screen afterward.",
     "resetToDefaults": "Reset to defaults",
     "cancel": "Cancel",
+    "saved": "Settings saved",
     "saving": "Saving...",
     "save": "Save Settings",
     "discardTitle": "Discard unsaved changes?",

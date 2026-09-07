@@ -352,6 +352,8 @@ describe('DM Browsing', () => {
       cy.get('[role="dialog"]').find('[role="combobox"]').eq(3).click();
       cy.get('[role="listbox"]').contains("Discord's order").click();
       cy.get('[role="dialog"]').contains('button', 'Save Settings').click();
+      cy.get('[role="dialog"]').contains('Settings saved').should('be.visible');
+      cy.get('[role="dialog"]').contains('button', /^Cancel$/).click();
       cy.get('[role="dialog"]').should('not.exist');
 
       // The sidebar re-sorts live to the API's order.

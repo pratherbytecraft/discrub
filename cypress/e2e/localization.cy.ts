@@ -51,6 +51,9 @@ describe('Localization (#124)', () => {
       cy.get('[data-testid="language-select"]').parent().click();
       cy.get('[data-testid="language-option-de"]').click();
       cy.get('[role="dialog"]').contains('button', 'Save Settings').click();
+      cy.get('[role="dialog"]').contains('Einstellungen gespeichert').should('be.visible');
+      cy.get('[role="dialog"]').contains('button', /^Abbrechen$/).click();
+      cy.get('[role="dialog"]').should('not.exist');
 
       cy.contains('[role="tab"]', 'Paket').should('be.visible');
       cy.get('[aria-label="Einstellungen"]').should('exist');
@@ -78,6 +81,9 @@ describe('Localization (#124)', () => {
       cy.get('[data-testid="language-select"]').parent().click();
       cy.get('[data-testid="language-option-de"]').click();
       cy.get('[role="dialog"]').contains('button', 'Save Settings').click();
+      cy.get('[role="dialog"]').contains('Einstellungen gespeichert').should('be.visible');
+      cy.get('[role="dialog"]').contains('button', /^Abbrechen$/).click();
+      cy.get('[role="dialog"]').should('not.exist');
       cy.contains('STATUSPROTOKOLL').should('be.visible');
       cy.selectServer('Test Server');
       cy.contains('Kanäle').should('be.visible');
@@ -120,7 +126,7 @@ describe('Localization (#124)', () => {
       cy.get('[aria-label="Settings"]').click();
       cy.get('[role="dialog"]').contains('button', 'Save Settings').click();
       // Wait for the save to land before removing the key, or the write re-pins English after the delete.
-      cy.contains('button', 'Save Settings').should('not.exist');
+      cy.get('[role="dialog"]').contains('Settings saved').should('be.visible');
       forgetStoredLanguage();
 
       cy.interceptDiscordApi();
@@ -144,7 +150,7 @@ describe('Localization (#124)', () => {
       cy.get('[aria-label="Settings"]').click();
       cy.get('[role="dialog"]').contains('button', 'Save Settings').click();
       // Wait for the save to land before removing the key, or the write re-pins English after the delete.
-      cy.contains('button', 'Save Settings').should('not.exist');
+      cy.get('[role="dialog"]').contains('Settings saved').should('be.visible');
       forgetStoredLanguage();
       cy.interceptDiscordApi();
       cy.visit('/', { onBeforeLoad: (win) => setBrowserLanguage(win, ['en-GB']) });

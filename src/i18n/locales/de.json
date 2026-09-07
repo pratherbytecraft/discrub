@@ -168,6 +168,7 @@
     "resetHelp": "Löscht alle Daten, die Discrub in deinem Browser speichert. Hilfreich bei anhaltenden Problemen, die Ab- und wieder Anmelden nicht behebt. Danach landest du wieder auf dem Anmeldebildschirm.",
     "resetToDefaults": "Auf Standard zurücksetzen",
     "cancel": "Abbrechen",
+    "saved": "Einstellungen gespeichert",
     "saving": "Wird gespeichert...",
     "save": "Einstellungen speichern",
     "discardTitle": "Ungespeicherte Änderungen verwerfen?",

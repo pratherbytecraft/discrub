@@ -70,7 +70,11 @@ describe('Settings', () => {
     cy.readIdbStore('settings').then((values) => {
       expect(values).to.include('false');
     });
-    // Reopen: the switch reflects the saved value.
+    // The dialog stays open after Save (#260); close it and reopen: the
+    // switch reflects the saved value.
+    cy.get('[role="dialog"]').contains('Settings saved').should('be.visible');
+    cy.get('[role="dialog"]').contains('button', /^Cancel$/).click();
+    cy.get('[role="dialog"]').should('not.exist');
     cy.get('[aria-label="Settings"]').click();
     cy.get('[role="dialog"] input[aria-label="Rest breaks"]').scrollIntoView().should('not.be.checked');
   });
@@ -130,15 +134,20 @@ describe('Settings', () => {
       cy.contains('button', 'Save Settings').should('not.exist');
     });
 
-    it('Save Settings bypasses the prompt and persists', () => {
+    it('Save Settings keeps the dialog open, confirms inline, and Cancel then closes without the prompt (#260)', () => {
       openWithEdit();
       cy.contains('button', 'Save Settings').click();
       cy.contains('Discard unsaved changes?').should('not.exist');
-      cy.contains('button', 'Save Settings').should('not.exist');
+      cy.get('[role="dialog"]').contains('Settings saved').should('be.visible');
+      cy.contains('button', 'Save Settings').should('be.visible');
       // The change actually persisted in Redux.
       cy.window().should((win) => {
         expect((win as any).__store__.getState().hotkeys.enabled).to.equal(false);
       });
+      // Saved edits are the new baseline: Cancel closes without asking.
+      cy.contains('button', /^Cancel$/).click();
+      cy.contains('Discard unsaved changes?').should('not.exist');
+      cy.contains('button', 'Save Settings').should('not.exist');
     });
   });
 

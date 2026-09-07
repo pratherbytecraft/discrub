@@ -167,6 +167,77 @@ describe('SettingsModal', () => {
     });
   });
 
+  describe('Save keeps the dialog open (#260)', () => {
+    it('stays open after Save, shows the confirmation, and Cancel then closes without a prompt', async () => {
+      const onClose = vi.fn();
+      const { store } = renderWithProviders(<SettingsModal open onClose={onClose} />, {
+        preloadedState: createBaseState({
+          app: {
+            discrubPaused: false,
+            discrubCancelled: false,
+            isMinimized: false,
+            focusedView: false,
+            kofiOverlayOpen: false,
+            sidebarView: 'server' as const,
+            task: { status: 'idle', message: '' },
+            settings: defaultSettings as any,
+            previewThemeId: null,
+          },
+        }),
+      });
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Rest breaks' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+
+      await waitFor(() => {
+        expect(store.getState().app.settings?.[DiscrubSetting.REST_BREAKS]).toBe('false');
+        expect(screen.getByRole('status')).toHaveTextContent('Settings saved');
+      });
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Save Settings' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByText('Discard unsaved changes?')).not.toBeInTheDocument();
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('clears the confirmation on the next edit', async () => {
+      renderSettings();
+      fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Settings saved'));
+
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Rest breaks' }));
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+
+    it('a saved hotkeys edit closes without the discard prompt too', async () => {
+      const onClose = vi.fn();
+      renderWithProviders(<SettingsModal open onClose={onClose} />, {
+        preloadedState: createBaseState({
+          app: {
+            discrubPaused: false,
+            discrubCancelled: false,
+            isMinimized: false,
+            focusedView: false,
+            kofiOverlayOpen: false,
+            sidebarView: 'server' as const,
+            task: { status: 'idle', message: '' },
+            settings: defaultSettings as any,
+            previewThemeId: null,
+          },
+        }),
+      });
+      fireEvent.click(screen.getByRole('tab', { name: 'Hotkeys' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Enable hotkeys' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }));
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Settings saved'));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByText('Discard unsaved changes?')).not.toBeInTheDocument();
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
+
   describe('Background settings writes while open (#256)', () => {
     it('keeps an in-progress edit when an unrelated setting changes underneath the form', async () => {
       const { store } = renderSettings();
