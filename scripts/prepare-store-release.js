@@ -116,7 +116,7 @@ if (fs.existsSync(firefoxSourceZip)) {
 }
 fs.writeFileSync(
   path.join(rootDir, 'store', 'SHA256SUMS.txt'),
-  `# Discrub v${appVersion} — SHA-256 checksums of the store upload artifacts\n` +
+  `# Discrub v${appVersion} SHA-256 checksums of the store upload artifacts\n` +
   `# Verify: shasum -a 256 <file>  (Windows: certutil -hashfile <file> SHA256)\n` +
   formatShaSums(sumEntries),
 );

@@ -123,7 +123,7 @@ describe('bestof', () => {
     expect(rows.map((r) => r.key)).toEqual(['601', '600']);
     expect(rows[0].excerpt).toHaveLength(80);
     expect(rows[0].excerpt?.endsWith('…')).toBe(true);
-    expect(rows[1].excerpt).toBe('📎 cat.png');
+    expect(rows[1].excerpt).toBe('Attachment: cat.png');
   });
 });
 
@@ -204,7 +204,7 @@ describe('media', () => {
       { key: '1', label: 'Ali', count: 2 },
       { key: '2', label: 'bob', count: 1 },
     ]);
-    expect(result.summary).toBe('📎 3 total · 🖼️ 1 image · 🎬 1 video · 📄 1 other');
+    expect(result.summary).toBe('3 total: 1 image, 1 video, 1 other');
   });
 });
 

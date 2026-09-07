@@ -392,7 +392,7 @@ function formatMonth(key: string): string {
 
 function formatDate(raw: string): string {
   const d = parseDiscordTimestamp(raw);
-  return d ? d.toLocaleDateString(i18next.language) : '—';
+  return d ? d.toLocaleDateString(i18next.language) : '';
 }
 
 export default PackageAnalytics;

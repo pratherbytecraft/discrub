@@ -236,12 +236,12 @@ export const OperationDelaysTab = ({ formValues, onChange }: OperationDelaysTabP
 
       <DelaySlider config={SEARCH_CONFIG} value={searchDelay} onChange={onChange} />
       <Typography variant="caption" color="text.secondary" sx={{ mt: -2 }}>
-        Effective delay: {parseFloat(searchDelay.toFixed(1))}s – {parseFloat((searchDelay + modifier).toFixed(1))}s
+        Effective delay: {parseFloat(searchDelay.toFixed(1))}s to {parseFloat((searchDelay + modifier).toFixed(1))}s
       </Typography>
 
       <DelaySlider config={DELETE_CONFIG} value={deleteDelay} onChange={onChange} />
       <Typography variant="caption" color="text.secondary" sx={{ mt: -2 }}>
-        Effective delay: {parseFloat(deleteDelay.toFixed(1))}s – {parseFloat((deleteDelay + modifier).toFixed(1))}s
+        Effective delay: {parseFloat(deleteDelay.toFixed(1))}s to {parseFloat((deleteDelay + modifier).toFixed(1))}s
       </Typography>
 
       <DelaySlider config={MODIFIER_CONFIG} value={modifier} onChange={onChange} />

@@ -19,6 +19,7 @@ import {
   ExpandMore as ExpandMoreIcon,
   ChevronRight as CollapseIcon,
   Lock as LockIcon,
+  FolderOpenOutlined,
 } from '@mui/icons-material';
 import MultiSelectControls from './MultiSelectControls';
 import type { Channel } from 'discrub-core/types/discord-types';
@@ -297,7 +298,7 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
   };
 
   if (!selectedGuild) {
-    return <EmptyState message={t('nav.selectServerForChannels')} icon="📁" />;
+    return <EmptyState message={t('nav.selectServerForChannels')} icon={<FolderOpenOutlined fontSize="inherit" />} />;
   }
 
   if (isLoading) {

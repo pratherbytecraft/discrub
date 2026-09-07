@@ -271,7 +271,7 @@ describe('AnalyticsModal', () => {
       render([createMessage('pic', 0, { attachments: [{ filename: 'a.png', content_type: 'image/png' }, { filename: 'notes.txt' }] as Message['attachments'] })]);
       openTab('Media');
       expect(screen.getByTestId('analytics-row')).toHaveTextContent('2');
-      expect(screen.getByTestId('analytics-summary')).toHaveTextContent('📎 2 total · 🖼️ 1 image · 🎬 0 videos · 📄 1 other');
+      expect(screen.getByTestId('analytics-summary')).toHaveTextContent('2 total: 1 image, 0 videos, 1 other');
     });
 
     it('Overview shows the headline tiles, top emoji and the most reacted message', () => {

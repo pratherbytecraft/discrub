@@ -125,7 +125,7 @@ export function emojiLabel(emoji: Reaction['emoji']): string {
 function excerptOf(message: Message): string {
   const text = (message.content ?? '').replace(/\s+/g, ' ').trim();
   if (text) return text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH - 1)}…` : text;
-  if (message.attachments?.length) return `📎 ${message.attachments.length === 1 ? message.attachments[0].filename : `${message.attachments.length} attachments`}`;
+  if (message.attachments?.length) return message.attachments.length === 1 ? `Attachment: ${message.attachments[0].filename}` : `${message.attachments.length} attachments`;
   if (message.embeds?.length) return '(embed)';
   if (message.sticker_items?.length) return '(sticker)';
   return '(no text)';
@@ -410,7 +410,7 @@ const media: AnalyticsReport = {
     return {
       rows,
       summary: attachments
-        ? `📎 ${attachments.toLocaleString()} total · 🖼️ ${plural(images, 'image')} · 🎬 ${plural(videos, 'video')} · 📄 ${(attachments - images - videos).toLocaleString()} other`
+        ? `${attachments.toLocaleString()} total: ${plural(images, 'image')}, ${plural(videos, 'video')}, ${(attachments - images - videos).toLocaleString()} other`
         : undefined,
       empty: 'No attachments in this feed.',
     };

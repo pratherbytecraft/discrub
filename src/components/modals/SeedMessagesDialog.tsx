@@ -143,7 +143,7 @@ const SeedMessagesDialog = ({ open, onClose }: SeedMessagesDialogProps) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pr: 5 }}>
-        🧪 Seed test messages
+        Seed test messages
         <DialogCloseIcon onClose={onClose} />
       </DialogTitle>
       <DialogContent sx={{ overflow: 'auto' }}>

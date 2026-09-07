@@ -116,7 +116,7 @@ describe('Analytics', () => {
     it('Media counts the fixture attachments', () => {
       openTab('Media');
       cy.get('[data-testid="analytics-row"]').should('have.length', 1).and('contain.text', '2');
-      cy.get('[data-testid="analytics-summary"]').should('contain.text', '📎 2 total');
+      cy.get('[data-testid="analytics-summary"]').should('contain.text', '2 total: ');
     });
 
     it('Overview shows the headline tiles and top posters', () => {

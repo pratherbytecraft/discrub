@@ -11,6 +11,7 @@ import {
   FilterList as FilterListIcon,
   Fullscreen as FullscreenIcon,
   FullscreenExit as FullscreenExitIcon,
+  ChatBubbleOutline,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import WelcomePanel from '@components/welcome/WelcomePanel';
@@ -1200,7 +1201,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
       )}
 
       {!isForumChannel && !isLoading && !error && messages.length === 0 && (
-        <EmptyState message={t('serverView.noMessagesFound', { context: scopeContext })} icon="💬" />
+        <EmptyState message={t('serverView.noMessagesFound', { context: scopeContext })} icon={<ChatBubbleOutline fontSize="inherit" />} />
       )}
 
       {!isForumChannel && !isLoading && !error && messages.length > 0 && (
