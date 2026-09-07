@@ -4,6 +4,20 @@ const API = '**/api/v10';
  * Set up thread discovery intercepts (guild channels only).
  * Public archived, private archived, joined private archived.
  */
+/**
+ * #257: after search runs dry the purge reads the channel's newest page
+ * once (list endpoint, no cursor). Default it to empty so the shared
+ * messages.json fixture (5 by the current user) doesn't add final-pass
+ * deletions to the exact-count assertions below. Tests that exercise the
+ * final pass override this LIFO.
+ */
+const interceptFinalPassEmpty = () => {
+  cy.intercept('GET', `${API}/channels/*/messages?*`, {
+    statusCode: 200,
+    body: [],
+  }).as('getNewestPage');
+};
+
 const interceptThreadDiscovery = (options?: {
   publicThreads?: object;
   privateThreads?: object;
@@ -36,6 +50,7 @@ const interceptThreadDiscovery = (options?: {
       },
     ).as('getJoinedPrivateThreads');
   });
+  interceptFinalPassEmpty();
 };
 
 /**
@@ -73,6 +88,8 @@ const interceptMessagesPurge = (options?: {
       }).as('searchChannelMessages');
     });
   });
+
+  interceptFinalPassEmpty();
 
   // Delete message
   cy.intercept('DELETE', `${API}/channels/*/messages/*`, {
@@ -620,6 +637,39 @@ describe('Bulk Purge Operations', () => {
       });
     });
 
+    it('#257: final pass deletes a matching message the search index missed and reports it', () => {
+      // Search returns 3 messages by the target (fixture). The newest page
+      // holds one more by the target that search never surfaced, plus one
+      // by someone else, plus one already seen via search.
+      cy.fixture('bulk-purge-search-results.json').then((searchResults) => {
+        const seen = searchResults.messages[0][0];
+        const fresh = { ...seen, id: '780000000000000099', content: 'posted a second ago' };
+        const theirs = { ...seen, id: '780000000000000098', author: { ...seen.author, id: '222333444555666777', username: 'someone_else' } };
+        cy.intercept('GET', `${API}/channels/*/messages?*`, {
+          statusCode: 200,
+          body: [fresh, theirs, seen],
+        }).as('getNewestPage');
+      });
+
+      selectChannelsForPurge('general');
+      openPurgeDialog();
+      addUserById('111222333444555666');
+      cy.wait('@lookupUser');
+      confirmPurge();
+      cy.get('[role="dialog"]').should('not.exist');
+      waitForPurgeComplete();
+
+      cy.get('@getNewestPage.all').should('have.length', 1);
+      cy.get('@deleteMessage.all').should('have.length', 4);
+      cy.get('@deleteMessage.all').then((calls) => {
+        const urls = (calls as any[]).map((c) => c.request.url as string);
+        expect(urls.some((u) => u.includes('780000000000000099')), 'fresh message deleted').to.be.true;
+        expect(urls.some((u) => u.includes('780000000000000098')), 'other author untouched').to.be.false;
+      });
+      verifyStatusEntry('Final pass over the newest messages in #general: found 1 more to process');
+      verifyStatusEntry('4 messages deleted, 1 from the final pass');
+    });
+
     it('should purge multiple channels sequentially', () => {
       selectChannelsForPurge('general', 'dev-chat');
       openPurgeDialog();
@@ -650,6 +700,13 @@ describe('Bulk Purge Operations', () => {
 
       interceptThreadDiscovery();
       interceptMessagesPurge();
+      // The history scan walks the list endpoint, so restore the shared
+      // messages fixture over the #257 empty default (LIFO).
+      cy.fixture('messages.json').then((messages) => {
+        cy.intercept('GET', `${API}/channels/*/messages?*`, (req) => {
+          req.reply({ statusCode: 200, body: req.url.includes('before=') ? [] : messages });
+        }).as('getMessages');
+      });
 
       // Deleted-account placeholder: the post-pomelo `deleted_user_` name
       // pattern flips the purge onto the full-history scan, since Discord's
@@ -2119,6 +2176,7 @@ describe('Bulk Purge Operations', () => {
         `${API}/channels/*/users/@me/threads/archived/private*`,
         { statusCode: 200, body: emptyThreads },
       ).as('getJoinedPrivateThreads');
+      interceptFinalPassEmpty();
 
       cy.intercept('GET', `${API}/users/*`, {
         statusCode: 200,
@@ -2305,6 +2363,7 @@ describe('Bulk Purge Operations', () => {
         `${API}/channels/*/users/@me/threads/archived/private*`,
         { statusCode: 200, body: emptyThreads },
       ).as('getJoinedPrivateThreads');
+      interceptFinalPassEmpty();
 
       cy.intercept('GET', `${API}/users/*`, {
         statusCode: 200,
@@ -2721,6 +2780,7 @@ describe('Bulk Purge Operations', () => {
         `${API}/channels/*/users/@me/threads/archived/private*`,
         { statusCode: 200, body: emptyThreads },
       ).as('getJoinedPrivateThreads');
+      interceptFinalPassEmpty();
 
       cy.intercept('GET', `${API}/users/*`, {
         statusCode: 200,

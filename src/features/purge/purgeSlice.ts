@@ -82,9 +82,15 @@ const formatPurgeDetail = (
   editedAttachmentsOnly: number,
   failed: number,
   noun?: string,
+  // #257: how many of `deleted` the final pass over the newest messages
+  // caught after search ran dry. Shown only when non-zero.
+  finalPass = 0,
 ): string => {
   const parts: string[] = [];
   parts.push(noun ? t('status.purge.detailDeletedNoun', { count: deleted, noun: t('status.purge.nounMessages') }) : t('status.purge.detailDeleted', { count: deleted }));
+  if (finalPass > 0) {
+    parts.push(t('status.purge.detailFinalPass', { count: finalPass }));
+  }
   if (editedAttachmentsOnly > 0) {
     parts.push(t('status.purge.detailStripped', { count: editedAttachmentsOnly }));
   }
@@ -603,6 +609,8 @@ interface ChannelPurgeResult {
   skipped: number;
   editedAttachmentsOnly: number;
   failed: number;
+  // #257: deletions the final pass over the newest messages caught.
+  finalPass: number;
 }
 
 /**
@@ -678,6 +686,17 @@ async function purgeChannelMessages(
   let totalProcessed = 0;
   let lastProgressDispatch = 0;
   let searchPageCount = 0;
+  // #257: Discord's search index lags on the freshest message or two, so
+  // a search-driven purge can end with matching messages still sitting
+  // at the top of the channel (seen on every live purge test; reported
+  // on r/discrub 2026-09-07). After search runs dry, read the newest page
+  // straight from the list endpoint, apply the same criteria client-side
+  // and push the leftovers through the normal processing loop. The page
+  // is fetched once per channel and shared across target users.
+  const seenIds = new Set<string>();
+  const finalPassIds = new Set<string>();
+  let totalFinalPass = 0;
+  let newestPage: Message[] | null | undefined;
 
   // Snapshot the in-flight accumulator at any cancel-throw site so the
   // caller's catch can recover work-already-done (#140) instead of
@@ -687,6 +706,7 @@ async function purgeChannelMessages(
     skipped: totalSkipped,
     editedAttachmentsOnly: totalEditedAttachmentsOnly,
     failed: totalFailed,
+    finalPass: totalFinalPass,
   });
 
   // Threads we un-archived during this run. The finally block re-archives
@@ -718,6 +738,57 @@ async function purgeChannelMessages(
   const includedSystemTypes = new Set(
     (systemMessageTypesToDelete ?? []).map(Number),
   );
+
+  // #257: the final pass only makes sense where search was the page
+  // source (the deleted-account scan already reads the list endpoint) and
+  // where the parent channel is inside any explicit channel narrowing.
+  const explicitChannelIds = filterOverrides?.channelIds ?? [];
+  const finalPassApplies =
+    explicitChannelIds.length === 0 || explicitChannelIds.includes(channelId);
+
+  const fetchNewestPage = async (): Promise<Message[]> => {
+    if (newestPage !== undefined) return newestPage ?? [];
+    const response = await withTransientRetry(
+      async () => (await discordService.fetchMessageData(token, '', channelId)) ?? { success: false },
+      {
+        getState,
+        onRetry: (attempt, delayMs) => {
+          dispatch(addStatusEntry({
+            level: 'warning',
+            message: t('status.purge.finalPassRetry', { label, seconds: Math.round(delayMs / 1000), attempt }),
+          }));
+        },
+      },
+    );
+    if (response.success && Array.isArray(response.data)) {
+      newestPage = response.data;
+    } else {
+      newestPage = null;
+      if (!checkCancelled(getState)) {
+        dispatch(addStatusEntry({
+          level: 'warning',
+          message: t('status.purge.finalPassFailed', { label }),
+        }));
+      }
+    }
+    return newestPage ?? [];
+  };
+
+  // Wrap a search page source so that, once it runs dry, one more page is
+  // yielded: the newest messages that match this user's criteria and were
+  // never seen during the search walk.
+  async function* withFinalPass(
+    source: AsyncGenerator<{ messages: Message[]; totalResults: number; pageIndex: number; aggregatedCount: number }>,
+    matchCriteria: SearchCriteria,
+  ): AsyncGenerator<{ messages: Message[]; totalResults: number; pageIndex: number; aggregatedCount: number; finalPass?: boolean }> {
+    yield* source;
+    if (checkCancelled(getState)) return;
+    const newest = await fetchNewestPage();
+    if (newest.length === 0) return;
+    const leftovers = applyRefineCriteria(newest, matchCriteria).filter((m) => !seenIds.has(m.id));
+    if (leftovers.length === 0) return;
+    yield { messages: leftovers, totalResults: 0, pageIndex: 0, aggregatedCount: 0, finalPass: true };
+  }
 
   for (const userId of targetUserIds) {
     const searchCriteria = buildSearchCriteria([userId], filterOverrides);
@@ -793,8 +864,11 @@ async function purgeChannelMessages(
           criteria: searchCriteria,
           getState,
         });
+    const pagesWithFinalPass = targetIsDeleted || !finalPassApplies
+      ? pageSource
+      : withFinalPass(pageSource, buildSearchCriteria([userId], filterOverrides));
 
-    for await (const page of pageSource) {
+    for await (const page of pagesWithFinalPass) {
       await waitWhilePaused(getState);
       if (checkCancelled(getState)) throw new CancelledError(partialMessages());
 
@@ -828,22 +902,31 @@ async function purgeChannelMessages(
 
       const messages = page.messages;
       if (messages.length === 0) continue;
+      messages.forEach((m) => seenIds.add(m.id));
 
-      searchPageCount++;
-      // Use the original totalResults (announced once at the top of the
-      // search) as the denominator. After deletions Discord's totalResults
-      // shrinks every page, which made the live denominator nonsensical
-      // ("75 of 64 matches fetched") as aggregatedCount kept growing past
-      // the now-shrunken total. The stable original keeps the progress
-      // signal honest: how much of the originally-reported set we've
-      // touched, not a live ratio against a moving target.
-      const batchDenom = totalForThisUser > 0
-        ? t('status.purge.batchDenom', { fetched: page.aggregatedCount.toLocaleString(), total: totalForThisUser.toLocaleString() })
-        : '';
-      dispatch(addStatusEntry({
-        level: 'info',
-        message: t('status.purge.searchBatch', { batch: searchPageCount, count: messages.length, denom: batchDenom }),
-      }));
+      if ((page as { finalPass?: boolean }).finalPass) {
+        messages.forEach((m) => finalPassIds.add(m.id));
+        dispatch(addStatusEntry({
+          level: 'info',
+          message: t('status.purge.finalPass', { label, count: messages.length }),
+        }));
+      } else {
+        searchPageCount++;
+        // Use the original totalResults (announced once at the top of the
+        // search) as the denominator. After deletions Discord's totalResults
+        // shrinks every page, which made the live denominator nonsensical
+        // ("75 of 64 matches fetched") as aggregatedCount kept growing past
+        // the now-shrunken total. The stable original keeps the progress
+        // signal honest: how much of the originally-reported set we've
+        // touched, not a live ratio against a moving target.
+        const batchDenom = totalForThisUser > 0
+          ? t('status.purge.batchDenom', { fetched: page.aggregatedCount.toLocaleString(), total: totalForThisUser.toLocaleString() })
+          : '';
+        dispatch(addStatusEntry({
+          level: 'info',
+          message: t('status.purge.searchBatch', { batch: searchPageCount, count: messages.length, denom: batchDenom }),
+        }));
+      }
 
       // Process each message in the batch
       for (let mi = 0; mi < messages.length; mi++) {
@@ -1084,6 +1167,7 @@ async function purgeChannelMessages(
           const response = await discordService.deleteMessage(token, message.id, targetChannelId);
           if (response.success) {
             totalDeleted++;
+            if (finalPassIds.has(message.id)) totalFinalPass++;
           } else {
             totalFailed++;
             dispatch(addStatusEntry({
@@ -1110,7 +1194,7 @@ async function purgeChannelMessages(
       if (totalDeleted > 0 || totalSkipped > 0 || totalEditedAttachmentsOnly > 0 || totalFailed > 0) {
         dispatch(addStatusEntry({
           level: 'info',
-          message: t('status.purge.progress', { detail: formatPurgeDetail(totalDeleted, totalSkipped, totalEditedAttachmentsOnly, totalFailed) }),
+          message: t('status.purge.progress', { detail: formatPurgeDetail(totalDeleted, totalSkipped, totalEditedAttachmentsOnly, totalFailed, undefined, totalFinalPass) }),
         }));
       }
 
@@ -1195,6 +1279,7 @@ async function purgeChannelMessages(
     skipped: totalSkipped,
     editedAttachmentsOnly: totalEditedAttachmentsOnly,
     failed: totalFailed,
+    finalPass: totalFinalPass,
   };
 
   } finally {
@@ -1782,6 +1867,7 @@ interface BulkPurgeRunResult {
     skipped: number;
     editedAttachmentsOnly: number;
     failed: number;
+    finalPass: number;
     reactionsRemoved: number;
   };
 }
@@ -1840,6 +1926,7 @@ const executeBulkPurge = async (
       skipped: 0,
       editedAttachmentsOnly: 0,
       failed: 0,
+      finalPass: 0,
       reactionsRemoved: 0,
     };
 
@@ -2192,12 +2279,15 @@ const executeBulkPurge = async (
               completedStats.skipped += result.skipped;
               completedStats.editedAttachmentsOnly += result.editedAttachmentsOnly;
               completedStats.failed += result.failed;
+              completedStats.finalPass += result.finalPass;
 
               const detail = formatPurgeDetail(
                 result.deleted,
                 result.skipped,
                 result.editedAttachmentsOnly,
                 result.failed,
+                undefined,
+                result.finalPass,
               );
               dispatch(addStatusEntry({
                 level: result.failed > 0 ? 'warning' : 'success',
@@ -2227,6 +2317,9 @@ const executeBulkPurge = async (
               }
               if (typeof partial.failed === 'number') {
                 completedStats.failed += partial.failed;
+              }
+              if (typeof partial.finalPass === 'number') {
+                completedStats.finalPass += partial.finalPass;
               }
               if (typeof partial.reactionsRemoved === 'number') {
                 completedStats.reactionsRemoved += partial.reactionsRemoved;
@@ -2265,6 +2358,7 @@ const executeBulkPurge = async (
         completedStats.editedAttachmentsOnly,
         completedStats.failed,
         'messages',
+        completedStats.finalPass,
       );
       if (wasCancelled) {
         if (isReactionsMode) {
@@ -2386,7 +2480,7 @@ export const purgeGuilds = createAsyncThunk<
     const delayModifier = selectDelayModifier(initialState);
     const discordService = getDiscordService();
     const errors: string[] = [];
-    const totals = { deleted: 0, skipped: 0, editedAttachmentsOnly: 0, failed: 0, reactionsRemoved: 0 };
+    const totals = { deleted: 0, skipped: 0, editedAttachmentsOnly: 0, failed: 0, finalPass: 0, reactionsRemoved: 0 };
     let serversProcessed = 0;
     let cancelled = false;
 
@@ -2472,6 +2566,7 @@ export const purgeGuilds = createAsyncThunk<
         totals.skipped += result.completedStats.skipped;
         totals.editedAttachmentsOnly += result.completedStats.editedAttachmentsOnly;
         totals.failed += result.completedStats.failed;
+        totals.finalPass += result.completedStats.finalPass;
         totals.reactionsRemoved += result.completedStats.reactionsRemoved;
         if (result.cancelled) { cancelled = true; break; }
 
@@ -2484,7 +2579,7 @@ export const purgeGuilds = createAsyncThunk<
       }
 
       const detail = config.mode === 'messages'
-        ? formatPurgeDetail(totals.deleted, totals.skipped, totals.editedAttachmentsOnly, totals.failed, 'messages')
+        ? formatPurgeDetail(totals.deleted, totals.skipped, totals.editedAttachmentsOnly, totals.failed, 'messages', totals.finalPass)
         : t('status.purge.reactionsRemovedDetail', { count: totals.reactionsRemoved });
       const serverCount = t('status.purge.serverCount', { processed: serversProcessed, count: guilds.length });
       if (cancelled || checkCancelled(getState)) {

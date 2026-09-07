@@ -407,6 +407,10 @@ describe('purgeSlice thunks', () => {
     // loop without terminating. Reset removes implementations too.
     mockFetchSearchMessageData.mockReset();
     mockFetchMessageData.mockReset();
+    // #257: every search-driven purge ends with one list-endpoint read of
+    // the channel's newest page. Default it to empty so tests that don't
+    // care about the final pass see no leftovers.
+    mockFetchMessageData.mockResolvedValue({ success: true, data: [] });
     // Restore default mock implementations (clearAllMocks only clears call history)
     (waitWhilePaused as Mock).mockResolvedValue(undefined);
     (checkCancelled as Mock).mockReturnValue(false);
@@ -1734,7 +1738,10 @@ describe('purgeSlice thunks', () => {
       );
 
       expect(mockFetchSearchMessageData).toHaveBeenCalled();
-      expect(mockFetchMessageData).not.toHaveBeenCalled();
+      // #257: the only list-endpoint read is the final pass over the
+      // newest page (no cursor), never a history walk.
+      expect(mockFetchMessageData).toHaveBeenCalledTimes(1);
+      expect(mockFetchMessageData.mock.calls[0][1]).toBe('');
     });
 
     it('#239: preserve applies on the history-scan path for deleted accounts too', async () => {
@@ -5723,6 +5730,113 @@ describe('purgeSlice thunks', () => {
   });
 
   // ── Status Log Detail ────────────────────────────────────────────────────
+
+  describe('bulkPurgeChannels — final pass over the newest messages (#257)', () => {
+    const OTHER_USER = { id: 'other-user', username: 'other' } as unknown as User;
+
+    it('deletes matching messages the search index never returned and reports them', async () => {
+      setupSearchResults([[mockMessage('m1')], []]);
+      // Newest page: one already-deleted-via-search id (search saw it), one
+      // fresh message search missed, one by someone else.
+      mockFetchMessageData.mockResolvedValue({
+        success: true,
+        data: [mockMessage('fresh-1'), mockMessage('m1'), mockMessage('theirs', 0, [], OTHER_USER)],
+      });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      expect(mockFetchMessageData).toHaveBeenCalledTimes(1);
+      expect(mockFetchMessageData).toHaveBeenCalledWith(TOKEN, '', 'ch1');
+      const deletedIds = mockDeleteMessage.mock.calls.map((c) => c[1]);
+      expect(deletedIds).toEqual(['m1', 'fresh-1']);
+
+      const entries = store.getState().status.entries.map((e: { message: string }) => e.message);
+      expect(entries.some((m) => m.includes('Final pass over the newest messages in #general: found 1 more to process'))).toBe(true);
+      expect(entries.some((m) => m.includes('Completed #general') && m.includes('2 deleted, 1 from the final pass'))).toBe(true);
+      expect(entries.some((m) => m.includes('2 messages deleted, 1 from the final pass'))).toBe(true);
+    });
+
+    it('applies the purge criteria to the newest page (content terms, other authors)', async () => {
+      setupSearchResults([[], []]);
+      const hit = { ...mockMessage('hit', 0, [], OTHER_USER), content: 'please remove THIS' } as Message;
+      const miss = { ...mockMessage('miss', 0, [], OTHER_USER), content: 'keep me' } as Message;
+      mockFetchMessageData.mockResolvedValue({ success: true, data: [hit, miss, mockMessage('mine')] });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([OTHER_USER.id]),
+          guildId: 'guild1',
+          searchCriteria: { searchMessageContents: ['this'] } as unknown as SearchCriteria,
+        }),
+      );
+
+      const deletedIds = mockDeleteMessage.mock.calls.map((c) => c[1]);
+      expect(deletedIds).toEqual(['hit']);
+    });
+
+    it('reads the newest page once per channel when purging several users', async () => {
+      setupSearchResults([[], []]);
+      mockFetchMessageData.mockResolvedValue({
+        success: true,
+        data: [mockMessage('a1'), mockMessage('b1', 0, [], OTHER_USER)],
+      });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id, OTHER_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      expect(mockFetchMessageData).toHaveBeenCalledTimes(1);
+      const deletedIds = mockDeleteMessage.mock.calls.map((c) => c[1]).sort();
+      expect(deletedIds).toEqual(['a1', 'b1']);
+    });
+
+    it('skips the final pass when the channel is outside an explicit channel filter', async () => {
+      setupSearchResults([[], []]);
+      mockFetchMessageData.mockResolvedValue({ success: true, data: [mockMessage('fresh')] });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+          searchCriteria: { channelIds: ['thread-only'] } as unknown as SearchCriteria,
+        }),
+      );
+
+      expect(mockFetchMessageData).not.toHaveBeenCalled();
+      expect(mockDeleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('warns and finishes cleanly when the newest page cannot be read', async () => {
+      setupSearchResults([[mockMessage('m1')], []]);
+      mockFetchMessageData.mockResolvedValue({ success: false, status: 403 });
+
+      const result = await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      expect(bulkPurgeChannels.fulfilled.match(result)).toBe(true);
+      expect(mockDeleteMessage).toHaveBeenCalledTimes(1);
+      const entries = store.getState().status.entries as Array<{ level: string; message: string }>;
+      expect(entries.some((e) => e.level === 'warning' && e.message.includes('Could not read the newest messages in #general for the final pass'))).toBe(true);
+      expect(entries.some((e) => e.message.includes('from the final pass'))).toBe(false);
+    });
+  });
 
   describe('status log detail', () => {
     it('never calls fetchActiveGuildThreads (bot-only endpoint)', async () => {

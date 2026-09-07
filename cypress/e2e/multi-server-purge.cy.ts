@@ -48,7 +48,9 @@ const stubThreads = () => {
   cy.intercept('GET', `${API}/guilds/*/threads/active`, { statusCode: 200, body: { threads: [], members: [] } });
   cy.intercept('GET', `${API}/channels/*/threads/archived/public*`, { statusCode: 200, body: { threads: [], has_more: false } });
   cy.intercept('GET', `${API}/channels/*/threads/archived/private*`, { statusCode: 200, body: { threads: [], has_more: false } });
-  cy.intercept('GET', `${API}/channels/*/users/@me/threads/archived/private*`, { statusCode: 200, body: { threads: [], has_more: false } });
+  cy.intercept('GET', `${API}/channels/*/users/@me/threads/archived/private*`, { statusCode: 200, body: { threads: [], has_more: false } });  // #257: the final pass reads each channel's newest page once; keep it
+  // empty so the shared messages fixture doesn't add deletions here.
+  cy.intercept('GET', `${API}/channels/*/messages?*`, { statusCode: 200, body: [] }).as('getNewestPage');
 };
 
 const textChannel = (id: string, name: string, guildId: string) => ({
