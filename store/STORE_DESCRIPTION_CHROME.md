@@ -39,6 +39,7 @@ Purge
 - Attachments-only mode strips attachments while keeping text
 - Reactions mode removes specific users' reactions
 - Multi-channel bulk purge with filter support
+- A final pass over each channel's newest messages catches what Discord's search index had not indexed yet
 - Archived threads auto-unarchive during purge and re-archive when done
 
 Reactions

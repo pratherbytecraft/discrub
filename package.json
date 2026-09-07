@@ -1,6 +1,6 @@
 {
   "name": "discrub",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "type": "module",
   "private": true,
   "scripts": {

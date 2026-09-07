@@ -110,6 +110,7 @@ Discrub 2.0 is the next major version. These features were not in Discrub Classi
 | Dropped Connection Mid-Scan | Scan ended quietly | Page fetch retried with backoff while you are offline; a scan that still cannot continue is reported as incomplete. If Discord stops answering while your connection is up, the run stops |
 | Multi-Server Purge | No | Select servers in the server list and purge your own messages from every readable channel in each, one operation with per-server progress, pause and cancel |
 | Rate-Limit Storms | Waited forever | Five 429s in a row, or a retry_after past 60 seconds, stop the operation with a status-log line instead of pausing for Resume |
+| Final Pass | No | After the search runs dry, the newest page of each channel is read directly and matching messages the search index had not caught yet are deleted; the summary reports the count |
 
 ### Search Improvements
 
@@ -166,6 +167,8 @@ All Discrub Classic settings carry over. New settings:
 - User data refresh rate
 - Export template selection
 - Export preset management
+
+Save keeps the dialog open and confirms inline; Cancel or the X closes it.
 
 ![Settings Dialog](docs/screenshots/settings/settings-dialog.png)
 

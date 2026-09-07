@@ -7,6 +7,7 @@ Features
 - Search by content, author, date, mentions, message type, embeds, files, images, links, audio, video, stickers, and pinned status
 - Refine loaded messages client-side without additional API calls; show only or hide a chosen system-message type
 - Purge your own messages in servers and DMs, with attachments-only mode, archived thread handling, and an opt-in to also delete chosen system-message categories (pins, joins, boosts)
+- A final pass over each channel's newest messages catches what Discord's search index had not indexed yet
 - Reaction management with per-user targeting and admin bulk removal
 - System messages (pins, joins, boosts, thread-created) rendered inline; forwarded messages render their full content; voice and stage channel chat browsable alongside text channels
 - Click-to-jump on reply bars and thread starters, and a focused view for full-width reading

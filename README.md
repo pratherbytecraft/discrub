@@ -170,6 +170,8 @@ Setting the Pinned dropdown to **False** preserves pinned messages during a purg
 
 While a purge runs, the status log progress label pulses on each update, with milestones every 5 deletes early, then 25, then 100.
 
+**Final pass.** Discord's search index lags on the newest message or two, so after the search runs dry Discrub reads the top of each channel directly, applies the same filters, and deletes what is left. The summary reports how many the final pass caught.
+
 ![Purge Dialog](docs/screenshots/purge/purge-dialog.png)
 
 ### Reactions
@@ -248,6 +250,8 @@ Settings are split across tabs:
 - **Operation Delays**: search and delete delays with a randomization modifier (with a `?` explainer on Discord rate limits), plus rest breaks: after 45 minutes of activity a long operation pauses for 10 minutes on its own (on by default)
 - **Export Preferences**: default format, template, media types and all export options
 - **Purge Behavior**: default mode (Delete, Strip Attachments Only, Remove Reactions) and media retention
+
+Save keeps the dialog open and shows a short confirmation, so you can keep editing. Close it with Cancel or the X.
 
 ![Settings](docs/screenshots/settings/settings-dialog.png)
 
@@ -538,7 +542,7 @@ Use the Ideas & Contact button (the lightbulb in the top bar) to reach support@p
 ### How do I update Discrub?
 
 - **Web app:** always serves the latest version; refresh the page
-- **Extension:** Chrome and Firefox update extensions on their own. For manual installs, re-download from the releases page
+- **Extension:** Chrome and Firefox update extensions on their own. For manual installs, re-download from the releases page. Reload any Discord tab that was open during the update.
 
 ### Does Discrub work offline?
 
