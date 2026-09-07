@@ -184,56 +184,60 @@ describe('exportService', () => {
     });
   });
 
-  describe('getFileIcon', () => {
-    it('should return image icon for image files', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('photo.jpg')).toBe('🖼️');
-      expect(getIcon('image.png')).toBe('🖼️');
-      expect(getIcon('animation.gif')).toBe('🖼️');
+  describe('getFileIcon (inline SVG, no emoji)', () => {
+    const kindOf = (name: string) => {
+      const svg = (service as any).getFileIcon.call(service, name) as string;
+      expect(svg.startsWith('<svg')).toBe(true);
+      expect(svg).toContain('aria-hidden="true"');
+      return svg.match(/file-icon-(\w+)/)?.[1];
+    };
+
+    it('maps images', () => {
+      expect(kindOf('photo.jpg')).toBe('image');
+      expect(kindOf('image.png')).toBe('image');
+      expect(kindOf('animation.gif')).toBe('image');
     });
 
-    it('should return video icon for video files', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('video.mp4')).toBe('🎬');
-      expect(getIcon('movie.webm')).toBe('🎬');
-      expect(getIcon('clip.mov')).toBe('🎬');
+    it('maps videos', () => {
+      expect(kindOf('video.mp4')).toBe('video');
+      expect(kindOf('movie.webm')).toBe('video');
+      expect(kindOf('clip.mov')).toBe('video');
     });
 
-    it('should return audio icon for audio files', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('song.mp3')).toBe('🎵');
-      expect(getIcon('audio.wav')).toBe('🎵');
+    it('maps audio', () => {
+      expect(kindOf('song.mp3')).toBe('audio');
+      expect(kindOf('audio.wav')).toBe('audio');
     });
 
-    it('should return document icon for document files', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('document.pdf')).toBe('📄');
-      expect(getIcon('text.txt')).toBe('📄');
+    it('maps documents', () => {
+      expect(kindOf('document.pdf')).toBe('document');
+      expect(kindOf('text.txt')).toBe('document');
     });
 
-    it('should return archive icon for archive files', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('archive.zip')).toBe('📦');
-      expect(getIcon('compressed.rar')).toBe('📦');
+    it('maps archives', () => {
+      expect(kindOf('archive.zip')).toBe('archive');
+      expect(kindOf('compressed.rar')).toBe('archive');
     });
 
-    it('should return code icon for code files', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('script.js')).toBe('📜');
-      expect(getIcon('component.tsx')).toBe('📜');
-      expect(getIcon('data.json')).toBe('📜');
+    it('maps code', () => {
+      expect(kindOf('script.js')).toBe('code');
+      expect(kindOf('component.tsx')).toBe('code');
+      expect(kindOf('data.json')).toBe('code');
     });
 
-    it('should return default icon for unknown extensions', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('file.unknown')).toBe('📁');
-      expect(getIcon('noextension')).toBe('📁');
+    it('falls back to a plain file for unknown extensions', () => {
+      expect(kindOf('file.unknown')).toBe('file');
+      expect(kindOf('noextension')).toBe('file');
     });
 
-    it('should be case insensitive', () => {
-      const getIcon = (service as any).getFileIcon.bind(service);
-      expect(getIcon('IMAGE.PNG')).toBe('🖼️');
-      expect(getIcon('VIDEO.MP4')).toBe('🎬');
+    it('is case insensitive', () => {
+      expect(kindOf('IMAGE.PNG')).toBe('image');
+      expect(kindOf('VIDEO.MP4')).toBe('video');
+    });
+
+    it('never emits an emoji', () => {
+      const svg = (service as any).getFileIcon.call(service, 'x.zip') as string;
+      expect(/[\u{1F300}-\u{1FAFF}]/u.test(svg)).toBe(false);
     });
   });
 

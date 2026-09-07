@@ -93,6 +93,9 @@ import { getUserRoleColor, getUserRoleIcon } from '@/utils/roleColorUtils';
  * Plain-text README for the 'text' format. Mirrors generateExportReadme but
  * stays text-only so it lives comfortably alongside the .txt page files.
  */
+/** File-type kinds for the inline attachment icons in HTML exports. */
+type FileIconKind = 'image' | 'video' | 'audio' | 'document' | 'archive' | 'code' | 'sticker' | 'file';
+
 export function generatePlainTextReadme(options: {
   isBulk: boolean;
   channelName?: string;
@@ -1152,7 +1155,7 @@ class ExportService {
                  } else if (previewMedia && isVideo && isBrowserPlayable) {
                    previewHtml = `<video class="attachment-preview" controls src="${href}"></video>`;
                  } else if (previewMedia && isVideo && !isBrowserPlayable) {
-                   previewHtml = `<div class="video-unsupported"><span class="video-unsupported-icon">🎬</span><span class="video-unsupported-text">.${ext.toUpperCase()} preview not available · <a href="${href}" ${isLocal ? '' : 'target="_blank" rel="noopener noreferrer"'}>download to play</a></span></div>`;
+                   previewHtml = `<div class="video-unsupported"><span class="video-unsupported-icon">${this.fileIconSvg('video')}</span><span class="video-unsupported-text">.${ext.toUpperCase()} preview not available · <a href="${href}" ${isLocal ? '' : 'target="_blank" rel="noopener noreferrer"'}>download to play</a></span></div>`;
                  }
 
                  return `
@@ -1215,7 +1218,7 @@ class ExportService {
                ${stickerItems.map((s) => {
                  const name = this.escapeHtml(s.name || 'sticker');
                  if (s.format_type === 3) {
-                   return `<div class="sticker-placeholder" title="${name}"><span class="sticker-placeholder-icon">🏷️</span><span class="sticker-placeholder-name">${name}</span></div>`;
+                   return `<div class="sticker-placeholder" title="${name}"><span class="sticker-placeholder-icon">${this.fileIconSvg('sticker')}</span><span class="sticker-placeholder-name">${name}</span></div>`;
                  }
                  const ext = s.format_type === 4 ? 'gif' : 'png';
                  return `<img class="sticker-img" src="stickers/${s.id}.${ext}" alt="${name}" title="${name}" loading="lazy">`;
@@ -1771,9 +1774,10 @@ ${buildContentThemeCSS(themeSet)}
     }
 
     .video-unsupported-icon {
-      font-size: 24px;
+      display: inline-flex;
       flex-shrink: 0;
     }
+    .video-unsupported-icon .file-icon { width: 24px; height: 24px; }
 
     .video-unsupported-text {
       line-height: 1.4;
@@ -1803,8 +1807,9 @@ ${buildContentThemeCSS(themeSet)}
     }
 
     .attachment-icon {
-      font-size: 20px;
+      display: inline-flex;
       flex-shrink: 0;
+      opacity: 0.85;
     }
 
     .attachment-name {
@@ -1938,7 +1943,8 @@ ${buildContentThemeCSS(themeSet)}
       text-align: center;
       padding: 8px;
     }
-    .sticker-placeholder-icon { font-size: 28px; }
+    .sticker-placeholder-icon { display: inline-flex; }
+    .sticker-placeholder-icon .file-icon { width: 28px; height: 28px; }
     .sticker-placeholder-name { font-size: 12px; word-break: break-word; }
 
     /* Poll card (#213) */
@@ -3853,26 +3859,45 @@ ${buildExportFooterHtml(this.exportFooterConfig, {
   }
 
   /**
-   * Get emoji icon for file extension
+   * Map a filename to a file-type kind for the attachment icon.
+   */
+  private fileIconKind(filename: string): FileIconKind {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const kinds: Record<string, FileIconKind> = {
+      jpg: 'image', jpeg: 'image', png: 'image', gif: 'image', webp: 'image', svg: 'image',
+      mp4: 'video', webm: 'video', mov: 'video', avi: 'video', mkv: 'video',
+      mp3: 'audio', wav: 'audio', ogg: 'audio', m4a: 'audio',
+      pdf: 'document', doc: 'document', docx: 'document', txt: 'document',
+      zip: 'archive', rar: 'archive', '7z': 'archive', tar: 'archive', gz: 'archive',
+      js: 'code', ts: 'code', jsx: 'code', tsx: 'code', py: 'code', java: 'code',
+      html: 'code', css: 'code', json: 'code', xml: 'code',
+    };
+    return kinds[ext] || 'file';
+  }
+
+  /**
+   * Inline SVG icon for a file-type kind (24px viewBox, currentColor, no
+   * emoji so the export reads the same on every platform and font).
+   */
+  private fileIconSvg(kind: FileIconKind): string {
+    const paths: Record<FileIconKind, string> = {
+      image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-6 6-2-2-5 5"/>',
+      video: '<rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3z"/>',
+      audio: '<path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+      document: '<path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5M9 13h6M9 17h6"/>',
+      archive: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M12 9v11M10 13h4"/>',
+      code: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
+      sticker: '<path d="M4 4h12l4 4v12H4z"/><path d="M16 4v4h4M16 20v-4h4"/>',
+      file: '<path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5"/>',
+    };
+    return `<svg class="file-icon file-icon-${kind}" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[kind]}</svg>`;
+  }
+
+  /**
+   * Inline SVG icon for a filename's file type.
    */
   private getFileIcon(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase() || '';
-    const icons: Record<string, string> = {
-      // Images
-      jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️',
-      // Videos
-      mp4: '🎬', webm: '🎬', mov: '🎬', avi: '🎬', mkv: '🎬',
-      // Audio
-      mp3: '🎵', wav: '🎵', ogg: '🎵', m4a: '🎵',
-      // Documents
-      pdf: '📄', doc: '📄', docx: '📄', txt: '📄',
-      // Archives
-      zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
-      // Code
-      js: '📜', ts: '📜', jsx: '📜', tsx: '📜', py: '📜', java: '📜',
-      html: '📜', css: '📜', json: '📜', xml: '📜',
-    };
-    return icons[ext] || '📁';
+    return this.fileIconSvg(this.fileIconKind(filename));
   }
 }
 
