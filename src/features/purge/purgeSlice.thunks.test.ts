@@ -5947,6 +5947,23 @@ describe('purgeSlice thunks', () => {
       expect(mockFetchActiveGuildThreads).not.toHaveBeenCalled();
     });
 
+    it('says "1 message deleted" at a count of one', async () => {
+      setupNoThreads();
+      setupSearchResults([[mockMessage('m1')], []]);
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      const messages = store.getState().status.entries.map((e) => e.message);
+      expect(messages.some((m) => m.startsWith('Purge: Complete ·') && m.includes('1 message deleted'))).toBe(true);
+      expect(messages.some((m) => m.includes('1 messages deleted'))).toBe(false);
+    });
+
     it('logs search batch details in messages mode', async () => {
       setupNoThreads();
       setupSearchResults([

@@ -1495,7 +1495,8 @@
     "purge": {
       "detailDeleted": "{{count}} gelöscht",
       "detailDeletedNoun": "{{count}} {{noun}} gelöscht",
-      "nounMessages": "Nachrichten",
+      "nounMessages_one": "Nachricht",
+      "nounMessages_other": "Nachrichten",
       "detailStripped": "{{count}} von Anhängen befreit",
       "detailSkipped": "{{count}} übersprungen",
       "detailFailed": "{{count}} fehlgeschlagen",

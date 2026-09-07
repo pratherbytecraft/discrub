@@ -41,6 +41,9 @@ describe('Themes hub', () => {
     openHub();
     cy.get('[data-testid="theme-card-discord-light"]').click();
     cy.get('body').should('have.css', 'background-color', LIGHT_BG);
+    // The pick applies from Redux before its IndexedDB write commits; a
+    // reload in that window loses the write. Wait for the persisted value.
+    cy.readIdbStore('settings').should('include', 'discord-light');
 
     cy.reload();
     cy.get('body').should('have.css', 'background-color', LIGHT_BG);

@@ -1495,7 +1495,8 @@
     "purge": {
       "detailDeleted": "{{count}} deleted",
       "detailDeletedNoun": "{{count}} {{noun}} deleted",
-      "nounMessages": "messages",
+      "nounMessages_one": "message",
+      "nounMessages_other": "messages",
       "detailStripped": "{{count}} stripped of attachments",
       "detailSkipped": "{{count}} skipped",
       "detailFailed": "{{count}} failed",

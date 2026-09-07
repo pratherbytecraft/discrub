@@ -413,11 +413,15 @@ const LandingPage = () => {
               onChange={(e) => setToken(e.target.value)}
               error={Boolean(authError)}
               helperText={
-                authError
-                  ? t('landing.invalidToken')
-                  : rememberMe
-                    ? t('landing.tokenSavedUntilLogout')
-                    : t('landing.tokenKeptUntilClose')
+                <>
+                  {authError && (
+                    <>
+                      {t('landing.invalidToken')}
+                      <br />
+                    </>
+                  )}
+                  {rememberMe ? t('landing.tokenSavedUntilLogout') : t('landing.tokenKeptUntilClose')}
+                </>
               }
               disabled={isLoading || !gateSatisfied}
               autoFocus={!isExtension && !hostedGate}

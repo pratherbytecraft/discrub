@@ -87,7 +87,7 @@ const formatPurgeDetail = (
   finalPass = 0,
 ): string => {
   const parts: string[] = [];
-  parts.push(noun ? t('status.purge.detailDeletedNoun', { count: deleted, noun: t('status.purge.nounMessages') }) : t('status.purge.detailDeleted', { count: deleted }));
+  parts.push(noun ? t('status.purge.detailDeletedNoun', { count: deleted, noun: t('status.purge.nounMessages', { count: deleted }) }) : t('status.purge.detailDeleted', { count: deleted }));
   if (finalPass > 0) {
     parts.push(t('status.purge.detailFinalPass', { count: finalPass }));
   }
