@@ -161,13 +161,14 @@ describe('BotsCorkboard', () => {
     expect(BOT_IDEA_MAILTO).toMatch(/^mailto:workbench@pratherbytecraft\.com/);
   });
 
-  it('pins a Discord-style message from the developer with a bundled avatar and a Follow link', async () => {
+  it('pins the developer card: avatar, name, DEV tag and a Follow link, no message (#261)', async () => {
     renderWithProviders(<BotsCorkboard />);
     const card = await screen.findByTestId('corkboard-developer');
     expect(card).toHaveTextContent(DEVELOPER.name);
     expect(card).toHaveTextContent('DEV');
-    expect(card).toHaveTextContent(`@${DEVELOPER.handle}`);
-    expect(card).toHaveTextContent(DEVELOPER.message);
+    // The handle appears once, inside the Follow link; no separate @handle line.
+    expect(card.textContent?.match(/@prathercc/g)).toHaveLength(1);
+    expect(card).not.toHaveTextContent('building Discrub');
     const photo = screen.getByRole('img', { name: `${DEVELOPER.name}'s avatar` });
     // Bundled asset, never a github.com fetch at launch.
     expect(photo.getAttribute('src')).not.toMatch(/github/);

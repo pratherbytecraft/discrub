@@ -23,8 +23,8 @@ import { t as translate } from '@/i18n';
  *
  * - Data-driven from `bots.ts`; one carousel slot showing the active bot's
  *   card on top of a stack of paper backs (so the slot visibly holds more
- *   than one card), a Discord-style message from the developer
- *   (`DeveloperCard`), plus sticky notes.
+ *   than one card), the developer's card (`DeveloperCard`: avatar, name,
+ *   Follow link), plus sticky notes.
  * - Collapsible; the folded state persists in `Discrub-state` and the board
  *   never re-expands on its own.
  * - Gentle auto-rotate: pauses on hover, waits out a longer grace after a

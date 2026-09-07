@@ -3,11 +3,11 @@ import { GitHub as GitHubIcon, OpenInNew as OpenIcon } from '@mui/icons-material
 import { DEVELOPER } from './developer';
 
 /**
- * A message from the developer, pinned to the corkboard and laid out like a
- * Discord message: round avatar, author line with a small DEV tag and the
- * handle where Discord puts the timestamp, then the message and a follow
- * link. Introduces the person before asking for the follow, which is why the
- * Follow button lives here instead of in the WelcomePanel action row.
+ * The developer's card, pinned to the corkboard: round avatar, name with a
+ * small DEV tag, and the Follow link underneath. No message body (#261,
+ * owner mockup 2026-09-07): the photo and name introduce the person, the
+ * link asks for the follow. That is why the Follow button lives here instead
+ * of in the WelcomePanel action row.
  */
 
 interface DeveloperCardProps {
@@ -20,7 +20,7 @@ const DeveloperCard = ({ pin, tilt }: DeveloperCardProps) => (
     data-testid="corkboard-developer"
     sx={{
       position: 'relative',
-      width: { xs: '100%', sm: 250 },
+      width: { xs: '100%', sm: 270 },
       p: 2,
       pt: 2.25,
       borderRadius: 1,
@@ -36,16 +36,16 @@ const DeveloperCard = ({ pin, tilt }: DeveloperCardProps) => (
     }}
   >
     {pin}
-    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
       <Box
         component="img"
         src={DEVELOPER.avatar}
         alt={`${DEVELOPER.name}'s avatar`}
-        width={40}
-        height={40}
-        sx={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, mt: 0.25 }}
+        width={48}
+        height={48}
+        sx={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
       />
-      <Box sx={{ minWidth: 0, flex: 1 }}>
+      <Box sx={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap', lineHeight: 1.2 }}>
           <Typography component="span" sx={{ fontWeight: 600, fontSize: '0.95rem' }}>
             {DEVELOPER.name}
@@ -56,19 +56,13 @@ const DeveloperCard = ({ pin, tilt }: DeveloperCardProps) => (
             color="primary"
             sx={{ height: 16, fontSize: '0.6rem', fontWeight: 700, '& .MuiChip-label': { px: 0.6 } }}
           />
-          <Typography component="span" variant="caption" color="text.secondary">
-            @{DEVELOPER.handle}
-          </Typography>
         </Box>
-        <Typography variant="body2" sx={{ lineHeight: 1.5, mt: 0.5, color: 'text.primary' }}>
-          {DEVELOPER.message}
-        </Typography>
         <Link
           href={DEVELOPER.profileUrl}
           target="_blank"
           rel="noopener noreferrer"
           underline="hover"
-          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 1, fontSize: '0.8rem', fontWeight: 600 }}
+          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontSize: '0.85rem', fontWeight: 600, whiteSpace: 'nowrap' }}
         >
           <GitHubIcon sx={{ fontSize: 16 }} /> Follow @{DEVELOPER.handle} <OpenIcon sx={{ fontSize: 14 }} />
         </Link>
