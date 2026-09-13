@@ -33,7 +33,7 @@ import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { selectSelectedGuild, selectRoles } from '@features/guild/guildSlice';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
-import { selectSettings } from '@features/app/appSlice';
+import { selectSettings, setFeedScrollAnchor, selectFeedScrollAnchor } from '@features/app/appSlice';
 import UserProfileModal from '@/components/modals/UserProfileModal';
 import AttachmentModal from '@/components/modals/AttachmentModal';
 import ReactionModal from '@/components/modals/ReactionModal';
@@ -137,6 +137,33 @@ const MessageFeed = ({
     getItemKey: useCallback((index: number) => chunks[index]?.key ?? index, [chunks]),
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
+
+  // Scroll anchor (2.2.0 layouts foundation). A layout swap or a Focus
+  // toggle remounts this component; remember the first visible message on
+  // unmount and scroll back to it once the same conversation and tab have
+  // their chunks again. Keyed on conversation and tab so a stale anchor
+  // never lands in another feed.
+  const anchorKey = `${contextId ?? ''}:${activeTab ?? 'main'}`;
+  const anchorKeyRef = useRef(anchorKey);
+  anchorKeyRef.current = anchorKey;
+  const virtualizerRef = useRef(rowVirtualizer);
+  virtualizerRef.current = rowVirtualizer;
+  useEffect(
+    () => () => {
+      const first = virtualizerRef.current.getVirtualItems()[0];
+      const chunk = first ? chunksRef.current[first.index] : undefined;
+      const messageId = chunk?.messages[0]?.id;
+      if (messageId) dispatch(setFeedScrollAnchor({ key: anchorKeyRef.current, messageId }));
+    },
+    [dispatch],
+  );
+  const scrollAnchor = useAppSelector(selectFeedScrollAnchor);
+  useEffect(() => {
+    if (!scrollAnchor || scrollAnchor.key !== anchorKey || chunks.length === 0) return;
+    const idx = chunks.findIndex((c) => c.messages.some((m) => m.id === scrollAnchor.messageId));
+    if (idx >= 0) rowVirtualizer.scrollToIndex(idx, { align: 'start' });
+    dispatch(setFeedScrollAnchor(null));
+  }, [scrollAnchor, anchorKey, chunks, rowVirtualizer, dispatch]);
 
   // Record each measured height into the estimator, then delegate to the
   // virtualizer's own measureElement. Kept ref-stable so rows don't re-attach.

@@ -160,6 +160,37 @@ describe('<MessageFeed />', () => {
     expect(screen.getAllByTestId('message-chunk')).toHaveLength(2);
   });
 
+  // 2.2.0 layouts foundation: a layout swap remounts the feed, so the first
+  // visible message is remembered on unmount and scrolled back to on remount.
+  it('remembers the first visible message on unmount and clears it once restored', () => {
+    const messages = [
+      createMockMessage({ id: 'm1', content: 'a' }),
+      createMockMessage({ id: 'm2', content: 'b' }),
+    ];
+    const { store, unmount } = renderWithProviders(<MessageFeed {...baseProps} />, {
+      preloadedState: stateWithMessages(messages),
+    });
+    expect(store.getState().app.feedScrollAnchor ?? null).toBeNull();
+    unmount();
+    const anchor = store.getState().app.feedScrollAnchor;
+    expect(anchor?.messageId).toBe('m1');
+    expect(anchor?.key.endsWith(':main')).toBe(true);
+
+    // Remount into the same conversation: the anchor is consumed.
+    const state = stateWithMessages(messages);
+    state.app = { ...state.app, feedScrollAnchor: anchor };
+    const second = renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: state });
+    expect(second.store.getState().app.feedScrollAnchor ?? null).toBeNull();
+  });
+
+  it('leaves an anchor for another conversation alone', () => {
+    const messages = [createMockMessage({ id: 'm1', content: 'a' })];
+    const state = stateWithMessages(messages);
+    state.app = { ...state.app, feedScrollAnchor: { key: 'other-channel:main', messageId: 'm1' } };
+    const { store } = renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: state });
+    expect(store.getState().app.feedScrollAnchor).toEqual({ key: 'other-channel:main', messageId: 'm1' });
+  });
+
   it('toggles sort direction when the toolbar button is clicked', () => {
     const messages = [createMockMessage({ id: 'm1', content: 'hello' })];
     const { store } = renderWithProviders(<MessageFeed {...baseProps} />, {

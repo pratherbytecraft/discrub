@@ -4,6 +4,8 @@ import appReducer, {
   setDialogOpen,
   toggleDialog,
   closeAllDialogs,
+  setFeedScrollAnchor,
+  selectFeedScrollAnchor,
   selectDialogOpen,
   selectDialogs,
   setSuggestedLanguage,
@@ -159,6 +161,17 @@ describe('appSlice', () => {
 
     it('dialog state is not a persisted setting', () => {
       store.dispatch(setDialogOpen({ dialog: 'filters', open: true }));
+      expect(store.getState().app.settings).toBeNull();
+    });
+  });
+
+  describe('feed scroll anchor', () => {
+    it('starts empty, holds the last unmount position, and clears', () => {
+      expect(selectFeedScrollAnchor(store.getState())).toBeNull();
+      store.dispatch(setFeedScrollAnchor({ key: 'ch1:main', messageId: 'm42' }));
+      expect(selectFeedScrollAnchor(store.getState())).toEqual({ key: 'ch1:main', messageId: 'm42' });
+      store.dispatch(setFeedScrollAnchor(null));
+      expect(selectFeedScrollAnchor(store.getState())).toBeNull();
       expect(store.getState().app.settings).toBeNull();
     });
   });

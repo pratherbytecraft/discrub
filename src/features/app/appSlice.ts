@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
-import { AppTask, SidebarView, FeedDialog, initialAppState, closedFeedDialogs } from './appTypes';
+import { AppTask, SidebarView, FeedDialog, FeedScrollAnchor, initialAppState, closedFeedDialogs } from './appTypes';
 import type { RootState } from '@/app/store';
 import { storage, migrateAllStorage } from '@/extension/storage';
 import {
@@ -199,6 +199,9 @@ const appSlice = createSlice({
     closeAllDialogs: (state) => {
       state.dialogs = { ...closedFeedDialogs };
     },
+    setFeedScrollAnchor: (state, action: PayloadAction<FeedScrollAnchor | null>) => {
+      state.feedScrollAnchor = action.payload;
+    },
     resetTask: (state) => {
       state.task = initialAppState.task;
       state.discrubPaused = false;
@@ -265,6 +268,7 @@ export const {
   setDialogOpen,
   toggleDialog,
   closeAllDialogs,
+  setFeedScrollAnchor,
   resetTask,
 } = appSlice.actions;
 
@@ -285,6 +289,7 @@ export const selectIsMinimized = (state: RootState) => state.app.isMinimized;
 export const selectFocusedView = (state: RootState) => state.app.focusedView;
 export const selectKofiOverlayOpen = (state: RootState) => state.app.kofiOverlayOpen;
 export const selectSidebarView = (state: RootState) => state.app.sidebarView;
+export const selectFeedScrollAnchor = (state: RootState) => state.app.feedScrollAnchor ?? null;
 export const selectDialogs = (state: RootState) => state.app.dialogs ?? closedFeedDialogs;
 export const selectDialogOpen = (dialog: FeedDialog) => (state: RootState) => selectDialogs(state)[dialog];
 

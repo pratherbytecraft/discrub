@@ -18,6 +18,11 @@ export type SidebarView = 'server' | 'package';
  */
 export type FeedDialog = 'filters' | 'export' | 'forumExport' | 'loadAll' | 'threadLoad' | 'analytics';
 export type FeedDialogs = Record<FeedDialog, boolean>;
+export interface FeedScrollAnchor {
+  /** `<conversation id>:<thread tab id or main>`. */
+  key: string;
+  messageId: string;
+}
 export const closedFeedDialogs: FeedDialogs = {
   filters: false, export: false, forumExport: false, loadAll: false, threadLoad: false, analytics: false,
 };
@@ -54,6 +59,12 @@ export interface AppState {
    * selectors and reducers treat a missing record as all closed.
    */
   dialogs?: FeedDialogs;
+  /**
+   * First visible message of the feed the last time it unmounted, keyed by
+   * conversation and tab, so a layout swap or a Focus toggle that remounts
+   * the feed lands back on the same message. Transient, never persisted.
+   */
+  feedScrollAnchor?: FeedScrollAnchor | null;
   task: AppTask;
   settings: AppSettings | null;
   /**
@@ -81,6 +92,7 @@ export const initialAppState: AppState = {
   kofiOverlayOpen: false,
   sidebarView: 'server',
   dialogs: { ...closedFeedDialogs },
+  feedScrollAnchor: null,
   task: {
     status: 'idle',
     message: '',
