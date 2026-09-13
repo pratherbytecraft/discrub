@@ -6,8 +6,8 @@ import { useAppSelector, useAppDispatch } from '@/app/hooks';
 import {
   selectSetting,
   selectSettings,
-  selectSidebarView,
   selectFocusedView,
+  selectSidebarView,
   setFocusedView,
   toggleFocusedView,
 } from '@features/app/appSlice';
@@ -41,12 +41,6 @@ import {
 import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
-import TopBar from './TopBar';
-import ThemeAccentStrip from '@/theme/ThemeAccentStrip';
-import Sidebar from '@components/navigation/Sidebar';
-import ServerView from '@containers/ServerView/ServerView';
-import PackageView from '@components/package/PackageView';
-import DonationDrawer, { DRAWER_WIDTH } from '@components/donations/DonationDrawer';
 import AnnouncementModal from '@components/modals/AnnouncementModal';
 import HotkeysReferenceModal from '@components/modals/HotkeysReferenceModal';
 import { useBeforeUnloadWarning } from '@/hooks/useBeforeUnloadWarning';
@@ -57,12 +51,11 @@ import { useWakeLock } from '@/hooks/useWakeLock';
 import { useOperationThrottleOptOut } from '@/hooks/useOperationThrottleOptOut';
 import { useRestBreaks } from '@/hooks/useRestBreaks';
 import { useTour } from '@/hooks/useTour';
-import StatusPanel from '@components/ui/StatusPanel';
-import FloatingPauseControl from '@components/ui/FloatingPauseControl';
 import Toast from '@components/ui/Toast';
 import TourTooltip from '@components/welcome/TourTooltip';
 import { buildShellTourSteps } from '@components/welcome/tourSteps';
 import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
+import { resolveShell } from '@/layouts/registry';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -74,6 +67,8 @@ const MainLayout = () => {
   const showFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const sidebarView = useAppSelector(selectSidebarView);
   const focusedView = useAppSelector(selectFocusedView);
+  // The layout setting (APP_LAYOUT, core 1.0.13) picks the shell once it lands; Classic until then.
+  const Shell = resolveShell('classic');
   const theme = useTheme();
   // Below `md` the Sidebar becomes a temporary drawer opened from the
   // TopBar hamburger, and the Ko-fi feed overlays instead of reserving
@@ -286,52 +281,14 @@ const MainLayout = () => {
           skipBeacon: true,
         }}
       />
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          // dvh tracks the visible viewport on phones (iOS URL bar), so the
-          // StatusPanel stays pinned to the bottom edge instead of below the fold.
-          height: '100vh',
-          '@supports (height: 100dvh)': { height: '100dvh' },
-          marginRight: drawerOpen ? `${DRAWER_WIDTH}px` : 0,
-          transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
-        }}
-      >
-        {!focusedView && <TopBar onMenuClick={() => setSidebarOpen(true)} />}
-        {!focusedView && <ThemeAccentStrip />}
-
-        <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
-          {!focusedView && <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />}
-
-          <Box
-            sx={{
-              flexGrow: 1,
-              overflow: 'auto',
-              backgroundColor: 'background.default',
-            }}
-          >
-            {sidebarView === 'package' ? (
-              <PackageView />
-            ) : (
-              <ServerView onStartShellTour={shellTour.start} />
-            )}
-          </Box>
-        </Box>
-
-        {!focusedView && <StatusPanel />}
-      </Box>
-
-      {!focusedView && <DonationDrawer />}
-
-      {/* Focused view hides the StatusPanel (the only other
-          PauseResumeControls mount), so float a compact pill above the
-          feed to keep pause/resume/cancel — and the Space/mod+.
-          hotkeys registered inside it — reachable during heavy
-          operations (#237). Mutually exclusive with the StatusPanel
-          mount above; the component self-nulls when no heavy op is
-          running. */}
-      {focusedView && <FloatingPauseControl />}
+      <Shell
+        focusedView={focusedView}
+        sidebarOpen={sidebarOpen}
+        onSidebarOpen={() => setSidebarOpen(true)}
+        onSidebarClose={() => setSidebarOpen(false)}
+        drawerOpen={drawerOpen}
+        onStartShellTour={shellTour.start}
+      />
 
       <AnnouncementModal
         open={hasNewAnnouncement}

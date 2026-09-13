@@ -1,0 +1,12 @@
+import type { LayoutKey, LayoutShell } from './types';
+import ClassicShell from './classic/ClassicShell';
+
+/**
+ * Every layout that ships. Keys missing here fall back to Classic, so a
+ * setting value from a newer build never renders nothing.
+ */
+export const LAYOUT_SHELLS: Partial<Record<LayoutKey, LayoutShell>> = {
+  classic: ClassicShell,
+};
+
+export const resolveShell = (key: LayoutKey | undefined): LayoutShell => LAYOUT_SHELLS[key ?? 'classic'] ?? ClassicShell;
