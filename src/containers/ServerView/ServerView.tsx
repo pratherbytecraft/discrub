@@ -14,6 +14,7 @@ import {
   ChatBubbleOutline,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import type { FeedDialog } from '@features/app/appTypes';
 import WelcomePanel from '@components/welcome/WelcomePanel';
 import TourTooltip from '@components/welcome/TourTooltip';
 import TourButton from '@components/welcome/TourButton';
@@ -34,6 +35,9 @@ import {
   selectSearchDelay,
   selectFocusedView,
   toggleFocusedView,
+  selectDialogs,
+  setDialogOpen,
+  toggleDialog,
 } from '@features/app/appSlice';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
@@ -184,21 +188,26 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
       dispatch(clearRefineCriteria());
     }
   };
-  const [filterModalOpen, setFilterModalOpen] = useState(false);
   const filterModalKeyRef = useRef(0);
+  // Dialog open state lives in the app slice (2.2.0 layouts foundation) so a
+  // layout swap that remounts this view keeps an open dialog open.
+  const dialogs = useAppSelector(selectDialogs);
+  const filterModalOpen = dialogs.filters;
+  const exportDialogOpen = dialogs.export;
+  const forumExportDialogOpen = dialogs.forumExport;
+  const loadAllDialogOpen = dialogs.loadAll;
+  const threadLoadOpen = dialogs.threadLoad;
+  const analyticsOpen = dialogs.analytics;
+  const openDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: true })), [dispatch]);
+  const closeDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: false })), [dispatch]);
   // Close filter modal when switching tabs so it re-opens with correct tab criteria
   const prevTabRef = useRef(activeTab);
   useEffect(() => {
     if (prevTabRef.current !== activeTab) {
-      setFilterModalOpen(false);
+      closeDialog('filters');
       prevTabRef.current = activeTab;
     }
-  }, [activeTab]);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [forumExportDialogOpen, setForumExportDialogOpen] = useState(false);
-  const [loadAllDialogOpen, setLoadAllDialogOpen] = useState(false);
-  const [threadLoadOpen, setThreadLoadOpen] = useState(false);
-  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  }, [activeTab, closeDialog]);
   // Analytics Threads report: thread id → name from every source the feed knows
   // (discovered threads for this channel, forum posts, open thread tabs).
   const analyticsThreadNames = useMemo(() => {
@@ -222,12 +231,12 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
     'openFilters',
     () => {
       if (filterModalOpen) {
-        setFilterModalOpen(false);
+        closeDialog('filters');
       } else {
         // Bump the remount key only on open; closing leaves the
         // existing modal instance to unmount cleanly.
         filterModalKeyRef.current++;
-        setFilterModalOpen(true);
+        openDialog('filters');
       }
     },
     isChannelLoaded && !isForumChannel,
@@ -236,9 +245,9 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
     'openExport',
     () => {
       if (isForumChannel) {
-        setForumExportDialogOpen((open) => !open);
+        dispatch(toggleDialog('forumExport'));
       } else {
-        setExportDialogOpen((open) => !open);
+        dispatch(toggleDialog('export'));
       }
     },
     isChannelLoaded &&
@@ -247,12 +256,12 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   );
   useHotkey(
     'openAnalytics',
-    () => setAnalyticsOpen((open) => !open),
+    () => dispatch(toggleDialog('analytics')),
     isChannelLoaded && !isForumChannel && messages.length > 0,
   );
   useHotkey(
     'loadAll',
-    () => setLoadAllDialogOpen((open) => !open),
+    () => dispatch(toggleDialog('loadAll')),
     isChannelLoaded &&
       !isForumChannel &&
       pagination.hasMore &&
@@ -263,7 +272,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   );
   useHotkey(
     'loadThread',
-    () => setThreadLoadOpen((open) => !open),
+    () => dispatch(toggleDialog('threadLoad')),
     isChannelLoaded,
   );
   const showPartialResultsWarning = partialResultsWarnings[activeTab ?? 'main'] ?? false;
@@ -742,7 +751,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   const handleThreadLoad = async (threadId: string) => {
     if (!token) return;
 
-    setThreadLoadOpen(false);
+    closeDialog('threadLoad');
     dispatch(addStatusEntry({ level: 'info', message: t('serverView.loadingThread') }));
 
     try {
@@ -784,7 +793,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   const handleLoadAll = async () => {
     if (!token || isOperationRunning) return;
 
-    setLoadAllDialogOpen(false);
+    closeDialog('loadAll');
 
     let dispatchResult;
     if (activeTab) {
@@ -946,7 +955,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
                   variant="outlined"
                   size="small"
                   startIcon={<LoadAllIcon />}
-                  onClick={() => setLoadAllDialogOpen(true)}
+                  onClick={() => openDialog('loadAll')}
                   disabled={isLoading || pagination.isLoadingAll || isOperationRunning}
                 >
                   {t('serverView.loadAll')}
@@ -960,7 +969,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
                 variant="outlined"
                 size="small"
                 startIcon={<FilterListIcon />}
-                onClick={() => { filterModalKeyRef.current++; setFilterModalOpen(true); }}
+                onClick={() => { filterModalKeyRef.current++; openDialog('filters'); }}
                 data-tour="search-filters"
                 data-testid="search-filters-button"
                 hotkeyActionId="openFilters"
@@ -974,7 +983,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
                 variant="outlined"
                 size="small"
                 startIcon={<ThreadIcon />}
-                onClick={() => setThreadLoadOpen(true)}
+                onClick={() => openDialog('threadLoad')}
               >
                 {t('serverView.loadThread')}
               </Button>
@@ -985,7 +994,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
                   variant="outlined"
                   size="small"
                   startIcon={<AnalyticsIcon />}
-                  onClick={() => setAnalyticsOpen(true)}
+                  onClick={() => openDialog('analytics')}
                   disabled={messages.length === 0}
                   data-tour="analytics-button"
                 >
@@ -1014,7 +1023,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
                   variant="outlined"
                   size="small"
                   startIcon={<ExportIcon />}
-                  onClick={() => setForumExportDialogOpen(true)}
+                  onClick={() => openDialog('forumExport')}
                   disabled={forumThreads.length === 0 || isOperationRunning}
                   data-tour="export-button"
                 >
@@ -1027,7 +1036,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
                   variant="outlined"
                   size="small"
                   startIcon={<ExportIcon />}
-                  onClick={() => setExportDialogOpen(true)}
+                  onClick={() => openDialog('export')}
                   data-tour="export-button"
                   disabled={messages.length === 0 || isOperationRunning}
                 >
@@ -1053,7 +1062,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
         <FilterModal
           key={filterModalKeyRef.current}
           open={filterModalOpen}
-          onClose={() => setFilterModalOpen(false)}
+          onClose={() => closeDialog('filters')}
           onServerSearch={handleServerSearch}
           onRefine={handleRefine}
           onClearSearch={handleClearServerSearch}
@@ -1215,12 +1224,12 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
 
       <ExportDialog
         open={exportDialogOpen}
-        onClose={() => setExportDialogOpen(false)}
+        onClose={() => closeDialog('export')}
       />
 
       <BulkExportDialog
         open={forumExportDialogOpen}
-        onClose={() => setForumExportDialogOpen(false)}
+        onClose={() => closeDialog('forumExport')}
         channels={forumThreads}
         mode="channels"
         guildId={selectedGuild?.id}
@@ -1228,14 +1237,14 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
 
       <LoadAllDialog
         open={loadAllDialogOpen}
-        onClose={() => setLoadAllDialogOpen(false)}
+        onClose={() => closeDialog('loadAll')}
         onConfirm={handleLoadAll}
         contextLabel={contextLabel}
       />
 
       <ThreadLoadModal
         open={threadLoadOpen}
-        onClose={() => setThreadLoadOpen(false)}
+        onClose={() => closeDialog('threadLoad')}
         onLoad={handleThreadLoad}
         channel={selectedChannel}
         guildId={selectedGuild?.id ?? null}
@@ -1243,7 +1252,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
 
       <AnalyticsModal
         open={analyticsOpen}
-        onClose={() => setAnalyticsOpen(false)}
+        onClose={() => closeDialog('analytics')}
         messages={messages}
         userMap={userMap}
         containerId={activeTab ?? selectedChannel?.id ?? null}

@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
-import { AppTask, SidebarView, initialAppState } from './appTypes';
+import { AppTask, SidebarView, FeedDialog, initialAppState, closedFeedDialogs } from './appTypes';
 import type { RootState } from '@/app/store';
 import { storage, migrateAllStorage } from '@/extension/storage';
 import {
@@ -189,6 +189,16 @@ const appSlice = createSlice({
     setPreviewThemeId: (state, action: PayloadAction<string | null>) => {
       state.previewThemeId = action.payload;
     },
+    setDialogOpen: (state, action: PayloadAction<{ dialog: FeedDialog; open: boolean }>) => {
+      state.dialogs = { ...closedFeedDialogs, ...state.dialogs, [action.payload.dialog]: action.payload.open };
+    },
+    toggleDialog: (state, action: PayloadAction<FeedDialog>) => {
+      const open = !(state.dialogs?.[action.payload] ?? false);
+      state.dialogs = { ...closedFeedDialogs, ...state.dialogs, [action.payload]: open };
+    },
+    closeAllDialogs: (state) => {
+      state.dialogs = { ...closedFeedDialogs };
+    },
     resetTask: (state) => {
       state.task = initialAppState.task;
       state.discrubPaused = false;
@@ -252,6 +262,9 @@ export const {
   setTask,
   setSettings,
   setPreviewThemeId,
+  setDialogOpen,
+  toggleDialog,
+  closeAllDialogs,
   resetTask,
 } = appSlice.actions;
 
@@ -272,6 +285,8 @@ export const selectIsMinimized = (state: RootState) => state.app.isMinimized;
 export const selectFocusedView = (state: RootState) => state.app.focusedView;
 export const selectKofiOverlayOpen = (state: RootState) => state.app.kofiOverlayOpen;
 export const selectSidebarView = (state: RootState) => state.app.sidebarView;
+export const selectDialogs = (state: RootState) => state.app.dialogs ?? closedFeedDialogs;
+export const selectDialogOpen = (dialog: FeedDialog) => (state: RootState) => selectDialogs(state)[dialog];
 
 // Settings helper selectors
 export const selectSetting = (key: DiscrubSetting) => (state: RootState) =>

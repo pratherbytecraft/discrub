@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { createTestStore, TestStore } from '@/test/test-utils';
 import appReducer, {
+  setDialogOpen,
+  toggleDialog,
+  closeAllDialogs,
+  selectDialogOpen,
+  selectDialogs,
   setSuggestedLanguage,
   setRateLimitStopped,
   setRequestsRefusedStopped,
@@ -120,6 +125,41 @@ describe('appSlice', () => {
       expect(state.app.task.status).toBe('idle');
       expect(state.app.task.message).toBe('');
       expect(state.app.settings).toBeNull();
+    });
+  });
+
+  describe('feed dialogs', () => {
+    it('start closed', () => {
+      expect(selectDialogs(store.getState())).toEqual({
+        filters: false, export: false, forumExport: false, loadAll: false, threadLoad: false, analytics: false,
+      });
+    });
+
+    it('setDialogOpen opens and closes one dialog and leaves the rest alone', () => {
+      store.dispatch(setDialogOpen({ dialog: 'export', open: true }));
+      expect(selectDialogOpen('export')(store.getState())).toBe(true);
+      expect(selectDialogOpen('filters')(store.getState())).toBe(false);
+      store.dispatch(setDialogOpen({ dialog: 'export', open: false }));
+      expect(selectDialogOpen('export')(store.getState())).toBe(false);
+    });
+
+    it('toggleDialog flips one dialog', () => {
+      store.dispatch(toggleDialog('loadAll'));
+      expect(selectDialogOpen('loadAll')(store.getState())).toBe(true);
+      store.dispatch(toggleDialog('loadAll'));
+      expect(selectDialogOpen('loadAll')(store.getState())).toBe(false);
+    });
+
+    it('closeAllDialogs closes every open dialog', () => {
+      store.dispatch(setDialogOpen({ dialog: 'analytics', open: true }));
+      store.dispatch(setDialogOpen({ dialog: 'threadLoad', open: true }));
+      store.dispatch(closeAllDialogs());
+      expect(Object.values(selectDialogs(store.getState())).some(Boolean)).toBe(false);
+    });
+
+    it('dialog state is not a persisted setting', () => {
+      store.dispatch(setDialogOpen({ dialog: 'filters', open: true }));
+      expect(store.getState().app.settings).toBeNull();
     });
   });
 

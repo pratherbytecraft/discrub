@@ -11,6 +11,17 @@ export interface AppTask {
 
 export type SidebarView = 'server' | 'package';
 
+/**
+ * The feed dialogs whose open state lives in the store (2.2.0 layouts,
+ * foundation). Held here rather than in ServerView useState so a layout
+ * swap that remounts the feed keeps an open dialog open.
+ */
+export type FeedDialog = 'filters' | 'export' | 'forumExport' | 'loadAll' | 'threadLoad' | 'analytics';
+export type FeedDialogs = Record<FeedDialog, boolean>;
+export const closedFeedDialogs: FeedDialogs = {
+  filters: false, export: false, forumExport: false, loadAll: false, threadLoad: false, analytics: false,
+};
+
 export interface AppState {
   discrubPaused: boolean;
   discrubCancelled: boolean;
@@ -37,6 +48,12 @@ export interface AppState {
   /** Mobile-only (< md): Ko-fi feed shown as a temporary overlay. Never persisted. */
   kofiOverlayOpen: boolean;
   sidebarView: SidebarView;
+  /**
+   * Open state of the feed dialogs. Never persisted. Optional like the
+   * other transient flags so hand built test states stay valid; the
+   * selectors and reducers treat a missing record as all closed.
+   */
+  dialogs?: FeedDialogs;
   task: AppTask;
   settings: AppSettings | null;
   /**
@@ -63,6 +80,7 @@ export const initialAppState: AppState = {
   focusedView: false,
   kofiOverlayOpen: false,
   sidebarView: 'server',
+  dialogs: { ...closedFeedDialogs },
   task: {
     status: 'idle',
     message: '',
