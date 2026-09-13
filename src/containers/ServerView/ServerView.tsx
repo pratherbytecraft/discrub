@@ -56,6 +56,9 @@ import {
   selectMessages,
   setFilteredMessages,
   setThreadFilteredMessages,
+  setSearchCriteria,
+  setThreadSearchCriteria,
+  selectSearchCriteria,
   deleteMessages,
   dismissLoadAllCancelled,
   editMessage,
@@ -163,7 +166,19 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   const isForumChannelType = selectedChannel?.type === ChannelType.GUILD_FORUM || selectedChannel?.type === ChannelType.GUILD_MEDIA;
   // Show forum thread list only when on the main tab (not when viewing a thread tab's messages)
   const isForumChannel = isForumChannelType && !activeTab;
-  const tabSearchCriteriaRef = useRef<Record<string, SearchCriteria>>({});
+  // Server search criteria live in the message slice (main and per thread
+  // tab), the same place the search thunks write them, so they survive a
+  // layout swap (2.2.0 foundation) and the chips, the Filters dialog and the
+  // click-to-search thunks all read one value. clearMessages nulls the main
+  // entry on every conversation switch (#226) and removeThreadTab drops a
+  // tab's entry with the tab.
+  const mainSearchCriteria = useAppSelector(selectSearchCriteria);
+  const savedSearchCriteria: SearchCriteria | undefined =
+    (activeTab ? threadTabs[activeTab]?.searchCriteria : mainSearchCriteria) ?? undefined;
+  const saveSearchCriteria = (criteria: SearchCriteria | null) => {
+    if (activeTab) dispatch(setThreadSearchCriteria({ threadId: activeTab, criteria }));
+    else dispatch(setSearchCriteria(criteria));
+  };
   // Refine criteria now lives in Redux (state.message.refineCriteria,
   // state.message.threadTabs[id].refineCriteria) so data-arrival reducers
   // can re-apply it as new pages stream in. Reading via selectors.
@@ -327,14 +342,14 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
     : currentContext?.name || t('common.directMessage');
 
 
-  // #226: search criteria are per-conversation UI state, but this component
-  // stays mounted across selection changes — without this reset, the 'main'
-  // ref entry survives a channel/DM switch and keeps rendering the previous
-  // conversation's filter chips (and pre-filling FilterModal), even though
-  // clearMessages already wiped the real Redux criteria. Keyed on ids so
-  // it fires for channel→channel, channel→DM, and guild switches alike.
+  // #226: search criteria and the partial-results warning are per-conversation
+  // UI state, but this component stays mounted across selection changes, so
+  // both reset on every switch. Keyed on ids so it fires for channel to
+  // channel, channel to DM and guild switches alike; clearSeq covers the
+  // id-unchanged re-click, which dispatches clearMessages. The criteria live
+  // in the message slice, so the reset is a dispatch (a no-op when already null).
   useEffect(() => {
-    delete tabSearchCriteriaRef.current['main'];
+    dispatch(setSearchCriteria(null));
     setPartialResultsWarnings((prev) => {
       if (!('main' in prev)) return prev;
       const next = { ...prev };
@@ -345,18 +360,12 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
     // conversation dispatches clearMessages (wiping the real criteria) but
     // leaves both ids alone, which used to strand stale chips + FilterModal
     // pre-fill here.
-  }, [selectedChannel?.id, selectedDm?.id, clearSeq]);
+  }, [selectedChannel?.id, selectedDm?.id, clearSeq, dispatch]);
 
-  // Clean up saved search criteria for closed thread tabs.
-  // Refine criteria is now per-tab in Redux and cleaned up automatically
-  // when removeThreadTab fires, so it doesn't need a sweep here.
+  // Clean up the partial-results warning for closed thread tabs. Search and
+  // refine criteria are per-tab in Redux and go with the tab on removeThreadTab.
   useEffect(() => {
     const openTabIds = new Set(Object.keys(threadTabs));
-    for (const key of Object.keys(tabSearchCriteriaRef.current)) {
-      if (key !== 'main' && !openTabIds.has(key)) {
-        delete tabSearchCriteriaRef.current[key];
-      }
-    }
     setPartialResultsWarnings((prev) => {
       const next = { ...prev };
       let changed = false;
@@ -456,7 +465,9 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   // --- Server search handler ---
   const handleServerSearch = async (criteria: SearchCriteria) => {
     if (!currentContext || !token) return;
-    tabSearchCriteriaRef.current[activeTab ?? 'main'] = criteria;
+    // Recorded before the search so the chips and dialog show it even when an
+    // operation is running and the search itself has to wait.
+    saveSearchCriteria(criteria);
 
     if (isOperationRunning) return;
     // The search reducer now applies any active refineCriteria itself when
@@ -481,7 +492,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
 
   // --- Clear handlers ---
   const handleClearServerSearch = () => {
-    tabSearchCriteriaRef.current[activeTab ?? 'main'] = defaultCriteria;
+    saveSearchCriteria(null);
     // Restore all messages. The setFilteredMessages dispatch is then
     // shadowed by setRefineCriteria's derive logic if refine is active —
     // but since we only call setFilteredMessages here, we manually
@@ -503,7 +514,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   };
 
   const handleClearAll = () => {
-    tabSearchCriteriaRef.current[activeTab ?? 'main'] = defaultCriteria;
+    saveSearchCriteria(null);
     dispatchClearRefine();
     if (activeTab) {
       dispatch(setThreadFilteredMessages({ threadId: activeTab, messages: allMessages }));
@@ -529,9 +540,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
   };
 
   const handleClearSearchFilter = (field: keyof SearchCriteria, value?: string) => {
-    const current = tabSearchCriteriaRef.current[activeTab ?? 'main'] ?? defaultCriteria;
-    const updated = reduceCriteria(current, field, value);
-    tabSearchCriteriaRef.current[activeTab ?? 'main'] = updated;
+    const updated = reduceCriteria(savedSearchCriteria ?? defaultCriteria, field, value);
     if (countActiveFilters(updated) > 0) {
       handleServerSearch(updated);
     } else {
@@ -548,7 +557,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
     }
   };
 
-  const currentSearchCriteria = tabSearchCriteriaRef.current[activeTab ?? 'main'] ?? defaultCriteria;
+  const currentSearchCriteria = savedSearchCriteria ?? defaultCriteria;
   const activeFilterCount = countTotalFilters(currentSearchCriteria, currentRefineCriteria);
 
   const handleDelete = async (messagesToDelete: Message[]) => {
@@ -1067,7 +1076,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
           onRefine={handleRefine}
           onClearSearch={handleClearServerSearch}
           onClearRefine={handleClearRefine}
-          savedSearchCriteria={tabSearchCriteriaRef.current[activeTab ?? 'main']}
+          savedSearchCriteria={savedSearchCriteria}
           savedRefineCriteria={currentRefineCriteria}
           cachedUserMap={cachedUserMap}
           currentUserId={currentUser?.id || ''}
