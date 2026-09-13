@@ -64,6 +64,8 @@ export const defaultSettings: AppSettings = {
   // Pause long operations for a rest break on a fixed cadence (useRestBreaks).
   [DiscrubSetting.REST_BREAKS]: 'true',
   [DiscrubSetting.RETRY_WAIT]: '1',
+  // Screen layout (2.2.0). Classic is the 2.1 frame; existing installs keep it on upgrade.
+  [DiscrubSetting.APP_LAYOUT]: 'classic',
 
   // Purge Behavior
   [DiscrubSetting.PURGE_RETAIN_ATTACHED_MEDIA]: 'false',

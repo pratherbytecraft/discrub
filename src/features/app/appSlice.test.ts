@@ -6,6 +6,7 @@ import appReducer, {
   closeAllDialogs,
   setFeedScrollAnchor,
   selectFeedScrollAnchor,
+  selectAppLayout,
   selectDialogOpen,
   selectDialogs,
   setSuggestedLanguage,
@@ -173,6 +174,19 @@ describe('appSlice', () => {
       store.dispatch(setFeedScrollAnchor(null));
       expect(selectFeedScrollAnchor(store.getState())).toBeNull();
       expect(store.getState().app.settings).toBeNull();
+    });
+  });
+
+  describe('selectAppLayout', () => {
+    it('is Classic before settings load and when the value is unknown', () => {
+      expect(selectAppLayout(store.getState())).toBe('classic');
+      store.dispatch(setSettings({ ...defaultSettings, [DiscrubSetting.APP_LAYOUT]: 'holodeck' }));
+      expect(selectAppLayout(store.getState())).toBe('classic');
+    });
+
+    it('returns a known layout key', () => {
+      store.dispatch(setSettings({ ...defaultSettings, [DiscrubSetting.APP_LAYOUT]: 'native' }));
+      expect(selectAppLayout(store.getState())).toBe('native');
     });
   });
 

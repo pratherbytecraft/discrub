@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { AppTask, SidebarView, FeedDialog, FeedScrollAnchor, initialAppState, closedFeedDialogs } from './appTypes';
+import { DEFAULT_LAYOUT, isLayoutKey, type LayoutKey } from '@/layouts/types';
 import type { RootState } from '@/app/store';
 import { storage, migrateAllStorage } from '@/extension/storage';
 import {
@@ -289,6 +290,11 @@ export const selectIsMinimized = (state: RootState) => state.app.isMinimized;
 export const selectFocusedView = (state: RootState) => state.app.focusedView;
 export const selectKofiOverlayOpen = (state: RootState) => state.app.kofiOverlayOpen;
 export const selectSidebarView = (state: RootState) => state.app.sidebarView;
+/** The layout to render. Unknown or missing values fall back to Classic so a newer build's setting never blanks the app. */
+export const selectAppLayout = (state: RootState): LayoutKey => {
+  const raw = state.app.settings?.[DiscrubSetting.APP_LAYOUT];
+  return isLayoutKey(raw) ? raw : DEFAULT_LAYOUT;
+};
 export const selectFeedScrollAnchor = (state: RootState) => state.app.feedScrollAnchor ?? null;
 export const selectDialogs = (state: RootState) => state.app.dialogs ?? closedFeedDialogs;
 export const selectDialogOpen = (dialog: FeedDialog) => (state: RootState) => selectDialogs(state)[dialog];
