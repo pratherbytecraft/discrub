@@ -16,7 +16,7 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('[data-testid="layout-card-classic"]').should('have.attr', 'aria-pressed', 'true');
     // Classic and Native are built; the supporter layouts read as coming soon and cannot be picked yet.
     cy.get('[data-testid="layout-card-native"]').should('not.have.attr', 'aria-disabled');
-    cy.get('[data-testid="layout-card-operator"]').should('have.attr', 'aria-disabled', 'true');
+    cy.get('[data-testid="layout-card-timeline"]').should('have.attr', 'aria-disabled', 'true');
     cy.get('[data-testid="layout-locked-workbench"]').should('exist');
     cy.get('[data-testid="appearance-hint"]').should('have.text', 'Hover to preview. Click to apply.');
     cy.get('body').type('{esc}');
@@ -52,7 +52,7 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('[role="dialog"]').contains('[role="tab"]', 'Display').click();
     cy.get('[data-testid="display-layout-block"]').should('be.visible');
     cy.get('[data-testid="settings-layout-classic"]').should('have.attr', 'aria-pressed', 'true');
-    cy.get('[data-testid="settings-layout-operator"]').should('be.disabled');
+    cy.get('[data-testid="settings-layout-timeline"]').should('be.disabled');
     cy.contains('Dates and language').should('be.visible');
     cy.get('body').type('{esc}');
   });

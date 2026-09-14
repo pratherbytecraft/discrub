@@ -233,18 +233,21 @@ const OpenDmByIdDialog = ({
 
 interface DMListProps {
   filterText?: string;
+  /** 2.2.0 Operator: the list is the run queue (see ChannelList). */
+  queue?: { marks?: Record<string, 'done' | 'running'> };
 }
 
 /**
  * DMList component - displays all DM channels
  */
-const DMList = ({ filterText = '' }: DMListProps) => {
+const DMList = ({ filterText = '', queue }: DMListProps) => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const dms = useAppSelector(selectDMs);
   const selectedDm = useAppSelector(selectSelectedDm);
   const selectedDms = useAppSelector(selectSelectedDms);
   const purgeFromStore = useAppSelector(selectDialogOpen('purge'));
+  const exportFromStore = useAppSelector(selectDialogOpen('bulkExport'));
   const isLoading = useAppSelector(selectDmLoading);
   const token = useAppSelector(selectAuthToken);
   const dmSortOrder = useAppSelector(
@@ -333,7 +336,7 @@ const DMList = ({ filterText = '' }: DMListProps) => {
   const handleDmClick = async (dm: Channel, event?: React.MouseEvent) => {
     if (!token) return;
 
-    if (multiSelectMode) {
+    if (multiSelectMode && !queue) {
       if (event?.shiftKey && rangeAnchorIdRef.current) {
         const anchorIdx = visible.findIndex((d) => d.id === rangeAnchorIdRef.current);
         const clickIdx = visible.findIndex((d) => d.id === dm.id);
@@ -439,7 +442,7 @@ const DMList = ({ filterText = '' }: DMListProps) => {
             <TagIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-        <TourButton
+        {!queue && <TourButton
           stepKey="multi-select-toggle"
           size="small"
           onClick={handleToggleMultiSelect}
@@ -451,13 +454,13 @@ const DMList = ({ filterText = '' }: DMListProps) => {
           sx={{ textTransform: 'none', minWidth: 0, px: 1, fontSize: '0.75rem' }}
         >
           {t('nav.multiSelect')}
-        </TourButton>
+        </TourButton>}
       </Box>
 
       {emptyState ?? (
         <>
       <MultiSelectControls
-        active={multiSelectMode}
+        active={multiSelectMode && !queue}
         selectedCount={selectedDms.length}
         totalCount={filteredDMs.length}
         allSelected={filteredDMs.length > 0 && selectedDms.length === filteredDMs.length}
@@ -481,19 +484,26 @@ const DMList = ({ filterText = '' }: DMListProps) => {
           <ListItemButton
             key={dm.id}
             data-testid="dm-row"
-            selected={multiSelectMode ? isDmSelected(dm) : selectedDm?.id === dm.id}
+            data-queued={queue ? isDmSelected(dm) : undefined}
+            selected={multiSelectMode && !queue ? isDmSelected(dm) : selectedDm?.id === dm.id}
             onClick={(e) => handleDmClick(dm, e)}
             // Shift+Click must not smear a text selection across rows (#218).
             onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
           >
-            {multiSelectMode && (
+            {(multiSelectMode || queue) && (
               <Checkbox
                 size="small"
                 checked={isDmSelected(dm)}
                 tabIndex={-1}
                 disableRipple
+                onClick={queue ? (e) => { e.stopPropagation(); dispatch(toggleDmSelection(dm)); } : undefined}
+                inputProps={{ 'aria-label': t('nav.toggleMultiSelect') }}
+                data-testid="queue-tick"
                 sx={{ p: 0, mr: 1 }}
               />
+            )}
+            {queue?.marks?.[dm.id] && (
+              <Box data-testid={`queue-mark-${queue.marks[dm.id]}`} sx={{ width: 8, height: 8, borderRadius: '50%', mr: 1, flexShrink: 0, backgroundColor: queue.marks[dm.id] === 'done' ? 'success.main' : 'primary.main' }} />
             )}
             <ListItemAvatar>
               <DmAvatar dm={dm} size={40} />
@@ -551,8 +561,8 @@ const DMList = ({ filterText = '' }: DMListProps) => {
       )}
 
       <BulkExportDialog
-        open={bulkExportOpen}
-        onClose={() => setBulkExportOpen(false)}
+        open={bulkExportOpen || exportFromStore}
+        onClose={() => { setBulkExportOpen(false); if (exportFromStore) dispatch(setDialogOpen({ dialog: 'bulkExport', open: false })); }}
         channels={selectedDms}
         mode="dms"
       />

@@ -54,20 +54,29 @@ import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
 import BulkEditDialog from '@containers/PurgeView/BulkEditDialog';
 import { useTranslation } from 'react-i18next';
 
+export type QueueMarks = Record<string, 'done' | 'running'>;
 interface ChannelListProps {
   filterText?: string;
+  /**
+   * 2.2.0 Operator: the list is the run queue. Multi select is always on,
+   * the toggle and the bar are hidden (the shell carries Export and Purge),
+   * ticking the box queues a channel and clicking the row opens it. `marks`
+   * paints a dot per channel while a bulk run walks the queue.
+   */
+  queue?: { marks?: QueueMarks };
 }
 
 /**
  * ChannelList component - displays channels for selected guild
  */
-const ChannelList = ({ filterText = '' }: ChannelListProps) => {
+const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const channels = useAppSelector(selectChannels);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedChannels = useAppSelector(selectSelectedChannels);
   const purgeFromStore = useAppSelector(selectDialogOpen('purge'));
+  const exportFromStore = useAppSelector(selectDialogOpen('bulkExport'));
   const selectedGuild = useAppSelector(selectSelectedGuild);
   const memberRoles = useAppSelector(selectCurrentMemberRoles);
   const currentUserId = useAppSelector(selectCurrentUser)?.id;
@@ -101,7 +110,7 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
       return;
     }
 
-    if (multiSelectMode) {
+    if (multiSelectMode && !queue) {
       // #218: Shift+Click selects the whole visible range between the last
       // plainly-clicked row (anchor) and this one. Plain click toggles and
       // re-anchors, like a file explorer.
@@ -353,7 +362,7 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
         >
           {t('nav.channels')}
         </Typography>
-        <TourButton
+        {!queue && <TourButton
           stepKey="multi-select-toggle"
           size="small"
           onClick={handleToggleMultiSelect}
@@ -365,11 +374,11 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
           sx={{ textTransform: 'none', minWidth: 0, px: 1, fontSize: '0.75rem' }}
         >
           {t('nav.multiSelect')}
-        </TourButton>
+        </TourButton>}
       </Box>
 
       <MultiSelectControls
-        active={multiSelectMode}
+        active={multiSelectMode && !queue}
         selectedCount={selectedChannels.length}
         totalCount={accessibleChannels.length}
         allSelected={accessibleChannels.length > 0 && selectedChannels.length === accessibleChannels.length}
@@ -436,7 +445,9 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
                 return (
                 <ListItemButton
                   key={channel.id}
-                  selected={multiSelectMode ? isChannelSelected(channel) : selectedChannel?.id === channel.id}
+                  data-testid="channel-row"
+                  data-queued={queue ? isChannelSelected(channel) : undefined}
+                  selected={multiSelectMode && !queue ? isChannelSelected(channel) : selectedChannel?.id === channel.id}
                   onClick={(e) => hasAccess && handleChannelClick(channel, e)}
                   // Shift+Click must not smear a text selection across rows.
                   onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
@@ -448,14 +459,20 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
                     }),
                   }}
                 >
-                  {multiSelectMode && hasAccess && (
+                  {(multiSelectMode || queue) && hasAccess && (
                     <Checkbox
                       size="small"
                       checked={isChannelSelected(channel)}
                       tabIndex={-1}
                       disableRipple
+                      onClick={queue ? (e) => { e.stopPropagation(); dispatch(toggleChannelSelection(channel)); } : undefined}
+                      inputProps={{ 'aria-label': t('nav.toggleMultiSelect') }}
+                      data-testid="queue-tick"
                       sx={{ p: 0, mr: 1 }}
                     />
+                  )}
+                  {queue?.marks?.[channel.id] && (
+                    <Box data-testid={`queue-mark-${queue.marks[channel.id]}`} sx={{ width: 8, height: 8, borderRadius: '50%', mr: 1, flexShrink: 0, backgroundColor: queue.marks[channel.id] === 'done' ? 'success.main' : 'primary.main' }} />
                   )}
                   <ListItemIcon sx={{ minWidth: 32 }}>
                     {hasAccess ? getChannelIcon(channel.type) : <LockIcon fontSize="small" sx={{ color: 'text.disabled' }} />}
@@ -474,9 +491,10 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
         ))}
       </List>
 
+      {/* 2.2.0 Operator opens the queue export through the store flag. */}
       <BulkExportDialog
-        open={bulkExportOpen}
-        onClose={() => setBulkExportOpen(false)}
+        open={bulkExportOpen || exportFromStore}
+        onClose={() => { setBulkExportOpen(false); if (exportFromStore) dispatch(setDialogOpen({ dialog: 'bulkExport', open: false })); }}
         channels={selectedChannels}
         mode="channels"
         guildId={selectedGuild.id}

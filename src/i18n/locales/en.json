@@ -124,6 +124,36 @@
     "allLoaded": "all loaded",
     "channelCount": "{{count}} channels"
   },
+  "operator": {
+      "pickServer": "Pick a server",
+    "pickServerHint": "Pick a server above to see its channels.",
+      "queueEmpty": "Tick channels to build a queue. One is fine, so is the whole server.",
+      "queued": "{{count}} channels queued",
+      "queueRun": "{{done}} done, 1 running, {{left}} queued",
+      "queueCount": "{{count}} channels in the queue",
+      "queueNone": "Nothing queued yet",
+      "queueHint": "Load All works on the open channel. Export and Purge run through the queue.",
+      "loadAllIn": "in {{name}}",
+      "loadAllNone": "Open a channel first",
+      "attempt": "attempt {{attempt}} of {{max}}",
+      "latestIn": "Latest in {{name}}",
+      "noConversation": "No conversation open",
+      "openFeed": "Open feed",
+      "backToRun": "Back to the run",
+      "recentExports": "Recent exports",
+      "tabQueue": "Queue",
+      "tabRun": "Run",
+      "tabFeed": "Feed",
+      "tabRecent": "Recent",
+      "state": {
+          "idle": "Idle",
+          "running": "Running",
+          "paused": "Paused",
+          "restBreak": "Rest break",
+          "retrying": "Retrying",
+          "retryPaused": "Paused after retries"
+      }
+  },
   "simple": {
     "pickHint": "Pick a server, a conversation or the package from the top.",
     "searchIn": "Search in {{name}}",

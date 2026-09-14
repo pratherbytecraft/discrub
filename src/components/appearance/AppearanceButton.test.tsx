@@ -28,8 +28,8 @@ describe('<AppearanceButton />', () => {
     await screen.findByTestId('appearance-popover');
     expect(screen.getByTestId('layout-card-native')).not.toHaveAttribute('aria-disabled');
     expect(screen.getByLabelText('Native')).toBeInTheDocument();
-    expect(screen.getByTestId('layout-card-operator')).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByLabelText('Operator (coming soon)')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-card-timeline')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByLabelText('Timeline (coming soon)')).toBeInTheDocument();
     expect(screen.getByLabelText('Simple (supporter layout, locked)')).toBeInTheDocument();
   });
 

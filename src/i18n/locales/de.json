@@ -124,6 +124,36 @@
     "allLoaded": "alles geladen",
     "channelCount": "{{count}} Kanäle"
   },
+  "operator": {
+      "pickServer": "Server wählen",
+    "pickServerHint": "Wähle oben einen Server, um seine Kanäle zu sehen.",
+      "queueEmpty": "Hake Kanäle an, um eine Warteschlange zu bilden. Einer reicht, der ganze Server geht auch.",
+      "queued": "{{count}} Kanäle in der Warteschlange",
+      "queueRun": "{{done}} fertig, 1 läuft, {{left}} wartend",
+      "queueCount": "{{count}} Kanäle in der Warteschlange",
+      "queueNone": "Noch nichts in der Warteschlange",
+      "queueHint": "Alle laden arbeitet im offenen Kanal. Export und Purge laufen durch die Warteschlange.",
+      "loadAllIn": "in {{name}}",
+      "loadAllNone": "Zuerst einen Kanal öffnen",
+      "attempt": "Versuch {{attempt}} von {{max}}",
+      "latestIn": "Neuestes in {{name}}",
+      "noConversation": "Keine Unterhaltung offen",
+      "openFeed": "Feed öffnen",
+      "backToRun": "Zurück zum Lauf",
+      "recentExports": "Letzte Exporte",
+      "tabQueue": "Warteschlange",
+      "tabRun": "Lauf",
+      "tabFeed": "Feed",
+      "tabRecent": "Zuletzt",
+      "state": {
+          "idle": "Untätig",
+          "running": "Läuft",
+          "paused": "Pausiert",
+          "restBreak": "Pause",
+          "retrying": "Neuer Versuch",
+          "retryPaused": "Nach Versuchen pausiert"
+      }
+  },
   "simple": {
     "pickHint": "Wähle oben einen Server, eine Unterhaltung oder das Paket.",
     "searchIn": "In {{name}} suchen",
