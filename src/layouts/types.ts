@@ -4,6 +4,8 @@ import type { ComponentType } from 'react';
 export type LayoutKey = 'classic' | 'native' | 'workbench' | 'simple' | 'operator' | 'timeline';
 export const LAYOUT_KEYS: LayoutKey[] = ['classic', 'native', 'workbench', 'simple', 'operator', 'timeline'];
 export const DEFAULT_LAYOUT: LayoutKey = 'classic';
+/** Where a locked supporter layout falls back to (A13): the free headline layout. */
+export const LOCKED_FALLBACK_LAYOUT: LayoutKey = 'native';
 /** Display names, the same in every locale (product words). */
 export const LAYOUT_NAMES: Record<LayoutKey, string> = { classic: 'Classic', native: 'Native', workbench: 'Workbench', simple: 'Simple', operator: 'Operator', timeline: 'Timeline' };
 

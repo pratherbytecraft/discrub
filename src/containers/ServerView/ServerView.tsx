@@ -99,6 +99,7 @@ import ExportDialog from '@containers/ExportView/ExportDialog';
 import BulkExportDialog from '@containers/ExportView/BulkExportDialog';
 import LoadAllDialog from '@components/message/LoadAllDialog';
 import ThreadLoadModal from '@components/modals/ThreadLoadModal';
+import MessageTable from '@components/message/MessageTable';
 import AnalyticsModal from '@components/modals/AnalyticsModal';
 import { addStatusEntry } from '@features/status/statusSlice';
 import { canManageMessages } from '@/utils/permissionUtils';
@@ -129,7 +130,7 @@ interface ServerViewProps {
    * its action buttons; Native draws its own head row and inspector, so the
    * header here is skipped. Dialogs, alerts, tabs and the feed stay.
    */
-  variant?: 'classic' | 'native';
+  variant?: 'classic' | 'native' | 'workbench';
 }
 
 /**
@@ -863,7 +864,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
           skipBeacon: true,
         }}
       />
-      {variant !== 'native' && (
+      {variant === 'classic' && (
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
           <Box sx={{ minWidth: 0, flexShrink: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1223,6 +1224,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
       {!isForumChannel && !isLoading && !error && messages.length > 0 && (
         <Box data-tour="message-table" data-testid="message-feed" sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+          {variant === 'workbench' ? <MessageTable /> : (
           <MessageFeed
             formattingContext={formattingContext}
             fullUserMap={fullUserMap}
@@ -1236,6 +1238,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
             onBulkDeleteAllReactions={handleBulkDeleteAllReactions}
             onBulkDeleteReactionsForEmoji={handleBulkDeleteReactionsForEmoji}
           />
+          )}
         </Box>
       )}
 

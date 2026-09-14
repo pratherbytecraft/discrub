@@ -1,6 +1,7 @@
 import type { LayoutKey, LayoutShell } from './types';
 import ClassicShell from './classic/ClassicShell';
 import NativeShell from './native/NativeShell';
+import WorkbenchShell from './workbench/WorkbenchShell';
 
 /**
  * Every layout that ships. Keys missing here fall back to Classic, so a
@@ -9,6 +10,7 @@ import NativeShell from './native/NativeShell';
 export const LAYOUT_SHELLS: Partial<Record<LayoutKey, LayoutShell>> = {
   classic: ClassicShell,
   native: NativeShell,
+  workbench: WorkbenchShell,
 };
 
 export const resolveShell = (key: LayoutKey | undefined): LayoutShell => LAYOUT_SHELLS[key ?? 'classic'] ?? ClassicShell;

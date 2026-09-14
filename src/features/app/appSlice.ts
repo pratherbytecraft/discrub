@@ -2,7 +2,8 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { AppTask, SidebarView, FeedDialog, FeedScrollAnchor, OperationHold, initialAppState, closedFeedDialogs } from './appTypes';
-import { DEFAULT_LAYOUT, isLayoutKey, type LayoutKey } from '@/layouts/types';
+import { DEFAULT_LAYOUT, LOCKED_FALLBACK_LAYOUT, isLayoutFree, isLayoutKey, type LayoutKey } from '@/layouts/types';
+import { selectHasThemes } from '@features/supporter/supporterSlice';
 import type { RootState } from '@/app/store';
 import { storage, migrateAllStorage } from '@/extension/storage';
 import {
@@ -301,10 +302,22 @@ export const selectIsMinimized = (state: RootState) => state.app.isMinimized;
 export const selectFocusedView = (state: RootState) => state.app.focusedView;
 export const selectKofiOverlayOpen = (state: RootState) => state.app.kofiOverlayOpen;
 export const selectSidebarView = (state: RootState) => state.app.sidebarView;
-/** The layout to render. Unknown or missing values fall back to Classic so a newer build's setting never blanks the app. */
-export const selectAppLayout = (state: RootState): LayoutKey => {
+/** The saved layout as written, before any lock is applied. */
+export const selectSavedLayout = (state: RootState): LayoutKey => {
   const raw = state.app.settings?.[DiscrubSetting.APP_LAYOUT];
   return isLayoutKey(raw) ? raw : DEFAULT_LAYOUT;
+};
+/**
+ * The layout to render. Unknown or missing values fall back to Classic so a
+ * newer build's setting never blanks the app. A supporter layout saved without
+ * a live key falls back to Native (A13). The setting itself is kept, so a
+ * renewed key brings the layout straight back.
+ */
+export const selectAppLayout = (state: RootState): LayoutKey => {
+  const saved = selectSavedLayout(state);
+  // Partial test stores may have no supporter slice; treat that as no key.
+  if (isLayoutFree(saved) || (state.supporter ? selectHasThemes(state) : false)) return saved;
+  return LOCKED_FALLBACK_LAYOUT;
 };
 export const selectPreviewLayout = (state: RootState): LayoutKey | null => state.app.previewLayout ?? null;
 /** The layout to render right now: a preview wins over the saved setting. */

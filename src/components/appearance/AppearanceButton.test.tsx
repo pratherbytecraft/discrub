@@ -28,8 +28,9 @@ describe('<AppearanceButton />', () => {
     await screen.findByTestId('appearance-popover');
     expect(screen.getByTestId('layout-card-native')).not.toHaveAttribute('aria-disabled');
     expect(screen.getByLabelText('Native')).toBeInTheDocument();
-    expect(screen.getByTestId('layout-card-workbench')).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByLabelText('Workbench (coming soon)')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-card-simple')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByLabelText('Simple (coming soon)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Workbench (supporter layout, locked)')).toBeInTheDocument();
   });
 
   it('opens the Themes and Support hub from the footer and Display settings from the gear', async () => {

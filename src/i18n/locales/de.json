@@ -101,6 +101,29 @@
     "logEmpty": "Noch nichts.",
     "searchDms": "Unterhaltung finden"
   },
+  "table": {
+    "author": "Autor",
+    "message": "Nachricht",
+    "files": "Dateien",
+    "reactions": "Reaktionen",
+    "date": "Datum",
+    "sortByDate": "Nach Datum sortieren",
+    "selectRow": "Nachricht auswählen",
+    "attachmentOnly": "{{count}} Anhang"
+  },
+  "workbench": {
+    "progress": "Fortschritt",
+    "recentRuns": "Letzte Läufe",
+    "statusLog": "Statusprotokoll",
+    "nothingRunning": "Nichts läuft",
+    "pickHint": "Wähle links einen Kanal. Alle laden, Export, Purge und Filter erscheinen hier oben, sobald einer offen ist.",
+    "noRuns": "Noch keine Exporte. Fertige Exporte erscheinen hier.",
+    "loaded": "{{count}} geladen",
+    "selected": "{{count}} ausgewählt",
+    "moreAvailable": "mehr verfügbar",
+    "allLoaded": "alles geladen",
+    "channelCount": "{{count}} Kanäle"
+  },
   "focus": {
     "on": "Fokus an",
     "or": " oder ",

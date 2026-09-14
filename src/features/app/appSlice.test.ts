@@ -190,6 +190,13 @@ describe('appSlice', () => {
       store.dispatch(setSettings({ ...defaultSettings, [DiscrubSetting.APP_LAYOUT]: 'native' }));
       expect(selectAppLayout(store.getState())).toBe('native');
     });
+
+    // A13: a supporter layout without a live key renders as Native; the saved value is untouched.
+    it('falls back to Native for a supporter layout without a key, and keeps the saved value', () => {
+      store.dispatch(setSettings({ ...defaultSettings, [DiscrubSetting.APP_LAYOUT]: 'workbench' }));
+      expect(selectAppLayout(store.getState())).toBe('native');
+      expect(store.getState().app.settings?.[DiscrubSetting.APP_LAYOUT]).toBe('workbench');
+    });
   });
 
   describe('operation hold', () => {

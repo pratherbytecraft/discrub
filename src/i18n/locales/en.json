@@ -101,6 +101,29 @@
     "logEmpty": "Nothing yet.",
     "searchDms": "Find a conversation"
   },
+  "table": {
+    "author": "Author",
+    "message": "Message",
+    "files": "Files",
+    "reactions": "Reactions",
+    "date": "Date",
+    "sortByDate": "Sort by date",
+    "selectRow": "Select message",
+    "attachmentOnly": "{{count}} attachment"
+  },
+  "workbench": {
+    "progress": "Progress",
+    "recentRuns": "Recent runs",
+    "statusLog": "Status log",
+    "nothingRunning": "Nothing running",
+    "pickHint": "Pick a channel on the left. Load All, Export, Purge and Filters live up here once one is open.",
+    "noRuns": "No exports yet. Finished exports show up here.",
+    "loaded": "{{count}} loaded",
+    "selected": "{{count}} selected",
+    "moreAvailable": "more available",
+    "allLoaded": "all loaded",
+    "channelCount": "{{count}} channels"
+  },
   "focus": {
     "on": "Focus on",
     "or": " or ",
