@@ -479,14 +479,14 @@ describe('TopBar', () => {
       expect(screen.getByTestId('gift-button')).toBeInTheDocument();
     });
 
-    it('should open the Supporter dialog and calm the attention animation on click', async () => {
+    it('should open the Appearance menu, calm the attention animation, and reach the Supporter dialog from its footer', async () => {
       const { store } = renderLoggedIn();
       expect(store.getState().supporter.giftAttentionSeen).toBe(false);
-
       fireEvent.click(screen.getByTestId('gift-button'));
-
-      expect(store.getState().supporter.dialogOpen).toBe(true);
       expect(store.getState().supporter.giftAttentionSeen).toBe(true);
+      expect(await screen.findByTestId('appearance-popover')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('appearance-open-hub'));
+      expect(store.getState().supporter.dialogOpen).toBe(true);
       await waitFor(() => {
         expect(screen.getByTestId('supporter-dialog')).toBeInTheDocument();
       });
@@ -522,20 +522,20 @@ describe('TopBar', () => {
       renderWithKeyStatus('none');
       expect(screen.queryByTestId('supporter-badge')).toBeNull();
       expect(screen.queryByTestId('supporter-avatar-pip')).toBeNull();
-      expect(screen.getByLabelText('Themes and Support')).toBeInTheDocument();
+      expect(screen.getByLabelText('Appearance')).toBeInTheDocument();
     });
 
     it('should keep the palette icon, mark it as the supporter badge, and show the avatar pip with a valid key', () => {
       renderWithKeyStatus('valid');
       expect(screen.getByTestId('supporter-badge')).toBeInTheDocument();
       expect(screen.getByTestId('supporter-avatar-pip')).toBeVisible();
-      expect(screen.getByLabelText('Supporter')).toBeInTheDocument();
-      expect(screen.queryByLabelText('Themes and Support')).toBeNull();
+      expect(screen.getByLabelText('Appearance')).toBeInTheDocument();
     });
 
-    it('should still open the Supporter dialog from the badge', async () => {
+    it('should still open the Supporter dialog from the menu footer', async () => {
       const { store } = renderWithKeyStatus('valid');
       fireEvent.click(screen.getByTestId('gift-button'));
+      fireEvent.click(await screen.findByTestId('appearance-open-hub'));
       expect(store.getState().supporter.dialogOpen).toBe(true);
       await waitFor(() => {
         expect(screen.getByTestId('supporter-dialog')).toBeInTheDocument();
@@ -545,7 +545,7 @@ describe('TopBar', () => {
     it('should treat an expired key as non-supporter', () => {
       renderWithKeyStatus('expired');
       expect(screen.queryByTestId('supporter-badge')).toBeNull();
-      expect(screen.getByLabelText('Themes and Support')).toBeInTheDocument();
+      expect(screen.getByLabelText('Appearance')).toBeInTheDocument();
     });
   });
 });

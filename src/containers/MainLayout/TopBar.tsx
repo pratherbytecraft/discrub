@@ -16,7 +16,6 @@ import {
   WarningAmber as WarningIcon,
   MoreVert as MoreIcon,
   Menu as MenuIcon,
-  Palette as PaletteIcon,
   Star as StarIcon,
 } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
@@ -35,13 +34,11 @@ import { selectIsHeavyOperationRunning, selectOperationSummary } from '@features
 import { reopenAnnouncement, fetchAnnouncementMarkdownThunk } from '@features/announcement/announcementSlice';
 import { isOverlayMode, closeOverlay, minimizeOverlay } from '@/extension/messaging';
 import {
-  selectGiftAttentionSeen,
   selectIsSupporter,
-  markGiftAttentionSeen,
-  setSupporterDialogOpen,
 } from '@features/supporter/supporterSlice';
 import SettingsModal from '@components/settings/SettingsModal';
 import SupporterDialog from '@components/supporter/SupporterDialog';
+import AppearanceButton from '@components/appearance/AppearanceButton';
 import CompatibilityPopover, { CompatibilitySheet } from '@components/compatibility/CompatibilityPopover';
 import { InfoOutlined as CompatibilityIcon } from '@mui/icons-material';
 import { BleedingStack } from '@components/supporter/BleedingTitle';
@@ -111,7 +108,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const showKofiFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
   const operationSummary = useAppSelector(selectOperationSummary);
-  const giftAttentionSeen = useAppSelector(selectGiftAttentionSeen);
   const isSupporter = useAppSelector(selectIsSupporter);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [compatOpen, setCompatOpen] = useState(false);
@@ -158,13 +154,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
 
   const handleProfileClick = () => {
     setProfileModalOpen(true);
-  };
-
-  const handleGiftClick = () => {
-    // Attention animation calms permanently after the first open —
-    // intrigue once, never nag.
-    if (!giftAttentionSeen) dispatch(markGiftAttentionSeen());
-    dispatch(setSupporterDialogOpen(true));
   };
 
   const handleMinimize = async () => {
@@ -355,69 +344,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
               </Typography>
             </Box>
 
-            <Tooltip title={isSupporter ? t('topbar.supporter') : t('topbar.themesAndSupport')} enterDelay={0} arrow>
-              <IconButton
-                color="inherit"
-                onClick={handleGiftClick}
-                aria-label={isSupporter ? t('topbar.supporter') : t('topbar.themesAndSupport')}
-                data-testid="gift-button"
-                sx={(theme: Theme) => ({
-                  color: 'cta.main',
-                  transition:
-                    'transform 200ms ease, box-shadow 200ms ease, background-color 200ms ease',
-                  // Non-supporters get a permanent soft halo so the
-                  // themes entry reads as more than another toolbar
-                  // icon, even after the attention animation calms.
-                  ...(!isSupporter && {
-                    backgroundColor: alpha(theme.palette.cta.main, 0.1),
-                    boxShadow: `0 0 8px 1px ${alpha(theme.palette.cta.main, 0.25)}`,
-                  }),
-                  '&:hover': {
-                    transform: 'scale(1.12)',
-                    boxShadow: `0 0 10px 2px ${alpha(theme.palette.cta.main, 0.35)}`,
-                    ...(!isSupporter && {
-                      backgroundColor: alpha(theme.palette.cta.main, 0.16),
-                    }),
-                  },
-                  // Attention intrigue: subtle glow pulse plus an
-                  // occasional gentle wiggle. Calms for the rest of
-                  // the session once the hub is opened (re-arms every
-                  // app open), never plays for users who prefer
-                  // reduced motion, and retires once the button
-                  // becomes the supporter badge.
-                  ...(giftAttentionSeen || isSupporter
-                    ? {}
-                    : {
-                        // The pulse breathes from the resting halo so
-                        // the glow never blinks fully off.
-                        '@keyframes giftGlow': {
-                          '0%, 100%': {
-                            boxShadow: `0 0 8px 1px ${alpha(theme.palette.cta.main, 0.25)}`,
-                          },
-                          '50%': {
-                            boxShadow: `0 0 14px 3px ${alpha(theme.palette.cta.main, 0.45)}`,
-                          },
-                        },
-                        '@keyframes giftWiggle': {
-                          '0%, 92%, 100%': { transform: 'rotate(0deg)' },
-                          '94%': { transform: 'rotate(-8deg)' },
-                          '96%': { transform: 'rotate(8deg)' },
-                          '98%': { transform: 'rotate(-4deg)' },
-                        },
-                        animation: 'giftGlow 3s ease-in-out infinite, giftWiggle 7s ease-in-out infinite',
-                        '@media (prefers-reduced-motion: reduce)': {
-                          animation: 'none',
-                        },
-                      }),
-                })}
-              >
-                {/* Same palette glyph in both states — supporters told us the
-                    star made the themes entry look like a different button.
-                    Only the styling changes: the halo and pulse retire, and
-                    the tooltip reads "Supporter". */}
-                <PaletteIcon data-testid={isSupporter ? 'supporter-badge' : undefined} />
-              </IconButton>
-            </Tooltip>
+            {/* Layouts and themes in one menu (2.2.0). Replaces the palette icon; the Themes and Support hub opens from its footer. */}
+            <AppearanceButton onOpenSettings={() => setSettingsOpen(true)} />
 
             {/* App group: Ideas, Compatibility, Settings. Groups are separated
                 by thin dividers with a tight gap inside each one. */}

@@ -200,7 +200,7 @@ describe('Visual Audit', () => {
 
     it('light mode', () => {
       // Pick the light theme from the Themes hub (instant apply).
-      cy.get('[data-testid="gift-button"]').click();
+      cy.openThemesHub();
       cy.get('[data-testid="theme-card-discord-light"]').click();
       cy.get('[aria-label="Close Supporter dialog"]').click();
       cy.wait(PAUSE);

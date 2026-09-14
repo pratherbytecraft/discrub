@@ -10,3 +10,5 @@ export const LAYOUT_SHELLS: Partial<Record<LayoutKey, LayoutShell>> = {
 };
 
 export const resolveShell = (key: LayoutKey | undefined): LayoutShell => LAYOUT_SHELLS[key ?? 'classic'] ?? ClassicShell;
+/** True once a layout has a shell; the menu marks the rest as coming soon. */
+export const isLayoutBuilt = (key: LayoutKey): boolean => key in LAYOUT_SHELLS;

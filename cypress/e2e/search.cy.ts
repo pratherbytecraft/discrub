@@ -1629,7 +1629,7 @@ describe('Search & Filters', () => {
 
     it('filter modal renders correctly in light mode', () => {
       // Pick the light theme from the Themes hub (instant apply).
-      cy.get('[data-testid="gift-button"]').click({ force: true });
+      cy.openThemesHub();
       cy.get('[data-testid="theme-card-discord-light"]').click();
       cy.get('[aria-label="Close Supporter dialog"]').click();
       cy.get('body').should('have.css', 'background-color', 'rgb(255, 255, 255)');

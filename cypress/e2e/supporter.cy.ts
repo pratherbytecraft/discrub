@@ -108,7 +108,7 @@ function visitApp({
 
 /** Open the hub and apply a key through the paste box (the primary path). */
 function applyKeyViaDialog(key: string) {
-  cy.get('[data-testid="gift-button"]').click();
+  cy.openThemesHub();
   cy.get('[data-testid="supporter-dialog"]').should('be.visible');
   cy.get('[data-testid="supporter-paste-key"]').type(key, { delay: 0 });
   cy.get('[data-testid="supporter-paste-apply"]').click();
@@ -121,7 +121,7 @@ describe('Supporter platform', () => {
 
   it('gift button opens the hub with the purchase grid first, then the theme grid', () => {
     visitApp();
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-dialog"]').should('be.visible');
     cy.contains('growing pack of cosmetic themes').should('be.visible');
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
@@ -204,7 +204,7 @@ describe('Supporter platform', () => {
     cy.get('body').should('have.css', 'background-color', AMOLED_BG);
 
     // Reopening the hub shows the applied pick as selected.
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="theme-selected-amoled-void"]').should('exist');
   });
 
@@ -220,16 +220,16 @@ describe('Supporter platform', () => {
     cy.get('[data-testid="supporter-badge"]').should('be.visible');
     cy.get('[data-testid="supporter-avatar-pip"]').should('be.visible');
     cy.get('[data-testid="gift-button"]')
-      .should('have.attr', 'aria-label', 'Supporter')
+      .should('have.attr', 'aria-label', 'Appearance')
       .and('have.css', 'animation-name', 'none');
 
     // The badge still opens the hub, and removing the key restores the gift.
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-remove-key"]').click();
     cy.get('[aria-label="Close Supporter dialog"]').click();
     cy.get('[data-testid="supporter-badge"]').should('not.exist');
     cy.get('[data-testid="supporter-avatar-pip"]').should('not.exist');
-    cy.get('[data-testid="gift-button"]').should('have.attr', 'aria-label', 'Themes and Support');
+    cy.get('[data-testid="gift-button"]').should('have.attr', 'aria-label', 'Appearance');
   });
 
   it('an applied key and theme survive a reload even when the check-in is offline', () => {
@@ -275,7 +275,7 @@ describe('Supporter platform', () => {
     });
     visitApp({ freshDbs: false, stubRefresh: false });
     cy.wait('@refresh');
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-access-hosted"]').should('have.attr', 'data-live', 'true');
     cy.get('[data-testid="supporter-checkin-note"]').should('contain.text', 'Checked just now');
     cy.get('[aria-label="Close Supporter dialog"]').click();
@@ -303,7 +303,7 @@ describe('Supporter platform', () => {
     cy.wait('@ended');
     cy.get('body').should('have.css', 'background-color', DARK_BG);
     cy.get('[data-testid="supporter-badge"]').should('not.exist');
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-lapsed-note"]').should('be.visible');
     // The key is kept so Refresh works after a renewal.
     cy.get('[data-testid="supporter-refresh-key"]').should('exist');
@@ -374,7 +374,7 @@ describe('Supporter platform', () => {
 
   it('accepts a valid pasted key and rejects a tampered one', () => {
     visitApp();
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
 
     // Tampered: flip a character in the signature.
     cy.then(() => signKey({ ent: { themes: null }, exp: null })).then((key) => {
@@ -402,14 +402,14 @@ describe('Supporter platform', () => {
     cy.get('[aria-label="Close Supporter dialog"]').click();
     cy.get('body').should('have.css', 'background-color', AMOLED_BG);
 
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-remove-key"]').click();
     cy.contains('growing pack of cosmetic themes').scrollIntoView().should('be.visible');
     cy.get('[aria-label="Close Supporter dialog"]').click();
 
     // Theme falls back without touching the saved setting.
     cy.get('body').should('have.css', 'background-color', DARK_BG);
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
       'have.length',
       8,
@@ -428,7 +428,7 @@ describe('Supporter platform', () => {
       'giftGlow, giftWiggle',
     );
     cy.get('[data-testid="gift-button"]').click();
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.get('body').type('{esc}');
     cy.get('[data-testid="gift-button"]').should('have.css', 'animation-name', 'none');
 
     // Per-session by design: a fresh app open re-arms the intrigue

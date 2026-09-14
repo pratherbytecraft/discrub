@@ -29,8 +29,12 @@ export function eventToBinding(e: KeyboardEvent): string | null {
   // readable and matches the Settings tab display.
   let token = key === ' ' ? 'Space' : key;
   if (/^[a-z]$/.test(token)) token = token.toUpperCase();
+  // Shift only counts on letters (2.2.0, Ctrl Shift L opens Appearance). On
+  // punctuation the browser already reports the shifted character ('?'), and
+  // a Shift segment there would break the existing '?' and '/' bindings.
+  const shift = e.shiftKey && /^[A-Z]$/.test(token);
 
-  return mod ? `mod+${token}` : token;
+  return `${mod ? 'mod+' : ''}${shift ? 'shift+' : ''}${token}`;
 }
 
 /**
@@ -52,9 +56,8 @@ export function isMacPlatform(): boolean {
  */
 export function formatBindingForDisplay(binding: string, mac = isMacPlatform()): string {
   if (!binding) return '';
-  if (binding.startsWith('mod+')) {
-    const tail = binding.slice('mod+'.length);
-    return mac ? `⌘${tail}` : `Ctrl+${tail}`;
-  }
-  return binding;
+  let rest = binding; const parts: string[] = [];
+  if (rest.startsWith('mod+')) { rest = rest.slice('mod+'.length); parts.push(mac ? '⌘' : 'Ctrl+'); }
+  if (rest.startsWith('shift+')) { rest = rest.slice('shift+'.length); parts.push(mac ? '⇧' : 'Shift+'); }
+  return parts.join('') + rest;
 }

@@ -324,3 +324,12 @@ Cypress.Commands.add(
     return poll(null, null);
   },
 );
+
+/**
+ * 2.2.0: the Themes and Support hub opens from the Appearance menu's footer.
+ * The top bar button keeps the gift-button test id.
+ */
+Cypress.Commands.add('openThemesHub', () => {
+  cy.get('[data-testid="gift-button"]').click();
+  cy.get('[data-testid="appearance-open-hub"]').click();
+});

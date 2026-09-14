@@ -37,6 +37,7 @@ export type HotkeyActionId =
   | 'pauseResume'
   | 'cancelOp'
   | 'openSettings'
+  | 'openAppearance'
   | 'minimize';
 
 /**

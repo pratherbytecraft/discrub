@@ -208,6 +208,9 @@ const appSlice = createSlice({
     setOperationHold: (state, action: PayloadAction<OperationHold | null>) => {
       state.operationHold = action.payload;
     },
+    setPreviewLayout: (state, action: PayloadAction<LayoutKey | null>) => {
+      state.previewLayout = action.payload;
+    },
     resetTask: (state) => {
       state.task = initialAppState.task;
       state.discrubPaused = false;
@@ -277,6 +280,7 @@ export const {
   closeAllDialogs,
   setFeedScrollAnchor,
   setOperationHold,
+  setPreviewLayout,
   resetTask,
 } = appSlice.actions;
 
@@ -302,6 +306,9 @@ export const selectAppLayout = (state: RootState): LayoutKey => {
   const raw = state.app.settings?.[DiscrubSetting.APP_LAYOUT];
   return isLayoutKey(raw) ? raw : DEFAULT_LAYOUT;
 };
+export const selectPreviewLayout = (state: RootState): LayoutKey | null => state.app.previewLayout ?? null;
+/** The layout to render right now: a preview wins over the saved setting. */
+export const selectEffectiveLayout = (state: RootState): LayoutKey => state.app.previewLayout ?? selectAppLayout(state);
 export const selectOperationHold = (state: RootState) => state.app.operationHold ?? null;
 export const selectFeedScrollAnchor = (state: RootState) => state.app.feedScrollAnchor ?? null;
 export const selectDialogs = (state: RootState) => state.app.dialogs ?? closedFeedDialogs;

@@ -8,7 +8,7 @@ import {
   selectSettings,
   selectFocusedView,
   selectSidebarView,
-  selectAppLayout,
+  selectEffectiveLayout,
   setFocusedView,
   toggleFocusedView,
 } from '@features/app/appSlice';
@@ -70,7 +70,7 @@ const MainLayout = () => {
   const sidebarView = useAppSelector(selectSidebarView);
   const focusedView = useAppSelector(selectFocusedView);
   // The layout setting picks the shell; anything unbuilt or unknown resolves to Classic.
-  const Shell = resolveShell(useAppSelector(selectAppLayout));
+  const Shell = resolveShell(useAppSelector(selectEffectiveLayout));
   const theme = useTheme();
   // Below `md` the Sidebar becomes a temporary drawer opened from the
   // TopBar hamburger, and the Ko-fi feed overlays instead of reserving

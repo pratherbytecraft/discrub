@@ -59,6 +59,25 @@
     "closingCancels": "Beim Schließen wird dieser Vorgang abgebrochen. Der Fortschritt kann verloren gehen.",
     "closeAnyway": "Trotzdem schließen"
   },
+  "appearance": {
+    "button": "Darstellung",
+    "layout": "Layout",
+    "theme": "Theme",
+    "hint": "Zum Ausprobieren darüberfahren. Zum Übernehmen klicken.",
+    "previewing": "Vorschau von {{name}}. Klicken, um es zu behalten.",
+    "locked": "Gesperrt",
+    "soon": "Bald",
+    "lockedLayout": "{{name}} (Supporter-Layout, gesperrt)",
+    "soonLayout": "{{name}} (kommt bald)",
+    "hub": "Themes und Support",
+    "supporterName": "Supporter · {{name}}",
+    "displaySettings": "Anzeigeeinstellungen",
+    "previewBar": "Vorschau von {{name}}",
+    "apply": "Übernehmen",
+    "stop": "Stopp",
+    "layoutHelp": "Wähle, wie Discrub aufgebaut ist. Themes gelten für jedes Layout.",
+    "datesAndLanguage": "Datum und Sprache"
+  },
   "focus": {
     "on": "Fokus an",
     "or": " oder ",

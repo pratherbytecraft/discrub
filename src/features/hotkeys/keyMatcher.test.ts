@@ -11,6 +11,13 @@ describe('eventToBinding', () => {
     expect(eventToBinding(evt({ key: 'L' }))).toBe('L');
   });
 
+  it('adds a shift segment on letters only (2.2.0, Ctrl Shift L)', () => {
+    expect(eventToBinding(evt({ key: 'L', shiftKey: true, ctrlKey: true }))).toBe('mod+shift+L');
+    expect(eventToBinding(evt({ key: 'L', shiftKey: true, metaKey: true }))).toBe('mod+shift+L');
+    expect(eventToBinding(evt({ key: 'F', shiftKey: true }))).toBe('shift+F');
+    expect(eventToBinding(evt({ key: '?', shiftKey: true }))).toBe('?');
+  });
+
   it('preserves typed punctuation', () => {
     expect(eventToBinding(evt({ key: '/' }))).toBe('/');
     expect(eventToBinding(evt({ key: '?' }))).toBe('?');
@@ -62,5 +69,13 @@ describe('formatBindingForDisplay', () => {
 
   it('returns empty string for empty input', () => {
     expect(formatBindingForDisplay('')).toBe('');
+  });
+});
+
+describe('formatBindingForDisplay with shift', () => {
+  it('shows the platform glyphs', () => {
+    expect(formatBindingForDisplay('mod+shift+L', true)).toBe('⌘⇧L');
+    expect(formatBindingForDisplay('mod+shift+L', false)).toBe('Ctrl+Shift+L');
+    expect(formatBindingForDisplay('mod+,', false)).toBe('Ctrl+,');
   });
 });

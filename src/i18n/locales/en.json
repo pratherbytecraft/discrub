@@ -59,6 +59,25 @@
     "closingCancels": "Closing will cancel this operation. Progress may be lost.",
     "closeAnyway": "Close Anyway"
   },
+  "appearance": {
+    "button": "Appearance",
+    "layout": "Layout",
+    "theme": "Theme",
+    "hint": "Hover to preview. Click to apply.",
+    "previewing": "Previewing {{name}}. Click to keep it.",
+    "locked": "Locked",
+    "soon": "Soon",
+    "lockedLayout": "{{name}} (supporter layout, locked)",
+    "soonLayout": "{{name}} (coming soon)",
+    "hub": "Themes and Support",
+    "supporterName": "Supporter · {{name}}",
+    "displaySettings": "Display settings",
+    "previewBar": "Previewing {{name}}",
+    "apply": "Apply",
+    "stop": "Stop",
+    "layoutHelp": "Pick how Discrub is laid out. Themes apply to every layout.",
+    "datesAndLanguage": "Dates and language"
+  },
   "focus": {
     "on": "Focus on",
     "or": " or ",

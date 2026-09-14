@@ -9,6 +9,8 @@ export interface AppTask {
   message: string;
 }
 
+import type { LayoutKey } from '@/layouts/types';
+
 export type SidebarView = 'server' | 'package';
 
 /**
@@ -76,6 +78,8 @@ export interface AppState {
    */
   feedScrollAnchor?: FeedScrollAnchor | null;
   operationHold?: OperationHold | null;
+  /** Transient layout preview from the Appearance menu, like previewThemeId. Never persisted. */
+  previewLayout?: LayoutKey | null;
   task: AppTask;
   settings: AppSettings | null;
   /**
@@ -105,6 +109,7 @@ export const initialAppState: AppState = {
   dialogs: { ...closedFeedDialogs },
   feedScrollAnchor: null,
   operationHold: null,
+  previewLayout: null,
   task: {
     status: 'idle',
     message: '',

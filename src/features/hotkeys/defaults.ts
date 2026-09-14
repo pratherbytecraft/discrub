@@ -82,6 +82,13 @@ export const HOTKEY_ACTIONS: HotkeyMeta[] = [
     defaultKey: 'mod+,',
   },
   {
+    id: 'openAppearance',
+    label: 'Open Appearance',
+    description: 'Open the layout and theme menu.',
+    scope: 'app',
+    defaultKey: 'mod+shift+L',
+  },
+  {
     id: 'openReference',
     label: 'Show keyboard shortcuts',
     description: 'Open the reference modal listing every shortcut.',

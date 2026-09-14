@@ -77,7 +77,7 @@ function visitApp() {
 
 function pasteSupporterKey() {
   cy.then(() => signLifetimeKey()).then((key) => {
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-paste-key"]').type(key as string, { delay: 0 });
     cy.get('[data-testid="supporter-paste-apply"]').click();
     cy.get('[data-testid="supporter-status"]').should('be.visible');
@@ -87,7 +87,7 @@ function pasteSupporterKey() {
 
 function saveTheme(themeId: string) {
   // Themes live in the hub only; picks apply (and persist) instantly.
-  cy.get('[data-testid="gift-button"]').click();
+  cy.openThemesHub();
   cy.get('[data-testid="supporter-theme-showcase"]').scrollIntoView().should('be.visible');
   cy.get(`[data-testid="theme-card-${themeId}"]`).click();
   cy.get('[aria-label="Close Supporter dialog"]').click();
@@ -214,7 +214,7 @@ describe('Export theming (slot E)', () => {
     pasteSupporterKey();
 
     // Customize: text + uploaded icon.
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-footer-text"]').type('Archived by Cy{enter}');
     cy.get('[data-testid="supporter-footer-icon-input"]').selectFile(
       'cypress/fixtures/footer-icon-sample.png',
@@ -237,7 +237,7 @@ describe('Export theming (slot E)', () => {
 
     // Turn the footer off entirely and export again.
     cy.task('downloads:clean');
-    cy.get('[data-testid="gift-button"]').click();
+    cy.openThemesHub();
     cy.get('[data-testid="supporter-footer-enabled"]').click();
     cy.get('[aria-label="Close Supporter dialog"]').click();
 
