@@ -10,7 +10,8 @@ describe('layout registry', () => {
     expect(resolveShell(DEFAULT_LAYOUT)).toBe(ClassicShell);
   });
 
-  it('falls back to Classic for a layout that is not built yet', () => {
+  it('resolves Native and falls back to Classic for a layout that is not built yet', () => {
+    expect(resolveShell('native')).not.toBe(ClassicShell);
     expect(resolveShell('timeline')).toBe(ClassicShell);
   });
 

@@ -43,9 +43,11 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
   const themeName = findThemeDescriptor(resolveThemeIdFromSetting(themeSetting))?.name ?? '';
 
   const preview = (key: LayoutKey | null) => dispatch(setPreviewLayout(key));
+  // Picking a layout applies it and closes the menu, so no hover preview lingers over the new frame.
   const applyLayout = (key: LayoutKey) => {
     dispatch(updateSetting({ key: DiscrubSetting.APP_LAYOUT, value: key }));
     dispatch(setPreviewLayout(null));
+    onClose();
   };
   const openHub = () => { onClose(); dispatch(setSupporterDialogOpen(true)); };
   const hovered = previewLayout && previewLayout !== layout ? LAYOUT_META.find((m) => m.key === previewLayout) : undefined;

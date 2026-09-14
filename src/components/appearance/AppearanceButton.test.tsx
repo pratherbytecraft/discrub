@@ -25,8 +25,9 @@ describe('<AppearanceButton />', () => {
     renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
     fireEvent.click(screen.getByLabelText('Appearance'));
     await screen.findByTestId('appearance-popover');
-    expect(screen.getByTestId('layout-card-native')).toBeDisabled();
-    expect(screen.getByLabelText('Native (coming soon)')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-card-native')).not.toBeDisabled();
+    expect(screen.getByLabelText('Native')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-card-workbench')).toBeDisabled();
     expect(screen.getByLabelText('Workbench (coming soon)')).toBeInTheDocument();
   });
 

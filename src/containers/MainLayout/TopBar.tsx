@@ -28,7 +28,9 @@ import { clearChannels, setSelectedChannel, selectSelectedChannel } from '@featu
 import { clearDMs, setSelectedDm, selectSelectedDm } from '@features/dm/dmSlice';
 import { clearMessages } from '@features/message/messageSlice';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
-import { selectSetting, updateSetting, setMinimized, setKofiOverlayOpen, selectSidebarView } from '@features/app/appSlice';
+import { selectSetting, updateSetting, setMinimized, setKofiOverlayOpen, selectSidebarView,
+  setDialogOpen,
+} from '@features/app/appSlice';
 import TopBarBotSpot from '@components/welcome/TopBarBotSpot';
 import { selectIsHeavyOperationRunning, selectOperationSummary } from '@features/app/operationSelectors';
 import { reopenAnnouncement, fetchAnnouncementMarkdownThunk } from '@features/announcement/announcementSlice';
@@ -36,8 +38,6 @@ import { isOverlayMode, closeOverlay, minimizeOverlay } from '@/extension/messag
 import {
   selectIsSupporter,
 } from '@features/supporter/supporterSlice';
-import SettingsModal from '@components/settings/SettingsModal';
-import SupporterDialog from '@components/supporter/SupporterDialog';
 import AppearanceButton from '@components/appearance/AppearanceButton';
 import CompatibilityPopover, { CompatibilitySheet } from '@components/compatibility/CompatibilityPopover';
 import { InfoOutlined as CompatibilityIcon } from '@mui/icons-material';
@@ -109,7 +109,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
   const operationSummary = useAppSelector(selectOperationSummary);
   const isSupporter = useAppSelector(selectIsSupporter);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [compatOpen, setCompatOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
@@ -170,7 +169,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   // matching how F toggles focus mode. Minimize is one-shot (no
   // restore-from-minimized hotkey in v1, see backlog).
   const isMinimized = useAppSelector(selectIsMinimized);
-  useHotkey('openSettings', () => setSettingsOpen((open) => !open), true);
   useHotkey('minimize', handleMinimize, isOverlayMode() && !isMinimized);
 
   const handleCloseConfirm = async () => {
@@ -345,7 +343,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
             </Box>
 
             {/* Layouts and themes in one menu (2.2.0). Replaces the palette icon; the Themes and Support hub opens from its footer. */}
-            <AppearanceButton onOpenSettings={() => setSettingsOpen(true)} />
+            <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
 
             {/* App group: Ideas, Compatibility, Settings. Groups are separated
                 by thin dividers with a tight gap inside each one. */}
@@ -366,7 +364,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
               <HotkeyTooltip actionId="openSettings" label={t('topbar.settings')} enterDelay={0} arrow>
                 <IconButton
                   color="inherit"
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))}
                   aria-label={t('topbar.settings')}
                 >
                   <SettingsIcon />
@@ -522,7 +520,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
               {isCompact && (
                 <MenuItem
                   onClick={() => {
-                    setSettingsOpen(true);
+                    dispatch(setDialogOpen({ dialog: 'settings', open: true }));
                     setMoreMenuAnchor(null);
                   }}
                   data-testid="more-menu-settings"
@@ -602,13 +600,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
       </Toolbar>
 
       <CompatibilitySheet open={compatOpen} onClose={() => setCompatOpen(false)} />
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
-
-      <SupporterDialog />
-
       <UserProfileModal
         open={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}

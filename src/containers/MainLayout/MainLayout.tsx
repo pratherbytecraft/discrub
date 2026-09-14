@@ -58,6 +58,7 @@ import { buildShellTourSteps } from '@components/welcome/tourSteps';
 import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { resolveShell } from '@/layouts/registry';
 import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
+import AppDialogs from './AppDialogs';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -310,6 +311,7 @@ const MainLayout = () => {
         onClose={() => setHotkeysRefOpen(false)}
       />
 
+      <AppDialogs />
       <AccessEndedNotice />
       <Toast />
     </Box>

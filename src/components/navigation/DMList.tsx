@@ -49,7 +49,7 @@ import {
   selectDmsInRange,
 } from '@features/dm/dmSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
-import { selectSetting } from '@features/app/appSlice';
+import { selectSetting, selectDialogOpen, setDialogOpen } from '@features/app/appSlice';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import {
   isGroupDm,
@@ -244,6 +244,7 @@ const DMList = ({ filterText = '' }: DMListProps) => {
   const dms = useAppSelector(selectDMs);
   const selectedDm = useAppSelector(selectSelectedDm);
   const selectedDms = useAppSelector(selectSelectedDms);
+  const purgeFromStore = useAppSelector(selectDialogOpen('purge'));
   const isLoading = useAppSelector(selectDmLoading);
   const token = useAppSelector(selectAuthToken);
   const dmSortOrder = useAppSelector(
@@ -556,10 +557,11 @@ const DMList = ({ filterText = '' }: DMListProps) => {
         mode="dms"
       />
 
+      {/* 2.2.0: a shell without the multi select bar (Native's inspector) opens a purge of the open conversation through the store flag. */}
       <BulkPurgeDialog
-        open={bulkPurgeOpen}
-        onClose={() => setBulkPurgeOpen(false)}
-        channels={selectedDms}
+        open={bulkPurgeOpen || purgeFromStore}
+        onClose={() => { setBulkPurgeOpen(false); if (purgeFromStore) dispatch(setDialogOpen({ dialog: 'purge', open: false })); }}
+        channels={bulkPurgeOpen || selectedDms.length > 0 ? selectedDms : selectedDm ? [selectedDm] : []}
         mode="dms"
       />
 

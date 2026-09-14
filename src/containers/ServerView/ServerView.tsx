@@ -124,12 +124,18 @@ import { useTranslation } from 'react-i18next';
 
 interface ServerViewProps {
   onStartShellTour?: () => void;
+  /**
+   * Which shell hosts the view (2.2.0). Classic keeps the channel header with
+   * its action buttons; Native draws its own head row and inspector, so the
+   * header here is skipped. Dialogs, alerts, tabs and the feed stay.
+   */
+  variant?: 'classic' | 'native';
 }
 
 /**
  * ServerView container - displays messages for selected channel or DM
  */
-const ServerView = ({ onStartShellTour }: ServerViewProps) => {
+const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
@@ -857,6 +863,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
           skipBeacon: true,
         }}
       />
+      {variant !== 'native' && (
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
           <Box sx={{ minWidth: 0, flexShrink: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1056,6 +1063,7 @@ const ServerView = ({ onStartShellTour }: ServerViewProps) => {
           </Box>
         </Box>
       </Paper>
+      )}
 
       {!isForumChannel && activeFilterCount > 0 && (
         <ActiveFilterChips

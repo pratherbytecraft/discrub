@@ -155,14 +155,15 @@ describe('TopBar', () => {
     });
 
     it('should open settings modal when settings button is clicked', () => {
-      renderWithProviders(<TopBar />, {
+      const { store } = renderWithProviders(<TopBar />, {
         preloadedState: createBaseState({
           user: { currentUser, isLoading: false, error: null },
           app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, kofiOverlayOpen: false, sidebarView: 'server' as const, task: { status: 'idle', message: '' }, settings: null, previewThemeId: null },
         }),
       });
       fireEvent.click(screen.getByLabelText('Settings'));
-      expect(screen.getByText('Settings')).toBeInTheDocument();
+      // 2.2.0: the Settings modal is mounted once by MainLayout (AppDialogs); the bar only raises the store flag.
+      expect(store.getState().app.dialogs?.settings).toBe(true);
     });
   });
 
@@ -487,9 +488,6 @@ describe('TopBar', () => {
       expect(await screen.findByTestId('appearance-popover')).toBeInTheDocument();
       fireEvent.click(screen.getByTestId('appearance-open-hub'));
       expect(store.getState().supporter.dialogOpen).toBe(true);
-      await waitFor(() => {
-        expect(screen.getByTestId('supporter-dialog')).toBeInTheDocument();
-      });
     });
   });
 
@@ -537,9 +535,6 @@ describe('TopBar', () => {
       fireEvent.click(screen.getByTestId('gift-button'));
       fireEvent.click(await screen.findByTestId('appearance-open-hub'));
       expect(store.getState().supporter.dialogOpen).toBe(true);
-      await waitFor(() => {
-        expect(screen.getByTestId('supporter-dialog')).toBeInTheDocument();
-      });
     });
 
     it('should treat an expired key as non-supporter', () => {

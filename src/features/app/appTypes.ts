@@ -18,7 +18,7 @@ export type SidebarView = 'server' | 'package';
  * foundation). Held here rather than in ServerView useState so a layout
  * swap that remounts the feed keeps an open dialog open.
  */
-export type FeedDialog = 'filters' | 'export' | 'forumExport' | 'loadAll' | 'threadLoad' | 'analytics';
+export type FeedDialog = 'filters' | 'export' | 'forumExport' | 'loadAll' | 'threadLoad' | 'analytics' | 'settings' | 'purge';
 export type FeedDialogs = Record<FeedDialog, boolean>;
 /**
  * Why a running operation is holding, beyond the user's own pause (2.2.0
@@ -36,7 +36,7 @@ export interface FeedScrollAnchor {
   messageId: string;
 }
 export const closedFeedDialogs: FeedDialogs = {
-  filters: false, export: false, forumExport: false, loadAll: false, threadLoad: false, analytics: false,
+  filters: false, export: false, forumExport: false, loadAll: false, threadLoad: false, analytics: false, settings: false, purge: false,
 };
 
 export interface AppState {

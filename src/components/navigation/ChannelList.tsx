@@ -27,6 +27,7 @@ import { ChannelType } from 'discrub-core/discord-enum';
 import { isMessageChannel } from '@utils/channelTypeUtils';
 import TourButton from '@components/welcome/TourButton';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { selectDialogOpen, setDialogOpen } from '@features/app/appSlice';
 import {
   selectChannels,
   selectSelectedChannel,
@@ -66,6 +67,7 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
   const channels = useAppSelector(selectChannels);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedChannels = useAppSelector(selectSelectedChannels);
+  const purgeFromStore = useAppSelector(selectDialogOpen('purge'));
   const selectedGuild = useAppSelector(selectSelectedGuild);
   const memberRoles = useAppSelector(selectCurrentMemberRoles);
   const currentUserId = useAppSelector(selectCurrentUser)?.id;
@@ -480,10 +482,11 @@ const ChannelList = ({ filterText = '' }: ChannelListProps) => {
         guildId={selectedGuild.id}
       />
 
+      {/* 2.2.0: a shell without the multi select bar (Native's inspector) opens a purge of the open channel through the store flag. */}
       <BulkPurgeDialog
-        open={bulkPurgeOpen}
-        onClose={() => setBulkPurgeOpen(false)}
-        channels={selectedChannels}
+        open={bulkPurgeOpen || purgeFromStore}
+        onClose={() => { setBulkPurgeOpen(false); if (purgeFromStore) dispatch(setDialogOpen({ dialog: 'purge', open: false })); }}
+        channels={bulkPurgeOpen || selectedChannels.length > 0 ? selectedChannels : selectedChannel ? [selectedChannel] : []}
         mode="channels"
         guildId={selectedGuild.id}
         canManageMessages={hasManageMessages}

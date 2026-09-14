@@ -136,7 +136,7 @@ describe('appSlice', () => {
   describe('feed dialogs', () => {
     it('start closed', () => {
       expect(selectDialogs(store.getState())).toEqual({
-        filters: false, export: false, forumExport: false, loadAll: false, threadLoad: false, analytics: false,
+        filters: false, export: false, forumExport: false, loadAll: false, threadLoad: false, analytics: false, settings: false, purge: false,
       });
     });
 

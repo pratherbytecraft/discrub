@@ -148,9 +148,16 @@ interface StatusPanelProps {
    * (2.2.0, A3)
    */
   sheetInset?: number;
+  /** Right inset for the sheet (a fixed drawer on the right). */
+  sheetRightInset?: number;
+  /** Controlled open state (2.2.0): a shell that opens the log from elsewhere passes both. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the collapsed bar; the shell provides its own entry point (Native inspector peek). */
+  hideBar?: boolean;
 }
 
-const StatusPanel = ({ sheetInset }: StatusPanelProps = {}) => {
+const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hideBar = false }: StatusPanelProps = {}) => {
   const dispatch = useAppDispatch();
   const { t, i18n } = useTranslation();
   const entries = useAppSelector(selectStatusEntries);
@@ -159,7 +166,13 @@ const StatusPanel = ({ sheetInset }: StatusPanelProps = {}) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [expanded, setExpanded] = useState(false);
+  const [expandedState, setExpandedState] = useState(false);
+  const expanded = open ?? expandedState;
+  const setExpanded = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(expanded) : next;
+    setExpandedState(value);
+    onOpenChange?.(value);
+  }, [expanded, onOpenChange]);
   const sheet = expanded && sheetInset != null;
   const [panelHeight, setPanelHeight] = useState<number>(PANEL_HEIGHT);
 
@@ -300,12 +313,15 @@ const StatusPanel = ({ sheetInset }: StatusPanelProps = {}) => {
 
   // (time formatting hoisted to module scope — see `timeFormatter`)
 
+  // A shell with its own entry point (Native's inspector peek) shows nothing until the log is opened.
+  if (hideBar && !expanded) return null;
+
   return (
     <Box
       data-tour="status-panel"
       data-sheet={sheet ? 'true' : undefined}
       sx={sheet
-        ? { position: 'fixed', left: sheetInset, right: 0, bottom: 0, zIndex: 1250, boxShadow: '0 -12px 32px rgba(0, 0, 0, 0.45)', borderTop: '1px solid #30363d', borderTopLeftRadius: 8, overflow: 'hidden' }
+        ? { position: 'fixed', left: sheetInset, right: sheetRightInset, bottom: 0, zIndex: 1250, boxShadow: '0 -12px 32px rgba(0, 0, 0, 0.45)', borderTop: '1px solid #30363d', borderTopLeftRadius: 8, overflow: 'hidden' }
         : { position: 'relative' }}
     >
       <OperationTip />

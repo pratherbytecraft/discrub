@@ -78,6 +78,28 @@
     "layoutHelp": "Wähle, wie Discrub aufgebaut ist. Themes gelten für jedes Layout.",
     "datesAndLanguage": "Datum und Sprache"
   },
+  "native": {
+    "pickOne": "Wähle einen Server, eine Unterhaltung oder das Paket",
+    "loaded": "{{count}} geladen",
+    "selected": "{{count}} ausgewählt",
+    "inspector": "Inspektor",
+    "thisChannel": "Dieser Kanal",
+    "thisConversation": "Diese Unterhaltung",
+    "thisForum": "Dieses Forum",
+    "thisPackage": "Dieses Paket",
+    "getStarted": "Los geht's",
+    "pickHint": "Wähle links einen Kanal. Alle laden, Export, Purge und Analytics erscheinen hier, sobald einer offen ist.",
+    "packageHint": "Von der Festplatte gelesen. Filtern, dann jeden Kanal exportieren. Nichts hier spricht mit Discord.",
+    "actionsHint": "Markiere eine Nachricht, um mit einer Auswahl zu arbeiten.",
+    "forumHint": "Öffne einen Beitrag, um ihn als Thread zu laden. Der Export umfasst jeden Beitrag.",
+    "purge": "Purge",
+    "edit": "Bearbeiten",
+    "open": "Öffnen",
+    "filtersActive": "{{count}} aktiv",
+    "filtersNone": "Keine. Alles Geladene wird angezeigt.",
+    "logEmpty": "Noch nichts.",
+    "searchDms": "Unterhaltung finden"
+  },
   "focus": {
     "on": "Fokus an",
     "or": " oder ",

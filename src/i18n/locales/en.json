@@ -78,6 +78,28 @@
     "layoutHelp": "Pick how Discrub is laid out. Themes apply to every layout.",
     "datesAndLanguage": "Dates and language"
   },
+  "native": {
+    "pickOne": "Pick a server, a conversation or the package",
+    "loaded": "{{count}} loaded",
+    "selected": "{{count}} selected",
+    "inspector": "Inspector",
+    "thisChannel": "This channel",
+    "thisConversation": "This conversation",
+    "thisForum": "This forum",
+    "thisPackage": "This package",
+    "getStarted": "Get started",
+    "pickHint": "Pick a channel on the left. Load All, Export, Purge and Analytics appear here once one is open.",
+    "packageHint": "Read from disk. Filter, then export any channel. Nothing here talks to Discord.",
+    "actionsHint": "Tick a message to act on a selection.",
+    "forumHint": "Open a post to load it as a thread. Export covers every post.",
+    "purge": "Purge",
+    "edit": "Edit",
+    "open": "Open",
+    "filtersActive": "{{count}} active",
+    "filtersNone": "None. Everything loaded is shown.",
+    "logEmpty": "Nothing yet.",
+    "searchDms": "Find a conversation"
+  },
   "focus": {
     "on": "Focus on",
     "or": " or ",
