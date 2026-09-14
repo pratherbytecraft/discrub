@@ -1,7 +1,8 @@
+import { previewSafe } from '@/middleware/previewGuardMiddleware';
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
-import { AppTask, SidebarView, FeedDialog, FeedScrollAnchor, OperationHold, initialAppState, closedFeedDialogs } from './appTypes';
+import { AppTask, SidebarView, FeedDialog, FeedScrollAnchor, OperationHold, AppPreview, initialAppState, closedFeedDialogs, noPreview } from './appTypes';
 import { DEFAULT_LAYOUT, LOCKED_FALLBACK_LAYOUT, isLayoutFree, isLayoutKey, type LayoutKey } from '@/layouts/types';
 import { selectHasThemes } from '@features/supporter/supporterSlice';
 import type { RootState } from '@/app/store';
@@ -99,7 +100,7 @@ export const loadSettings = createAsyncThunk(
  * per-purpose database based on whether the key is meta-state or a
  * user preference.
  */
-export const updateSetting = createAsyncThunk(
+export const updateSetting = previewSafe(createAsyncThunk(
   'app/updateSetting',
   async (
     { key, value }: { key: DiscrubSetting; value: AppSettings[keyof AppSettings] },
@@ -116,7 +117,7 @@ export const updateSetting = createAsyncThunk(
       return rejectWithValue('Failed to update setting');
     }
   },
-);
+));
 
 /**
  * Replace every setting at once. Used by SettingsModal's "Save". Each
@@ -206,6 +207,15 @@ const appSlice = createSlice({
     setOperationHold: (state, action: PayloadAction<OperationHold | null>) => {
       state.operationHold = action.payload;
     },
+    setPreviewLayout: (state, action: PayloadAction<LayoutKey | null>) => {
+      state.preview = { ...(state.preview ?? noPreview), layout: action.payload };
+    },
+    setPreviewTheme: (state, action: PayloadAction<string | null>) => {
+      state.preview = { ...(state.preview ?? noPreview), theme: action.payload };
+    },
+    endPreview: (state) => {
+      state.preview = noPreview;
+    },
     resetTask: (state) => {
       state.task = initialAppState.task;
       state.discrubPaused = false;
@@ -274,6 +284,9 @@ export const {
   closeAllDialogs,
   setFeedScrollAnchor,
   setOperationHold,
+  setPreviewLayout,
+  setPreviewTheme,
+  endPreview,
   resetTask,
 } = appSlice.actions;
 
@@ -310,6 +323,11 @@ export const selectAppLayout = (state: RootState): LayoutKey => {
   if (isLayoutFree(saved) || (state.supporter ? selectHasThemes(state) : false)) return saved;
   return LOCKED_FALLBACK_LAYOUT;
 };
+// Partial test stores may have no app slice.
+export const selectPreview = (state: RootState): AppPreview => state.app?.preview ?? noPreview;
+export const selectIsPreviewing = (state: RootState): boolean => { const p = selectPreview(state); return p.layout != null || p.theme != null; };
+/** The layout to render right now: a live preview wins over the saved setting. */
+export const selectEffectiveLayout = (state: RootState): LayoutKey => selectPreview(state).layout ?? selectAppLayout(state);
 export const selectOperationHold = (state: RootState) => state.app.operationHold ?? null;
 export const selectFeedScrollAnchor = (state: RootState) => state.app.feedScrollAnchor ?? null;
 export const selectDialogs = (state: RootState) => state.app.dialogs ?? closedFeedDialogs;

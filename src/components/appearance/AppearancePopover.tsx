@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { Box, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, Tooltip, Typography, alpha, useTheme } from '@mui/material';
-import { LockOutlined as LockIcon, Check as CheckIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { LockOutlined as LockIcon, Check as CheckIcon, Settings as SettingsIcon, VisibilityOutlined as PreviewIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectAppLayout, selectSettings, updateSetting } from '@features/app/appSlice';
+import { selectAppLayout, selectSettings, setPreviewLayout, setPreviewTheme, updateSetting } from '@features/app/appSlice';
+import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import { selectHasThemes, selectSupporter, setSupporterDialogOpen } from '@features/supporter/supporterSlice';
 import { ThemeGrid } from '@components/settings/tabs/ThemePicker';
-import { findThemeDescriptor } from '@/theme/descriptors';
-import { resolveThemeIdFromSetting } from '@/theme/theme';
 import { LAYOUT_META, type LayoutKey } from '@/layouts/types';
 import { isLayoutBuilt } from '@/layouts/registry';
 import LayoutGlyph from './LayoutGlyph';
+import LayoutMockup from './LayoutMockup';
 
 export type AppearanceTab = 'layout' | 'theme';
 
@@ -42,15 +42,19 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
   const layout = useAppSelector(selectAppLayout);
   const isSupporter = useAppSelector(selectHasThemes);
   const supporterName = useAppSelector(selectSupporter).payload?.name;
+  // A preview cannot start mid-run: the store gate would cut the run off (see previewGuardMiddleware).
+  const operationRunning = useAppSelector(selectIsOperationRunning);
   const themeSetting = settings?.[DiscrubSetting.APP_THEME_MODE] ?? 'auto';
-  const themeName = findThemeDescriptor(resolveThemeIdFromSetting(themeSetting))?.name ?? '';
-
-  // Picking a layout applies it and closes the menu, since the frame that hosts this menu is about to swap.
+    // Picking a layout applies it and closes the menu, since the frame that hosts this menu is about to swap.
   const applyLayout = (key: LayoutKey) => {
     dispatch(updateSetting({ key: DiscrubSetting.APP_LAYOUT, value: key }));
     onClose();
   };
   const openHub = () => { onClose(); dispatch(setSupporterDialogOpen(true)); };
+  // A live preview swaps the frame, which unmounts the bar hosting this menu, so starting one closes the menu;
+  // PreviewBar (mounted by MainLayout) takes over until the preview ends.
+  const startLayoutPreview = (key: LayoutKey) => { dispatch(setPreviewLayout(key)); onClose(); };
+  const startThemePreview = (id: string) => { dispatch(setPreviewTheme(id)); onClose(); };
 
   return (
     <Popover
@@ -66,9 +70,6 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
           <ToggleButton value="layout" data-testid="appearance-tab-layout"><LayoutGlyph layout={layout} color="currentColor" width={20} height={13} />{t('appearance.layout')}</ToggleButton>
           <ToggleButton value="theme" data-testid="appearance-tab-theme">{t('appearance.theme')}</ToggleButton>
         </ToggleButtonGroup>
-        <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 0 }} noWrap>
-          {tab === 'layout' ? LAYOUT_META.find((m) => m.key === layout)?.name : themeName}
-        </Typography>
       </Box>
 
       {tab === 'layout' && (
@@ -78,24 +79,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
             const locked = !m.free && !isSupporter;
             const built = isLayoutBuilt(m.key);
             const label = !built ? t('appearance.soonLayout', { name: m.name }) : locked ? t('appearance.lockedLayout', { name: m.name }) : m.name;
-            const peek = (
-              <Box data-testid={`layout-peek-${m.key}`} sx={{ p: 0.5 }}>
-                <Box sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', display: 'grid', placeItems: 'center' }}>
-                  <LayoutGlyph layout={m.key} color={theme.palette.text.primary} width={224} height={140} />
-                </Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, mt: 1 }}>{m.name}</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>{m.blurb}</Typography>
-              </Box>
-            );
             return (
-              <Tooltip
-                key={m.key}
-                title={built ? peek : ''}
-                placement="top"
-                enterDelay={400}
-                enterNextDelay={400}
-                slotProps={{ tooltip: { sx: { maxWidth: 'none', p: 0.75, bgcolor: 'background.paper', color: 'text.primary', border: '1px solid', borderColor: 'divider', boxShadow: 3 } } }}
-              >
               <Box
                 role="button"
                 tabIndex={built ? 0 : -1}
@@ -116,8 +100,8 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
                   '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
                 }}
               >
-                <Box sx={{ display: 'grid', placeItems: 'center', height: 48, mb: 1, opacity: locked ? 0.7 : 1 }}>
-                  <LayoutGlyph layout={m.key} color={current ? theme.palette.primary.main : theme.palette.text.primary} />
+                <Box sx={{ display: 'grid', placeItems: 'center', mb: 1, opacity: locked ? 0.75 : 1 }}>
+                  <LayoutMockup layout={m.key} width={156} />
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{m.name}{!built && <Box component="span" sx={{ ml: 0.75, fontSize: '0.65rem', color: 'text.secondary', border: '1px solid', borderColor: 'divider', borderRadius: 0.5, px: 0.5 }}>{t('appearance.soon')}</Box>}</Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.35, minHeight: 31 }}>{m.blurb}</Typography>
@@ -127,12 +111,18 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
                   </Box>
                 )}
                 {current && !locked && (
-                  <Box sx={{ position: 'absolute', right: 6, top: 6, width: 18, height: 18, borderRadius: '50%', bgcolor: 'primary.main', display: 'grid', placeItems: 'center' }}>
-                    <CheckIcon sx={{ fontSize: 12, color: '#fff' }} />
+                  <Box data-testid="layout-current" sx={{ position: 'absolute', right: 6, top: 6, height: 18, px: 0.75, borderRadius: 9, bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                    <CheckIcon sx={{ fontSize: 11 }} />{t('appearance.current')}
                   </Box>
                 )}
+                {built && locked && (
+                  <Tooltip title={operationRunning ? t('appearance.previewBusy') : t('appearance.previewThis', { name: m.name })} enterDelay={300} arrow>
+                    <IconButton size="small" aria-label={t('appearance.previewThis', { name: m.name })} data-testid={`layout-preview-${m.key}`} disabled={operationRunning} onClick={(e) => { e.stopPropagation(); startLayoutPreview(m.key); }} sx={{ position: 'absolute', right: 4, bottom: 4, p: 0.4, color: 'text.secondary', bgcolor: (th) => alpha(th.palette.background.paper, 0.8), border: '1px solid', borderColor: 'divider' }}>
+                      <PreviewIcon sx={{ fontSize: 15 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
-              </Tooltip>
             );
           })}
         </Box>
@@ -144,6 +134,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
             value={themeSetting}
             onChange={(id) => dispatch(updateSetting({ key: DiscrubSetting.APP_THEME_MODE, value: id }))}
             onLockedPick={openHub}
+            onPreview={operationRunning ? undefined : startThemePreview}
             isSupporter={isSupporter}
             cardWidth={96}
             data-testid="appearance-theme-grid"

@@ -1,3 +1,4 @@
+import type { LayoutKey } from '@/layouts/types';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 
 /**
@@ -77,6 +78,12 @@ export interface AppState {
    */
   feedScrollAnchor?: FeedScrollAnchor | null;
   operationHold?: OperationHold | null;
+  /**
+   * Live preview from the Appearance menu (2.2.0). Never persisted. While either
+   * is set the shell renders inert and operation thunks refuse to start, so a
+   * preview of a locked layout or theme is look-only whatever the DOM says.
+   */
+  preview?: AppPreview;
   task: AppTask;
   settings: AppSettings | null;
   /**
@@ -86,6 +93,9 @@ export interface AppState {
    */
   suggestedLanguage?: string | null;
 }
+
+export interface AppPreview { layout: LayoutKey | null; theme: string | null }
+export const noPreview: AppPreview = { layout: null, theme: null };
 
 export const initialAppState: AppState = {
   discrubPaused: false,
@@ -100,6 +110,7 @@ export const initialAppState: AppState = {
   dialogs: { ...closedFeedDialogs },
   feedScrollAnchor: null,
   operationHold: null,
+  preview: noPreview,
   task: {
     status: 'idle',
     message: '',

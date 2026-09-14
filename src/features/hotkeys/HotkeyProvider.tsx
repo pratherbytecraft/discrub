@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { useAppSelector } from '@/app/hooks';
 import { selectHotkeyBindings, selectHotkeysEnabled } from './hotkeysSlice';
+import { selectIsPreviewing } from '@features/app/appSlice';
 import { eventToBinding } from './keyMatcher';
 import type { HotkeyActionId, HotkeyBinding } from './types';
 
@@ -52,7 +53,9 @@ interface HotkeyProviderProps {
 }
 
 export const HotkeyProvider = ({ children }: HotkeyProviderProps) => {
-  const enabled = useAppSelector(selectHotkeysEnabled);
+  // Hotkeys are off during a live preview (2.2.0): the shell is inert, and a key must not reach past it.
+  const previewing = useAppSelector(selectIsPreviewing);
+  const enabled = useAppSelector(selectHotkeysEnabled) && !previewing;
   const bindings = useAppSelector(selectHotkeyBindings);
 
   // Mutable map keeps registrations stable across renders; replacing

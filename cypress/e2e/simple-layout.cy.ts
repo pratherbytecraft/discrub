@@ -24,15 +24,18 @@ describe('Simple layout (2.2.0)', () => {
     });
   });
 
-  it('is locked without a key: the card opens the hub and there is no preview', () => {
+  it('is locked without a key: the card opens the hub and the eye gives a look-only preview', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-simple"]').should('exist');
     cy.get('[data-testid="layout-card-simple"]').click();
     cy.get('[data-testid="supporter-dialog"]').should('be.visible');
     cy.get('[aria-label="Close Supporter dialog"]').click();
     cy.get('[data-testid="gift-button"]').click();
-    cy.get('[data-testid="layout-preview-simple"]').should('not.exist');
-    cy.get('body').type('{esc}');
+    cy.get('[data-testid="layout-preview-simple"]').click();
+    cy.get('[data-testid="simple-shell"]').should('exist');
+    cy.get('[data-testid="preview-bar"]').should('contain.text', 'Previewing Simple');
+    cy.get('[data-testid="shell-frame"]').should('have.attr', 'inert');
+    cy.get('[data-testid="preview-end"]').click();
     cy.get('[data-testid="simple-shell"]').should('not.exist');
   });
 

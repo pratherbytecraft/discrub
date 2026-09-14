@@ -8,7 +8,8 @@ import {
   selectSettings,
   selectFocusedView,
   selectSidebarView,
-  selectAppLayout,
+  selectEffectiveLayout,
+  selectIsPreviewing,
   setFocusedView,
   toggleFocusedView,
 } from '@features/app/appSlice';
@@ -59,6 +60,7 @@ import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { resolveShell } from '@/layouts/registry';
 import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
 import AppDialogs from './AppDialogs';
+import PreviewBar from '@components/appearance/PreviewBar';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -70,8 +72,10 @@ const MainLayout = () => {
   const showFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const sidebarView = useAppSelector(selectSidebarView);
   const focusedView = useAppSelector(selectFocusedView);
-  // The layout setting picks the shell; anything unbuilt or unknown resolves to Classic.
-  const Shell = resolveShell(useAppSelector(selectAppLayout));
+  // The layout setting picks the shell; anything unbuilt or unknown resolves to Classic. A live preview wins.
+  const Shell = resolveShell(useAppSelector(selectEffectiveLayout));
+  // While previewing, the whole shell is inert: look and scroll, no clicks or focus.
+  const previewing = useAppSelector(selectIsPreviewing);
   const theme = useTheme();
   // Below `md` the Sidebar becomes a temporary drawer opened from the
   // TopBar hamburger, and the Ko-fi feed overlays instead of reserving
@@ -284,14 +288,17 @@ const MainLayout = () => {
           skipBeacon: true,
         }}
       />
-      <Shell
-        focusedView={focusedView}
-        sidebarOpen={sidebarOpen}
-        onSidebarOpen={() => setSidebarOpen(true)}
-        onSidebarClose={() => setSidebarOpen(false)}
-        drawerOpen={drawerOpen}
-        onStartShellTour={shellTour.start}
-      />
+      <Box data-testid="shell-frame" sx={{ display: 'contents' }} {...(previewing ? { inert: '' } : {})}>
+        <Shell
+          focusedView={focusedView}
+          sidebarOpen={sidebarOpen}
+          onSidebarOpen={() => setSidebarOpen(true)}
+          onSidebarClose={() => setSidebarOpen(false)}
+          drawerOpen={drawerOpen}
+          onStartShellTour={shellTour.start}
+        />
+      </Box>
+      <PreviewBar />
 
       <AnnouncementModal
         open={hasNewAnnouncement}

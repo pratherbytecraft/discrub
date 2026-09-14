@@ -31,7 +31,8 @@ import {
 } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectSetting, updateSetting } from '@features/app/appSlice';
+import { selectSetting, updateSetting, setPreviewTheme } from '@features/app/appSlice';
+import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import {
   selectSupporterDialogOpen,
   selectSupporterKeyStatus,
@@ -141,6 +142,7 @@ const SupporterDialog = () => {
   const lastRefreshAt = useAppSelector(selectSupporterLastRefreshAt);
   const isSupporter = useAppSelector(selectIsSupporter);
   const hasThemes = useAppSelector(selectHasThemes);
+  const operationRunning = useAppSelector(selectIsOperationRunning);
   const themeSetting = useAppSelector(selectSetting(DiscrubSetting.APP_THEME_MODE)) || 'auto';
   const animationsSetting =
     useAppSelector(selectSetting(DiscrubSetting.APP_THEME_ANIMATIONS)) || 'true';
@@ -159,6 +161,11 @@ const SupporterDialog = () => {
 
   const handleThemePick = (id: string) => {
     dispatch(updateSetting({ key: DiscrubSetting.APP_THEME_MODE, value: id }));
+  };
+  // A live preview swaps the theme under the whole app, so the hub closes and PreviewBar takes over.
+  const handleThemePreview = (id: string) => {
+    dispatch(setPreviewTheme(id));
+    dispatch(setSupporterDialogOpen(false));
   };
 
   const handlePasteApply = () => {
@@ -498,6 +505,7 @@ const SupporterDialog = () => {
           <ThemeGrid
             value={themeSetting}
             onChange={handleThemePick}
+            onPreview={operationRunning ? undefined : handleThemePreview}
             isSupporter={hasThemes}
             cardWidth={104}
             centered

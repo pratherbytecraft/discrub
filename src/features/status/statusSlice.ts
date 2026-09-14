@@ -1,3 +1,4 @@
+import { previewSafe } from '@/middleware/previewGuardMiddleware';
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '@/app/store';
 import { storage } from '@/extension/storage';
@@ -47,7 +48,7 @@ export function getCurrentSessionId(): string {
  * Sorted ascending by timestamp so the panel renders in chronological
  * order without per-render sorting.
  */
-export const loadStatusLog = createAsyncThunk(
+export const loadStatusLog = previewSafe(createAsyncThunk(
   'status/loadStatusLog',
   async (_, { rejectWithValue }) => {
     try {
@@ -65,7 +66,7 @@ export const loadStatusLog = createAsyncThunk(
       return rejectWithValue('Failed to load status log');
     }
   },
-);
+));
 
 /**
  * Best-effort persistence helpers — fire-and-forget, never block the

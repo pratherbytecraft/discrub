@@ -24,15 +24,18 @@ describe('Workbench layout (2.2.0)', () => {
     });
   });
 
-  it('is locked without a key: the card opens the hub and there is no preview', () => {
+  it('is locked without a key: the card opens the hub and the eye gives a look-only preview', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-workbench"]').should('exist');
     cy.get('[data-testid="layout-card-workbench"]').click();
     cy.get('[data-testid="supporter-dialog"]').should('be.visible');
     cy.get('[aria-label="Close Supporter dialog"]').click();
     cy.get('[data-testid="gift-button"]').click();
-    cy.get('[data-testid="layout-preview-workbench"]').should('not.exist');
-    cy.get('body').type('{esc}');
+    cy.get('[data-testid="layout-preview-workbench"]').click();
+    cy.get('[data-testid="workbench-shell"]').should('exist');
+    cy.get('[data-testid="preview-bar"]').should('contain.text', 'Previewing Workbench');
+    cy.get('[data-testid="shell-frame"]').should('have.attr', 'inert');
+    cy.get('[data-testid="preview-end"]').click();
     cy.get('[data-testid="workbench-shell"]').should('not.exist');
   });
 

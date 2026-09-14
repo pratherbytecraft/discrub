@@ -34,6 +34,7 @@ const payload: SupporterKeyPayload = {
 const renderWrapper = (opts: {
   themeSetting: string;
   supporter?: Partial<typeof initialSupporterState>;
+  previewTheme?: string | null;
 }) =>
   renderWithProviders(
     <ThemeWrapper>
@@ -43,6 +44,7 @@ const renderWrapper = (opts: {
       preloadedState: createBaseState({
         app: {
           ...initialAppState,
+          preview: { layout: null, theme: opts.previewTheme ?? null },
           settings: {
             ...defaultSettings,
             [DiscrubSetting.APP_THEME_MODE]: opts.themeSetting,
@@ -92,5 +94,14 @@ describe('ThemeWrapper supporter fallback', () => {
       supporter: { initialized: true, keyStatus: 'none' },
     });
     expect(screen.getByTestId('probe')).toHaveTextContent(defaultDarkBackground);
+  });
+
+  it('renders a previewed supporter theme for a non-supporter (the preview is the pitch)', () => {
+    renderWrapper({
+      themeSetting: DISCORD_DARK_ID,
+      supporter: { initialized: true, keyStatus: 'none' },
+      previewTheme: SUPPORTER_ID,
+    });
+    expect(screen.getByTestId('probe')).toHaveTextContent(supporterBackground);
   });
 });

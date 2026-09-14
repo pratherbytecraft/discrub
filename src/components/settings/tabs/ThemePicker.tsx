@@ -1,9 +1,10 @@
-import { Box, Typography, Tooltip, alpha } from '@mui/material';
+import { Box, IconButton, Typography, Tooltip, alpha } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
   Lock as LockIcon,
   CheckCircle as SelectedIcon,
   BrightnessAuto as AutoIcon,
+  VisibilityOutlined as PreviewIcon,
 } from '@mui/icons-material';
 import {
   THEME_DESCRIPTORS,
@@ -129,6 +130,8 @@ export interface ThemeGridProps {
   onChange: (id: string) => void;
   /** Called when a locked supporter theme is clicked (the Appearance menu opens the hub). */
   onLockedPick?: (id: string) => void;
+  /** When given, each locked card gets an eye that starts a live preview of that theme (the Appearance menu). */
+  onPreview?: (id: string) => void;
   isSupporter?: boolean;
   descriptors?: ThemeDescriptor[];
   cardWidth?: number;
@@ -147,6 +150,7 @@ export const ThemeGrid = ({
   value,
   onChange,
   onLockedPick,
+  onPreview,
   isSupporter = false,
   descriptors = THEME_DESCRIPTORS,
   cardWidth = CARD_WIDTH,
@@ -240,7 +244,7 @@ export const ThemeGrid = ({
           )}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.75, minHeight: 20 }}>
-          <Typography variant="caption" sx={{ fontWeight: 600, flex: 1 }} noWrap>
+          <Typography variant="caption" sx={{ fontWeight: selected ? 700 : 600, flex: 1, color: selected ? 'primary.main' : 'inherit' }} noWrap data-testid={selected ? `theme-current-${id}` : undefined}>
             {label}
           </Typography>
         </Box>
@@ -249,6 +253,29 @@ export const ThemeGrid = ({
     return (
       <Box key={id} sx={{ position: 'relative', width: cardWidth, flexShrink: 0 }}>
         {tooltip ? <Tooltip title={tooltip}>{card}</Tooltip> : card}
+        {onPreview && locked && (
+          <Tooltip title={`Preview ${label}`} enterDelay={300}>
+            <IconButton
+              size="small"
+              aria-label={`Preview ${label}`}
+              data-testid={`theme-preview-${id}`}
+              onClick={() => onPreview(id)}
+              sx={{
+                position: 'absolute',
+                top: 10,
+                right: 10,
+                p: '2px',
+                color: 'text.secondary',
+                backgroundColor: alpha(theme.palette.background.paper, 0.8),
+                border: '1px solid',
+                borderColor: 'divider',
+                '&:hover': { backgroundColor: 'background.paper', color: 'text.primary' },
+              }}
+            >
+              <PreviewIcon sx={{ fontSize: 13 }} />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
     );
   };

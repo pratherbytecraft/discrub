@@ -3,6 +3,7 @@ import authReducer from '@features/auth/authSlice';
 import userReducer from '@features/user/userSlice';
 import appReducer, { settingsChangeMiddleware } from '@features/app/appSlice';
 import { errorLoggingMiddleware } from '@/middleware/errorLoggingMiddleware';
+import { previewGuardMiddleware } from '@/middleware/previewGuardMiddleware';
 import guildReducer from '@features/guild/guildSlice';
 import channelReducer from '@features/channel/channelSlice';
 import dmReducer from '@features/dm/dmSlice';
@@ -64,7 +65,7 @@ export const store = configureStore({
             ignoredActions: ['auth/setToken', 'export/setExportCriteria', 'export/applyPreset'],
             ignoredPaths: ['auth.token', 'export.exportCriteria'],
           },
-    }).concat(settingsChangeMiddleware, errorLoggingMiddleware),
+    }).prepend(previewGuardMiddleware).concat(settingsChangeMiddleware, errorLoggingMiddleware),
 });
 
 export type AppStore = typeof store;

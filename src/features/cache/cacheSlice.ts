@@ -1,3 +1,4 @@
+import { previewSafe } from '@/middleware/previewGuardMiddleware';
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { ExportUserMap } from 'discrub-core/types/discrub-types';
 import { initialCacheState } from './cacheTypes';
@@ -70,7 +71,7 @@ export const loadCacheFromLocalStorage = createAsyncThunk(
  * batch operations; for individual writes prefer `setCachedUserMap` /
  * `updateCachedUser` which write only the affected rows.
  */
-export const saveCacheToLocalStorage = createAsyncThunk(
+export const saveCacheToLocalStorage = previewSafe(createAsyncThunk(
   'cache/saveToLocalStorage',
   async (_, { getState, rejectWithValue }) => {
     try {
@@ -91,7 +92,7 @@ export const saveCacheToLocalStorage = createAsyncThunk(
       return rejectWithValue('Failed to save cache');
     }
   },
-);
+));
 
 /**
  * Replace the entire user map (rare — most callers use updateCachedUser

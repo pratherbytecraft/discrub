@@ -53,10 +53,28 @@ describe('ThemeGrid', () => {
     expect(onChange).toHaveBeenCalledWith('discord-dark');
   });
 
-  it('has no eye button and no preview bar', () => {
-    renderGrid({ value: 'auto' });
+  it('has no eye without onPreview, and with it only locked cards get one', () => {
+    const { unmount } = renderGrid({ value: 'auto', descriptors: rosterWithSupporter });
     expect(screen.queryByTestId('theme-preview-discord-light')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('theme-preview-bar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('theme-preview-test-supporter')).not.toBeInTheDocument();
+    unmount();
+    const onPreview = vi.fn();
+    renderGrid({ value: 'auto', descriptors: rosterWithSupporter, onPreview });
+    expect(screen.queryByTestId('theme-preview-discord-light')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('theme-preview-test-supporter'));
+    expect(onPreview).toHaveBeenCalledWith('test-supporter');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('a supporter sees no eye at all', () => {
+    renderGrid({ value: 'auto', descriptors: rosterWithSupporter, isSupporter: true, onPreview: vi.fn() });
+    expect(screen.queryByTestId('theme-preview-test-supporter')).not.toBeInTheDocument();
+  });
+
+  it('marks the current card by name as well as by check', () => {
+    renderGrid({ value: 'discord-light' });
+    expect(screen.getByTestId('theme-current-discord-light')).toHaveTextContent('Light Original');
+    expect(screen.queryByTestId('theme-current-auto')).not.toBeInTheDocument();
   });
 
   it('shows a lock badge on supporter themes when not a supporter', () => {

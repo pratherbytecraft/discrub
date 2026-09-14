@@ -24,15 +24,18 @@ describe('Operator layout (2.2.0)', () => {
     });
   });
 
-  it('is locked without a key: the card opens the hub and there is no preview', () => {
+  it('is locked without a key: the card opens the hub and the eye gives a look-only preview', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-operator"]').should('exist');
     cy.get('[data-testid="layout-card-operator"]').click();
     cy.get('[data-testid="supporter-dialog"]').should('be.visible');
     cy.get('[aria-label="Close Supporter dialog"]').click();
     cy.get('[data-testid="gift-button"]').click();
-    cy.get('[data-testid="layout-preview-operator"]').should('not.exist');
-    cy.get('body').type('{esc}');
+    cy.get('[data-testid="layout-preview-operator"]').click();
+    cy.get('[data-testid="operator-shell"]').should('exist');
+    cy.get('[data-testid="preview-bar"]').should('contain.text', 'Previewing Operator');
+    cy.get('[data-testid="shell-frame"]').should('have.attr', 'inert');
+    cy.get('[data-testid="preview-end"]').click();
     cy.get('[data-testid="operator-shell"]').should('not.exist');
   });
 

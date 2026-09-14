@@ -31,7 +31,7 @@ describe('Native layout (2.2.0)', () => {
     cy.get('[data-testid="native-head-strip"]').should('contain.text', 'loaded');
     cy.get('[data-testid="inspector-actions"]').should('be.visible');
     cy.contains('[data-testid="message-feed-row"]', 'Hello everyone! Welcome to the server.').should('exist');
-    cy.get('[data-testid="appearance-current-layout"]').should('have.text', 'Native');
+    cy.get('[data-testid="gift-button"]').should('have.attr', 'data-layout', 'native');
   });
 
   it('opens Export, Filters and Analytics from the inspector', () => {

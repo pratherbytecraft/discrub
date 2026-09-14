@@ -25,9 +25,13 @@ installUnloadFlushListener();
 // a running operation.
 setSleepImplementation(throttleImmuneSleep);
 
-// Expose Redux store on window for Cypress E2E testing
+// Expose Redux store on window for Cypress E2E testing, plus a work thunk
+// so the preview gate can be exercised by hand (appearance.cy.ts).
 if (import.meta.env.DEV) {
   (window as any).__store__ = store;
+  import('./features/guild/guildSlice').then((guild) => {
+    (window as any).__thunks__ = { fetchGuilds: guild.fetchGuilds };
+  });
 }
 
 // #263: measurement hooks for tooling/perf. Only a build made with

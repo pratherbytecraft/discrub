@@ -123,6 +123,13 @@ describe('SupporterDialog', () => {
       await waitFor(() => expect(store.getState().app.settings?.appThemeMode).toBe('terminal'));
     });
 
+    it('the eye on a locked theme card starts a preview and closes the hub', () => {
+      const { store } = renderDialog();
+      fireEvent.click(screen.getByTestId('theme-preview-amoled-void'));
+      expect(store.getState().app.preview?.theme).toBe('amoled-void');
+      expect(store.getState().supporter.dialogOpen).toBe(false);
+    });
+
     it('clicking a locked theme card changes nothing', () => {
       const { store } = renderDialog();
       const before = store.getState().app.settings?.appThemeMode;

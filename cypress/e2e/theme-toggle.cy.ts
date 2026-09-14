@@ -1,8 +1,9 @@
 /**
  * Theme switching from the Themes hub (the gift-button dialog). The
  * old TopBar cycle button was retired when the hub took over as the
- * single theme-switching surface. There is no live preview: the card
- * swatches are the preview, and a locked card applies nothing.
+ * single theme-switching surface. Locked cards carry an eye that starts a
+ * look-only live preview and closes the hub; clicking a locked card itself
+ * applies nothing.
  */
 
 const DARK_BG = 'rgb(30, 33, 36)'; // discord-dark background.default
@@ -38,13 +39,20 @@ describe('Theme switching from the hub', () => {
     cy.get('body').should('have.css', 'background-color', LIGHT_BG);
   });
 
-  it('has no live preview: no eye, and a locked supporter card changes nothing', () => {
+  it('free cards have no eye; a locked card changes nothing on click and its eye previews from the hub', () => {
     openHub();
     cy.get('[data-testid="theme-card-discord-dark"]').click();
     cy.get('body').should('have.css', 'background-color', DARK_BG);
 
     cy.get('[data-testid="theme-preview-terminal"]').should('not.exist');
-    cy.get('[data-testid="theme-preview-bar"]').should('not.exist');
+    cy.get('[data-testid="theme-preview-amoled-void"]').click();
+    cy.get('[data-testid="supporter-dialog"]').should('not.exist');
+    cy.get('[data-testid="preview-bar"]').should('contain.text', 'Previewing AMOLED Void');
+    cy.get('body').should('have.css', 'background-color', 'rgb(0, 0, 0)');
+    cy.get('[data-testid="preview-end"]').click();
+    cy.get('body').should('have.css', 'background-color', DARK_BG);
+
+    openHub();
 
     cy.get('[data-testid="theme-card-amoled-void"]').click();
     cy.get('body').should('have.css', 'background-color', DARK_BG);

@@ -43,7 +43,14 @@ import appReducer, {
   selectDeleteDelay,
   selectDelayModifier,
   settingsChangeMiddleware,
+  setPreviewLayout,
+  setPreviewTheme,
+  endPreview,
+  selectPreview,
+  selectIsPreviewing,
+  selectEffectiveLayout,
 } from './appSlice';
+import guildReducer, { fetchGuilds } from '@features/guild/guildSlice';
 import { initialAppState } from './appTypes';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
@@ -302,6 +309,39 @@ describe('appSlice', () => {
         const state = store.getState().app;
         expect(state.isMinimized).toBe(true);
         expect(state.discrubPaused).toBe(true);
+      });
+    });
+
+    describe('live preview (2.2.0)', () => {
+      it('starts empty, sets either half, and ends as one', () => {
+        expect(selectIsPreviewing(store.getState())).toBe(false);
+        store.dispatch(setPreviewLayout('workbench'));
+        expect(selectPreview(store.getState())).toEqual({ layout: 'workbench', theme: null });
+        expect(selectIsPreviewing(store.getState())).toBe(true);
+        expect(selectEffectiveLayout(store.getState())).toBe('workbench');
+        store.dispatch(setPreviewTheme('synthwave'));
+        expect(selectPreview(store.getState())).toEqual({ layout: 'workbench', theme: 'synthwave' });
+        store.dispatch(endPreview());
+        expect(selectPreview(store.getState())).toEqual({ layout: null, theme: null });
+        expect(selectEffectiveLayout(store.getState())).toBe('classic');
+        expect(store.getState().app.settings).toEqual(initialAppState.settings);
+      });
+
+      it('the store gate drops a work thunk while previewing and lets it run afterwards', async () => {
+        const gated = createTestStore({ app: appReducer, guild: guildReducer });
+        gated.dispatch(setPreviewTheme('synthwave'));
+        const blocked = await gated.dispatch(fetchGuilds('token'));
+        expect(blocked).toEqual({ type: 'app/previewBlocked' });
+        expect(gated.getState().guild.isLoading).toBe(false);
+        gated.dispatch(endPreview());
+        const result = await gated.dispatch(fetchGuilds('token'));
+        expect(result.type).not.toBe('app/previewBlocked');
+      });
+
+      it('a previewSafe thunk (updateSetting) still runs while previewing', async () => {
+        store.dispatch(setPreviewLayout('simple'));
+        await store.dispatch(updateSetting({ key: DiscrubSetting.APP_THEME_MODE, value: 'terminal' }));
+        expect(selectSetting(DiscrubSetting.APP_THEME_MODE)(store.getState())).toBe('terminal');
       });
     });
 

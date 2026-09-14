@@ -1,3 +1,4 @@
+import { previewSafe } from '@/middleware/previewGuardMiddleware';
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { fetchRevokedSupporterKeys } from 'discrub-core/github-service';
 import type { RootState } from '@/app/store';
@@ -162,7 +163,7 @@ export const initializeSupporter = createAsyncThunk(
  * endpoint for a fresh merged one. Works for valid and recently-expired
  * keys alike; the server's entitlement check is the truth.
  */
-export const refreshSupporterKey = createAsyncThunk(
+export const refreshSupporterKey = previewSafe(createAsyncThunk(
   'supporter/refreshKey',
   async (_, { rejectWithValue }) => {
     const storedKey = await storage.state.get<string>(SUPPORTER_KEY_STORAGE_KEY);
@@ -190,7 +191,7 @@ export const refreshSupporterKey = createAsyncThunk(
       return rejectWithValue('Something went wrong refreshing your key. Try again.');
     }
   },
-);
+));
 
 /**
  * Apply a pasted supporter key — the primary unlock path. Emails carry

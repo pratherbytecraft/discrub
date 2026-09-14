@@ -63,7 +63,7 @@
     "button": "Appearance",
     "layout": "Layout",
     "theme": "Theme",
-    "hint": "Hover to preview. Click to apply.",
+    "hint": "Click to apply. The eye previews a locked one.",
     "locked": "Locked",
     "soon": "Soon",
     "lockedLayout": "{{name}} (supporter layout, locked)",
@@ -72,7 +72,12 @@
     "supporterName": "Supporter · {{name}}",
     "displaySettings": "Display settings",
     "layoutHelp": "Pick how Discrub is laid out. Themes apply to every layout.",
-    "datesAndLanguage": "Dates and language"
+    "datesAndLanguage": "Dates and language",
+    "previewBar": "Previewing {{name}}",
+    "previewThis": "Preview {{name}}",
+    "endPreview": "End preview",
+    "current": "Current",
+    "previewBusy": "Finish the current run first"
   },
   "native": {
     "pickOne": "Pick a server, a conversation or the package",

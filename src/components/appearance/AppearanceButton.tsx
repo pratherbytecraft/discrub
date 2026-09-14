@@ -13,8 +13,9 @@ import { LAYOUT_NAMES } from '@/layouts/types';
 import AppearancePopover from './AppearancePopover';
 /**
  * Top bar entry for layouts and themes (2.2.0). Replaces the palette icon:
- * names the current layout and theme, collapses to its dot below the sm
- * breakpoint, opens the Appearance popover on click or Ctrl Shift L. Keeps
+ * the theme dot, the word Appearance and a chevron, with the current layout
+ * and theme in its tooltip (the names left the button 2026-09-19, the menu
+ * shows them on the cards). Collapses to its dot below the sm breakpoint, opens the Appearance popover on click or Ctrl Shift L. Keeps
  * the attention glow non-supporters saw on the palette icon and the
  * supporter badge once a key is in.
  */
@@ -46,7 +47,7 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
 
   return (
     <>
-      <Tooltip title={t('appearance.button')} enterDelay={0} arrow>
+      <Tooltip title={`${LAYOUT_NAMES[layout]} · ${themeName}`} enterDelay={0} arrow>
         <ButtonBase
           ref={ref}
           onClick={toggle}
@@ -54,6 +55,8 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
           aria-haspopup="dialog"
           aria-expanded={open}
           data-testid="gift-button"
+          data-layout={layout}
+          data-theme-name={themeName}
           sx={(th: Theme) => ({
             display: 'inline-flex', alignItems: 'center', gap: 1, height: 30, px: compact ? 0.75 : 1.25, borderRadius: 1.5,
             border: '1px solid', borderColor: 'divider',
@@ -83,10 +86,7 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
           {dot}
           {!compact && (
             <>
-              <Typography variant="overline" sx={{ lineHeight: 1, color: 'text.secondary', fontSize: '0.65rem' }}>{t('appearance.button')}</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }} data-testid="appearance-current-layout">{LAYOUT_NAMES[layout]}</Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>·</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }} data-testid="appearance-current-theme">{themeName}</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('appearance.button')}</Typography>
               <ChevronIcon sx={{ fontSize: 18, color: 'text.secondary', ml: -0.5 }} />
             </>
           )}

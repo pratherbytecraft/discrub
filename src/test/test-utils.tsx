@@ -1,3 +1,4 @@
+import { previewGuardMiddleware } from '@/middleware/previewGuardMiddleware';
 import { ReactElement, ReactNode } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { Provider } from 'react-redux';
@@ -111,10 +112,9 @@ export function createTestStore(
   return configureStore({
     reducer: reducers,
     preloadedState,
-    ...(middleware && {
-      middleware: (getDefaultMiddleware) =>
-        getDefaultMiddleware().concat(...middleware),
-    }),
+    // The preview guard is part of every store so tests see the real gate.
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware().prepend(previewGuardMiddleware).concat(...(middleware ?? [])),
   }) as unknown as TestStore;
 }
 
