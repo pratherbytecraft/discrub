@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
+import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/test-utils';
 import { createBaseState } from '@/test/state-factories';
 import { defaultSettings } from '@features/app/storageKeys';
 import AppearanceButton from './AppearanceButton';
+import LayoutPreviewBar from './LayoutPreviewBar';
 
 const withSettings = () => {
   const state = createBaseState();
@@ -25,9 +26,9 @@ describe('<AppearanceButton />', () => {
     renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
     fireEvent.click(screen.getByLabelText('Appearance'));
     await screen.findByTestId('appearance-popover');
-    expect(screen.getByTestId('layout-card-native')).not.toBeDisabled();
+    expect(screen.getByTestId('layout-card-native')).not.toHaveAttribute('aria-disabled');
     expect(screen.getByLabelText('Native')).toBeInTheDocument();
-    expect(screen.getByTestId('layout-card-workbench')).toBeDisabled();
+    expect(screen.getByTestId('layout-card-workbench')).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByLabelText('Workbench (coming soon)')).toBeInTheDocument();
   });
 
@@ -49,5 +50,16 @@ describe('<AppearanceButton />', () => {
     expect(await screen.findByTestId('appearance-theme-grid')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Terminal'));
     expect(store.getState().app.settings?.appThemeMode).toBe('terminal');
+  });
+
+  it('starts a layout preview from the eye, closes the menu, and the bar can stop it', async () => {
+    const { store } = renderWithProviders(<><AppearanceButton onOpenSettings={vi.fn()} /><LayoutPreviewBar /></>, { preloadedState: withSettings() });
+    fireEvent.click(screen.getByLabelText('Appearance'));
+    fireEvent.click(await screen.findByTestId('layout-preview-native'));
+    expect(store.getState().app.previewLayout).toBe('native');
+    await waitFor(() => expect(screen.queryByTestId('appearance-popover')).toBeNull());
+    expect(screen.getByTestId('layout-preview-bar')).toHaveTextContent('Previewing Native');
+    fireEvent.click(screen.getByTestId('layout-preview-stop'));
+    expect(store.getState().app.previewLayout ?? null).toBeNull();
   });
 });

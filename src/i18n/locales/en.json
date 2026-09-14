@@ -73,6 +73,7 @@
     "supporterName": "Supporter · {{name}}",
     "displaySettings": "Display settings",
     "previewBar": "Previewing {{name}}",
+    "previewThis": "Preview {{name}}",
     "apply": "Apply",
     "stop": "Stop",
     "layoutHelp": "Pick how Discrub is laid out. Themes apply to every layout.",

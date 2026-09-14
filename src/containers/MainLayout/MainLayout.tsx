@@ -59,6 +59,7 @@ import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { resolveShell } from '@/layouts/registry';
 import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
 import AppDialogs from './AppDialogs';
+import LayoutPreviewBar from '@components/appearance/LayoutPreviewBar';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -312,6 +313,7 @@ const MainLayout = () => {
       />
 
       <AppDialogs />
+      <LayoutPreviewBar />
       <AccessEndedNotice />
       <Toast />
     </Box>

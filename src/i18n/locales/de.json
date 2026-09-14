@@ -73,6 +73,7 @@
     "supporterName": "Supporter · {{name}}",
     "displaySettings": "Anzeigeeinstellungen",
     "previewBar": "Vorschau von {{name}}",
+    "previewThis": "{{name}} ausprobieren",
     "apply": "Übernehmen",
     "stop": "Stopp",
     "layoutHelp": "Wähle, wie Discrub aufgebaut ist. Themes gelten für jedes Layout.",

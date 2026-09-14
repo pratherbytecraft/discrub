@@ -61,7 +61,7 @@ const NativeHead = ({ inspectorOpen, canToggleInspector, onToggleInspector, show
           <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, maxWidth: 320 }} data-testid="native-head-title">{name}</Typography>
         </>
       ) : (
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.secondary' }}>{t('native.pickOne')}</Typography>
+        <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, color: 'text.secondary', minWidth: 0, flexShrink: 1 }}>{t('native.pickOne')}</Typography>
       )}
       {hasContext && !isPackage && !isForum && (
         <Box data-testid="native-head-strip" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1, py: 0.25, borderRadius: 1.5, backgroundColor: alpha(theme.palette.text.primary, 0.05), minWidth: 0 }}>

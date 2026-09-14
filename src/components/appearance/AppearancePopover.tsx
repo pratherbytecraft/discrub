@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Box, Button, IconButton, Popover, Tab, Tabs, Tooltip, Typography, alpha, useTheme } from '@mui/material';
-import { LockOutlined as LockIcon, Check as CheckIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { LockOutlined as LockIcon, Check as CheckIcon, Settings as SettingsIcon, VisibilityOutlined as PreviewIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -42,7 +42,9 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
   const themeSetting = settings?.[DiscrubSetting.APP_THEME_MODE] ?? 'auto';
   const themeName = findThemeDescriptor(resolveThemeIdFromSetting(themeSetting))?.name ?? '';
 
-  const preview = (key: LayoutKey | null) => dispatch(setPreviewLayout(key));
+  // A layout preview swaps the whole frame, including the bar that hosts this menu, so it starts from the
+  // eye and closes the menu; the preview bar at the bottom offers Apply and Stop (round 2 decision).
+  const startPreview = (key: LayoutKey) => { dispatch(setPreviewLayout(key)); onClose(); };
   // Picking a layout applies it and closes the menu, so no hover preview lingers over the new frame.
   const applyLayout = (key: LayoutKey) => {
     dispatch(updateSetting({ key: DiscrubSetting.APP_LAYOUT, value: key }));
@@ -50,13 +52,13 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
     onClose();
   };
   const openHub = () => { onClose(); dispatch(setSupporterDialogOpen(true)); };
-  const hovered = previewLayout && previewLayout !== layout ? LAYOUT_META.find((m) => m.key === previewLayout) : undefined;
+  const previewed = previewLayout && previewLayout !== layout ? LAYOUT_META.find((m) => m.key === previewLayout) : undefined;
 
   return (
     <Popover
       open={open}
       anchorEl={anchorEl}
-      onClose={() => { preview(null); onClose(); }}
+      onClose={onClose}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       slotProps={{ paper: { sx: { width: 640, maxWidth: 'calc(100vw - 24px)', mt: 1, border: '1px solid', borderColor: 'divider', overflow: 'visible' }, 'data-testid': 'appearance-popover' } as never }}
@@ -67,7 +69,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
       </Tabs>
 
       {tab === 'layout' && (
-        <Box sx={{ p: 1.75, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 1 }} data-testid="layout-cards" onMouseLeave={() => preview(null)}>
+        <Box sx={{ p: 1.75, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 1 }} data-testid="layout-cards">
           {LAYOUT_META.map((m) => {
             const current = m.key === layout;
             const locked = !m.free && !isSupporter;
@@ -76,15 +78,14 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
             return (
               <Box
                 key={m.key}
-                component="button"
-                type="button"
+                role="button"
+                tabIndex={built ? 0 : -1}
                 aria-label={label}
                 aria-pressed={current}
+                aria-disabled={!built || undefined}
                 data-testid={`layout-card-${m.key}`}
-                disabled={!built}
-                onMouseEnter={() => built && preview(m.key)}
-                onFocus={() => built && preview(m.key)}
                 onClick={() => { if (!built) return; if (locked) openHub(); else applyLayout(m.key); }}
+                onKeyDown={(e) => { if (built && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); if (locked) openHub(); else applyLayout(m.key); } }}
                 sx={{
                   position: 'relative', textAlign: 'left', cursor: built ? 'pointer' : 'default', font: 'inherit', color: 'inherit',
                   p: '10px 10px 8px', borderRadius: 2, border: '1px solid',
@@ -111,6 +112,13 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
                     <CheckIcon sx={{ fontSize: 12, color: '#fff' }} />
                   </Box>
                 )}
+                {built && !current && (
+                  <Tooltip title={t('appearance.previewThis', { name: m.name })} enterDelay={300} arrow>
+                    <IconButton size="small" aria-label={t('appearance.previewThis', { name: m.name })} data-testid={`layout-preview-${m.key}`} onClick={(e) => { e.stopPropagation(); startPreview(m.key); }} sx={{ position: 'absolute', right: 4, bottom: 4, p: 0.4, color: 'text.secondary' }}>
+                      <PreviewIcon sx={{ fontSize: 15 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Box>
             );
           })}
@@ -131,7 +139,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.75, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }} noWrap data-testid="appearance-hint">
-          {hovered ? t('appearance.previewing', { name: hovered.name }) : t('appearance.hint')}
+          {previewed ? t('appearance.previewing', { name: previewed.name }) : t('appearance.hint')}
         </Typography>
         <Button size="small" onClick={openHub} data-testid="appearance-open-hub" sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}>
           {isSupporter && supporterName ? t('appearance.supporterName', { name: supporterName }) : t('appearance.hub')}
