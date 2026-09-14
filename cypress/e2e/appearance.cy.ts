@@ -14,9 +14,10 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('[data-testid="appearance-popover"]').should('be.visible');
     cy.get('[data-testid="layout-cards"] [data-testid^="layout-card-"]').should('have.length', 6);
     cy.get('[data-testid="layout-card-classic"]').should('have.attr', 'aria-pressed', 'true');
-    // Classic and Native are built; the supporter layouts read as coming soon and cannot be picked yet.
+    // All six layouts are built, so no card is disabled; the supporter ones carry the lock without a key.
     cy.get('[data-testid="layout-card-native"]').should('not.have.attr', 'aria-disabled');
-    cy.get('[data-testid="layout-card-timeline"]').should('have.attr', 'aria-disabled', 'true');
+    cy.get('[data-testid="layout-card-timeline"]').should('not.have.attr', 'aria-disabled');
+    cy.get('[data-testid="layout-locked-timeline"]').should('exist');
     cy.get('[data-testid="layout-locked-workbench"]').should('exist');
     cy.get('[data-testid="appearance-hint"]').should('have.text', 'Hover to preview. Click to apply.');
     cy.get('body').type('{esc}');
@@ -52,7 +53,7 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('[role="dialog"]').contains('[role="tab"]', 'Display').click();
     cy.get('[data-testid="display-layout-block"]').should('be.visible');
     cy.get('[data-testid="settings-layout-classic"]').should('have.attr', 'aria-pressed', 'true');
-    cy.get('[data-testid="settings-layout-timeline"]').should('be.disabled');
+    cy.get('[data-testid="settings-layout-timeline"]').should('not.be.disabled');
     cy.contains('Dates and language').should('be.visible');
     cy.get('body').type('{esc}');
   });

@@ -37,10 +37,11 @@ import { selectSettings, setFeedScrollAnchor, selectFeedScrollAnchor } from '@fe
 import UserProfileModal from '@/components/modals/UserProfileModal';
 import AttachmentModal from '@/components/modals/AttachmentModal';
 import ReactionModal from '@/components/modals/ReactionModal';
-import { chunkMessages } from '@/utils/messageChunking';
+import { chunkMessages, localDayKey } from '@/utils/messageChunking';
 import { createChunkSizeEstimator } from '@/utils/chunkSizeEstimator';
 import MessageChunk from './MessageChunk';
 import MessageFeedToolbar from './MessageFeedToolbar';
+import MessageDayHeading from './MessageDayHeading';
 import { useTranslation } from 'react-i18next';
 
 interface MessageFeedProps {
@@ -55,6 +56,8 @@ interface MessageFeedProps {
   currentUserId?: string;
   onBulkDeleteAllReactions?: (messageId: string) => Promise<void>;
   onBulkDeleteReactionsForEmoji?: (messageId: string, emoji: string) => Promise<void>;
+  /** Timeline layout (2.2.0): a heading above the first chunk of each local day, with the day's count and Select day. */
+  groupByDay?: boolean;
 }
 
 const MessageFeed = ({
@@ -69,6 +72,7 @@ const MessageFeed = ({
   currentUserId,
   onBulkDeleteAllReactions,
   onBulkDeleteReactionsForEmoji,
+  groupByDay = false,
 }: MessageFeedProps) => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
@@ -104,7 +108,21 @@ const MessageFeed = ({
     [selectedMessages],
   );
 
-  const chunks = useMemo(() => chunkMessages(messages), [messages]);
+  const chunks = useMemo(() => chunkMessages(messages, { splitByDay: groupByDay }), [messages, groupByDay]);
+
+  // Timeline: messages per local day, read by the day headings.
+  const dayCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!groupByDay) return counts;
+    for (const m of messages) { const k = localDayKey(m.timestamp); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
+    return counts;
+  }, [messages, groupByDay]);
+  const selectedDayCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!groupByDay) return counts;
+    for (const m of selectedMessages) { const k = localDayKey(m.timestamp); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
+    return counts;
+  }, [selectedMessages, groupByDay]);
 
   // Virtualize over chunks, not raw messages. Chunks have wildly variable
   // heights (short content vs embeds + attachments + reactions), so
@@ -338,6 +356,17 @@ const MessageFeed = ({
     }
   }, [activeTab, dispatch, messages.length, selectedMessages.length]);
 
+  // Select day ticks every shown message from that day; a second click unticks them.
+  const handleToggleDay = useCallback((dayKey: string) => {
+    const dayIds = new Set(messages.filter((m) => localDayKey(m.timestamp) === dayKey).map((m) => m.id));
+    const allSelected = selectedMessages.filter((m) => dayIds.has(m.id)).length === dayIds.size;
+    const next = allSelected
+      ? selectedMessages.filter((m) => !dayIds.has(m.id))
+      : [...selectedMessages.filter((m) => !dayIds.has(m.id)), ...messages.filter((m) => dayIds.has(m.id))];
+    if (activeTab) dispatch(setThreadSelectedMessages({ threadId: activeTab, messages: next }));
+    else dispatch(setSelectedMessages(next));
+  }, [activeTab, dispatch, messages, selectedMessages]);
+
   const handleToggleSort = useCallback(() => {
     const newOrder = {
       order:
@@ -480,6 +509,9 @@ const MessageFeed = ({
             {virtualItems.map((virtualRow) => {
               const chunk = chunks[virtualRow.index];
               if (!chunk) return null;
+              const dayKey = groupByDay ? localDayKey(chunk.firstTimestamp) : '';
+              const prevChunk = virtualRow.index > 0 ? chunks[virtualRow.index - 1] : undefined;
+              const startsDay = !!dayKey && (!prevChunk || localDayKey(prevChunk.firstTimestamp) !== dayKey);
               return (
                 <Box
                   key={chunk.key}
@@ -493,6 +525,14 @@ const MessageFeed = ({
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
+                  {startsDay && (
+                    <MessageDayHeading
+                      dayKey={dayKey}
+                      count={dayCounts.get(dayKey) ?? 0}
+                      selectedCount={selectedDayCounts.get(dayKey) ?? 0}
+                      onToggleDay={handleToggleDay}
+                    />
+                  )}
                   <MessageChunk
                     chunk={chunk}
                     selectedIds={selectedIdSet}

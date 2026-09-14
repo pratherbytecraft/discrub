@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils';
+import { renderWithProviders, screen, userEvent, waitFor, act } from '../../test/test-utils';
 import ServerView from './ServerView';
 import { createBaseState, createAuthenticatedState } from '../../test/state-factories';
 import { createMockMessage, createMockGuild, createMockChannel } from '../../test/fixtures';
@@ -270,6 +270,32 @@ describe('ServerView', () => {
   // search criteria previously survived a channel switch — stale chips kept
   // rendering (and FilterModal kept pre-filling) for the OLD conversation
   // even though Redux criteria were already cleared.
+  // 2.2.0: the new layouts open Filters through the store, and the Timeline
+  // strip writes the refine dates from outside the dialog. Every open has to
+  // show what is saved, not what the dialog held when it first mounted.
+  describe('Filters dialog reads the saved refine on every open', () => {
+    it('shows refine dates that were set from outside the dialog, when opened through the store', async () => {
+      const { store } = renderWithProviders(<ServerView variant="timeline" />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          guild: { ...createBaseState().guild, guilds: [guild], selectedGuild: guild },
+          channel: { ...createBaseState().channel, channels: [channel], selectedChannel: channel },
+        }),
+      });
+      const { setRefineCriteria } = await import('@/features/message/messageSlice');
+      const { setDialogOpen } = await import('@/features/app/appSlice');
+      const { defaultCriteria } = await import('@/components/search/searchConstants');
+      act(() => { store.dispatch(setRefineCriteria({ ...defaultCriteria, searchAfterDate: new Date(2026, 6, 10), searchBeforeDate: new Date(2026, 6, 15, 23, 59, 59, 999) })); });
+      act(() => { store.dispatch(setDialogOpen({ dialog: 'filters', open: true })); });
+      expect(await screen.findByTestId('clear-refine-filters')).toHaveTextContent('2');
+      // Closed, range cleared from outside, opened again: the dialog follows.
+      act(() => { store.dispatch(setDialogOpen({ dialog: 'filters', open: false })); });
+      act(() => { store.dispatch(setRefineCriteria({ ...defaultCriteria })); });
+      act(() => { store.dispatch(setDialogOpen({ dialog: 'filters', open: true })); });
+      await waitFor(() => expect(screen.getByTestId('clear-refine-filters')).not.toHaveTextContent('2'));
+    });
+  });
+
   describe('Search criteria reset on conversation switch (#226)', () => {
     it('clears the saved search chips when the selected channel changes', async () => {
       const channelB = createMockChannel({ id: 'ch2', name: 'other-channel' });

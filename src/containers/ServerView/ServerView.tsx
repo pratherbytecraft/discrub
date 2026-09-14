@@ -130,7 +130,7 @@ interface ServerViewProps {
    * its action buttons; Native draws its own head row and inspector, so the
    * header here is skipped. Dialogs, alerts, tabs and the feed stay.
    */
-  variant?: 'classic' | 'native' | 'workbench' | 'simple' | 'operator';
+  variant?: 'classic' | 'native' | 'workbench' | 'simple' | 'operator' | 'timeline';
 }
 
 /**
@@ -215,6 +215,12 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   // layout swap that remounts this view keeps an open dialog open.
   const dialogs = useAppSelector(selectDialogs);
   const filterModalOpen = dialogs.filters;
+  // Every open remounts the Filters dialog so it reads the saved criteria,
+  // whoever opened it: the 2.2.0 layouts open it through the store, and the
+  // Timeline strip writes the refine dates from outside the dialog.
+  const prevFilterModalOpenRef = useRef(filterModalOpen);
+  if (filterModalOpen && !prevFilterModalOpenRef.current) filterModalKeyRef.current++;
+  prevFilterModalOpenRef.current = filterModalOpen;
   const exportDialogOpen = dialogs.export;
   const forumExportDialogOpen = dialogs.forumExport;
   const loadAllDialogOpen = dialogs.loadAll;
@@ -1237,6 +1243,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
             currentUserId={currentUser?.id}
             onBulkDeleteAllReactions={handleBulkDeleteAllReactions}
             onBulkDeleteReactionsForEmoji={handleBulkDeleteReactionsForEmoji}
+            groupByDay={variant === 'timeline'}
           />
           )}
         </Box>

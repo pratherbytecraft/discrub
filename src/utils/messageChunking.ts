@@ -46,7 +46,19 @@ const canGroup = (a: Message, b: Message): boolean => {
  * preserve that order. Grouping is symmetric w.r.t. sort direction because
  * the time-delta check uses Math.abs.
  */
-export const chunkMessages = (messages: Message[]): MessageChunk[] => {
+/** Local calendar day of a timestamp as YYYY-MM-DD. Empty for a missing or unreadable timestamp. */
+export const localDayKey = (timestamp: string | null | undefined): string => {
+  if (!timestamp) return '';
+  const d = new Date(timestamp);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/**
+ * `splitByDay` (Timeline, 2.2.0) ends a chunk at midnight local time so a
+ * day heading can sit above the first chunk of each day.
+ */
+export const chunkMessages = (messages: Message[], opts: { splitByDay?: boolean } = {}): MessageChunk[] => {
   if (messages.length === 0) return [];
 
   const chunks: MessageChunk[] = [];
@@ -55,7 +67,7 @@ export const chunkMessages = (messages: Message[]): MessageChunk[] => {
   for (let i = 1; i < messages.length; i++) {
     const prev = current[current.length - 1];
     const next = messages[i];
-    if (canGroup(prev, next)) {
+    if (canGroup(prev, next) && (!opts.splitByDay || localDayKey(prev.timestamp) === localDayKey(next.timestamp))) {
       current.push(next);
     } else {
       chunks.push(toChunk(current));

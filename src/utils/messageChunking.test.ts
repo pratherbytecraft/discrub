@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Message } from 'discrub-core/types/discord-types';
-import { chunkMessages, CHUNK_WINDOW_MS } from './messageChunking';
+import { chunkMessages, localDayKey, CHUNK_WINDOW_MS } from './messageChunking';
 
 const msg = (
   id: string,
@@ -129,5 +129,28 @@ describe('chunkMessages', () => {
     const b = msg('222', 'alice', '2026-04-19T15:01:00.000Z');
     const chunks = chunkMessages([a, b]);
     expect(chunks[0].key).toBe('111');
+  });
+});
+
+describe('chunkMessages with splitByDay (Timeline)', () => {
+  // Built from local date parts so the test holds in any time zone.
+  const local = (y: number, mo: number, d: number, h: number, mi: number) => new Date(y, mo - 1, d, h, mi).toISOString();
+
+  it('ends a chunk at local midnight even inside the grouping window', () => {
+    const messages = [msg('2', 'a', local(2026, 7, 18, 0, 1)), msg('1', 'a', local(2026, 7, 17, 23, 58))];
+    expect(chunkMessages(messages)).toHaveLength(1);
+    const split = chunkMessages(messages, { splitByDay: true });
+    expect(split).toHaveLength(2);
+    expect(split.map((c) => localDayKey(c.firstTimestamp))).toEqual(['2026-07-18', '2026-07-17']);
+  });
+
+  it('still groups a run inside one day', () => {
+    const messages = [msg('2', 'a', local(2026, 7, 17, 10, 3)), msg('1', 'a', local(2026, 7, 17, 10, 1))];
+    expect(chunkMessages(messages, { splitByDay: true })).toHaveLength(1);
+  });
+
+  it('gives an empty key for a missing or unreadable timestamp', () => {
+    expect(localDayKey(undefined)).toBe('');
+    expect(localDayKey('not a date')).toBe('');
   });
 });

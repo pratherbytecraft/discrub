@@ -10,9 +10,11 @@ describe('layout registry', () => {
     expect(resolveShell(DEFAULT_LAYOUT)).toBe(ClassicShell);
   });
 
-  it('resolves Native and falls back to Classic for a layout that is not built yet', () => {
+  it('resolves every built layout to its own shell and falls back to Classic for an unknown key', () => {
     expect(resolveShell('native')).not.toBe(ClassicShell);
-    expect(resolveShell('timeline')).toBe(ClassicShell);
+    expect(resolveShell('timeline')).not.toBe(ClassicShell);
+    for (const key of LAYOUT_KEYS) expect(LAYOUT_SHELLS[key]).toBeDefined();
+    expect(resolveShell('gallery' as never)).toBe(ClassicShell);
   });
 
   it('recognises the six layout keys and nothing else', () => {

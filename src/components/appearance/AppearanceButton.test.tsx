@@ -22,14 +22,15 @@ describe('<AppearanceButton />', () => {
     expect(screen.getByTestId('appearance-hint')).toHaveTextContent('Hover to preview. Click to apply.');
   });
 
-  it('marks supporter layouts as locked without a key, and unbuilt ones as coming soon', async () => {
+  it('marks supporter layouts as locked without a key, and none as coming soon now that all six are built', async () => {
     renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
     fireEvent.click(screen.getByLabelText('Appearance'));
     await screen.findByTestId('appearance-popover');
     expect(screen.getByTestId('layout-card-native')).not.toHaveAttribute('aria-disabled');
     expect(screen.getByLabelText('Native')).toBeInTheDocument();
-    expect(screen.getByTestId('layout-card-timeline')).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByLabelText('Timeline (coming soon)')).toBeInTheDocument();
+    expect(screen.getByTestId('layout-card-timeline')).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByLabelText('Timeline (supporter layout, locked)')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/coming soon/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Simple (supporter layout, locked)')).toBeInTheDocument();
   });
 

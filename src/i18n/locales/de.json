@@ -154,6 +154,33 @@
           "retryPaused": "Nach Versuchen pausiert"
       }
   },
+  "timeline": {
+    "dayCount_one": "{{count, number}} Nachricht",
+    "dayCount_other": "{{count, number}} Nachrichten",
+    "messageCount_one": "{{count, number}} Nachricht",
+    "messageCount_other": "{{count, number}} Nachrichten",
+    "selectDay": "Tag auswählen",
+    "clearDay": "Tag abwählen",
+    "allLoaded": "Alles geladen",
+    "olderNeedLoadAll": "ältere Tage brauchen Alle laden",
+    "jumpTo": "Springe zu",
+    "newest": "Neueste",
+    "oldest": "Älteste",
+    "pickDate": "Datum wählen",
+    "emptyHint": "Öffne einen Serverkanal oder eine DM. Die Tage erscheinen hier als Balken.",
+    "packageHint": "Ein Paket wird von der Festplatte gelesen. Öffne einen seiner Kanäle, um die Tage zu sehen.",
+    "rangeShown": "{{shown, number}} von {{total, number}} Nachrichten angezeigt. Alle auswählen und Export verwenden diesen Zeitraum.",
+    "openInFilters": "In Filtern öffnen",
+    "clearRange": "Zeitraum löschen",
+    "months": "Monate",
+    "total": "Gesamt",
+    "countsAreLoaded": "Gezählt wird, was geladen ist. Ältere Monate füllen sich mit Alle laden.",
+    "dateRange": "Zeitraum",
+    "rangeHint": "Klicke auf einen Balken, um zu dem Tag zu springen. Ziehe über Balken, um nur diese Tage zu zeigen.",
+    "getStarted": "Erste Schritte",
+    "getStartedBody": "Wähle oben einen Server oder eine DM. Der Streifen und die Monatsliste füllen sich mit dem, was geladen wird.",
+    "actions": "Aktionen"
+  },
   "simple": {
     "pickHint": "Wähle oben einen Server, eine Unterhaltung oder das Paket.",
     "searchIn": "In {{name}} suchen",

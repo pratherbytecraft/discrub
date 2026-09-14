@@ -154,6 +154,33 @@
           "retryPaused": "Paused after retries"
       }
   },
+  "timeline": {
+    "dayCount_one": "{{count, number}} message",
+    "dayCount_other": "{{count, number}} messages",
+    "messageCount_one": "{{count, number}} message",
+    "messageCount_other": "{{count, number}} messages",
+    "selectDay": "Select day",
+    "clearDay": "Clear day",
+    "allLoaded": "All loaded",
+    "olderNeedLoadAll": "older days need Load All",
+    "jumpTo": "Jump to",
+    "newest": "Newest",
+    "oldest": "Oldest",
+    "pickDate": "Pick a date",
+    "emptyHint": "Open a server channel or a DM. Its days show here as bars.",
+    "packageHint": "A package is read from disk. Open one of its channels to see its days.",
+    "rangeShown": "{{shown, number}} of {{total, number}} messages shown. Select all and Export use this range.",
+    "openInFilters": "Open in Filters",
+    "clearRange": "Clear range",
+    "months": "Months",
+    "total": "Total",
+    "countsAreLoaded": "Counts are what is loaded. Older months fill in with Load All.",
+    "dateRange": "Date range",
+    "rangeHint": "Click a bar to jump to that day. Drag across bars to show only those days.",
+    "getStarted": "Get started",
+    "getStartedBody": "Pick a server or a DM from the top bar. The strip and the month list fill in from what gets loaded.",
+    "actions": "Actions"
+  },
   "simple": {
     "pickHint": "Pick a server, a conversation or the package from the top.",
     "searchIn": "Search in {{name}}",
