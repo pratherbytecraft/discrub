@@ -4,6 +4,8 @@ import type { ComponentType } from 'react';
 export type LayoutKey = 'classic' | 'native' | 'workbench' | 'simple' | 'operator' | 'timeline';
 export const LAYOUT_KEYS: LayoutKey[] = ['classic', 'native', 'workbench', 'simple', 'operator', 'timeline'];
 export const DEFAULT_LAYOUT: LayoutKey = 'classic';
+/** Display names, the same in every locale (product words). */
+export const LAYOUT_NAMES: Record<LayoutKey, string> = { classic: 'Classic', native: 'Native', workbench: 'Workbench', simple: 'Simple', operator: 'Operator', timeline: 'Timeline' };
 export const isLayoutKey = (value: unknown): value is LayoutKey =>
   typeof value === 'string' && (LAYOUT_KEYS as string[]).includes(value);
 

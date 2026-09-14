@@ -11,9 +11,10 @@ describe('Focused View Mode', () => {
       .and('contain.text', 'Focus');
   });
 
-  it('clicking Focus hides TopBar, Sidebar, StatusPanel, and DonationDrawer', () => {
+  it('clicking Focus hides Sidebar, StatusPanel and DonationDrawer, keeps the top bar and shows the pill', () => {
     // Chrome is present before toggling.
     cy.get('[data-testid="topbar"], header').should('exist');
+    cy.get('[data-tour="status-panel"]').should('exist');
 
     cy.get('[data-testid="focus-mode-toggle"]').click({ force: true });
 
@@ -22,6 +23,11 @@ describe('Focused View Mode', () => {
       const store = (win as any).__store__;
       expect(store.getState().app.focusedView).to.equal(true);
     });
+
+    // 2.2.0 (A2): the top bar stays so Appearance and the user chip never vanish; the pill says how to leave.
+    cy.get('[data-testid="topbar"], header').should('exist');
+    cy.get('[data-tour="status-panel"]').should('not.exist');
+    cy.get('[data-testid="focus-pill"]').should('be.visible').and('contain.text', 'Focus on');
 
     // Toolbar exit affordance is the user's escape hatch in focus mode.
     cy.get('[data-testid="focus-mode-toggle"]')

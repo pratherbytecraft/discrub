@@ -140,7 +140,17 @@ EntryRow.displayName = 'EntryRow';
  * Terminal-style status log panel with fixed height.
  * Shows the latest PAGE_SIZE entries, loads more on scroll-up.
  */
-const StatusPanel = () => {
+interface StatusPanelProps {
+  /**
+   * When set, the expanded log rises as a sheet over the feed column instead
+   * of pushing it up: fixed to the bottom, inset from the left by this many
+   * pixels (the shell's navigation width). The collapsed bar is unchanged.
+   * (2.2.0, A3)
+   */
+  sheetInset?: number;
+}
+
+const StatusPanel = ({ sheetInset }: StatusPanelProps = {}) => {
   const dispatch = useAppDispatch();
   const { t, i18n } = useTranslation();
   const entries = useAppSelector(selectStatusEntries);
@@ -150,6 +160,7 @@ const StatusPanel = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expanded, setExpanded] = useState(false);
+  const sheet = expanded && sheetInset != null;
   const [panelHeight, setPanelHeight] = useState<number>(PANEL_HEIGHT);
 
   // Hydrate persisted panel height (#136). Clamp to the current viewport
@@ -290,7 +301,13 @@ const StatusPanel = () => {
   // (time formatting hoisted to module scope — see `timeFormatter`)
 
   return (
-    <Box sx={{ position: 'relative' }} data-tour="status-panel">
+    <Box
+      data-tour="status-panel"
+      data-sheet={sheet ? 'true' : undefined}
+      sx={sheet
+        ? { position: 'fixed', left: sheetInset, right: 0, bottom: 0, zIndex: 1250, boxShadow: '0 -12px 32px rgba(0, 0, 0, 0.45)', borderTop: '1px solid #30363d', borderTopLeftRadius: 8, overflow: 'hidden' }
+        : { position: 'relative' }}
+    >
       <OperationTip />
       <Box
         sx={{

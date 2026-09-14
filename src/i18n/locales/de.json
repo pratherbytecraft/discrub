@@ -59,6 +59,11 @@
     "closingCancels": "Beim Schließen wird dieser Vorgang abgebrochen. Der Fortschritt kann verloren gehen.",
     "closeAnyway": "Trotzdem schließen"
   },
+  "focus": {
+    "on": "Fokus an",
+    "or": " oder ",
+    "toLeave": " zum Verlassen"
+  },
   "pause": {
     "operationResumed": "Vorgang fortgesetzt",
     "operationPaused": "Vorgang pausiert",
@@ -1357,6 +1362,13 @@
     "getOnKofi": "Auf Ko-fi holen",
     "renewsAutomatically": " Verlängert sich automatisch, solange deine Mitgliedschaft aktiv ist.",
     "lapsedNote": "Dein Unterstützerzugang ist abgelaufen, die Vorteile sind wieder gesperrt. Klicke nach der Verlängerung auf Aktualisieren oder füge unten einen neuen Schlüssel ein.",
+    "accessEnded": {
+      "title": "Dein Supporter-Zugang ist abgelaufen.",
+      "body": "Layout und Theme sind wieder auf {{layout}} und {{theme}}. Deine Einstellungen bleiben erhalten.",
+      "baseTheme": "Dark Original",
+      "after": "Nach dem Verlängern öffne Themes und Support und klicke auf Aktualisieren.",
+      "close": "Schließen"
+    },
     "revokedNote": "Dieser Schlüssel ist nicht mehr aktiv. Füge unten einen neuen Schlüssel ein.",
     "billingPeriod": "Abrechnungszeitraum",
     "monthly": "Monatlich",

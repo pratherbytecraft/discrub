@@ -8,6 +8,7 @@ import supporterReducer, {
   applyPastedSupporterKey,
   removeSupporterKey,
   markGiftAttentionSeen,
+  dismissAccessEndedNotice,
   setSupporterDialogOpen,
   selectIsSupporter,
   selectHasThemes,
@@ -538,6 +539,30 @@ describe('supporterSlice', () => {
       store.dispatch(setSupporterDialogOpen(false));
       expect(store.getState().supporter.dialogOpen).toBe(false);
       expect(store.getState().supporter.claimError).toBeNull();
+    });
+  });
+  // 2.2.0 A13: a valid key that comes back expired raises a one-time notice.
+  describe('access ended notice', () => {
+    const valid = { keyStatus: 'valid' as const, payload: { v: 1, kid: 'k', jti: 'j', name: 'Aaron', eh: 'x', ent: { themes: null }, iat: 1, exp: null } as any, lastRefreshAt: 1 };
+    it('is raised when a valid key becomes expired, and only then', () => {
+      const store = makeStore();
+      expect((store.getState().supporter.accessEndedNotice === true)).toBe(false);
+      store.dispatch({ type: refreshSupporterKey.fulfilled.type, payload: { ...valid } });
+      expect((store.getState().supporter.accessEndedNotice === true)).toBe(false);
+      store.dispatch({ type: refreshSupporterKey.fulfilled.type, payload: { ...valid, keyStatus: 'expired' } });
+      expect(store.getState().supporter.keyStatus).toBe('expired');
+      expect((store.getState().supporter.accessEndedNotice === true)).toBe(true);
+      store.dispatch(dismissAccessEndedNotice());
+      expect((store.getState().supporter.accessEndedNotice === true)).toBe(false);
+      // Already expired, still expired: quiet.
+      store.dispatch({ type: refreshSupporterKey.fulfilled.type, payload: { ...valid, keyStatus: 'expired' } });
+      expect((store.getState().supporter.accessEndedNotice === true)).toBe(false);
+    });
+
+    it('a fresh install that loads an expired key says nothing', () => {
+      const store = makeStore();
+      store.dispatch({ type: initializeSupporter.fulfilled.type, payload: { ...valid, keyStatus: 'expired', footer: store.getState().supporter.footer } });
+      expect((store.getState().supporter.accessEndedNotice === true)).toBe(false);
     });
   });
 });

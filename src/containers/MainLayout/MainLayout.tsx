@@ -57,6 +57,7 @@ import TourTooltip from '@components/welcome/TourTooltip';
 import { buildShellTourSteps } from '@components/welcome/tourSteps';
 import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { resolveShell } from '@/layouts/registry';
+import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -309,6 +310,7 @@ const MainLayout = () => {
         onClose={() => setHotkeysRefOpen(false)}
       />
 
+      <AccessEndedNotice />
       <Toast />
     </Box>
   );

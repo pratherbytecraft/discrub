@@ -4,11 +4,14 @@ import { selectSidebarView } from '@features/app/appSlice';
 import TopBar from '@containers/MainLayout/TopBar';
 import ThemeAccentStrip from '@/theme/ThemeAccentStrip';
 import Sidebar from '@components/navigation/Sidebar';
+import { SIDEBAR_WIDTH } from '@components/navigation/sidebarConstants';
 import ServerView from '@containers/ServerView/ServerView';
 import PackageView from '@components/package/PackageView';
 import DonationDrawer, { DRAWER_WIDTH } from '@components/donations/DonationDrawer';
 import StatusPanel from '@components/ui/StatusPanel';
 import FloatingPauseControl from '@components/ui/FloatingPauseControl';
+import FocusPill from '@components/ui/FocusPill';
+import { useMediaQuery, useTheme } from '@mui/material';
 import type { ShellProps } from '../types';
 
 /**
@@ -23,6 +26,8 @@ import type { ShellProps } from '../types';
  */
 const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen, onStartShellTour }: ShellProps) => {
   const sidebarView = useAppSelector(selectSidebarView);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   return (
     <>
       <Box
@@ -37,8 +42,9 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
           transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
         }}
       >
-        {!focusedView && <TopBar onMenuClick={onSidebarOpen} />}
-        {!focusedView && <ThemeAccentStrip />}
+        {/* Focus hides navigation, side panels and the dock; the top bar stays so Appearance and the user chip never vanish (2.2.0, A2). */}
+        <TopBar onMenuClick={onSidebarOpen} />
+        <ThemeAccentStrip />
 
         <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
           {!focusedView && <Sidebar open={sidebarOpen} onClose={onSidebarClose} />}
@@ -58,7 +64,7 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
           </Box>
         </Box>
 
-        {!focusedView && <StatusPanel />}
+        {!focusedView && <StatusPanel sheetInset={isMobile ? 0 : SIDEBAR_WIDTH} />}
       </Box>
 
       {!focusedView && <DonationDrawer />}
@@ -71,6 +77,7 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
           mount above; the component self-nulls when no heavy op is
           running. */}
       {focusedView && <FloatingPauseControl />}
+      {focusedView && <FocusPill />}
     </>
   );
 };

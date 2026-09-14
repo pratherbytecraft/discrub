@@ -542,4 +542,22 @@ describe('StatusPanel', () => {
       setSpy.mockRestore();
     });
   });
+  // 2.2.0 (A3): with a sheet inset the expanded log rises over the feed column.
+  describe('sheet mode', () => {
+    it('is a plain panel while collapsed and a fixed sheet once expanded', () => {
+      renderWithProviders(<StatusPanel sheetInset={320} />, { preloadedState: createBaseState() });
+      const panel = document.querySelector('[data-tour="status-panel"]') as HTMLElement;
+      expect(panel.getAttribute('data-sheet')).toBeNull();
+      fireEvent.click(screen.getByLabelText('Expand log'));
+      expect(panel.getAttribute('data-sheet')).toBe('true');
+      expect(getComputedStyle(panel).position).toBe('fixed');
+      expect(getComputedStyle(panel).left).toBe('320px');
+    });
+
+    it('never becomes a sheet without an inset', () => {
+      renderWithProviders(<StatusPanel />, { preloadedState: createBaseState() });
+      fireEvent.click(screen.getByLabelText('Expand log'));
+      expect((document.querySelector('[data-tour="status-panel"]') as HTMLElement).getAttribute('data-sheet')).toBeNull();
+    });
+  });
 });

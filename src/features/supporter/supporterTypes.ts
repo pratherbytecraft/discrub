@@ -28,6 +28,11 @@ export interface SupporterState {
   initialized: boolean;
   /** 'none' = no stored key; otherwise last verification outcome. */
   keyStatus: SupporterKeyStatus | 'none';
+  /**
+   * A valid key just became expired (the server answered that access ended).
+   * MainLayout shows the one-time notice and clears it. Transient. (2.2.0, A13)
+   */
+  accessEndedNotice?: boolean;
   /** Verified payload — present for valid/expired/revoked keys. */
   payload: SupporterKeyPayload | null;
   /** When the key was last checked against the server (ms), null = never. */
@@ -48,6 +53,7 @@ export interface SupporterState {
 export const initialSupporterState: SupporterState = {
   initialized: false,
   keyStatus: 'none',
+  accessEndedNotice: false,
   payload: null,
   lastRefreshAt: null,
   dialogOpen: false,

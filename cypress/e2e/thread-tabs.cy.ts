@@ -853,7 +853,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       // Pause/Cancel controls should appear (Pause button has aria-label="Pause")
       cy.get('[aria-label="Pause"]').should('be.visible');
-      cy.get('[aria-label="Cancel"]').should('be.visible');
+      cy.get('[aria-label="Stop"]').should('be.visible');
     });
 
     it('should show status indicator when search is running on thread tab', () => {

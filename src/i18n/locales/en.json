@@ -59,6 +59,11 @@
     "closingCancels": "Closing will cancel this operation. Progress may be lost.",
     "closeAnyway": "Close Anyway"
   },
+  "focus": {
+    "on": "Focus on",
+    "or": " or ",
+    "toLeave": " to leave"
+  },
   "pause": {
     "operationResumed": "Operation Resumed",
     "operationPaused": "Operation Paused",
@@ -1357,6 +1362,13 @@
     "getOnKofi": "Get it on Ko-fi",
     "renewsAutomatically": " Renews automatically while your membership is active.",
     "lapsedNote": "Your supporter access has ended, so supporter perks have relocked. Hit Refresh after renewing, or paste a fresh key below.",
+    "accessEnded": {
+      "title": "Your supporter access has ended.",
+      "body": "Layout and theme are back to {{layout}} and {{theme}}. Your settings are kept.",
+      "baseTheme": "Dark Original",
+      "after": "After renewing, open Themes and Support and click Refresh.",
+      "close": "Close"
+    },
     "revokedNote": "This key is no longer active. Paste a fresh key below.",
     "billingPeriod": "Billing period",
     "monthly": "Monthly",

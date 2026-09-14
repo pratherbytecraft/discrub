@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+
+import { SIDEBAR_WIDTH } from './sidebarConstants';
 import { Box, Tabs, Tab, Drawer, useMediaQuery, useTheme, TextField, InputAdornment, IconButton, Typography, alpha } from '@mui/material';
 import { Search as SearchIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -143,7 +145,7 @@ const Sidebar = ({ open = false, onClose }: SidebarProps) => {
   const sidebarContent = (
     <Box
       sx={{
-        width: isMobile ? 'min(300px, 85vw)' : 320,
+        width: isMobile ? 'min(300px, 85vw)' : SIDEBAR_WIDTH,
         flexShrink: 0,
         height: '100%',
         display: 'flex',

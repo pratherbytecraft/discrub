@@ -218,11 +218,13 @@ describe('MainLayout', () => {
         app: { ...initialAppState, focusedView: true },
       });
 
-    it('hides TopBar, Sidebar, StatusPanel, and DonationDrawer while keeping ServerView', () => {
+    // 2.2.0 (A2): the top bar stays in Focus; navigation, the dock and the drawer hide; the pill says how to leave.
+    it('hides Sidebar, StatusPanel and DonationDrawer, keeps TopBar and ServerView, shows the pill', () => {
       renderWithProviders(<MainLayout />, {
         preloadedState: focusedState(),
       });
-      expect(screen.queryByTestId('topbar')).not.toBeInTheDocument();
+      expect(screen.getByTestId('topbar')).toBeInTheDocument();
+      expect(screen.getByTestId('focus-pill')).toHaveTextContent('Focus on');
       expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
       expect(screen.queryByTestId('status-panel')).not.toBeInTheDocument();
       expect(screen.queryByTestId('donation-drawer')).not.toBeInTheDocument();

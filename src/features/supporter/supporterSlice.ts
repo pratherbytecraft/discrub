@@ -19,6 +19,7 @@ import {
 } from '@services/supporterClaimService';
 import type { SupporterFooterPreferences } from '@services/exportFooter';
 import {
+  type SupporterState,
   initialSupporterState,
   SUPPORTER_KEY_STORAGE_KEY,
   SUPPORTER_EMAIL_STORAGE_KEY,
@@ -53,6 +54,15 @@ interface VerifiedKeyState {
   keyStatus: SupporterKeyVerification['status'];
   payload: SupporterKeyPayload | null;
 }
+
+/**
+ * Set the key status and raise the one-time access-ended notice when a key
+ * that was valid comes back expired (A13). Any other transition is quiet.
+ */
+const applyKeyStatus = (state: SupporterState, next: SupporterState['keyStatus']) => {
+  if (state.keyStatus === 'valid' && next === 'expired') state.accessEndedNotice = true;
+  state.keyStatus = next;
+};
 
 const toVerifiedState = (verification: SupporterKeyVerification): VerifiedKeyState => ({
   keyStatus: verification.status,
@@ -306,6 +316,9 @@ const supporterSlice = createSlice({
     // Calm the gift-button attention animation for the rest of this
     // session. Deliberately NOT persisted: the glow/wiggle re-arms on
     // every app open until the user becomes a supporter.
+    dismissAccessEndedNotice: (state) => {
+      state.accessEndedNotice = false;
+    },
     markGiftAttentionSeen: (state) => {
       state.giftAttentionSeen = true;
     },
@@ -314,7 +327,7 @@ const supporterSlice = createSlice({
     builder
       .addCase(initializeSupporter.fulfilled, (state, action) => {
         state.initialized = true;
-        state.keyStatus = action.payload.keyStatus;
+        applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
         state.footer = action.payload.footer;
         state.lastRefreshAt = action.payload.lastRefreshAt;
@@ -329,7 +342,7 @@ const supporterSlice = createSlice({
       })
       .addCase(refreshSupporterKey.fulfilled, (state, action) => {
         state.claimInProgress = false;
-        state.keyStatus = action.payload.keyStatus;
+        applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
       })
@@ -344,7 +357,7 @@ const supporterSlice = createSlice({
       })
       .addCase(applyPastedSupporterKey.fulfilled, (state, action) => {
         state.claimInProgress = false;
-        state.keyStatus = action.payload.keyStatus;
+        applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
       })
@@ -369,12 +382,13 @@ const supporterSlice = createSlice({
   },
 });
 
-export const { setSupporterDialogOpen, clearClaimError, markGiftAttentionSeen } =
+export const { setSupporterDialogOpen, clearClaimError, markGiftAttentionSeen, dismissAccessEndedNotice } =
   supporterSlice.actions;
 
 // Selectors
 export const selectSupporter = (state: RootState) => state.supporter;
 /** Any live feature at all (badge, avatar ring, "thank you" framing). */
+export const selectAccessEndedNotice = (state: RootState) => state.supporter.accessEndedNotice === true;
 export const selectIsSupporter = (state: RootState) =>
   state.supporter.keyStatus === 'valid' &&
   liveSupporterFeatures(state.supporter.payload).length > 0;
