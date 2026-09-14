@@ -874,7 +874,6 @@ describe('messageSlice', () => {
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
             settings: defaultSettings,
-            previewThemeId: null,
             ...appOverrides,
           },
           message: messageState,
@@ -1112,7 +1111,6 @@ describe('messageSlice', () => {
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
             settings: defaultSettings,
-            previewThemeId: null,
             ...appOverrides,
           },
           message: messageState,
@@ -1436,7 +1434,6 @@ describe('messageSlice', () => {
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
             settings: defaultSettings,
-            previewThemeId: null,
           },
           message: initialMessageState,
         },
@@ -1483,7 +1480,6 @@ describe('messageSlice', () => {
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
             settings: defaultSettings,
-            previewThemeId: null,
           },
           message: initialMessageState,
         },
@@ -1565,7 +1561,6 @@ describe('messageSlice', () => {
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
             settings: defaultSettings,
-            previewThemeId: null,
           },
           message: initialMessageState,
         },
@@ -1615,7 +1610,6 @@ describe('messageSlice', () => {
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
             settings: defaultSettings,
-            previewThemeId: null,
           },
           message: initialMessageState,
         },
@@ -2380,7 +2374,6 @@ describe('messageSlice', () => {
           sidebarView: 'server' as const,
           task: { status: 'idle' as const, message: '' },
           settings: defaultSettings,
-          previewThemeId: null,
         },
         message: messageState,
       },
@@ -2920,7 +2913,7 @@ describe('messageSlice', () => {
       return configureStore({
         reducer: { message: messageReducer, app: appReducer },
         preloadedState: {
-          app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, kofiOverlayOpen: false, sidebarView: 'server' as const, task: { status: 'idle' as const, message: '' }, settings: defaultSettings, previewThemeId: null },
+          app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, kofiOverlayOpen: false, sidebarView: 'server' as const, task: { status: 'idle' as const, message: '' }, settings: defaultSettings },
           message: messageState,
         },
       });
@@ -3407,7 +3400,7 @@ describe('messageSlice', () => {
       return configureStore({
         reducer: { message: messageReducer, app: appReducer },
         preloadedState: {
-          app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, kofiOverlayOpen: false, sidebarView: 'server' as const, task: { status: 'idle' as const, message: '' }, settings: defaultSettings, previewThemeId: null },
+          app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, kofiOverlayOpen: false, sidebarView: 'server' as const, task: { status: 'idle' as const, message: '' }, settings: defaultSettings },
           message: messageState,
         },
       });
@@ -5525,7 +5518,6 @@ describe('messageSlice', () => {
         kofiOverlayOpen: false,
         sidebarView: 'server' as const,
         task: { status: 'idle' as const, message: '' },
-        previewThemeId: null,
         settings: defaultSettings,
       };
 
@@ -5756,7 +5748,6 @@ describe('messageSlice', () => {
             kofiOverlayOpen: false,
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
-            previewThemeId: null,
             settings: defaultSettings,
           } as any,
           message: messageState,
@@ -5892,7 +5883,6 @@ describe('messageSlice', () => {
             kofiOverlayOpen: false,
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
-            previewThemeId: null,
             settings: defaultSettings,
           } as any,
           message: {
@@ -6040,7 +6030,6 @@ describe('messageSlice', () => {
             kofiOverlayOpen: false,
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
-            previewThemeId: null,
             settings: {
               ...defaultSettings,
               [DiscrubSetting.REACTIONS_ENABLED]: reactionsEnabled ? 'true' : 'false',
@@ -6793,7 +6782,6 @@ describe('messageSlice', () => {
             kofiOverlayOpen: false,
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
-            previewThemeId: null,
             settings: defaultSettings,
           },
           message: messageState,
@@ -7166,7 +7154,6 @@ describe('messageSlice', () => {
             sidebarView: 'server' as const,
             task: { status: 'idle' as const, message: '' },
             settings: { ...defaultSettings, deleteDelay2: '0' },
-            previewThemeId: null,
           } as never,
           package: {
             ...initialPackageState,

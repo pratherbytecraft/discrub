@@ -31,7 +31,7 @@ import {
 } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectSetting, updateSetting, setPreviewThemeId } from '@features/app/appSlice';
+import { selectSetting, updateSetting } from '@features/app/appSlice';
 import {
   selectSupporterDialogOpen,
   selectSupporterKeyStatus,
@@ -154,9 +154,6 @@ const SupporterDialog = () => {
   const iconInputRef = useRef<HTMLInputElement>(null);
 
   const handleClose = () => {
-    // Theme picks in the hub apply instantly, so the preview must not
-    // outlive the dialog.
-    dispatch(setPreviewThemeId(null));
     dispatch(setSupporterDialogOpen(false));
   };
 

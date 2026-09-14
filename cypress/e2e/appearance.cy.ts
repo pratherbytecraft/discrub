@@ -58,14 +58,14 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('body').type('{esc}');
   });
 
-  it('previews a layout from the eye and stops from the bar', () => {
+  it('has no live preview: hovering a card shows a wireframe peek, nothing swaps the frame', () => {
     cy.get('[data-testid="gift-button"]').click();
-    cy.get('[data-testid="layout-preview-native"]').click();
-    cy.get('[data-testid="appearance-popover"]').should('not.exist');
-    cy.get('[data-testid="native-shell"]').should('be.visible');
-    cy.get('[data-testid="layout-preview-bar"]').should('contain.text', 'Previewing Native');
-    cy.get('[data-testid="layout-preview-stop"]').click();
+    cy.get('[data-testid="layout-preview-native"]').should('not.exist');
+    cy.get('[data-testid="layout-card-native"]').trigger('mouseover');
+    cy.get('[data-testid="layout-peek-native"]').should('be.visible').and('contain.text', 'Native');
     cy.get('[data-testid="native-shell"]').should('not.exist');
+    cy.get('[data-testid="layout-preview-bar"]').should('not.exist');
+    cy.get('body').type('{esc}');
     cy.get('[data-testid="appearance-current-layout"]').should('have.text', 'Classic');
   });
 });

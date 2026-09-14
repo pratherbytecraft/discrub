@@ -34,7 +34,6 @@ const payload: SupporterKeyPayload = {
 const renderWrapper = (opts: {
   themeSetting: string;
   supporter?: Partial<typeof initialSupporterState>;
-  previewThemeId?: string | null;
 }) =>
   renderWithProviders(
     <ThemeWrapper>
@@ -44,7 +43,6 @@ const renderWrapper = (opts: {
       preloadedState: createBaseState({
         app: {
           ...initialAppState,
-          previewThemeId: opts.previewThemeId ?? null,
           settings: {
             ...defaultSettings,
             [DiscrubSetting.APP_THEME_MODE]: opts.themeSetting,
@@ -94,14 +92,5 @@ describe('ThemeWrapper supporter fallback', () => {
       supporter: { initialized: true, keyStatus: 'none' },
     });
     expect(screen.getByTestId('probe')).toHaveTextContent(defaultDarkBackground);
-  });
-
-  it('still live-previews supporter themes for non-supporters', () => {
-    renderWrapper({
-      themeSetting: DISCORD_DARK_ID,
-      supporter: { initialized: true, keyStatus: 'none' },
-      previewThemeId: SUPPORTER_ID,
-    });
-    expect(screen.getByTestId('probe')).toHaveTextContent(supporterBackground);
   });
 });

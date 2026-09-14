@@ -8,7 +8,7 @@ import {
   selectSettings,
   selectFocusedView,
   selectSidebarView,
-  selectEffectiveLayout,
+  selectAppLayout,
   setFocusedView,
   toggleFocusedView,
 } from '@features/app/appSlice';
@@ -59,7 +59,6 @@ import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { resolveShell } from '@/layouts/registry';
 import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
 import AppDialogs from './AppDialogs';
-import LayoutPreviewBar from '@components/appearance/LayoutPreviewBar';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -72,7 +71,7 @@ const MainLayout = () => {
   const sidebarView = useAppSelector(selectSidebarView);
   const focusedView = useAppSelector(selectFocusedView);
   // The layout setting picks the shell; anything unbuilt or unknown resolves to Classic.
-  const Shell = resolveShell(useAppSelector(selectEffectiveLayout));
+  const Shell = resolveShell(useAppSelector(selectAppLayout));
   const theme = useTheme();
   // Below `md` the Sidebar becomes a temporary drawer opened from the
   // TopBar hamburger, and the Ko-fi feed overlays instead of reserving
@@ -313,7 +312,6 @@ const MainLayout = () => {
       />
 
       <AppDialogs />
-      <LayoutPreviewBar />
       <AccessEndedNotice />
       <Toast />
     </Box>

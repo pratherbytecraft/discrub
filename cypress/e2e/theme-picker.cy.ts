@@ -1,5 +1,5 @@
 /**
- * Themes hub details: the roster, the Settings pointer, preview
+ * Themes hub details: the roster, the Settings pointer,
  * accents, and the animations toggle. Theme selection left Settings
  * entirely — the Display tab only points at the hub now.
  */
@@ -47,15 +47,6 @@ describe('Themes hub', () => {
 
     cy.reload();
     cy.get('body').should('have.css', 'background-color', LIGHT_BG);
-  });
-
-  it('supporter theme preview shows the animated accent strip', () => {
-    openHub();
-    cy.get('[data-testid="theme-accent-strip"]').should('not.exist');
-    cy.get('[data-testid="theme-preview-synthwave"]').click();
-    cy.get('[data-testid="theme-accent-strip"]').should('exist');
-    cy.get('[data-testid="theme-preview-stop"]').click();
-    cy.get('[data-testid="theme-accent-strip"]').should('not.exist');
   });
 
   it('the theme animations toggle applies instantly and sticks', () => {

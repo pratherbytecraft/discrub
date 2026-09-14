@@ -1,14 +1,10 @@
-import { useRef } from 'react';
-import { Box, Button, Collapse, Typography, Tooltip, IconButton, alpha } from '@mui/material';
+import { Box, Typography, Tooltip, alpha } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
   Lock as LockIcon,
   CheckCircle as SelectedIcon,
   BrightnessAuto as AutoIcon,
-  VisibilityOutlined as PreviewIcon,
 } from '@mui/icons-material';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { setPreviewThemeId, selectPreviewThemeId } from '@features/app/appSlice';
 import {
   THEME_DESCRIPTORS,
   findThemeDescriptor,
@@ -131,6 +127,8 @@ export interface ThemeGridProps {
   value: string;
   /** Called with the picked theme id (or 'auto'). */
   onChange: (id: string) => void;
+  /** Called when a locked supporter theme is clicked (the Appearance menu opens the hub). */
+  onLockedPick?: (id: string) => void;
   isSupporter?: boolean;
   descriptors?: ThemeDescriptor[];
   cardWidth?: number;
@@ -139,50 +137,30 @@ export interface ThemeGridProps {
 }
 
 /**
- * The theme card grid inside the Themes hub (its only surface): Auto +
- * every descriptor, a per-card eye toggle for live previewing, lock
- * badges for non-supporters. Picks apply instantly via onChange.
- *
- * Previewing is deliberate and sticky: the eye starts it (clicking a
- * locked card does too, since applying is impossible), and the whole
- * app stays in that theme — even while the pointer wanders off to look
- * around behind the dialog — until the user stops it, previews another
- * theme, applies one, or the hub closes (the hub clears previewThemeId
- * on close). While a preview is active, a bar pinned to the bottom of
- * the grid names it and offers Apply/Stop.
+ * The theme card grid (Themes hub and the Appearance menu): Auto + every
+ * descriptor, lock badges for non-supporters. Each card's swatch is a
+ * miniature of the app in that theme, so it is the preview; there is no
+ * live preview of the whole app (2.2.0 decision, a live preview handed
+ * out locked themes for free). Picks apply instantly via onChange.
  */
 export const ThemeGrid = ({
   value,
   onChange,
+  onLockedPick,
   isSupporter = false,
   descriptors = THEME_DESCRIPTORS,
   cardWidth = CARD_WIDTH,
   centered = false,
   'data-testid': testId = 'theme-grid',
 }: ThemeGridProps) => {
-  const dispatch = useAppDispatch();
   const theme = useTheme();
 
   // Normalize the form value the same way ThemeWrapper does: legacy
   // aliases resolve to their canonical id, unknown ids behave as auto.
   const selectedId = value === 'auto' ? 'auto' : (findThemeDescriptor(value)?.id ?? 'auto');
 
-  // Previewing the current selection is a visual no-op, so the eye
-  // states and the preview bar only light up for a different theme.
-  const previewThemeId = useAppSelector(selectPreviewThemeId);
-  const previewedId =
-    previewThemeId !== null && previewThemeId !== selectedId ? previewThemeId : null;
-
   const defaultDark = descriptors.find((d) => d.base === 'dark') ?? descriptors[0];
   const defaultLight = descriptors.find((d) => d.base === 'light') ?? descriptors[0];
-
-  const preview = (id: string) => dispatch(setPreviewThemeId(id));
-  const stopPreview = () => dispatch(setPreviewThemeId(selectedId));
-
-  const pick = (id: string) => {
-    onChange(id);
-    dispatch(setPreviewThemeId(id));
-  };
 
   const renderCard = (opts: {
     id: string;
@@ -193,7 +171,6 @@ export const ThemeGrid = ({
   }) => {
     const { id, label, locked = false, tooltip, swatch } = opts;
     const selected = selectedId === id;
-    const previewed = previewedId === id;
     const card = (
       <Box
         component="button"
@@ -201,13 +178,7 @@ export const ThemeGrid = ({
         data-testid={`theme-card-${id}`}
         aria-label={locked ? `${label} (supporter theme, locked)` : label}
         aria-pressed={selected}
-        onClick={() => {
-          // Locked cards can't be applied, so clicking one toggles its
-          // preview instead — same as the eye.
-          if (!locked) pick(id);
-          else if (previewed) stopPreview();
-          else preview(id);
-        }}
+        onClick={() => (locked ? onLockedPick?.(id) : onChange(id))}
         sx={{
           width: '100%',
           textAlign: 'left',
@@ -217,11 +188,7 @@ export const ThemeGrid = ({
           p: 0.75,
           borderRadius: 1.5,
           border: '2px solid',
-          borderColor: selected
-            ? 'primary.main'
-            : previewed
-              ? 'cta.main'
-              : 'divider',
+          borderColor: selected ? 'primary.main' : 'divider',
           backgroundColor: selected ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
           // Availability at a glance: unlocked themes carry a faint
           // brand glow, locked ones a soft red one.
@@ -279,59 +246,12 @@ export const ThemeGrid = ({
         </Box>
       </Box>
     );
-    // The eye is a sibling overlaid on the swatch corner (never nested
-    // inside the card button — that would be a button in a button).
     return (
       <Box key={id} sx={{ position: 'relative', width: cardWidth, flexShrink: 0 }}>
         {tooltip ? <Tooltip title={tooltip}>{card}</Tooltip> : card}
-        <Tooltip title={previewed ? 'Stop previewing' : 'Preview this theme'} enterDelay={300}>
-          <IconButton
-            size="small"
-            aria-label={previewed ? `Stop previewing ${label}` : `Preview ${label}`}
-            aria-pressed={previewed}
-            data-testid={`theme-preview-${id}`}
-            onClick={() => (previewed ? stopPreview() : preview(id))}
-            sx={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              p: '3px',
-              color: previewed ? 'cta.main' : 'text.secondary',
-              backgroundColor: alpha(theme.palette.background.paper, 0.8),
-              border: '1px solid',
-              borderColor: previewed ? 'cta.main' : 'divider',
-              '&:hover': {
-                backgroundColor: 'background.paper',
-                color: previewed ? 'cta.main' : 'text.primary',
-              },
-            }}
-          >
-            <PreviewIcon sx={{ fontSize: 14 }} />
-          </IconButton>
-        </Tooltip>
       </Box>
     );
   };
-
-  // Look the previewed theme up in THIS grid's roster (not the global
-  // registry) so injected descriptors carry their name and lock state.
-  const previewedDescriptor =
-    previewedId && previewedId !== 'auto'
-      ? (descriptors.find((d) => d.id === previewedId) ?? null)
-      : null;
-  const previewedLabel = previewedId === 'auto' ? 'Auto' : (previewedDescriptor?.name ?? '');
-  const previewedLocked =
-    !!previewedDescriptor && previewedDescriptor.tier === 'supporter' && !isSupporter;
-
-  // The bar collapses (rather than vanishing) when a preview stops, so
-  // it keeps showing its last contents while animating out.
-  const lastBarRef = useRef<{ id: string; label: string; locked: boolean } | null>(null);
-  if (previewedId) {
-    lastBarRef.current = { id: previewedId, label: previewedLabel, locked: previewedLocked };
-  }
-  const bar = previewedId
-    ? { id: previewedId, label: previewedLabel, locked: previewedLocked }
-    : lastBarRef.current;
 
   return (
     <Box data-testid={testId}>
@@ -355,60 +275,11 @@ export const ThemeGrid = ({
             id: d.id,
             label: d.name,
             locked,
+            tooltip: locked ? 'Supporter theme' : undefined,
             swatch: <Swatch descriptor={d} />,
           });
         })}
       </Box>
-      <Collapse
-        in={Boolean(previewedId)}
-        timeout={220}
-        unmountOnExit
-        sx={{ position: 'sticky', bottom: 0, zIndex: 1 }}
-      >
-        {bar && (
-          <Box
-            data-testid="theme-preview-bar"
-            sx={{
-              mt: 1.25,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              pl: 1.5,
-              pr: 1,
-              py: 0.5,
-              borderRadius: 1.5,
-              border: '1px solid',
-              borderColor: 'divider',
-              backgroundColor: 'background.paper',
-              boxShadow: 3,
-              opacity: previewedId ? 1 : 0,
-              transition: 'opacity 200ms ease',
-            }}
-          >
-            <PreviewIcon sx={{ fontSize: 16, color: 'cta.main', flexShrink: 0 }} />
-            <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
-              Previewing{' '}
-              <Box component="span" sx={{ fontWeight: 600 }}>
-                {bar.label}
-              </Box>
-              {bar.locked && ' · Locked'}
-            </Typography>
-            {!bar.locked && (
-              <Button
-                size="small"
-                variant="contained"
-                onClick={() => pick(bar.id)}
-                data-testid="theme-preview-apply"
-              >
-                Apply
-              </Button>
-            )}
-            <Button size="small" color="inherit" onClick={stopPreview} data-testid="theme-preview-stop">
-              Stop
-            </Button>
-          </Box>
-        )}
-      </Collapse>
     </Box>
   );
 };

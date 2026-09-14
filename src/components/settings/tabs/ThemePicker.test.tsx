@@ -47,55 +47,16 @@ describe('ThemeGrid', () => {
     expect(screen.getByTestId('theme-selected-auto')).toBeInTheDocument();
   });
 
-  it('clicking an unlocked card selects it and keeps it previewed', () => {
-    const { store } = renderGrid({ value: 'auto' });
+  it('clicking an unlocked card selects it', () => {
+    renderGrid({ value: 'auto' });
     fireEvent.click(screen.getByTestId('theme-card-discord-dark'));
     expect(onChange).toHaveBeenCalledWith('discord-dark');
-    expect(store.getState().app.previewThemeId).toBe('discord-dark');
   });
 
-  it('the eye starts a sticky preview that survives the pointer leaving', () => {
-    const { store } = renderGrid({ value: 'auto' });
-    const eye = screen.getByTestId('theme-preview-discord-light');
-
-    fireEvent.click(eye);
-    expect(store.getState().app.previewThemeId).toBe('discord-light');
-
-    // Sticky: wandering off the card must NOT revert the preview.
-    fireEvent.mouseLeave(screen.getByTestId('theme-card-discord-light'));
-    expect(store.getState().app.previewThemeId).toBe('discord-light');
-  });
-
-  it('the eye toggles: a second click reverts to the selection', () => {
-    const { store } = renderGrid({ value: 'auto' });
-    const eye = screen.getByTestId('theme-preview-discord-light');
-
-    fireEvent.click(eye);
-    expect(store.getState().app.previewThemeId).toBe('discord-light');
-    fireEvent.click(eye);
-    expect(store.getState().app.previewThemeId).toBe('auto');
-  });
-
-  it('shows the preview bar with Apply and Stop while previewing an unlocked theme', () => {
-    const { store } = renderGrid({ value: 'auto' });
+  it('has no eye button and no preview bar', () => {
+    renderGrid({ value: 'auto' });
+    expect(screen.queryByTestId('theme-preview-discord-light')).not.toBeInTheDocument();
     expect(screen.queryByTestId('theme-preview-bar')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('theme-preview-discord-light'));
-    const bar = screen.getByTestId('theme-preview-bar');
-    expect(bar).toHaveTextContent('Previewing');
-    expect(bar).toHaveTextContent('Light Original');
-
-    fireEvent.click(screen.getByTestId('theme-preview-apply'));
-    expect(onChange).toHaveBeenCalledWith('discord-light');
-    expect(store.getState().app.previewThemeId).toBe('discord-light');
-  });
-
-  it('Stop in the preview bar reverts to the selection', () => {
-    const { store } = renderGrid({ value: 'auto' });
-    fireEvent.click(screen.getByTestId('theme-preview-discord-light'));
-    fireEvent.click(screen.getByTestId('theme-preview-stop'));
-    expect(store.getState().app.previewThemeId).toBe('auto');
-    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('shows a lock badge on supporter themes when not a supporter', () => {
@@ -103,26 +64,18 @@ describe('ThemeGrid', () => {
     expect(screen.getByTestId('theme-locked-test-supporter')).toBeInTheDocument();
   });
 
-  it('clicking a locked card toggles its preview instead of selecting', () => {
-    const { store } = renderGrid({ descriptors: rosterWithSupporter, isSupporter: false });
-    const locked = screen.getByTestId('theme-card-test-supporter');
-
-    fireEvent.click(locked);
-    expect(store.getState().app.previewThemeId).toBe('test-supporter');
+  it('clicking a locked card calls onLockedPick instead of selecting', () => {
+    const onLockedPick = vi.fn();
+    renderGrid({ descriptors: rosterWithSupporter, isSupporter: false, onLockedPick });
+    fireEvent.click(screen.getByTestId('theme-card-test-supporter'));
+    expect(onLockedPick).toHaveBeenCalledWith('test-supporter');
     expect(onChange).not.toHaveBeenCalled();
-
-    fireEvent.click(locked);
-    expect(store.getState().app.previewThemeId).toBe('auto');
   });
 
-  it('the preview bar marks a locked theme and offers no Apply', () => {
+  it('clicking a locked card without onLockedPick does nothing', () => {
     renderGrid({ descriptors: rosterWithSupporter, isSupporter: false });
-    fireEvent.click(screen.getByTestId('theme-preview-test-supporter'));
-
-    const bar = screen.getByTestId('theme-preview-bar');
-    expect(bar).toHaveTextContent('Locked');
-    expect(screen.queryByTestId('theme-preview-apply')).not.toBeInTheDocument();
-    expect(screen.getByTestId('theme-preview-stop')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('theme-card-test-supporter'));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('supporter themes unlock when isSupporter is true', () => {
@@ -131,11 +84,5 @@ describe('ThemeGrid', () => {
 
     fireEvent.click(screen.getByTestId('theme-card-test-supporter'));
     expect(onChange).toHaveBeenCalledWith('test-supporter');
-  });
-
-  it('previewing the currently selected theme is a visual no-op (no bar)', () => {
-    renderGrid({ value: 'discord-dark' });
-    fireEvent.click(screen.getByTestId('theme-preview-discord-dark'));
-    expect(screen.queryByTestId('theme-preview-bar')).not.toBeInTheDocument();
   });
 });

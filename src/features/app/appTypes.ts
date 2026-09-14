@@ -9,7 +9,6 @@ export interface AppTask {
   message: string;
 }
 
-import type { LayoutKey } from '@/layouts/types';
 
 export type SidebarView = 'server' | 'package';
 
@@ -78,16 +77,8 @@ export interface AppState {
    */
   feedScrollAnchor?: FeedScrollAnchor | null;
   operationHold?: OperationHold | null;
-  /** Transient layout preview from the Appearance menu, like previewThemeId. Never persisted. */
-  previewLayout?: LayoutKey | null;
   task: AppTask;
   settings: AppSettings | null;
-  /**
-   * Transient theme override for the Settings theme picker's live
-   * preview. Never persisted — ThemeWrapper renders it over the saved
-   * APP_THEME_MODE while set; clearing (null) falls back to the setting.
-   */
-  previewThemeId: string | null;
   /**
    * #124 — set once by loadSettings when an existing install has no saved
    * language and the browser prefers a supported non-English one. MainLayout
@@ -109,12 +100,10 @@ export const initialAppState: AppState = {
   dialogs: { ...closedFeedDialogs },
   feedScrollAnchor: null,
   operationHold: null,
-  previewLayout: null,
   task: {
     status: 'idle',
     message: '',
   },
   settings: null,
-  previewThemeId: null,
   suggestedLanguage: null,
 };

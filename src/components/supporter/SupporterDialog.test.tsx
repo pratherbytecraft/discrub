@@ -117,18 +117,18 @@ describe('SupporterDialog', () => {
       expect(screen.queryByText(/lifetime/i)).toBeNull();
     });
 
-    it('applies a free theme instantly from the grid', () => {
+    it('applies a free theme instantly from the grid', async () => {
       const { store } = renderDialog();
       fireEvent.click(screen.getByTestId('theme-card-terminal'));
-      expect(store.getState().app.previewThemeId).toBe('terminal');
+      await waitFor(() => expect(store.getState().app.settings?.appThemeMode).toBe('terminal'));
     });
 
-    it('clicking a locked theme card previews it without selecting', () => {
+    it('clicking a locked theme card changes nothing', () => {
       const { store } = renderDialog();
+      const before = store.getState().app.settings?.appThemeMode;
       fireEvent.click(screen.getByTestId('theme-card-amoled-void'));
-      // The dialog stays open, the theme previews, nothing is selected.
       expect(store.getState().supporter.dialogOpen).toBe(true);
-      expect(store.getState().app.previewThemeId).toBe('amoled-void');
+      expect(store.getState().app.settings?.appThemeMode).toBe(before);
       expect(screen.queryByTestId('theme-selected-amoled-void')).toBeNull();
     });
 

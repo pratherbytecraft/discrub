@@ -190,9 +190,6 @@ const appSlice = createSlice({
     setSettings: (state, action: PayloadAction<AppSettings>) => {
       state.settings = action.payload;
     },
-    setPreviewThemeId: (state, action: PayloadAction<string | null>) => {
-      state.previewThemeId = action.payload;
-    },
     setDialogOpen: (state, action: PayloadAction<{ dialog: FeedDialog; open: boolean }>) => {
       state.dialogs = { ...closedFeedDialogs, ...state.dialogs, [action.payload.dialog]: action.payload.open };
     },
@@ -208,9 +205,6 @@ const appSlice = createSlice({
     },
     setOperationHold: (state, action: PayloadAction<OperationHold | null>) => {
       state.operationHold = action.payload;
-    },
-    setPreviewLayout: (state, action: PayloadAction<LayoutKey | null>) => {
-      state.previewLayout = action.payload;
     },
     resetTask: (state) => {
       state.task = initialAppState.task;
@@ -275,13 +269,11 @@ export const {
   setSidebarView,
   setTask,
   setSettings,
-  setPreviewThemeId,
   setDialogOpen,
   toggleDialog,
   closeAllDialogs,
   setFeedScrollAnchor,
   setOperationHold,
-  setPreviewLayout,
   resetTask,
 } = appSlice.actions;
 
@@ -297,7 +289,6 @@ export const selectRestBreaksEnabled = (state: RootState) =>
 export const selectSuggestedLanguage = (state: RootState) => state.app.suggestedLanguage;
 export const selectTask = (state: RootState) => state.app.task;
 export const selectSettings = (state: RootState) => state.app.settings;
-export const selectPreviewThemeId = (state: RootState) => state.app.previewThemeId;
 export const selectIsMinimized = (state: RootState) => state.app.isMinimized;
 export const selectFocusedView = (state: RootState) => state.app.focusedView;
 export const selectKofiOverlayOpen = (state: RootState) => state.app.kofiOverlayOpen;
@@ -319,9 +310,6 @@ export const selectAppLayout = (state: RootState): LayoutKey => {
   if (isLayoutFree(saved) || (state.supporter ? selectHasThemes(state) : false)) return saved;
   return LOCKED_FALLBACK_LAYOUT;
 };
-export const selectPreviewLayout = (state: RootState): LayoutKey | null => state.app.previewLayout ?? null;
-/** The layout to render right now: a preview wins over the saved setting. */
-export const selectEffectiveLayout = (state: RootState): LayoutKey => state.app.previewLayout ?? selectAppLayout(state);
 export const selectOperationHold = (state: RootState) => state.app.operationHold ?? null;
 export const selectFeedScrollAnchor = (state: RootState) => state.app.feedScrollAnchor ?? null;
 export const selectDialogs = (state: RootState) => state.app.dialogs ?? closedFeedDialogs;

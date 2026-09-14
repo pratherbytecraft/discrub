@@ -26,16 +26,15 @@ describe('Timeline layout (2.2.0)', () => {
     });
   });
 
-  it('is locked without a key: the card opens the hub and the preview bar says Locked', () => {
+  it('is locked without a key: the card opens the hub and there is no preview', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-timeline"]').should('exist');
     cy.get('[data-testid="layout-card-timeline"]').click();
     cy.get('[data-testid="supporter-dialog"]').should('be.visible');
     cy.get('[aria-label="Close Supporter dialog"]').click();
     cy.get('[data-testid="gift-button"]').click();
-    cy.get('[data-testid="layout-preview-timeline"]').click();
-    cy.get('[data-testid="layout-preview-bar"]').should('contain.text', 'Previewing Timeline').and('contain.text', 'Locked');
-    cy.get('[data-testid="layout-preview-stop"]').click();
+    cy.get('[data-testid="layout-preview-timeline"]').should('not.exist');
+    cy.get('body').type('{esc}');
     cy.get('[data-testid="timeline-shell"]').should('not.exist');
   });
 

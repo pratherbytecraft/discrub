@@ -4,14 +4,13 @@ import { ArrowDropDown as ChevronIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectAppLayout, selectPreviewLayout, selectSettings } from '@features/app/appSlice';
+import { selectAppLayout, selectSettings } from '@features/app/appSlice';
 import { markGiftAttentionSeen, selectGiftAttentionSeen, selectIsSupporter } from '@features/supporter/supporterSlice';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { findThemeDescriptor } from '@/theme/descriptors';
 import { resolveThemeIdFromSetting } from '@/theme/theme';
 import { LAYOUT_NAMES } from '@/layouts/types';
 import AppearancePopover from './AppearancePopover';
-
 /**
  * Top bar entry for layouts and themes (2.2.0). Replaces the palette icon:
  * names the current layout and theme, collapses to its dot below the sm
@@ -28,11 +27,9 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
   const [open, setOpen] = useState(false);
   const settings = useAppSelector(selectSettings);
   const layout = useAppSelector(selectAppLayout);
-  const previewLayout = useAppSelector(selectPreviewLayout);
   const isSupporter = useAppSelector(selectIsSupporter);
   const giftAttentionSeen = useAppSelector(selectGiftAttentionSeen);
   const themeName = findThemeDescriptor(resolveThemeIdFromSetting(settings?.[DiscrubSetting.APP_THEME_MODE] ?? 'auto'))?.name ?? '';
-  const previewing = previewLayout != null && previewLayout !== layout;
 
   const toggle = () => {
     if (!giftAttentionSeen) dispatch(markGiftAttentionSeen());
@@ -59,8 +56,8 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
           data-testid="gift-button"
           sx={(th: Theme) => ({
             display: 'inline-flex', alignItems: 'center', gap: 1, height: 30, px: compact ? 0.75 : 1.25, borderRadius: 1.5,
-            border: '1px solid', borderColor: previewing ? 'primary.main' : 'divider',
-            backgroundColor: previewing ? alpha(th.palette.primary.main, 0.14) : alpha(th.palette.text.primary, 0.04),
+            border: '1px solid', borderColor: 'divider',
+            backgroundColor: alpha(th.palette.text.primary, 0.04),
             color: 'text.primary', whiteSpace: 'nowrap', transition: 'box-shadow 200ms ease, background-color 200ms ease',
             '&:hover': { backgroundColor: alpha(th.palette.text.primary, 0.08) },
             // Non-supporters keep the soft halo the palette icon had; it calms once the menu has been opened this session.

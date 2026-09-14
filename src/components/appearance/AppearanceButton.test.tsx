@@ -3,7 +3,6 @@ import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/test-uti
 import { createBaseState } from '@/test/state-factories';
 import { defaultSettings } from '@features/app/storageKeys';
 import AppearanceButton from './AppearanceButton';
-import LayoutPreviewBar from './LayoutPreviewBar';
 
 const withSettings = () => {
   const state = createBaseState();
@@ -54,14 +53,15 @@ describe('<AppearanceButton />', () => {
     expect(store.getState().app.settings?.appThemeMode).toBe('terminal');
   });
 
-  it('starts a layout preview from the eye, closes the menu, and the bar can stop it', async () => {
-    const { store } = renderWithProviders(<><AppearanceButton onOpenSettings={vi.fn()} /><LayoutPreviewBar /></>, { preloadedState: withSettings() });
+  it('has no live preview: no eye on the cards, and a locked theme card opens the hub', async () => {
+    const { store } = renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
     fireEvent.click(screen.getByLabelText('Appearance'));
-    fireEvent.click(await screen.findByTestId('layout-preview-native'));
-    expect(store.getState().app.previewLayout).toBe('native');
+    expect(await screen.findByTestId('layout-card-native')).toBeInTheDocument();
+    expect(screen.queryByTestId('layout-preview-native')).toBeNull();
+    fireEvent.click(screen.getByTestId('appearance-tab-theme'));
+    fireEvent.click(await screen.findByLabelText('AMOLED Void (supporter theme, locked)'));
+    expect(store.getState().supporter.dialogOpen).toBe(true);
+    expect(store.getState().app.settings?.appThemeMode).not.toBe('amoled-void');
     await waitFor(() => expect(screen.queryByTestId('appearance-popover')).toBeNull());
-    expect(screen.getByTestId('layout-preview-bar')).toHaveTextContent('Previewing Native');
-    fireEvent.click(screen.getByTestId('layout-preview-stop'));
-    expect(store.getState().app.previewLayout ?? null).toBeNull();
   });
 });

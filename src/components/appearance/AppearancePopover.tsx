@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Box, Button, IconButton, Popover, Tab, Tabs, Tooltip, Typography, alpha, useTheme } from '@mui/material';
-import { LockOutlined as LockIcon, Check as CheckIcon, Settings as SettingsIcon, VisibilityOutlined as PreviewIcon } from '@mui/icons-material';
+import { Box, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, Tooltip, Typography, alpha, useTheme } from '@mui/material';
+import { LockOutlined as LockIcon, Check as CheckIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectAppLayout, selectPreviewLayout, selectSettings, setPreviewLayout, updateSetting } from '@features/app/appSlice';
+import { selectAppLayout, selectSettings, updateSetting } from '@features/app/appSlice';
 import { selectHasThemes, selectSupporter, setSupporterDialogOpen } from '@features/supporter/supporterSlice';
 import { ThemeGrid } from '@components/settings/tabs/ThemePicker';
 import { findThemeDescriptor } from '@/theme/descriptors';
@@ -24,10 +24,14 @@ interface AppearancePopoverProps {
 
 /**
  * The Appearance menu (2.2.0): layouts and themes in one popover. Layout cards
- * carry a corner lock and a soft red glow when the key is missing, a check on
- * the current one, and preview on hover; clicking applies. Themes reuse the
- * theme grid with its own preview bar. Footer: the hint, the Themes and
- * Support hub, and Display settings.
+ * carry a corner lock and a soft red glow when the key is missing and a check
+ * on the current one; hovering shows a larger wireframe of the layout, clicking
+ * applies. Themes reuse the theme grid, whose swatches are the preview. There
+ * is no live preview of the whole app: one handed out locked layouts and
+ * themes for free once the bottom bar was hidden. Footer: the hint, the
+ * Themes and Support hub, and Display settings. The header is a segmented
+ * control (Layout, Theme) with the current name beside it; plain tabs read as
+ * a title bar and were missed (owner, 2026-09-19).
  */
 const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: AppearancePopoverProps) => {
   const { t } = useTranslation();
@@ -36,23 +40,17 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
   const [tab, setTab] = useState<AppearanceTab>('layout');
   const settings = useAppSelector(selectSettings);
   const layout = useAppSelector(selectAppLayout);
-  const previewLayout = useAppSelector(selectPreviewLayout);
   const isSupporter = useAppSelector(selectHasThemes);
   const supporterName = useAppSelector(selectSupporter).payload?.name;
   const themeSetting = settings?.[DiscrubSetting.APP_THEME_MODE] ?? 'auto';
   const themeName = findThemeDescriptor(resolveThemeIdFromSetting(themeSetting))?.name ?? '';
 
-  // A layout preview swaps the whole frame, including the bar that hosts this menu, so it starts from the
-  // eye and closes the menu; the preview bar at the bottom offers Apply and Stop (round 2 decision).
-  const startPreview = (key: LayoutKey) => { dispatch(setPreviewLayout(key)); onClose(); };
-  // Picking a layout applies it and closes the menu, so no hover preview lingers over the new frame.
+  // Picking a layout applies it and closes the menu, since the frame that hosts this menu is about to swap.
   const applyLayout = (key: LayoutKey) => {
     dispatch(updateSetting({ key: DiscrubSetting.APP_LAYOUT, value: key }));
-    dispatch(setPreviewLayout(null));
     onClose();
   };
   const openHub = () => { onClose(); dispatch(setSupporterDialogOpen(true)); };
-  const previewed = previewLayout && previewLayout !== layout ? LAYOUT_META.find((m) => m.key === previewLayout) : undefined;
 
   return (
     <Popover
@@ -63,10 +61,15 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
       transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       slotProps={{ paper: { sx: { width: 640, maxWidth: 'calc(100vw - 24px)', mt: 1, border: '1px solid', borderColor: 'divider', overflow: 'visible' }, 'data-testid': 'appearance-popover' } as never }}
     >
-      <Tabs value={tab} onChange={(_, v: AppearanceTab) => setTab(v)} sx={{ borderBottom: '1px solid', borderColor: 'divider', minHeight: 40, px: 1 }}>
-        <Tab value="layout" data-testid="appearance-tab-layout" sx={{ minHeight: 40, textTransform: 'none', gap: 1 }} label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><LayoutGlyph layout={layout} color={theme.palette.primary.main} width={20} height={13} /><Typography variant="overline" sx={{ lineHeight: 1 }}>{t('appearance.layout')}</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{LAYOUT_META.find((m) => m.key === layout)?.name}</Typography></Box>} />
-        <Tab value="theme" data-testid="appearance-tab-theme" sx={{ minHeight: 40, textTransform: 'none' }} label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Typography variant="overline" sx={{ lineHeight: 1 }}>{t('appearance.theme')}</Typography><Typography variant="body2" sx={{ fontWeight: 600 }}>{themeName}</Typography></Box>} />
-      </Tabs>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.75, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v: AppearanceTab | null) => { if (v) setTab(v); }} data-testid="appearance-segments" sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.5, py: 0.5, gap: 0.75 } }}>
+          <ToggleButton value="layout" data-testid="appearance-tab-layout"><LayoutGlyph layout={layout} color="currentColor" width={20} height={13} />{t('appearance.layout')}</ToggleButton>
+          <ToggleButton value="theme" data-testid="appearance-tab-theme">{t('appearance.theme')}</ToggleButton>
+        </ToggleButtonGroup>
+        <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 0 }} noWrap>
+          {tab === 'layout' ? LAYOUT_META.find((m) => m.key === layout)?.name : themeName}
+        </Typography>
+      </Box>
 
       {tab === 'layout' && (
         <Box sx={{ p: 1.75, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 1 }} data-testid="layout-cards">
@@ -75,9 +78,25 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
             const locked = !m.free && !isSupporter;
             const built = isLayoutBuilt(m.key);
             const label = !built ? t('appearance.soonLayout', { name: m.name }) : locked ? t('appearance.lockedLayout', { name: m.name }) : m.name;
+            const peek = (
+              <Box data-testid={`layout-peek-${m.key}`} sx={{ p: 0.5 }}>
+                <Box sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'background.default', border: '1px solid', borderColor: 'divider', display: 'grid', placeItems: 'center' }}>
+                  <LayoutGlyph layout={m.key} color={theme.palette.text.primary} width={224} height={140} />
+                </Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mt: 1 }}>{m.name}</Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>{m.blurb}</Typography>
+              </Box>
+            );
             return (
-              <Box
+              <Tooltip
                 key={m.key}
+                title={built ? peek : ''}
+                placement="top"
+                enterDelay={400}
+                enterNextDelay={400}
+                slotProps={{ tooltip: { sx: { maxWidth: 'none', p: 0.75, bgcolor: 'background.paper', color: 'text.primary', border: '1px solid', borderColor: 'divider', boxShadow: 3 } } }}
+              >
+              <Box
                 role="button"
                 tabIndex={built ? 0 : -1}
                 aria-label={label}
@@ -112,14 +131,8 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
                     <CheckIcon sx={{ fontSize: 12, color: '#fff' }} />
                   </Box>
                 )}
-                {built && !current && (
-                  <Tooltip title={t('appearance.previewThis', { name: m.name })} enterDelay={300} arrow>
-                    <IconButton size="small" aria-label={t('appearance.previewThis', { name: m.name })} data-testid={`layout-preview-${m.key}`} onClick={(e) => { e.stopPropagation(); startPreview(m.key); }} sx={{ position: 'absolute', right: 4, bottom: 4, p: 0.4, color: 'text.secondary' }}>
-                      <PreviewIcon sx={{ fontSize: 15 }} />
-                    </IconButton>
-                  </Tooltip>
-                )}
               </Box>
+              </Tooltip>
             );
           })}
         </Box>
@@ -130,6 +143,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
           <ThemeGrid
             value={themeSetting}
             onChange={(id) => dispatch(updateSetting({ key: DiscrubSetting.APP_THEME_MODE, value: id }))}
+            onLockedPick={openHub}
             isSupporter={isSupporter}
             cardWidth={96}
             data-testid="appearance-theme-grid"
@@ -139,7 +153,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.75, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }} noWrap data-testid="appearance-hint">
-          {previewed ? t('appearance.previewing', { name: previewed.name }) : t('appearance.hint')}
+          {t('appearance.hint')}
         </Typography>
         <Button size="small" onClick={openHub} data-testid="appearance-open-hub" sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}>
           {isSupporter && supporterName ? t('appearance.supporterName', { name: supporterName }) : t('appearance.hub')}

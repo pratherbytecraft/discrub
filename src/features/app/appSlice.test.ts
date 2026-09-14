@@ -27,7 +27,6 @@ import appReducer, {
   toggleFocusedView,
   setTask,
   setSettings,
-  setPreviewThemeId,
   resetTask,
   loadSettings,
   updateSetting,
@@ -303,22 +302,6 @@ describe('appSlice', () => {
         const state = store.getState().app;
         expect(state.isMinimized).toBe(true);
         expect(state.discrubPaused).toBe(true);
-      });
-    });
-
-    describe('setPreviewThemeId', () => {
-      it('defaults to null and never touches settings', () => {
-        expect(store.getState().app.previewThemeId).toBeNull();
-
-        store.dispatch(setPreviewThemeId('discord-light'));
-        expect(store.getState().app.previewThemeId).toBe('discord-light');
-        expect(store.getState().app.settings).toEqual(initialAppState.settings);
-      });
-
-      it('clears back to null', () => {
-        store.dispatch(setPreviewThemeId('discord-light'));
-        store.dispatch(setPreviewThemeId(null));
-        expect(store.getState().app.previewThemeId).toBeNull();
       });
     });
 
