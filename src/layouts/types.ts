@@ -12,12 +12,12 @@ export const LAYOUT_NAMES: Record<LayoutKey, string> = { classic: 'Classic', nat
 /** What the Appearance menu and the Settings cards say about each layout. Free ones need no key. */
 export interface LayoutMeta { key: LayoutKey; name: string; blurb: string; free: boolean }
 export const LAYOUT_META: LayoutMeta[] = [
-  { key: 'classic', name: 'Classic', blurb: 'The 2.1 layout. Sidebar, toolbar, feed.', free: true },
-  { key: 'native', name: 'Native', blurb: 'Discord look. Inspector on the right.', free: true },
-  { key: 'workbench', name: 'Workbench', blurb: 'Compact table with a progress dock.', free: false },
-  { key: 'simple', name: 'Simple', blurb: 'One wide column, nothing in the way.', free: false },
-  { key: 'operator', name: 'Operator', blurb: 'Built around the run. Queue, progress, log.', free: false },
-  { key: 'timeline', name: 'Timeline', blurb: 'Messages by day with a strip on top.', free: false },
+  { key: 'classic', name: 'Classic', blurb: 'The 2.1 layout.', free: true },
+  { key: 'native', name: 'Native', blurb: 'Looks like Discord.', free: true },
+  { key: 'workbench', name: 'Workbench', blurb: 'A compact table.', free: false },
+  { key: 'simple', name: 'Simple', blurb: 'One wide column.', free: false },
+  { key: 'operator', name: 'Operator', blurb: 'Queue and progress up front.', free: false },
+  { key: 'timeline', name: 'Timeline', blurb: 'Messages grouped by day.', free: false },
 ];
 export const isLayoutFree = (key: LayoutKey): boolean => LAYOUT_META.find((m) => m.key === key)?.free ?? true;
 export const isLayoutKey = (value: unknown): value is LayoutKey =>
