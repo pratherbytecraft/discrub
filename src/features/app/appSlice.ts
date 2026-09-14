@@ -253,8 +253,12 @@ const appSlice = createSlice({
         const { key, value } = action.meta.arg;
         state.settings = { ...state.settings, [key]: value } as typeof state.settings;
       })
+      // Apply only this key on completion. The payload is a snapshot taken when
+      // the write started, so replacing the whole map would undo any setting
+      // changed while the write was in flight (two quick card picks, 2.2.0).
       .addCase(updateSetting.fulfilled, (state, action) => {
-        state.settings = action.payload;
+        const { key, value } = action.meta.arg;
+        state.settings = { ...(state.settings ?? action.payload), [key]: value } as typeof state.settings;
       })
       .addCase(updateAllSettings.pending, (state, action) => {
         state.settings = action.meta.arg;

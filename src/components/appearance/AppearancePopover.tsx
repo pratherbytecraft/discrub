@@ -12,8 +12,9 @@ import { LAYOUT_META, type LayoutKey } from '@/layouts/types';
 import { isLayoutBuilt } from '@/layouts/registry';
 import LayoutGlyph from './LayoutGlyph';
 import LayoutMockup from './LayoutMockup';
+import ScrublingsTab from './ScrublingsTab';
 
-export type AppearanceTab = 'layout' | 'theme';
+export type AppearanceTab = 'layout' | 'theme' | 'scrublings';
 
 interface AppearancePopoverProps {
   anchorEl: HTMLElement | null;
@@ -30,8 +31,9 @@ interface AppearancePopoverProps {
  * is no live preview of the whole app: one handed out locked layouts and
  * themes for free once the bottom bar was hidden. Footer: the hint, the
  * Themes and Support hub, and Display settings. The header is a segmented
- * control (Layout, Theme) with the current name beside it; plain tabs read as
- * a title bar and were missed (owner, 2026-09-19).
+ * control (Layout, Theme, Scrublings); plain tabs read as a title bar and were
+ * missed (owner, 2026-09-19). The third segment picks the pixel characters
+ * that live on the top bar.
  */
 const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: AppearancePopoverProps) => {
   const { t } = useTranslation();
@@ -69,6 +71,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
         <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v: AppearanceTab | null) => { if (v) setTab(v); }} data-testid="appearance-segments" sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.5, py: 0.5, gap: 0.75 } }}>
           <ToggleButton value="layout" data-testid="appearance-tab-layout"><LayoutGlyph layout={layout} color="currentColor" width={20} height={13} />{t('appearance.layout')}</ToggleButton>
           <ToggleButton value="theme" data-testid="appearance-tab-theme">{t('appearance.theme')}</ToggleButton>
+          <ToggleButton value="scrublings" data-testid="appearance-tab-scrublings">{t('appearance.scrublings')}</ToggleButton>
         </ToggleButtonGroup>
       </Box>
 
@@ -142,9 +145,11 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
         </Box>
       )}
 
+      {tab === 'scrublings' && <ScrublingsTab onLockedPick={openHub} />}
+
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.75, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }} noWrap data-testid="appearance-hint">
-          {t('appearance.hint')}
+          {tab === 'scrublings' ? t(isSupporter ? 'scrublings.hintSupporter' : 'scrublings.hintFree') : t('appearance.hint')}
         </Typography>
         <Button size="small" onClick={openHub} data-testid="appearance-open-hub" sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}>
           {isSupporter && supporterName ? t('appearance.supporterName', { name: supporterName }) : t('appearance.hub')}

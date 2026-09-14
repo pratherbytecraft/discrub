@@ -66,6 +66,10 @@ export const defaultSettings: AppSettings = {
   [DiscrubSetting.RETRY_WAIT]: '1',
   // Screen layout (2.2.0). Classic is the 2.1 frame; existing installs keep it on upgrade.
   [DiscrubSetting.APP_LAYOUT]: 'classic',
+  // Scrublings (2.2.0): the pixel characters on the top bar. Suds and the Mage are on by default.
+  [DiscrubSetting.APP_SCRUBLINGS_ENABLED]: 'true',
+  [DiscrubSetting.APP_SCRUBLINGS_PICKED]: '["suds","mage"]',
+  [DiscrubSetting.APP_SCRUBLINGS_POSITIONS]: '{}',
 
   // Purge Behavior
   [DiscrubSetting.PURGE_RETAIN_ATTACHED_MEDIA]: 'false',

@@ -77,7 +77,39 @@
     "previewThis": "{{name}} ausprobieren",
     "endPreview": "Vorschau beenden",
     "current": "Aktuell",
-    "previewBusy": "Zuerst den laufenden Vorgang beenden"
+    "previewBusy": "Zuerst den laufenden Vorgang beenden",
+    "scrublings": "Scrublings"
+  },
+  "scrublings": {
+    "show": "Scrublings anzeigen",
+    "picked": "{{count}} von {{max}} ausgewählt",
+    "fits_one": "{{count}} passt auf diesen Bildschirm",
+    "fits_other": "{{count}} passen auf diesen Bildschirm",
+    "free": "Kostenlos",
+    "fullHint": "Höchstens {{max}} gleichzeitig. Wähle zuerst einen ab.",
+    "lockedOne": "{{name}} (Supporter-Scrubling, gesperrt)",
+    "hintFree": "Suds und der Magier sind kostenlos. Die anderen gibt es mit Supporter-Zugang.",
+    "hintSupporter": "Eigene Scrublings gibt es auf Bestellung bei Ko-fi.",
+    "names": {
+      "suds": "Suds",
+      "mage": "Magier",
+      "cat": "Katze",
+      "dog": "Hund",
+      "adventurer": "Abenteurer",
+      "pker": "Pker",
+      "alien": "Alien",
+      "ghost": "Geist"
+    },
+    "blurbs": {
+      "suds": "Der Schrubber. Blasen, ein Schwamm und ein Eimer.",
+      "mage": "Komplettes Ahrim's und ein uralter Stab. Zaubert auf den Zähler, teleportiert sich bei Langeweile.",
+      "cat": "Unnahbar. Schläft auf Dingen, schlägt nach allem, was sich bewegt.",
+      "dog": "Eifrig. Holt alles, bellt den Zähler an.",
+      "adventurer": "Weihnachtsmütze, komplettes Rune, eine Abyssal-Peitsche. Steigt eine Stufe auf, wenn ein Lauf fertig ist.",
+      "pker": "Zaubererhut, Lederbody, schwarze D'hide-Chaps, ein Drachenkrummsäbel. Zeigt den Totenkopf, wenn ein Purge startet.",
+      "alien": "Fliegt eine Untertasse. Beamt die Einsen und Nullen hoch, während ein Purge läuft.",
+      "ghost": "Der Geist gelöschter Nachrichten. Frisst sie während eines Purge."
+    }
   },
   "native": {
     "pickOne": "Wähle einen Server, eine Unterhaltung oder das Paket",

@@ -32,6 +32,7 @@ import { selectSetting, updateSetting, setMinimized, setKofiOverlayOpen, selectS
   setDialogOpen,
 } from '@features/app/appSlice';
 import TopBarBotSpot from '@components/welcome/TopBarBotSpot';
+import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import { selectIsHeavyOperationRunning, selectOperationSummary } from '@features/app/operationSelectors';
 import { reopenAnnouncement, fetchAnnouncementMarkdownThunk } from '@features/announcement/announcementSlice';
 import { isOverlayMode, closeOverlay, minimizeOverlay } from '@/extension/messaging';
@@ -89,6 +90,9 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const hasSpotRoom = useMediaQuery(theme.breakpoints.up('lg'));
   const middleRef = useRef<HTMLDivElement>(null);
   const [middleFits, setMiddleFits] = useState(true);
+  // The spotlight card, measured by the Scrublings stage so it can fade while a character crosses it.
+  const spotRef = useRef<HTMLDivElement>(null);
+  const [spotCovered, setSpotCovered] = useState(false);
   useLayoutEffect(() => {
     const el = middleRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -263,12 +267,21 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
             corkboard's home) it carries the compact bot spotlight; it
             steps aside whenever a heavy operation needs the user's eyes,
             and only bars 1200px and up have the room for it at all. */}
-        <Box ref={middleRef} sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, px: 1, overflow: 'hidden' }}>
+        <Box ref={middleRef} sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', position: 'relative', minWidth: 0, px: 1, overflow: 'hidden' }}>
+          {/* The Scrublings walk the free stretch in front of the spotlight.
+              While one is passing over the card it fades almost out, so the
+              character reads clearly, and comes back once they are off it
+              (owner, 2026-09-20). */}
+          {currentUser && <Box sx={{ position: 'absolute', inset: 0, zIndex: 2 }}><ScrublingsStage obstacle={spotRef} onObstacleCovered={setSpotCovered} /></Box>}
           {hasSpotRoom &&
             middleFits &&
             currentUser &&
             !isOperationRunning &&
-            (Boolean(selectedChannel || selectedDm) || sidebarView === 'package') && <TopBarBotSpot />}
+            (Boolean(selectedChannel || selectedDm) || sidebarView === 'package') && (
+              <Box ref={spotRef} data-testid="bot-spot-fade" data-covered={spotCovered ? 'true' : 'false'} sx={{ opacity: spotCovered ? 0.08 : 1, transition: 'opacity 250ms ease' }}>
+                <TopBarBotSpot />
+              </Box>
+            )}
         </Box>
 
         {currentUser && (

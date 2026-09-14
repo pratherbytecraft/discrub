@@ -148,6 +148,8 @@ describe('Export theming (slot E)', () => {
         expect(page).to.contain('<option value="terminal" selected>');
         expect(page).to.contain('.export-theme-discord-light {');
         expect(page).to.not.contain('synthwave');
+        // The Scrublings live on the bar only; nothing of theirs reaches an export (2.2.0).
+        expect(page.toLowerCase()).to.not.contain('scrubling');
         // Free set only: 6 dropdown options.
         expect(page.match(/<option value="/g)).to.have.length(6);
       });

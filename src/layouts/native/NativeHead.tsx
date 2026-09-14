@@ -9,6 +9,7 @@ import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { ChannelType } from 'discrub-core/discord-enum';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
+import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { getDmName } from '@/utils/dmListUtils';
@@ -76,7 +77,8 @@ const NativeHead = ({ inspectorOpen, canToggleInspector, onToggleInspector, show
           )}
         </Box>
       )}
-      <Box sx={{ flex: 1 }} />
+      {/* The free stretch. Without a conversation the hint text would take it all, so keep room for two Scrublings (not on a phone). */}
+      <Box sx={{ flex: 1, alignSelf: 'stretch', position: 'relative', minWidth: hasContext || showMenu ? 0 : 108 }}><ScrublingsStage /></Box>
       <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
       {hasContext && !isPackage && (
         <HotkeyTooltip actionId="openFilters" label={t('serverView.filters')} arrow>

@@ -589,6 +589,23 @@ describe('appSlice', () => {
   });
 
   describe('updateSetting async thunk', () => {
+    /**
+     * Two quick updates (2.2.0, two Scrubling card picks): the first write's
+     * completion must apply only its own key, not a whole-map snapshot that
+     * would undo the second.
+     */
+    it('keeps a later update when an earlier one completes after it', () => {
+      const start = { ...initialAppState, settings: { ...defaultSettings } };
+      const first = { key: DiscrubSetting.APP_SCRUBLINGS_PICKED, value: '["suds"]' };
+      const second = { key: DiscrubSetting.APP_THEME_MODE, value: 'terminal' };
+      let state = appReducer(start, updateSetting.pending('a', first));
+      const snapshot = { ...state.settings! };
+      state = appReducer(state, updateSetting.pending('b', second));
+      state = appReducer(state, updateSetting.fulfilled(snapshot, 'a', first));
+      expect(state.settings?.[DiscrubSetting.APP_SCRUBLINGS_PICKED]).toBe('["suds"]');
+      expect(state.settings?.[DiscrubSetting.APP_THEME_MODE]).toBe('terminal');
+    });
+
     it('should update a single setting', async () => {
       store = createTestStore(
         { app: appReducer },

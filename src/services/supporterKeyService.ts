@@ -36,6 +36,8 @@ export interface SupporterKeyPayload {
    * its own expiry. Buying more grows this map on the next refresh.
    */
   ent: SupporterEntitlementMap;
+  /** Ids of made-to-order Scrublings this key unlocks (2.2.0). Absent on stock keys. */
+  custom?: string[];
   iat: number;
   /** Latest feature expiry; null when any feature never expires. */
   exp: number | null;

@@ -77,7 +77,39 @@
     "previewThis": "Preview {{name}}",
     "endPreview": "End preview",
     "current": "Current",
-    "previewBusy": "Finish the current run first"
+    "previewBusy": "Finish the current run first",
+    "scrublings": "Scrublings"
+  },
+  "scrublings": {
+    "show": "Show Scrublings",
+    "picked": "{{count}} of {{max}} picked",
+    "fits_one": "{{count}} shows on this screen",
+    "fits_other": "{{count}} show on this screen",
+    "free": "Free",
+    "fullHint": "Up to {{max}} at once. Unpick one first.",
+    "lockedOne": "{{name}} (supporter Scrubling, locked)",
+    "hintFree": "Suds and the Mage are free. The rest come with supporter access.",
+    "hintSupporter": "Custom Scrublings are made to order on Ko-fi.",
+    "names": {
+      "suds": "Suds",
+      "mage": "Mage",
+      "cat": "Cat",
+      "dog": "Dog",
+      "adventurer": "Adventurer",
+      "pker": "Pker",
+      "alien": "Alien",
+      "ghost": "Ghost"
+    },
+    "blurbs": {
+      "suds": "The scrubber. Bubbles, a sponge, and a bucket.",
+      "mage": "Full Ahrim's and an ancient staff. Casts at the counter, teleports when bored.",
+      "cat": "Aloof. Sleeps on things, bats at anything that moves.",
+      "dog": "Eager. Fetches anything, barks at the counter.",
+      "adventurer": "Santa hat, full rune, an abyssal whip. Levels up when a run finishes.",
+      "pker": "Wizard hat, leather body, black d'hide chaps, a dragon scimitar. Skulls up when a Purge starts.",
+      "alien": "Rides a saucer. Beams up the 1s and 0s while a Purge runs.",
+      "ghost": "The spirit of deleted messages. Eats them during a Purge."
+    }
   },
   "native": {
     "pickOne": "Pick a server, a conversation or the package",

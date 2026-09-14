@@ -651,5 +651,19 @@ describe('TopBar wide layout (md and up)', () => {
       renderWithProviders(<TopBar />, { preloadedState: state });
       expect(screen.queryByTestId('topbar-bot-spot')).not.toBeInTheDocument();
     });
+
+    it('fades while a Scrubling is crossing it', () => {
+      // Give the stage room for the default pair and let every rect share one
+      // 400px span, so whoever is on stage is standing on the card.
+      const widthSpy = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(400);
+      const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, width: 400, top: 0, right: 400, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+      try {
+        renderWithProviders(<TopBar />, { preloadedState: createAuthenticatedState() });
+        expect(screen.getByTestId('bot-spot-fade')).toHaveAttribute('data-covered', 'true');
+      } finally {
+        widthSpy.mockRestore();
+        rectSpy.mockRestore();
+      }
+    });
   });
 });

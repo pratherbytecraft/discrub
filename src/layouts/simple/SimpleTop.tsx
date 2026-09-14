@@ -10,6 +10,7 @@ import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { selectIsSupporter } from '@features/supporter/supporterSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
+import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { getDmName } from '@/utils/dmListUtils';
 
@@ -58,7 +59,7 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
         {leaf && <Typography variant="body2" noWrap sx={{ mx: 1, color: 'text.secondary', flexShrink: 0 }}>›</Typography>}
         {leaf && <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0, flexShrink: phone ? 1 : 0 }}>{leaf}</Typography>}
       </Button>
-      {!phone && <Box sx={{ flex: 1 }} />}
+      {!phone && <Box sx={{ flex: 1, alignSelf: 'stretch', position: 'relative', minWidth: 0 }}><ScrublingsStage /></Box>}
       <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
       {hasContext && (
         <HotkeyTooltip actionId="openAnalytics" label={t('serverView.analytics')} arrow>

@@ -9,6 +9,7 @@ import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { selectIsSupporter } from '@features/supporter/supporterSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
+import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import { getDmName } from '@/utils/dmListUtils';
 
 /**
@@ -39,11 +40,12 @@ const OperatorTop = () => {
           <Typography variant="caption" data-testid="operator-version" sx={{ color: 'text.secondary', lineHeight: 1.1 }}>{__APP_VERSION__}</Typography>
         </Box>
       )}
-      <Box data-testid="operator-crumb" sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: 1, ml: phone ? 0 : 2 }}>
+      <Box data-testid="operator-crumb" sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, flex: '0 1 auto', ml: phone ? 0 : 2 }}>
         <Typography variant="body2" noWrap sx={{ color: 'text.secondary', flexShrink: 1, minWidth: 0 }}>{section}</Typography>
         {leaf && <Typography variant="body2" sx={{ color: 'text.secondary', flexShrink: 0 }}>/</Typography>}
         {leaf && <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0 }}>{leaf}</Typography>}
       </Box>
+      <Box sx={{ flex: '1 1 0', alignSelf: 'stretch', position: 'relative', minWidth: 0 }}><ScrublingsStage /></Box>
       <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
       <Tooltip title={t('topbar.settings')} enterDelay={0} arrow>
         <IconButton size="small" aria-label={t('topbar.settings')} onClick={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} data-testid="operator-settings"><SettingsIcon /></IconButton>
