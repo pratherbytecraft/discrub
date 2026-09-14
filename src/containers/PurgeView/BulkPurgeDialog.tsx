@@ -292,6 +292,14 @@ const BulkPurgeDialog = ({ open, onClose, channels, mode, guilds = [], guildId, 
     ? false
     : effectiveTargetUserIds.length === 0;
 
+  const disabledHint = isOperationRunning
+    ? t('purge.hintRunning')
+    : targetCount === 0
+      ? t('purge.hintNoTargets')
+      : hasNoTargetUsers
+        ? (isMessagesFamily ? t('purge.hintPickAuthor') : t('purge.hintPickUser'))
+        : '';
+
   const targetLabel = isReactionsFamily ? t('purge.targetReactions') : t('purge.targetAuthor');
 
   const getLockReasonText = () => {
@@ -593,6 +601,12 @@ const BulkPurgeDialog = ({ open, onClose, channels, mode, guilds = [], guildId, 
         </Box>
       </DialogContent>
       <DialogActions>
+        {/* One line that says why the confirm button is off (2.2.0, round 3 review). */}
+        {disabledHint && (
+          <Typography variant="caption" color="text.secondary" data-testid="purge-disabled-hint" sx={{ flex: 1, pl: 2, textAlign: 'left' }}>
+            {disabledHint}
+          </Typography>
+        )}
         <Button variant="outlined" onClick={onClose}>{t('purge.cancel')}</Button>
         <Button
           onClick={handleConfirm}

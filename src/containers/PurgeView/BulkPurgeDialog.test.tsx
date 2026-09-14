@@ -90,6 +90,21 @@ describe('BulkPurgeDialog', () => {
       expect(screen.getByTestId('long-run-note')).toHaveTextContent('Long runs send many requests from your account.');
     });
 
+    it('says why the confirm button is off until an author is picked, and says nothing once it is on', () => {
+      const { unmount } = renderWithProviders(
+        <BulkPurgeDialog open channels={mockChannels} onClose={vi.fn()} mode="channels" guildId="g1" canManageMessages />,
+        { preloadedState: stateWithUser },
+      );
+      expect(screen.getByTestId('purge-disabled-hint')).toHaveTextContent('Open Filters above and pick whose messages to purge.');
+      unmount();
+      // DM mode targets the signed in user, so the button is on and there is nothing to explain.
+      renderWithProviders(
+        <BulkPurgeDialog open channels={mockChannels} onClose={vi.fn()} mode="dms" />,
+        { preloadedState: stateWithUser },
+      );
+      expect(screen.queryByTestId('purge-disabled-hint')).not.toBeInTheDocument();
+    });
+
     it('renders dialog title with channel count', () => {
       renderWithProviders(
         <BulkPurgeDialog open channels={mockChannels} onClose={vi.fn()} mode="channels" guildId="g1" />,
