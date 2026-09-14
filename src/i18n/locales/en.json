@@ -124,6 +124,13 @@
     "allLoaded": "all loaded",
     "channelCount": "{{count}} channels"
   },
+  "simple": {
+    "pickHint": "Pick a server, a conversation or the package from the top.",
+    "searchIn": "Search in {{name}}",
+    "messagesLoaded": "messages loaded",
+    "keepReading": "You can keep reading. Discord may ask us to wait now and then, the bar will pause while it does.",
+    "allKeys": "all keys"
+  },
   "focus": {
     "on": "Focus on",
     "or": " or ",

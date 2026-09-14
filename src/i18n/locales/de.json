@@ -124,6 +124,13 @@
     "allLoaded": "alles geladen",
     "channelCount": "{{count}} Kanäle"
   },
+  "simple": {
+    "pickHint": "Wähle oben einen Server, eine Unterhaltung oder das Paket.",
+    "searchIn": "In {{name}} suchen",
+    "messagesLoaded": "Nachrichten geladen",
+    "keepReading": "Du kannst weiterlesen. Discord lässt uns ab und zu warten, der Balken pausiert dann.",
+    "allKeys": "alle Tasten"
+  },
   "focus": {
     "on": "Fokus an",
     "or": " oder ",

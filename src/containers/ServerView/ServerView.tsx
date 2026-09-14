@@ -130,7 +130,7 @@ interface ServerViewProps {
    * its action buttons; Native draws its own head row and inspector, so the
    * header here is skipped. Dialogs, alerts, tabs and the feed stay.
    */
-  variant?: 'classic' | 'native' | 'workbench';
+  variant?: 'classic' | 'native' | 'workbench' | 'simple';
 }
 
 /**
