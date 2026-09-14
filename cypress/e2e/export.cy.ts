@@ -979,11 +979,11 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
         firstAtCancel = firstHits;
         secondAtCancel = secondHits.length;
       });
-      cy.get('[aria-label="Cancel"]').click({ force: true });
+      cy.get('[aria-label="Stop"]').click({ force: true });
 
       // The operation unwinds: cancellation status entry + controls gone.
       expectStatusEntry('Export: Cancelled · general');
-      cy.get('[aria-label="Cancel"]').should('not.exist');
+      cy.get('[aria-label="Stop"]').should('not.exist');
 
       // Cancel reached INTO the in-flight download: no re-attempt of the
       // aborted leg, no fall-through to its direct-CDN leg, and no new

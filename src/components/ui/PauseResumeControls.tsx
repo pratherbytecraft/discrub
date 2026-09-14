@@ -3,13 +3,16 @@ import { ButtonGroup, Button, Box, Typography, LinearProgress, Popover, useTheme
 import {
   Pause as PauseIcon,
   PlayArrow as ResumeIcon,
-  Cancel as CancelIcon,
+  Stop as StopIcon,
+  Autorenew as RetryIcon,
+  Pause as HoldIcon,
+  Close as FailedIcon,
   HelpOutline as HelpIcon,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { getTourEntry } from '@components/welcome/tourSteps';
-import { selectDiscrubPaused, selectRestBreakUntil, setDiscrubPaused, setDiscrubCancelled } from '@features/app/appSlice';
-import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
+import { selectDiscrubPaused, setDiscrubPaused, setDiscrubCancelled, setOperationHold } from '@features/app/appSlice';
+import { selectIsHeavyOperationRunning, selectOperationSummary, type OperationStateColor } from '@features/app/operationSelectors';
 import { addStatusEntry } from '@features/status/statusSlice';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
@@ -37,8 +40,8 @@ const buildLabelPulse = (pulseColor: string, restColor: string) => keyframes`
  * "Rest break · resumes in m:ss", ticking once a second while an automatic
  * rest break (`useRestBreaks`) holds the operation. Empty otherwise.
  */
-const useRestBreakCountdown = (restBreakUntil: number | null): string => {
-  const { t } = useTranslation();
+const useCountdown = (until: number | null | undefined): string => {
+  const restBreakUntil = until ?? null;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (restBreakUntil == null) return;
@@ -48,15 +51,20 @@ const useRestBreakCountdown = (restBreakUntil: number | null): string => {
   }, [restBreakUntil]);
   if (restBreakUntil == null) return '';
   const remaining = Math.max(0, Math.ceil((restBreakUntil - now) / 1000));
+  if (remaining < 60) return `${remaining} s`;
   const minutes = Math.floor(remaining / 60);
   const seconds = String(remaining % 60).padStart(2, '0');
-  return t('restBreak.countdown', { time: `${minutes}:${seconds}` });
+  return `${minutes}:${seconds}`;
 };
 
 /**
  * Pause/Resume/Cancel controls for long-running operations.
  * Only visible when an operation is running.
  */
+// The one colour per state (A4). Same hex the status panel uses for its dot.
+const STATE_HEX: Record<OperationStateColor, string> = { neutral: '#8b949e', success: '#3fb950', warning: '#d29922', info: '#58a6ff', error: '#f85149' };
+const spin = keyframes`to { transform: rotate(360deg); }`;
+
 const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -68,8 +76,17 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
   const { t } = useTranslation();
   const isRunning = useAppSelector(selectIsHeavyOperationRunning);
   const isPaused = useAppSelector(selectDiscrubPaused);
-  const restBreakUntil = useAppSelector(selectRestBreakUntil);
-  const restBreakLabel = useRestBreakCountdown(restBreakUntil);
+  const summary = useAppSelector(selectOperationSummary);
+  const countdown = useCountdown(summary.hold?.until);
+  const inHold = summary.state === 'restBreak' || summary.state === 'retrying' || summary.state === 'retryPaused';
+  const headline = summary.state === 'restBreak'
+    ? t('operation.state.restBreak', { time: countdown })
+    : summary.state === 'retrying'
+      ? t('operation.state.retrying', { time: countdown, attempt: summary.hold?.attempt, max: summary.hold?.max })
+      : summary.state === 'retryPaused'
+        ? t('operation.state.retryPaused', { max: summary.hold?.max })
+        : '';
+  const stateHex = STATE_HEX[summary.stateColor];
   const [helpAnchor, setHelpAnchor] = useState<HTMLButtonElement | null>(null);
   const tourEntry = getTourEntry('pause-resume-controls', t);
 
@@ -92,6 +109,11 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
   const togglePause = () => {
     dispatch(setDiscrubPaused(!isPaused));
     dispatch(addStatusEntry({ level: isPaused ? 'success' : 'warning', message: isPaused ? t('pause.operationResumed') : t('pause.operationPaused') }));
+  };
+  const retryNow = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Clearing the hold ends the retry wait early (withTransientRetry watches for it).
+    dispatch(setOperationHold(null));
   };
   const cancelOp = () => {
     dispatch(setDiscrubCancelled(true));
@@ -135,13 +157,13 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
           </Button>
         </HotkeyTooltip>
 
-        <HotkeyTooltip actionId="cancelOp" label={t('pause.cancel')} enterDelay={0} arrow>
+        <HotkeyTooltip actionId="cancelOp" label={t('pause.stop')} enterDelay={0} arrow>
           <Button
             onClick={handleCancel}
-            aria-label={t('pause.cancel')}
+            aria-label={t('pause.stop')}
             sx={{ minWidth: 32, px: 0.5, '&:hover': { backgroundColor: 'rgba(240, 71, 71, 0.15)' } }}
           >
-            <CancelIcon />
+            <StopIcon />
           </Button>
         </HotkeyTooltip>
 
@@ -197,17 +219,36 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
         </Popover>
       )}
 
-      {restBreakLabel && (
-        <Typography
-          variant="caption"
-          data-testid="rest-break-countdown"
-          sx={{ color: 'warning.main', whiteSpace: 'nowrap', ml: 0.5 }}
-        >
-          {restBreakLabel}
-        </Typography>
+      {inHold && (
+        <Box data-testid="operation-state" data-state={summary.state} sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 0.5, minWidth: 0 }}>
+          <Box
+            aria-hidden
+            sx={{
+              width: 16, height: 16, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center',
+              backgroundColor: stateHex, color: '#0d1117',
+              animation: summary.state === 'retrying' ? `${spin} 1.6s linear infinite` : 'none',
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+            }}
+          >
+            {summary.state === 'restBreak' && <HoldIcon sx={{ fontSize: 11 }} />}
+            {summary.state === 'retrying' && <RetryIcon sx={{ fontSize: 12 }} />}
+            {summary.state === 'retryPaused' && <FailedIcon sx={{ fontSize: 12 }} />}
+          </Box>
+          <Typography variant="caption" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{summary.name}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
+          <Typography variant="caption" data-testid="operation-state-headline" sx={{ color: stateHex, fontWeight: 600, whiteSpace: 'nowrap' }}>{headline}</Typography>
+          {summary.sentence && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{summary.sentence}</Typography>
+          )}
+          {summary.state === 'retrying' && (
+            <Button size="small" onClick={retryNow} sx={{ minWidth: 0, px: 1, py: 0, fontSize: '0.7rem', color: stateHex, whiteSpace: 'nowrap' }}>
+              {t('pause.retryNow')}
+            </Button>
+          )}
+        </Box>
       )}
 
-      {label && (
+      {label && !inHold && (
         <Typography
           key={pulseKey}
           variant="caption"

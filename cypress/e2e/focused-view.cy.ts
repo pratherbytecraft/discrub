@@ -123,7 +123,7 @@ describe('Focused View Mode', () => {
         .should('be.visible')
         .within(() => {
           cy.get('[aria-label="Pause"]').should('be.visible');
-          cy.get('[aria-label="Cancel"]').should('be.visible');
+          cy.get('[aria-label="Stop"]').should('be.visible');
           cy.contains('Exporting...').should('be.visible');
         });
     });

@@ -5192,7 +5192,7 @@ describe('messageSlice', () => {
           ([p]) => p.level === 'warning' && /paused after 5 failed retries/.test(p.message),
         );
         expect(pauseEntries.length).toBeGreaterThanOrEqual(1);
-        expect(pauseEntries[0][0].message).toContain('100 messages fetched');
+        expect(pauseEntries[0][0].message).toContain('from 100 loaded');
 
         vi.mocked(checkCancelled).mockReturnValue(false);
         vi.mocked(waitWhilePaused).mockResolvedValue(undefined);
@@ -6886,7 +6886,7 @@ describe('messageSlice', () => {
         }
         expect(store.getState().app.discrubPaused).toBe(true);
         const paused = vi.mocked(addStatusEntry).mock.calls.map(([p]) => p.message).find((m) => /paused after/.test(m));
-        expect(paused).toBe('Load All: paused after 5 failed retries (Discord answered HTTP 502). Check your connection, then click Resume to continue from 0 messages fetched.');
+        expect(paused).toBe('Load All: paused after 5 failed retries. Discord answered HTTP 502. Wait a bit, then Resume to continue from 0 loaded.');
         store.dispatch(setDiscrubCancelled(true));
         await pending;
       }, 20000);
@@ -6975,7 +6975,7 @@ describe('messageSlice', () => {
           ([p]) => p.level === 'warning' && /paused after 5 failed retries/.test(p.message),
         );
         expect(pauseEntries.length).toBeGreaterThanOrEqual(1);
-        expect(pauseEntries[0][0].message).toContain('100 messages fetched');
+        expect(pauseEntries[0][0].message).toContain('from 100 loaded');
 
         // Reset overrides so other tests see the default stubs.
         vi.mocked(checkCancelled).mockReturnValue(false);
@@ -7112,7 +7112,7 @@ describe('messageSlice', () => {
           ([p]) => p.level === 'warning' && /Search Load All: paused after 5 failed retries/.test(p.message),
         );
         expect(pauseEntries.length).toBeGreaterThanOrEqual(1);
-        expect(pauseEntries[0][0].message).toContain('25 messages loaded');
+        expect(pauseEntries[0][0].message).toContain('from 25 loaded');
 
         vi.mocked(checkCancelled).mockReturnValue(false);
         vi.mocked(waitWhilePaused).mockResolvedValue(undefined);

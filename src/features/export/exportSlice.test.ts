@@ -1456,7 +1456,7 @@ describe('exportSlice', () => {
 
       const entries = testStore.getState().status.entries as Array<{ level: string; message: string }>;
       const paused = entries.find((e) => e.level === 'warning' && /Export: paused after 5 failed retries loading #flaky/.test(e.message));
-      expect(paused?.message).toContain('100 messages fetched');
+      expect(paused?.message).toContain('from 100 loaded');
 
       vi.mocked(waitWhilePaused).mockResolvedValue(undefined);
     }, 10000);

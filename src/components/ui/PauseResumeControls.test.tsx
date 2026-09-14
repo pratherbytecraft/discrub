@@ -29,9 +29,9 @@ describe('PauseResumeControls', () => {
         },
       }),
     });
-    expect(screen.getByTestId('rest-break-countdown')).toHaveTextContent('Rest break · resumes in 9:32');
+    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent('Rest break, resumes in 9:32');
     act(() => { vi.advanceTimersByTime(2000); });
-    expect(screen.getByTestId('rest-break-countdown')).toHaveTextContent('Rest break · resumes in 9:30');
+    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent('Rest break, resumes in 9:30');
     // Resume is what skips the break.
     expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
@@ -83,13 +83,13 @@ describe('PauseResumeControls', () => {
     expect(screen.getByLabelText('Resume')).toBeInTheDocument();
   });
 
-  it('shows Cancel button when operation running', () => {
+  it('shows Stop button when operation running', () => {
     renderWithProviders(<PauseResumeControls />, {
       preloadedState: createBaseState({
         export: { ...initialExportState, isExporting: true },
       }),
     });
-    expect(screen.getByLabelText('Cancel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Stop')).toBeInTheDocument();
   });
 
   it('dispatches setDiscrubPaused(true) when Pause clicked', () => {
@@ -146,7 +146,7 @@ describe('PauseResumeControls', () => {
         },
       }),
     });
-    fireEvent.click(screen.getByLabelText('Cancel'));
+    fireEvent.click(screen.getByLabelText('Stop'));
     expect(store.getState().app.discrubCancelled).toBe(true);
     expect(store.getState().app.discrubPaused).toBe(false);
     expect(store.getState().status.entries).toEqual(
@@ -191,5 +191,47 @@ describe('PauseResumeControls', () => {
     rerender(<PauseResumeControls label="Exporting (avatars)... 13 of 100" />);
     const secondNode = screen.getByText('Exporting (avatars)... 13 of 100');
     expect(secondNode).not.toBe(firstNode);
+  });
+  // 2.2.0 item 2 (A4): one headline, one sentence and one colour per state.
+  describe('operation states', () => {
+    const running = () => createBaseState({ export: { ...initialExportState, isExporting: true } });
+
+    it('names a rest break with its countdown and the reason', () => {
+      const state = running();
+      state.app = { ...state.app, discrubPaused: true, restBreakUntil: Date.now() + 271000 };
+      renderWithProviders(<PauseResumeControls label="Exporting..." />, { preloadedState: state });
+      expect(screen.getByTestId('operation-state')).toHaveAttribute('data-state', 'restBreak');
+      expect(screen.getByTestId('operation-state-headline').textContent).toMatch(/^Rest break, resumes in 4:3\d$/);
+      expect(screen.getByText(/Paused for 10 minutes after 45 minutes of activity/)).toBeInTheDocument();
+      expect(screen.queryByText('Exporting...')).not.toBeInTheDocument();
+    });
+
+    it('names a retry wait with the attempt and offers Retry now, which clears the hold', () => {
+      const state = running();
+      state.app = { ...state.app, operationHold: { kind: 'retryWait', until: Date.now() + 4000, attempt: 2, max: 5, answer: 'Discord answered HTTP 502' } };
+      const { store } = renderWithProviders(<PauseResumeControls label="Exporting..." />, { preloadedState: state });
+      expect(screen.getByTestId('operation-state')).toHaveAttribute('data-state', 'retrying');
+      expect(screen.getByTestId('operation-state-headline').textContent).toMatch(/^Retrying in \d s, attempt 2 of 5$/);
+      expect(screen.getByText(/Discord answered HTTP 502\. Each retry waits twice as long, then Export pauses for you\./)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+      expect(store.getState().app.operationHold ?? null).toBeNull();
+    });
+
+    it('names a pause after five failed retries with the resume point', () => {
+      const state = running();
+      state.app = { ...state.app, discrubPaused: true, operationHold: { kind: 'retryExhausted', answer: 'Discord answered HTTP 502', loaded: 1250 } };
+      renderWithProviders(<PauseResumeControls label="Paused · Exporting" />, { preloadedState: state });
+      expect(screen.getByTestId('operation-state')).toHaveAttribute('data-state', 'retryPaused');
+      expect(screen.getByTestId('operation-state-headline')).toHaveTextContent('Paused after 5 failed retries');
+      expect(screen.getByText(/Wait a bit, then Resume to continue from 1,250 loaded\./)).toBeInTheDocument();
+      expect(screen.getByLabelText('Resume')).toBeInTheDocument();
+      expect(screen.getByLabelText('Stop')).toBeInTheDocument();
+    });
+
+    it('shows the plain label while simply running', () => {
+      renderWithProviders(<PauseResumeControls label="Exporting..." />, { preloadedState: running() });
+      expect(screen.queryByTestId('operation-state')).not.toBeInTheDocument();
+      expect(screen.getByText('Exporting...')).toBeInTheDocument();
+    });
   });
 });

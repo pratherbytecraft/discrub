@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { REST_BREAK_AFTER_MINUTES, REST_BREAK_LENGTH_MINUTES } from './restBreakConstants';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import {
@@ -12,9 +13,9 @@ import { addStatusEntry } from '@features/status/statusSlice';
 import { t } from '@/i18n';
 
 /** Active (running, not paused) time before a rest break starts. */
-export const REST_BREAK_AFTER_MS = 45 * 60 * 1000;
+export const REST_BREAK_AFTER_MS = REST_BREAK_AFTER_MINUTES * 60 * 1000;
 /** Length of a rest break. */
-export const REST_BREAK_LENGTH_MS = 10 * 60 * 1000;
+export const REST_BREAK_LENGTH_MS = REST_BREAK_LENGTH_MINUTES * 60 * 1000;
 /** Wall-clock check cadence. Background throttling only delays a tick. */
 export const REST_BREAK_TICK_MS = 1000;
 

@@ -813,7 +813,7 @@ async function fetchAllChannelMessages(
         dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: allMessages.length }));
         dispatch(addStatusEntry({
           level: 'warning',
-          message: t('status.export.loadPaused', { label, count: allMessages.length.toLocaleString() }),
+          message: t('status.export.loadPaused', { label, answer: describeAnswer(response), count: allMessages.length.toLocaleString() }),
         }));
         continue;
       }

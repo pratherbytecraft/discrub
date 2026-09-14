@@ -33,7 +33,7 @@ describe('FloatingPauseControl', () => {
     });
     expect(screen.getByTestId('floating-pause-control')).toBeInTheDocument();
     expect(screen.getByLabelText('Pause')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cancel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Stop')).toBeInTheDocument();
   });
 
   it('clicking Pause pauses the operation and shows Resume', () => {

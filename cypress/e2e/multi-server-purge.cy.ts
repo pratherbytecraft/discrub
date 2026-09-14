@@ -162,7 +162,7 @@ describe('Multi-server purge (#255)', () => {
     cy.contains('button', 'Purge 2 Servers').click();
 
     cy.wait('@slowSearch', { timeout: 20000 });
-    cy.get('[aria-label="Cancel"]').click({ force: true });
+    cy.get('[aria-label="Stop"]').click({ force: true });
 
     expandLog();
     cy.contains(/Purge: Cancelled · 1 of 2 servers/, { timeout: 15000 }).should('exist');

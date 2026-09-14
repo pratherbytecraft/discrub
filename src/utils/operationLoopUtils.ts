@@ -49,6 +49,8 @@ export const cancellableDelay = async (
   delayMs: number,
   getState: () => RootState,
   signal?: AbortSignal,
+  /** Ends the wait early (not cancelled) when it returns true, checked each tick. */
+  stopWhen?: () => boolean,
 ): Promise<boolean> => {
   const interval = 200;
   // Wall-clock accounting (#247): a chunk that oversleeps under browser
@@ -59,6 +61,7 @@ export const cancellableDelay = async (
     if (signal?.aborted || checkCancelled(getState)) return true;
     await waitWhilePaused(getState);
     if (signal?.aborted || checkCancelled(getState)) return true;
+    if (stopWhen?.()) break;
     const remaining = delayMs - (Date.now() - start);
     if (remaining <= 0) break;
     await throttleImmuneSleep(Math.min(interval, remaining));
@@ -227,7 +230,8 @@ export const withTransientRetry = async <T extends RetryableResponse>(
     const delayMs = transientRetryDelayMs(attempt, baseDelayMs, maxDelayMs);
     opts.onRetry?.(attempt + 1, delayMs, lastResponse);
     opts.dispatch?.(setOperationHold({ kind: 'retryWait', until: Date.now() + delayMs, attempt: attempt + 1, max: maxRetries, answer: describeAnswer(lastResponse) }));
-    const cancelled = await cancellableDelay(delayMs, opts.getState, opts.signal);
+    // Retry now clears the hold from the UI, which ends this wait early.
+    const cancelled = await cancellableDelay(delayMs, opts.getState, opts.signal, opts.dispatch ? () => opts.getState().app.operationHold == null : undefined);
     opts.dispatch?.(setOperationHold(null));
     if (cancelled) return lastResponse;
   }

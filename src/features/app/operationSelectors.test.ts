@@ -9,7 +9,7 @@ describe('operationSelectors', () => {
     it('should return idle when no operations are running', () => {
       const state = createBaseState();
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: false, isPaused: false, label: 'Idle', tier: 'idle' });
+      expect(summary).toMatchObject({ isRunning: false, isPaused: false, label: 'Idle', tier: 'idle' });
     });
 
     it('should return exporting without progress when isExporting but no progress', () => {
@@ -21,7 +21,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: false, label: 'Exporting...', tier: 'heavy' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Exporting...', tier: 'heavy' });
     });
 
     it('should return exporting with stage and percentage when progress exists', () => {
@@ -38,7 +38,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({
+      expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
         label: 'Exporting (attachments)... 45%',
@@ -84,7 +84,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({
+      expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
         label: 'Channel 2/5: general (attachments)... 30%',
@@ -112,7 +112,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({
+      expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
         label: 'Channel 1/3: dev-chat',
@@ -158,7 +158,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: false, label: 'Loading all messages...', tier: 'heavy' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Loading all messages...', tier: 'heavy' });
     });
 
     it('should return loading messages when isLoading', () => {
@@ -169,7 +169,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: false, label: 'Loading messages...', tier: 'light' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Loading messages...', tier: 'light' });
     });
 
     it('should return light tier for user enrichment', () => {
@@ -180,7 +180,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: false, label: 'Looking up users...', tier: 'light' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Looking up users...', tier: 'light' });
     });
 
     it('should prioritize exporting over loadingAll', () => {
@@ -224,7 +224,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: false, label: 'Deleting messages...', tier: 'heavy' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Deleting messages...', tier: 'heavy' });
     });
 
     it('should return paused deleting label when paused and isDeleting', () => {
@@ -239,7 +239,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: true, label: 'Paused · Deleting messages', tier: 'heavy' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: true, label: 'Paused · Deleting messages', tier: 'heavy' });
     });
 
     it('should prioritize isDeleting over isLoading', () => {
@@ -262,7 +262,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: false, label: 'Removing reactions...', tier: 'heavy' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Removing reactions...', tier: 'heavy' });
     });
 
     it('should return paused label when paused and isRemovingReactions', () => {
@@ -277,7 +277,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: true, label: 'Paused · Removing reactions', tier: 'heavy' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: true, label: 'Paused · Removing reactions', tier: 'heavy' });
     });
   });
 
@@ -485,7 +485,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({ isRunning: true, isPaused: false, label: 'Purging...', tier: 'heavy' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Purging...', tier: 'heavy' });
     });
 
     it('should return legacy purge label with processed and deleted counts', () => {
@@ -504,7 +504,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({
+      expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
         label: 'Purging... 50 processed (30 deleted)',
@@ -534,7 +534,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({
+      expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
         label: 'Purging... Channel 2/3: general · 25 processed (50 deleted)',
@@ -589,7 +589,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toEqual({
+      expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
         label: 'Removing reactions... Channel 1/2: memes · 100 scanned (20 removed)',
@@ -1045,6 +1045,48 @@ describe('operationSelectors', () => {
         app: { ...createBaseState().app, discrubPaused: true },
       });
       expect(selectOperationSummary(state).label).toBe('Paused · Purging');
+    });
+  });
+  // 2.2.0 item 2 (A4): the state overlay every layout reads.
+  describe('operation state overlay', () => {
+    const exporting = () => createBaseState({ export: { ...createBaseState().export, isExporting: true } });
+
+    it('is idle when nothing runs and running for a heavy operation', () => {
+      expect(selectOperationSummary(createBaseState())).toMatchObject({ state: 'idle', stateColor: 'neutral' });
+      expect(selectOperationSummary(exporting())).toMatchObject({ state: 'running', stateColor: 'success', name: 'Export' });
+    });
+
+    it('reports a rest break with its end time and sentence', () => {
+      const state = exporting();
+      state.app = { ...state.app, discrubPaused: true, restBreakUntil: 123456 };
+      const s = selectOperationSummary(state);
+      expect(s).toMatchObject({ state: 'restBreak', stateColor: 'warning', hold: { until: 123456 } });
+      expect(s.sentence).toBe('Paused for 10 minutes after 45 minutes of activity. Resume skips the break.');
+    });
+
+    it('reports a retry wait with the attempt and the answer', () => {
+      const state = exporting();
+      state.app = { ...state.app, operationHold: { kind: 'retryWait', until: 99, attempt: 3, max: 5, answer: 'Discord answered HTTP 502' } };
+      const s = selectOperationSummary(state);
+      expect(s).toMatchObject({ state: 'retrying', stateColor: 'info', hold: { until: 99, attempt: 3, max: 5 } });
+      expect(s.sentence).toBe('Discord answered HTTP 502. Each retry waits twice as long, then Export pauses for you.');
+    });
+
+    it('reports a pause after retries with the resume point, and a plain pause otherwise', () => {
+      const state = exporting();
+      state.app = { ...state.app, discrubPaused: true, operationHold: { kind: 'retryExhausted', answer: 'Discord answered HTTP 502', loaded: 1250 } };
+      const s = selectOperationSummary(state);
+      expect(s).toMatchObject({ state: 'retryPaused', stateColor: 'error', hold: { max: 5, loaded: 1250 } });
+      expect(s.sentence).toBe('Discord answered HTTP 502. Wait a bit, then Resume to continue from 1,250 loaded.');
+      const plain = exporting();
+      plain.app = { ...plain.app, discrubPaused: true };
+      expect(selectOperationSummary(plain)).toMatchObject({ state: 'paused', stateColor: 'warning' });
+    });
+
+    it('never marks a light operation as holding', () => {
+      const state = createBaseState({ message: { ...createBaseState().message, isLoading: true } });
+      state.app = { ...state.app, operationHold: { kind: 'retryWait', until: 1, attempt: 1, max: 5, answer: 'x' } };
+      expect(selectOperationSummary(state)).toMatchObject({ state: 'running', tier: 'light' });
     });
   });
 });

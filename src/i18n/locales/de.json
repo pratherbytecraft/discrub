@@ -66,6 +66,8 @@
     "resume": "Fortsetzen",
     "pause": "Pause",
     "cancel": "Abbrechen",
+    "stop": "Stopp",
+    "retryNow": "Jetzt erneut versuchen",
     "help": "Hilfe: {{title}}"
   },
   "statusPanel": {
@@ -120,7 +122,22 @@
     "loadingChannels": "Kanäle werden geladen...",
     "loadingDms": "DMs werden geladen...",
     "lookingUpUsers": "Benutzer werden nachgeschlagen...",
-    "idle": "Bereit"
+    "idle": "Bereit",
+    "names": {
+      "loadAll": "Alle laden",
+      "export": "Export",
+      "purge": "Purge",
+      "package": "Paket",
+      "operation": "Vorgang"
+    },
+    "state": {
+      "restBreak": "Pause, geht weiter in {{time}}",
+      "restBreakSentence": "Nach {{active}} Minuten Aktivität für {{minutes}} Minuten pausiert. Fortsetzen überspringt die Pause.",
+      "retrying": "Neuer Versuch in {{time}}, Versuch {{attempt}} von {{max}}",
+      "retryingSentence": "{{answer}}. Jeder Versuch wartet doppelt so lange, dann pausiert {{name}} für dich.",
+      "retryPaused": "Nach {{max}} fehlgeschlagenen Versuchen pausiert",
+      "retryPausedSentence": "{{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen."
+    }
   },
   "landing": {
     "supporterKeyInactive": "Unterstützerschlüssel ist nicht mehr aktiv.",
@@ -1439,7 +1456,7 @@
       "answerHttp": "Discord hat mit HTTP {{status}} geantwortet",
       "answerNone": "Discord hat nicht geantwortet",
       "searchLoadAllRetry": "Suche Alle laden: {{answer}}, neuer Versuch in {{seconds}} s (Versuch {{attempt}}/5)",
-      "searchLoadAllPaused": "Suche Alle laden: nach 5 fehlgeschlagenen Versuchen pausiert ({{answer}}). Prüfe deine Verbindung und klicke auf Fortsetzen, um bei {{count}} geladenen Nachrichten weiterzumachen.",
+      "searchLoadAllPaused": "Suche Alle laden: nach 5 fehlgeschlagenen Versuchen pausiert. {{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen.",
       "loadAllSearchFailed": "Fehler beim Laden aller Suchergebnisse",
       "searchLoadAllStopped": "Suche Alle laden bei {{count}} von {{total}} Treffern gestoppt; Discord lieferte vor der gemeldeten Gesamtzahl keine neuen Ergebnisse mehr, einige Treffer könnten fehlen.",
       "searchFetched": "Suche: {{count}} von {{total}} Ergebnissen geladen",
@@ -1447,7 +1464,7 @@
       "searchEnrichedTotal_other": "Suche: Reaktionen für insgesamt {{count}} Nachrichten angereichert",
       "loadAllStarting": "Alle laden: Start...",
       "loadAllRetry": "Alle laden: {{answer}}, neuer Versuch in {{seconds}} s (Versuch {{attempt}}/5)",
-      "loadAllPaused": "Alle laden: nach 5 fehlgeschlagenen Versuchen pausiert ({{answer}}). Prüfe deine Verbindung und klicke auf Fortsetzen, um bei {{count}} geladenen Nachrichten weiterzumachen.",
+      "loadAllPaused": "Alle laden: nach 5 fehlgeschlagenen Versuchen pausiert. {{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen.",
       "fetchAllFailed": "Nicht alle Nachrichten konnten geladen werden",
       "fetchAllFailedHttp": "Nicht alle Nachrichten konnten geladen werden (HTTP {{status}})",
       "fetchAllFailedNoResponse": "Nicht alle Nachrichten konnten geladen werden. Discord hat nicht geantwortet, prüfe deine Verbindung und versuche es erneut.",
@@ -1703,7 +1720,7 @@
       "bulkResolvingReplies_other": "Sammelexport: Antwortbezüge für {{count}} Nachrichten in {{label}} werden aufgelöst…",
       "loadingFrom": "Nachrichten aus {{label}} werden geladen…",
       "loadRetry": "Export: Verbindung beim Laden von {{label}} fehlgeschlagen, neuer Versuch in {{seconds}} s (Versuch {{attempt}}/5)",
-      "loadPaused": "Export: nach 5 fehlgeschlagenen Versuchen beim Laden von {{label}} pausiert. Prüfe deine Verbindung und klicke auf Fortsetzen, um bei {{count}} geladenen Nachrichten weiterzumachen.",
+      "loadPaused": "Export: nach 5 fehlgeschlagenen Versuchen beim Laden von {{label}} pausiert. {{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen.",
       "loadedFrom": "{{count}} Nachrichten aus {{label}} geladen",
       "loadedFromCount_one": "{{count, number}} Nachricht aus {{label}} geladen",
       "loadedFromCount_other": "{{count, number}} Nachrichten aus {{label}} geladen",

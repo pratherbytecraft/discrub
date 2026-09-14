@@ -287,7 +287,7 @@ describe('MainLayout', () => {
       });
       expect(screen.getByTestId('floating-pause-control')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
     });
 
     it('clicking Pause dispatches pause and swaps the button to Resume', () => {

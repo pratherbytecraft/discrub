@@ -13,7 +13,7 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectStatusEntries, selectStatusCount, clearStatusLog, getCurrentSessionId } from '@features/status/statusSlice';
 import { groupEntriesBySession, LEGACY_SESSION_ID } from '@features/status/statusGrouping';
 import { storage } from '@/extension/storage';
-import { selectOperationSummary } from '@features/app/operationSelectors';
+import { selectOperationSummary, type OperationSummary } from '@features/app/operationSelectors';
 import type { StatusLevel, StatusLogEntry } from '@features/status/statusTypes';
 import PauseResumeControls from './PauseResumeControls';
 import OperationTip from './OperationTip';
@@ -35,6 +35,9 @@ const blink = keyframes`
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 `;
+
+// One colour per operation state (A4), shared with PauseResumeControls.
+const STATUS_DOT: Record<OperationSummary['stateColor'], string> = { neutral: '#8b949e', success: '#3fb950', warning: '#d29922', info: '#58a6ff', error: '#f85149' };
 
 const levelPrefixes: Record<StatusLevel, string> = {
   info: '[INFO]',
@@ -333,7 +336,7 @@ const StatusPanel = () => {
               variant={operationSummary.isPaused ? 'determinate' : 'indeterminate'}
               value={operationSummary.isPaused ? 100 : undefined}
               sx={{
-                color: operationSummary.isPaused ? '#d29922' : '#3fb950',
+                color: STATUS_DOT[operationSummary.stateColor],
                 flexShrink: 0,
               }}
               aria-label={operationSummary.isPaused ? t('statusPanel.operationPaused') : t('statusPanel.operationInProgress')}

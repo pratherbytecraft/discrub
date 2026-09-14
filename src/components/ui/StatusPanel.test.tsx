@@ -92,7 +92,7 @@ describe('StatusPanel', () => {
       }),
     });
     expect(screen.getByLabelText('Pause')).toBeInTheDocument();
-    expect(screen.getByLabelText('Cancel')).toBeInTheDocument();
+    expect(screen.getByLabelText('Stop')).toBeInTheDocument();
   });
 
   it('shows operation label and progress when exporting', () => {
@@ -115,7 +115,7 @@ describe('StatusPanel', () => {
       preloadedState: createBaseState(),
     });
     expect(screen.queryByLabelText('Pause')).toBeNull();
-    expect(screen.queryByLabelText('Cancel')).toBeNull();
+    expect(screen.queryByLabelText('Stop')).toBeNull();
   });
 
   it('shows download log button when entries exist', () => {

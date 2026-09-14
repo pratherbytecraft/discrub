@@ -66,6 +66,8 @@
     "resume": "Resume",
     "pause": "Pause",
     "cancel": "Cancel",
+    "stop": "Stop",
+    "retryNow": "Retry now",
     "help": "Help: {{title}}"
   },
   "statusPanel": {
@@ -120,7 +122,22 @@
     "loadingChannels": "Loading channels...",
     "loadingDms": "Loading DMs...",
     "lookingUpUsers": "Looking up users...",
-    "idle": "Idle"
+    "idle": "Idle",
+    "names": {
+      "loadAll": "Load All",
+      "export": "Export",
+      "purge": "Purge",
+      "package": "Package",
+      "operation": "Operation"
+    },
+    "state": {
+      "restBreak": "Rest break, resumes in {{time}}",
+      "restBreakSentence": "Paused for {{minutes}} minutes after {{active}} minutes of activity. Resume skips the break.",
+      "retrying": "Retrying in {{time}}, attempt {{attempt}} of {{max}}",
+      "retryingSentence": "{{answer}}. Each retry waits twice as long, then {{name}} pauses for you.",
+      "retryPaused": "Paused after {{max}} failed retries",
+      "retryPausedSentence": "{{answer}}. Wait a bit, then Resume to continue from {{count}} loaded."
+    }
   },
   "landing": {
     "supporterKeyInactive": "Supporter key no longer active.",
@@ -1439,7 +1456,7 @@
       "answerHttp": "Discord answered HTTP {{status}}",
       "answerNone": "Discord did not answer",
       "searchLoadAllRetry": "Search Load All: {{answer}}, retrying in {{seconds}}s (attempt {{attempt}}/5)",
-      "searchLoadAllPaused": "Search Load All: paused after 5 failed retries ({{answer}}). Check your connection, then click Resume to continue from {{count}} messages loaded.",
+      "searchLoadAllPaused": "Search Load All: paused after 5 failed retries. {{answer}}. Wait a bit, then Resume to continue from {{count}} loaded.",
       "loadAllSearchFailed": "Failed while loading all search results",
       "searchLoadAllStopped": "Search Load All stopped at {{count}} of {{total}} matches; Discord stopped serving new results before the reported total, so some matches may be missing.",
       "searchFetched": "Search: fetched {{count}} of {{total}} results",
@@ -1447,7 +1464,7 @@
       "searchEnrichedTotal_other": "Search: enriched reactions for {{count}} messages total",
       "loadAllStarting": "Load All: Starting...",
       "loadAllRetry": "Load All: {{answer}}, retrying in {{seconds}}s (attempt {{attempt}}/5)",
-      "loadAllPaused": "Load All: paused after 5 failed retries ({{answer}}). Check your connection, then click Resume to continue from {{count}} messages fetched.",
+      "loadAllPaused": "Load All: paused after 5 failed retries. {{answer}}. Wait a bit, then Resume to continue from {{count}} loaded.",
       "fetchAllFailed": "Failed to fetch all messages",
       "fetchAllFailedHttp": "Failed to fetch all messages (HTTP {{status}})",
       "fetchAllFailedNoResponse": "Failed to fetch all messages. Discord did not answer, check your connection and try again.",
@@ -1703,7 +1720,7 @@
       "bulkResolvingReplies_other": "Bulk export: resolving reply parents for {{count}} messages in {{label}}…",
       "loadingFrom": "Loading messages from {{label}}…",
       "loadRetry": "Export: connection failed while loading {{label}}, retrying in {{seconds}}s (attempt {{attempt}}/5)",
-      "loadPaused": "Export: paused after 5 failed retries loading {{label}}. Check your connection, then click Resume to continue from {{count}} messages fetched.",
+      "loadPaused": "Export: paused after 5 failed retries loading {{label}}. {{answer}}. Wait a bit, then Resume to continue from {{count}} loaded.",
       "loadedFrom": "Loaded {{count}} messages from {{label}}",
       "loadedFromCount_one": "Loaded {{count, number}} message from {{label}}",
       "loadedFromCount_other": "Loaded {{count, number}} messages from {{label}}",
