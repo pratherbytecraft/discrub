@@ -285,7 +285,8 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
           </Typography>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 0.5, px: 2, py: 1 }}>
+      {/* The top padding keeps the summary strip off the scrolled options above it; the theme draws the divider. */}
+      <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 2, pt: 1.5, pb: 1 }}>
         <ExportSummaryChip />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
           <Button onClick={handleClose} variant="outlined">
