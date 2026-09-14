@@ -18,6 +18,16 @@ export type SidebarView = 'server' | 'package';
  */
 export type FeedDialog = 'filters' | 'export' | 'forumExport' | 'loadAll' | 'threadLoad' | 'analytics';
 export type FeedDialogs = Record<FeedDialog, boolean>;
+/**
+ * Why a running operation is holding, beyond the user's own pause (2.2.0
+ * item 2). Rest breaks keep their end time in `restBreakUntil`; this covers
+ * the two retry holds so every layout can name the state, the wait and the
+ * attempt. Cleared on resume, on success and on resetTask. Never persisted.
+ */
+export type OperationHold =
+  | { kind: 'retryWait'; until: number; attempt: number; max: number; answer: string }
+  | { kind: 'retryExhausted'; answer: string; loaded: number };
+
 export interface FeedScrollAnchor {
   /** `<conversation id>:<thread tab id or main>`. */
   key: string;
@@ -65,6 +75,7 @@ export interface AppState {
    * the feed lands back on the same message. Transient, never persisted.
    */
   feedScrollAnchor?: FeedScrollAnchor | null;
+  operationHold?: OperationHold | null;
   task: AppTask;
   settings: AppSettings | null;
   /**
@@ -93,6 +104,7 @@ export const initialAppState: AppState = {
   sidebarView: 'server',
   dialogs: { ...closedFeedDialogs },
   feedScrollAnchor: null,
+  operationHold: null,
   task: {
     status: 'idle',
     message: '',

@@ -1563,7 +1563,7 @@ export const enrichPackageChannel = createAsyncThunk<
                 channelId,
                 QueryStringParam.AROUND,
               ),
-              { getState },
+              { getState, dispatch },
             );
             if (response.success && response.data) {
               // Cache the whole window so subsequent iterations can

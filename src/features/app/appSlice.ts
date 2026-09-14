@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
-import { AppTask, SidebarView, FeedDialog, FeedScrollAnchor, initialAppState, closedFeedDialogs } from './appTypes';
+import { AppTask, SidebarView, FeedDialog, FeedScrollAnchor, OperationHold, initialAppState, closedFeedDialogs } from './appTypes';
 import { DEFAULT_LAYOUT, isLayoutKey, type LayoutKey } from '@/layouts/types';
 import type { RootState } from '@/app/store';
 import { storage, migrateAllStorage } from '@/extension/storage';
@@ -150,6 +150,8 @@ const appSlice = createSlice({
   reducers: {
     setDiscrubPaused: (state, action: PayloadAction<boolean>) => {
       state.discrubPaused = action.payload;
+      // Resume ends a retry hold: the loop continues from where it paused.
+      if (!action.payload && state.operationHold?.kind === 'retryExhausted') state.operationHold = null;
     },
     setRateLimitStopped: (state, action: PayloadAction<boolean>) => {
       state.rateLimitStopped = action.payload;
@@ -203,6 +205,9 @@ const appSlice = createSlice({
     setFeedScrollAnchor: (state, action: PayloadAction<FeedScrollAnchor | null>) => {
       state.feedScrollAnchor = action.payload;
     },
+    setOperationHold: (state, action: PayloadAction<OperationHold | null>) => {
+      state.operationHold = action.payload;
+    },
     resetTask: (state) => {
       state.task = initialAppState.task;
       state.discrubPaused = false;
@@ -210,6 +215,7 @@ const appSlice = createSlice({
       state.rateLimitStopped = false;
       state.requestsRefusedStopped = false;
       state.restBreakUntil = null;
+      state.operationHold = null;
     },
   },
   extraReducers: (builder) => {
@@ -270,6 +276,7 @@ export const {
   toggleDialog,
   closeAllDialogs,
   setFeedScrollAnchor,
+  setOperationHold,
   resetTask,
 } = appSlice.actions;
 
@@ -295,6 +302,7 @@ export const selectAppLayout = (state: RootState): LayoutKey => {
   const raw = state.app.settings?.[DiscrubSetting.APP_LAYOUT];
   return isLayoutKey(raw) ? raw : DEFAULT_LAYOUT;
 };
+export const selectOperationHold = (state: RootState) => state.app.operationHold ?? null;
 export const selectFeedScrollAnchor = (state: RootState) => state.app.feedScrollAnchor ?? null;
 export const selectDialogs = (state: RootState) => state.app.dialogs ?? closedFeedDialogs;
 export const selectDialogOpen = (dialog: FeedDialog) => (state: RootState) => selectDialogs(state)[dialog];

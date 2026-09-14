@@ -7,7 +7,7 @@ import { ReactionType, IsPinnedType } from 'discrub-core/discord-enum';
 import { MessageOrder, initialMessageState, initialPaginationState, ThreadTabState } from './messageTypes';
 import { getDiscordService } from '@services/discordService';
 import type { RootState } from '@/app/store';
-import { selectSearchDelay, selectDeleteDelay, selectDelayModifier, selectSettings, selectDiscrubPaused, setDiscrubPaused } from '@features/app/appSlice';
+import { selectSearchDelay, selectDeleteDelay, selectDelayModifier, selectSettings, selectDiscrubPaused, setDiscrubPaused, setOperationHold } from '@features/app/appSlice';
 import { calculateRandomDelay } from '@/utils/delayUtils';
 import { userEnrichmentService } from '@services/userEnrichmentService';
 import { reactionEnrichmentService } from '@services/reactionEnrichmentService';
@@ -30,10 +30,11 @@ import { notePackageDeletions } from '@features/package/packageDeletedCache';
  * per 202 wait and per transient retry, worded like Load All's.
  */
 const searchPageRetryHooks = (
-  dispatch: (action: ReturnType<typeof addStatusEntry>) => unknown,
+  dispatch: (action: ReturnType<typeof addStatusEntry> | ReturnType<typeof setOperationHold>) => unknown,
   getState: () => RootState,
 ) => ({
   getState,
+  dispatch,
   onIndexingWait: (attempt: number, delayMs: number) => {
     dispatch(addStatusEntry({
       level: 'warning',
@@ -1722,6 +1723,7 @@ export const loadAllSearchResults = createAsyncThunk(
               // Exhausted retries — pause and let the user fix their network,
               // then Resume to continue from progress (#185 Bug A).
               dispatch(setDiscrubPaused(true));
+              dispatch(setOperationHold({ kind: 'retryExhausted', answer: lastAnswer, loaded: aggregated.length }));
               dispatch(addStatusEntry({
                 level: 'warning',
                 message: t('status.msg.searchLoadAllPaused', { answer: lastAnswer, count: aggregated.length }),
@@ -1929,6 +1931,7 @@ export const fetchAllMessages = createAsyncThunk(
           () => discordService.fetchMessageData(token, lastMessageId, channelId),
           {
             getState: getState as () => RootState,
+            dispatch,
             signal,
             onRetry: (attempt, delayMs, last) => {
               dispatch(addStatusEntry({
@@ -1942,6 +1945,7 @@ export const fetchAllMessages = createAsyncThunk(
         if (!response.success || !response.data) {
           if (isTransientApiFailure(response)) {
             dispatch(setDiscrubPaused(true));
+            dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: allMessages.length }));
             dispatch(addStatusEntry({
               level: 'warning',
               message: t('status.msg.loadAllPaused', { answer: describeAnswer(response), count: allMessages.length }),
@@ -2359,6 +2363,7 @@ export const fetchAllThreadMessages = createAsyncThunk(
           () => discordService.fetchMessageData(token, lastMsgId, threadId),
           {
             getState: getState as () => RootState,
+            dispatch,
             signal,
             onRetry: (attempt, delayMs, last) => {
               dispatch(addStatusEntry({
@@ -2372,6 +2377,7 @@ export const fetchAllThreadMessages = createAsyncThunk(
         if (!response.success || !response.data) {
           if (isTransientApiFailure(response) && !signal.aborted && !checkCancelled(getState as () => RootState)) {
             dispatch(setDiscrubPaused(true));
+            dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: allMessages.length }));
             dispatch(addStatusEntry({
               level: 'warning',
               message: t('status.msg.loadAllPaused', { answer: describeAnswer(response), count: allMessages.length }),

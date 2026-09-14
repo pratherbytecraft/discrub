@@ -129,6 +129,29 @@ describe('withTransientRetry', () => {
     expect(onRetry).not.toHaveBeenCalled();
   });
 
+  it('records each retry wait as the operation hold and clears it after the wait', async () => {
+    const getState = createMockGetState();
+    const dispatch = vi.fn();
+    const fn = vi.fn()
+      .mockResolvedValueOnce({ success: false, status: 502 })
+      .mockResolvedValueOnce({ success: true, data: 'ok' });
+    const result = await withTransientRetry(fn, { getState, dispatch, baseDelayMs: 5 });
+    expect(result.success).toBe(true);
+    const payloads = dispatch.mock.calls.map(([a]) => a.payload);
+    expect(payloads).toHaveLength(2);
+    expect(payloads[0]).toMatchObject({ kind: 'retryWait', attempt: 1, max: 5, answer: expect.stringContaining('502') });
+    expect(payloads[0].until).toBeGreaterThan(Date.now() - 1000);
+    expect(payloads[1]).toBeNull();
+  });
+
+  it('records nothing without a dispatch', async () => {
+    const getState = createMockGetState();
+    const fn = vi.fn()
+      .mockResolvedValueOnce({ success: false, status: 502 })
+      .mockResolvedValueOnce({ success: true, data: 'ok' });
+    await expect(withTransientRetry(fn, { getState, baseDelayMs: 5 })).resolves.toMatchObject({ success: true });
+  });
+
   it('retries transient failures then returns success', async () => {
     const getState = createMockGetState();
     const fn = vi

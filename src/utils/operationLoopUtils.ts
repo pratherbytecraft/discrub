@@ -1,5 +1,5 @@
 import type { RootState } from '@/app/store';
-import { selectDiscrubPaused, selectDiscrubCancelled, selectRetryWaitSeconds } from '@features/app/appSlice';
+import { selectDiscrubPaused, selectDiscrubCancelled, selectRetryWaitSeconds, setOperationHold } from '@features/app/appSlice';
 import { throttleImmuneSleep } from './workerTimers';
 import { t } from '@/i18n';
 
@@ -105,6 +105,12 @@ export interface TransientRetryOptions<T extends RetryableResponse> {
   getState: () => RootState;
   /** Optional thunk signal so backoff sleep can honor abort. */
   signal?: AbortSignal;
+  /**
+   * When given, every retry wait is recorded as the operation hold
+   * (`app.operationHold`, kind retryWait) so the layouts can show the wait
+   * and the attempt live; the hold is cleared when the wait ends.
+   */
+  dispatch?: (action: ReturnType<typeof setOperationHold>) => unknown;
 }
 
 /**
@@ -220,7 +226,9 @@ export const withTransientRetry = async <T extends RetryableResponse>(
 
     const delayMs = transientRetryDelayMs(attempt, baseDelayMs, maxDelayMs);
     opts.onRetry?.(attempt + 1, delayMs, lastResponse);
+    opts.dispatch?.(setOperationHold({ kind: 'retryWait', until: Date.now() + delayMs, attempt: attempt + 1, max: maxRetries, answer: describeAnswer(lastResponse) }));
     const cancelled = await cancellableDelay(delayMs, opts.getState, opts.signal);
+    opts.dispatch?.(setOperationHold(null));
     if (cancelled) return lastResponse;
   }
   return lastResponse;

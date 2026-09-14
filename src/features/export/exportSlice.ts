@@ -16,7 +16,7 @@ import type { ThunkDispatch, UnknownAction } from '@reduxjs/toolkit';
 export type ExportDispatch = ThunkDispatch<RootState, unknown, UnknownAction>;
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
-import { selectSearchDelay, selectDelayModifier, selectSettings, setDiscrubPaused } from '@features/app/appSlice';
+import { selectSearchDelay, selectDelayModifier, selectSettings, setDiscrubPaused, setOperationHold } from '@features/app/appSlice';
 import { selectHasThemes, selectSupporterFooter } from '@features/supporter/supporterSlice';
 import { resolveExportThemeSet } from '@services/exportThemes';
 import {
@@ -28,7 +28,7 @@ import { addRecentExport } from '@features/history/historySlice';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { IsPinnedType, ChannelType } from 'discrub-core/discord-enum';
 import { calculateRandomDelay } from '@/utils/delayUtils';
-import { waitWhilePaused, checkCancelled, cancellableDelay, createShouldContinue, CancelledError, withTransientRetry, isTransientApiFailure } from '@/utils/operationLoopUtils';
+import { waitWhilePaused, checkCancelled, cancellableDelay, createShouldContinue, CancelledError, withTransientRetry, isTransientApiFailure, describeAnswer } from '@/utils/operationLoopUtils';
 import { iterateSearchMessagesRedux, nextMilestone } from '@/utils/searchPagination';
 import { addStatusEntry, showOperationTip } from '@features/status/statusSlice';
 import { t } from '@/i18n';
@@ -793,6 +793,7 @@ async function fetchAllChannelMessages(
       () => discordService.fetchMessageData(token, lastMessageId, channelId),
       {
         getState,
+        dispatch,
         onRetry: (attempt, delayMs) => {
           dispatch(addStatusEntry({
             level: 'warning',
@@ -809,6 +810,7 @@ async function fetchAllChannelMessages(
     if (!response.success || !response.data) {
       if (isTransientApiFailure(response)) {
         dispatch(setDiscrubPaused(true));
+        dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: allMessages.length }));
         dispatch(addStatusEntry({
           level: 'warning',
           message: t('status.export.loadPaused', { label, count: allMessages.length.toLocaleString() }),
@@ -952,6 +954,7 @@ async function fetchAllForumThreads(
       }),
       {
         getState,
+        dispatch,
         onRetry: (attempt, delayMs) => {
           dispatch(addStatusEntry({
             level: 'warning',

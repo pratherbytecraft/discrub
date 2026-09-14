@@ -6,6 +6,8 @@ import appReducer, {
   closeAllDialogs,
   setFeedScrollAnchor,
   selectFeedScrollAnchor,
+  setOperationHold,
+  selectOperationHold,
   selectAppLayout,
   selectDialogOpen,
   selectDialogs,
@@ -187,6 +189,32 @@ describe('appSlice', () => {
     it('returns a known layout key', () => {
       store.dispatch(setSettings({ ...defaultSettings, [DiscrubSetting.APP_LAYOUT]: 'native' }));
       expect(selectAppLayout(store.getState())).toBe('native');
+    });
+  });
+
+  describe('operation hold', () => {
+    it('starts empty and records a retry wait', () => {
+      expect(selectOperationHold(store.getState())).toBeNull();
+      store.dispatch(setOperationHold({ kind: 'retryWait', until: 123, attempt: 2, max: 5, answer: 'HTTP 502' }));
+      expect(selectOperationHold(store.getState())).toMatchObject({ kind: 'retryWait', attempt: 2 });
+      store.dispatch(setOperationHold(null));
+      expect(selectOperationHold(store.getState())).toBeNull();
+    });
+
+    it('resume clears a paused-after-retries hold but not a retry wait', () => {
+      store.dispatch(setDiscrubPaused(true));
+      store.dispatch(setOperationHold({ kind: 'retryExhausted', answer: 'HTTP 502', loaded: 1250 }));
+      store.dispatch(setDiscrubPaused(false));
+      expect(selectOperationHold(store.getState())).toBeNull();
+      store.dispatch(setOperationHold({ kind: 'retryWait', until: 1, attempt: 1, max: 5, answer: 'HTTP 502' }));
+      store.dispatch(setDiscrubPaused(false));
+      expect(selectOperationHold(store.getState())).toMatchObject({ kind: 'retryWait' });
+    });
+
+    it('resetTask clears the hold', () => {
+      store.dispatch(setOperationHold({ kind: 'retryExhausted', answer: 'HTTP 502', loaded: 10 }));
+      store.dispatch(resetTask());
+      expect(selectOperationHold(store.getState())).toBeNull();
     });
   });
 

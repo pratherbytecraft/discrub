@@ -275,7 +275,7 @@ async function* iterateReactionPurgeMessages(
             () => discordService.fetchMessageData(
               token, hit.id, aroundChannelId, QueryStringParam.AROUND,
             ),
-            { getState },
+            { getState, dispatch },
           );
         } catch (err) {
           // Network / CORS / preflight failure — surface once per channel
@@ -336,6 +336,7 @@ async function* iterateReactionPurgeMessages(
       () => discordService.fetchMessageData(token, lastId ?? '', channelId),
       {
         getState,
+        dispatch,
         onRetry: (attempt, delayMs) => {
           dispatch(addStatusEntry({
             level: 'warning',
@@ -433,6 +434,7 @@ async function* iterateDeletedUserScan(
         () => discordService.fetchMessageData(token, lastId, scanChannelId),
         {
           getState,
+          dispatch,
           onRetry: (attempt, delayMs) => {
             dispatch(addStatusEntry({
               level: 'warning',
@@ -813,6 +815,7 @@ async function purgeChannelMessages(
       async () => (await discordService.fetchMessageData(token, '', channelId)) ?? { success: false },
       {
         getState,
+        dispatch,
         onRetry: (attempt, delayMs) => {
           dispatch(addStatusEntry({
             level: 'warning',
@@ -2586,6 +2589,7 @@ export const purgeGuilds = createAsyncThunk<
           () => discordService.fetchChannels(token, guild.id),
           {
             getState,
+            dispatch,
             signal,
             onRetry: (attempt, delayMs) => {
               dispatch(addStatusEntry({
@@ -2609,7 +2613,7 @@ export const purgeGuilds = createAsyncThunk<
         if (currentUserId) {
           const memberResponse = await withTransientRetry(
             () => discordService.fetchGuildUser(guild.id, currentUserId, token),
-            { getState, signal, maxRetries: 2 },
+            { getState, signal, maxRetries: 2, dispatch },
           );
           if (memberResponse.success && memberResponse.data) {
             memberRoles = memberResponse.data.roles ?? [];

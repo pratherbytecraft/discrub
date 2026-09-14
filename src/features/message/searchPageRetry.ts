@@ -1,5 +1,6 @@
 import type { SearchMessageResult } from 'discrub-core/types/discord-types';
 import type { RootState } from '@/app/store';
+import type { setOperationHold } from '@features/app/appSlice';
 import { cancellableDelay, withTransientRetry } from '@/utils/operationLoopUtils';
 import { t } from '@/i18n';
 
@@ -30,6 +31,8 @@ export const indexingWaitMs = (attempt: number): number => Math.min(1000 * attem
 export interface SearchPageRetryOptions {
   getState: () => RootState;
   signal?: AbortSignal;
+  /** Records each retry wait as the operation hold; see withTransientRetry. */
+  dispatch?: (action: ReturnType<typeof setOperationHold>) => unknown;
   /** A 202 came back and the search is about to wait `delayMs` before attempt `attempt` of INDEXING_WAITS. */
   onIndexingWait?: (attempt: number, delayMs: number) => void;
   /** A transient failure is being retried (same contract as withTransientRetry's onRetry). */
@@ -59,6 +62,7 @@ export const fetchSearchPageWithRetry = async <T extends SearchPageResponse>(
     const response = await withTransientRetry(fetchPage, {
       getState: opts.getState,
       signal: opts.signal,
+      dispatch: opts.dispatch,
       onRetry: opts.onRetry,
       baseDelayMs: opts.baseDelayMs,
     });
