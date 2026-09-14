@@ -26,6 +26,12 @@ export const FOOTER_ICON_MEDIA_KEY = 'supporter:footerIcon';
 export interface SupporterState {
   /** True once initializeSupporter has resolved (gates load-time UI). */
   initialized: boolean;
+  /**
+   * Bumped by every key action the user takes (paste, refresh, remove).
+   * A boot-time initialize that resolves after one of those is stale and
+   * must not put the old key back.
+   */
+  keyGeneration: number;
   /** 'none' = no stored key; otherwise last verification outcome. */
   keyStatus: SupporterKeyStatus | 'none';
   /**
@@ -52,6 +58,7 @@ export interface SupporterState {
 
 export const initialSupporterState: SupporterState = {
   initialized: false,
+  keyGeneration: 0,
   keyStatus: 'none',
   accessEndedNotice: false,
   payload: null,

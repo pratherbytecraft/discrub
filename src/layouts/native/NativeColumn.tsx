@@ -33,7 +33,12 @@ const NativeColumn = () => {
   return (
     <Box
       data-testid="native-column"
-      sx={{ width: COLUMN_WIDTH, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: 'background.paper', borderRight: '1px solid', borderColor: 'divider' }}
+      sx={{
+        width: COLUMN_WIDTH, flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: 'background.paper', borderRight: '1px solid', borderColor: 'divider',
+        // The column is too narrow for the Multi-select label beside the list heading, so the toggle is its icon here.
+        '& [data-tour="multi-select-toggle"] .multi-select-label': { display: 'none' },
+        '& [data-tour="multi-select-toggle"] .MuiButton-startIcon': { m: 0 },
+      }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.5, height: 48, borderBottom: '1px solid', borderColor: 'divider' }}>
         {selectedGuild && sidebarView === 'server' && (

@@ -1,6 +1,7 @@
 // 2.2.0 item 5: the Workbench layout (supporter). A live key is put in the store; without one the card is locked.
 const payload = { v: 1, kid: 'k', jti: 'j', name: 'Aaron', eh: 'x', ent: { themes: null }, iat: 1, exp: null };
-const unlock = () => cy.window().then((win) => {
+// Wait for the app's own supporter init to finish first, or it lands after this and puts 'none' back.
+const unlock = () => cy.window().its('__store__').invoke('getState').its('supporter.initialized').should('be.true').then(() => cy.window()).then((win) => {
   (win as any).__store__.dispatch({ type: 'supporter/refreshKey/fulfilled', payload: { keyStatus: 'valid', payload, lastRefreshAt: 1 } });
 });
 const switchTo = (key: string) => {

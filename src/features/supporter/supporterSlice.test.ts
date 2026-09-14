@@ -280,6 +280,31 @@ describe('supporterSlice', () => {
       expect(mockRequestKey).not.toHaveBeenCalled();
     });
 
+    it('does not put the old key back when a paste or remove lands while it runs', async () => {
+      // Boot with a stored key whose check-in is slow.
+      stateData[SUPPORTER_KEY_STORAGE_KEY] = 'DSCRB-old';
+      mockVerify.mockResolvedValue({ status: 'valid', payload: makePayload({ name: 'Old' }) });
+      let answer: (value: { key: string }) => void = () => {};
+      mockRequestKey.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+
+      const store = makeStore();
+      const init = store.dispatch(initializeSupporter());
+      await Promise.resolve();
+      // The user removes the key before the server answers.
+      await store.dispatch(removeSupporterKey());
+      expect(store.getState().supporter.keyStatus).toBe('none');
+
+      answer({ key: 'DSCRB-merged' });
+      await init;
+
+      const state = store.getState().supporter;
+      expect(state.initialized).toBe(true);
+      expect(state.keyStatus).toBe('none');
+      expect(state.payload).toBeNull();
+      // The stale check-in never writes the old key back into storage.
+      expect(stateData[SUPPORTER_KEY_STORAGE_KEY]).toBeUndefined();
+    });
+
     it('per-feature selectors follow the entitlement map, not the overall status', async () => {
       stateData[SUPPORTER_KEY_STORAGE_KEY] = 'DSCRB-key';
       stateData[SUPPORTER_LAST_REFRESH_STORAGE_KEY] = Date.now();

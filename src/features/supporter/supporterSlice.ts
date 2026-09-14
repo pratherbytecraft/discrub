@@ -79,7 +79,11 @@ const toVerifiedState = (verification: SupporterKeyVerification): VerifiedKeySta
  */
 export const initializeSupporter = createAsyncThunk(
   'supporter/initialize',
-  async () => {
+  async (_, { getState }) => {
+    // Snapshot the key generation now: a paste, refresh or remove that
+    // lands while this runs makes the result stale (see the reducer).
+    const generation = (getState() as RootState).supporter.keyGeneration;
+    const isStale = () => (getState() as RootState).supporter.keyGeneration !== generation;
     const [storedKey, lastRefreshAt, footerText, footerRemoved, footerIcon] =
       await Promise.all([
         storage.state.get<string>(SUPPORTER_KEY_STORAGE_KEY),
@@ -94,6 +98,7 @@ export const initializeSupporter = createAsyncThunk(
     storage.state.remove(SUPPORTER_EMAIL_STORAGE_KEY).catch(() => {});
 
     const base = {
+      generation,
       footer: {
         text: typeof footerText === 'string' && footerText ? footerText : null,
         removed: footerRemoved === true,
@@ -122,6 +127,9 @@ export const initializeSupporter = createAsyncThunk(
       try {
         const result = await requestSupporterKeyRefresh(storedKey);
         const refreshed = await verifySupporterKey(result.key, { revokedJtis });
+        // The user replaced or removed the key while the server answered;
+        // writing the old key back would undo that.
+        if (isStale()) return { ...base, ...toVerifiedState(verification) };
         if (refreshed.status !== 'invalid') {
           await storage.state.set(SUPPORTER_KEY_STORAGE_KEY, result.key);
           verification = refreshed;
@@ -327,9 +335,11 @@ const supporterSlice = createSlice({
     builder
       .addCase(initializeSupporter.fulfilled, (state, action) => {
         state.initialized = true;
+        state.footer = action.payload.footer;
+        // A key action beat this result: keep what the user just did.
+        if (action.payload.generation !== state.keyGeneration) return;
         applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
-        state.footer = action.payload.footer;
         state.lastRefreshAt = action.payload.lastRefreshAt;
       })
       .addCase(initializeSupporter.rejected, (state) => {
@@ -342,6 +352,7 @@ const supporterSlice = createSlice({
       })
       .addCase(refreshSupporterKey.fulfilled, (state, action) => {
         state.claimInProgress = false;
+        state.keyGeneration += 1;
         applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
@@ -357,6 +368,7 @@ const supporterSlice = createSlice({
       })
       .addCase(applyPastedSupporterKey.fulfilled, (state, action) => {
         state.claimInProgress = false;
+        state.keyGeneration += 1;
         applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
@@ -367,6 +379,7 @@ const supporterSlice = createSlice({
           (action.payload as string) ?? "That key couldn't be verified.";
       })
       .addCase(removeSupporterKey.fulfilled, (state) => {
+        state.keyGeneration += 1;
         state.keyStatus = 'none';
         state.payload = null;
         state.lastRefreshAt = null;

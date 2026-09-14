@@ -350,7 +350,7 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1 }}>
         <Typography
           variant="caption"
           sx={{
@@ -371,9 +371,9 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
           aria-label={t('nav.toggleMultiSelect')}
           data-tour="multi-select-toggle"
           startIcon={multiSelectMode ? <SelectModeIcon fontSize="small" /> : <SelectModeOffIcon fontSize="small" />}
-          sx={{ textTransform: 'none', minWidth: 0, px: 1, fontSize: '0.75rem' }}
+          sx={{ textTransform: 'none', minWidth: 0, px: 1, fontSize: '0.75rem', whiteSpace: 'nowrap', flexShrink: 0 }}
         >
-          {t('nav.multiSelect')}
+          <Box component="span" className="multi-select-label">{t('nav.multiSelect')}</Box>
         </TourButton>}
       </Box>
 
