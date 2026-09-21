@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, useMediaQuery, useTheme } from '@mui/material';
+import { Box } from '@mui/material';
 import { Joyride } from 'react-joyride';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppSelector, useAppDispatch } from '@/app/hooks';
@@ -61,6 +61,7 @@ import { resolveShell } from '@/layouts/registry';
 import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
 import AppDialogs from './AppDialogs';
 import PreviewBar from '@components/appearance/PreviewBar';
+import { useWallOverlay } from '@components/donations/useWallOverlay';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -76,11 +77,9 @@ const MainLayout = () => {
   const Shell = resolveShell(useAppSelector(selectEffectiveLayout));
   // While previewing, the whole shell is inert: look and scroll, no clicks or focus.
   const previewing = useAppSelector(selectIsPreviewing);
-  const theme = useTheme();
   // Below `md` the Sidebar becomes a temporary drawer opened from the
   // TopBar hamburger, and the Ko-fi feed overlays instead of reserving
   // a 320px column (2.1.0 mobile pass).
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
@@ -91,7 +90,8 @@ const MainLayout = () => {
   useEffect(() => {
     setSidebarOpen(false);
   }, [selectedChannelId, selectedDmId]);
-  const drawerOpen = showFeed === 'true' && !focusedView && !isMobile;
+  const wallOverlay = useWallOverlay();
+  const drawerOpen = showFeed === 'true' && !focusedView && !wallOverlay;
   const hasNewAnnouncement = useAppSelector(selectHasNewAnnouncement);
   const announcementMarkdown = useAppSelector(selectAnnouncementMarkdown);
   const isLoadingMarkdown = useAppSelector(selectIsLoadingMarkdown);

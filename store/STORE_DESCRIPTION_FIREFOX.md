@@ -19,8 +19,8 @@ Privacy
 - Your Discord data is never sent to any server of ours
 - One optional exception. If you apply a supporter key, the extension checks in with api.pratherbytecraft.com about once a day to keep that key current. Only the key itself is sent, never an email address or any Discord data, and removing your key stops this entirely.
 
-Supporter themes
-- Every feature is free and stays free. Supporters unlock a pack of extra cosmetic themes.
+Supporter cosmetics
+- Every feature is free and stays free. Supporters unlock extra cosmetics, which are more layouts, themes and Scrublings, the small pixel characters on the top bar.
 
 Additional
 - Interface in English or German, auto-detected on first run and switchable in Settings

@@ -3,7 +3,11 @@ import { useState, useEffect } from 'react';
 import { SIDEBAR_WIDTH } from './sidebarConstants';
 import { Box, Tabs, Tab, Drawer, useMediaQuery, useTheme, TextField, InputAdornment, IconButton, Typography, alpha } from '@mui/material';
 import { Search as SearchIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { useStore } from 'react-redux';
+import type { RootState } from '@/app/store';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { selectSelectedDm } from '@features/dm/dmSlice';
+import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedGuild, setSelectedGuild } from '@features/guild/guildSlice';
 import { selectSidebarView, setSidebarView } from '@features/app/appSlice';
 import ServerList from './ServerList';
@@ -31,7 +35,15 @@ interface SidebarProps {
 const Sidebar = ({ open = false, onClose }: SidebarProps) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [tab, setTab] = useState(0);
+  // The sidebar mounts fresh on every switch into Classic or Workbench, so it opens on the tab that matches
+  // what is already on screen. Until 2026-09-21 it always opened on Servers: coming from Native in Package
+  // mode threw the package view away, and an open DM sat beside the server list.
+  const store = useStore<RootState>();
+  const [tab, setTab] = useState(() => {
+    const state = store.getState();
+    if (selectSidebarView(state) === 'package') return 2;
+    return selectSelectedDm(state) && !selectSelectedChannel(state) ? 1 : 0;
+  });
   const [filterText, setFilterText] = useState('');
   const dispatch = useAppDispatch();
   const { t } = useTranslation();

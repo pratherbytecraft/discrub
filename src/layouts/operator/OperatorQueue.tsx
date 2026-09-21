@@ -6,8 +6,8 @@ import type { Guild } from 'discrub-core/types/discord-types';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setSidebarView } from '@features/app/appSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
-import { fetchChannels, selectSelectedChannels, setSelectedChannel, deselectAllChannels } from '@features/channel/channelSlice';
-import { selectSelectedDms, deselectAllDms } from '@features/dm/dmSlice';
+import { fetchChannels, selectSelectedChannels, selectSelectedChannel, setSelectedChannel, deselectAllChannels } from '@features/channel/channelSlice';
+import { selectSelectedDms, selectSelectedDm, deselectAllDms } from '@features/dm/dmSlice';
 import { fetchCurrentMember, fetchRoles, selectGuilds, selectSelectedGuild, setSelectedGuild } from '@features/guild/guildSlice';
 import { clearMessages } from '@features/message/messageSlice';
 import { addStatusEntry } from '@features/status/statusSlice';
@@ -15,6 +15,7 @@ import ChannelList, { type QueueMarks } from '@components/navigation/ChannelList
 import DMList from '@components/navigation/DMList';
 import PackageChannelList from '@components/package/PackageChannelList';
 import GuildAvatar from '@components/ui/GuildAvatar';
+import { useLoadGuilds } from '@/hooks/useLoadGuilds';
 
 export const QUEUE_WIDTH = 280;
 
@@ -32,14 +33,18 @@ const OperatorQueue = ({ marks, runProgress }: { marks: QueueMarks; runProgress?
   const token = useAppSelector(selectAuthToken);
   const guilds = useAppSelector(selectGuilds);
   const guild = useAppSelector(selectSelectedGuild);
+  const openDm = useAppSelector(selectSelectedDm);
+  const openChannel = useAppSelector(selectSelectedChannel);
   const sidebarView = useAppSelector(selectSidebarView);
   const selectedChannels = useAppSelector(selectSelectedChannels);
   const selectedDms = useAppSelector(selectSelectedDms);
   const [filterText, setFilterText] = useState('');
+  useLoadGuilds();
   type Segment = 'servers' | 'dms' | 'package';
   // The segment is the column's own choice: Servers with nothing picked shows the picker, not the DM list.
-  const [segment, setSegmentState] = useState<Segment>(sidebarView === 'package' ? 'package' : guild ? 'servers' : 'dms');
-  useEffect(() => { if (sidebarView === 'package') setSegmentState('package'); else if (guild) setSegmentState('servers'); }, [sidebarView, guild]);
+  // An open DM with no channel means the DMs segment, even when a server is still picked behind it (Classic leaves it picked).
+  const [segment, setSegmentState] = useState<Segment>(sidebarView === 'package' ? 'package' : guild && !(openDm && !openChannel) ? 'servers' : 'dms');
+  useEffect(() => { if (sidebarView === 'package') setSegmentState('package'); else if (guild && !(openDm && !openChannel)) setSegmentState('servers'); }, [sidebarView, guild, openDm, openChannel]);
   const queued = segment === 'dms' ? selectedDms.length : segment === 'servers' ? selectedChannels.length : 0;
 
   const pickGuild = async (g: Guild) => {

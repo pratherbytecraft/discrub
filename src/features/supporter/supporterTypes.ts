@@ -43,7 +43,7 @@ export interface SupporterState {
   payload: SupporterKeyPayload | null;
   /** When the key was last checked against the server (ms), null = never. */
   lastRefreshAt: number | null;
-  dialogOpen: boolean;
+  panelOpen: boolean;
   /** Gift-button attention animation calms permanently once true. */
   giftAttentionSeen: boolean;
   claimInProgress: boolean;
@@ -63,7 +63,7 @@ export const initialSupporterState: SupporterState = {
   accessEndedNotice: false,
   payload: null,
   lastRefreshAt: null,
-  dialogOpen: false,
+  panelOpen: false,
   giftAttentionSeen: false,
   claimInProgress: false,
   claimError: null,

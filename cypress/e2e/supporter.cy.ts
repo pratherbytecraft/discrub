@@ -109,7 +109,7 @@ function visitApp({
 /** Open the hub and apply a key through the paste box (the primary path). */
 function applyKeyViaDialog(key: string) {
   cy.openThemesHub();
-  cy.get('[data-testid="supporter-dialog"]').should('be.visible');
+  cy.get('[data-testid="supporter-panel"]').should('be.visible');
   cy.get('[data-testid="supporter-paste-key"]').type(key, { delay: 0 });
   cy.get('[data-testid="supporter-paste-apply"]').click();
 }
@@ -119,15 +119,11 @@ describe('Supporter platform', () => {
     cy.wrap(makeFixturePair());
   });
 
-  it('gift button opens the hub with the purchase grid first, then the theme grid', () => {
+  it('the Supporter segment shows the pitch and the purchase grid, the Theme segment shows the locks', () => {
     visitApp();
     cy.openThemesHub();
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
-    cy.contains('growing pack of cosmetic themes').should('be.visible');
-    cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
-      'have.length',
-      8,
-    );
+    cy.get('[data-testid="supporter-panel"]').should('be.visible');
+    cy.contains('growing pack of cosmetics').should('be.visible');
     // Two tiers, one Ko-fi button each; the period toggle swaps price + URL.
     cy.get('[data-testid="supporter-kofi-themes-monthly"]').should(
       'have.attr',
@@ -145,15 +141,15 @@ describe('Supporter platform', () => {
     cy.get('[data-testid="supporter-kofi-hosted-yearly"]').should('be.visible');
     cy.get('[data-testid="supporter-price-themes"]').should('have.text', '$25');
     cy.get('[data-testid="supporter-period-monthly"]').click();
-    cy.get('[data-testid="supporter-dialog"]').should('not.contain.text', 'Lifetime');
-    // The purchase grid renders above the theme grid.
-    cy.get('[data-testid="supporter-purchase-grid"]').then(($grid) => {
-      cy.get('[data-testid="supporter-theme-showcase"]').then(($themes) => {
-        expect($grid[0].getBoundingClientRect().top).to.be.lessThan(
-          $themes[0].getBoundingClientRect().top,
-        );
-      });
-    });
+    cy.get('[data-testid="supporter-panel"]').should('not.contain.text', 'Lifetime');
+    // The theme grid is its own segment now.
+    cy.get('[data-testid="supporter-theme-showcase"]').should('not.exist');
+    cy.get('[data-testid="appearance-tab-theme"]').click();
+    cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
+      'have.length',
+      9,
+    );
+    cy.get('[data-testid="appearance-tab-supporter"]').click();
     // Export footer controls are shown, locked, with the real default line.
     cy.get('[data-testid="supporter-footer-controls"]').should('have.attr', 'data-locked', 'true');
     cy.get('[data-testid="supporter-footer-text"]')
@@ -168,7 +164,7 @@ describe('Supporter platform', () => {
     );
     cy.contains('right after you join').should('be.visible');
     cy.contains('about once a day').should('be.visible');
-    cy.get('[data-testid="supporter-dialog"]')
+    cy.get('[data-testid="supporter-panel"]')
       .invoke('text')
       .then((text) => expect(text.toLowerCase()).not.to.contain('code'));
   });
@@ -186,25 +182,19 @@ describe('Supporter platform', () => {
     // Footer controls are live for a themes key.
     cy.get('[data-testid="supporter-footer-controls"]').should('have.attr', 'data-locked', 'false');
     cy.get('[data-testid="supporter-footer-text"]').should('not.be.disabled');
-    // The access card sits above the theme grid.
-    cy.get('[data-testid="supporter-status"]').then(($status) => {
-      cy.get('[data-testid="supporter-theme-showcase"]').then(($themes) => {
-        expect($status[0].getBoundingClientRect().top).to.be.lessThan(
-          $themes[0].getBoundingClientRect().top,
-        );
-      });
-    });
-    // The hub's own grid unlocks in place; switch right here.
+    // The Theme segment unlocks in place; switch right there.
+    cy.get('[data-testid="appearance-tab-theme"]').click();
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
       'have.length',
       0,
     );
+    cy.get('[data-testid="appearance-tab-theme"]').click();
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid="theme-card-amoled-void"]').click();
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
     cy.get('body').should('have.css', 'background-color', AMOLED_BG);
 
-    // Reopening the hub shows the applied pick as selected.
-    cy.openThemesHub();
+    // Reopening the Theme segment shows the applied pick as selected.
+    cy.openThemeGrid();
     cy.get('[data-testid="theme-selected-amoled-void"]').should('exist');
   });
 
@@ -215,7 +205,7 @@ describe('Supporter platform', () => {
     cy.then(() => signKey()).then((key) => {
       applyKeyViaDialog(key as string);
     });
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
 
     cy.get('[data-testid="supporter-badge"]').should('be.visible');
     cy.get('[data-testid="supporter-avatar-pip"]').should('be.visible');
@@ -226,7 +216,7 @@ describe('Supporter platform', () => {
     // The badge still opens the hub, and removing the key restores the gift.
     cy.openThemesHub();
     cy.get('[data-testid="supporter-remove-key"]').click();
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
     cy.get('[data-testid="supporter-badge"]').should('not.exist');
     cy.get('[data-testid="supporter-avatar-pip"]').should('not.exist');
     cy.get('[data-testid="gift-button"]').should('have.attr', 'aria-label', 'Appearance');
@@ -237,8 +227,9 @@ describe('Supporter platform', () => {
     cy.then(() => signKey()).then((key) => {
       applyKeyViaDialog(key as string);
     });
+    cy.get('[data-testid="appearance-tab-theme"]').click();
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid="theme-card-amoled-void"]').click();
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
     cy.get('body').should('have.css', 'background-color', AMOLED_BG);
 
     // visitApp forces the refresh call offline: fail-open keeps the key.
@@ -253,7 +244,7 @@ describe('Supporter platform', () => {
     cy.then(() => signKey()).then((key) => {
       applyKeyViaDialog(key as string);
     });
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
 
     // First reload: the key has never been checked, so it is presented
     // and the merged answer (now carrying hosted too) is stored.
@@ -278,7 +269,7 @@ describe('Supporter platform', () => {
     cy.openThemesHub();
     cy.get('[data-testid="supporter-access-hosted"]').should('have.attr', 'data-live', 'true');
     cy.get('[data-testid="supporter-checkin-note"]').should('contain.text', 'Checked just now');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
 
     // Second reload inside the day: no call at all.
     cy.intercept('POST', '**/supporter/refresh', cy.spy().as('refreshSpy'));
@@ -292,8 +283,9 @@ describe('Supporter platform', () => {
     cy.then(() => signKey()).then((key) => {
       applyKeyViaDialog(key as string);
     });
+    cy.get('[data-testid="appearance-tab-theme"]').click();
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid="theme-card-amoled-void"]').click();
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
 
     cy.intercept('POST', '**/supporter/refresh', {
       statusCode: 410,
@@ -398,21 +390,23 @@ describe('Supporter platform', () => {
     cy.then(() => signKey()).then((key) => {
       applyKeyViaDialog(key as string);
     });
+    cy.get('[data-testid="appearance-tab-theme"]').click();
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid="theme-card-amoled-void"]').click();
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
     cy.get('body').should('have.css', 'background-color', AMOLED_BG);
 
     cy.openThemesHub();
     cy.get('[data-testid="supporter-remove-key"]').click();
-    cy.contains('growing pack of cosmetic themes').scrollIntoView().should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.contains('growing pack of cosmetics').scrollIntoView().should('be.visible');
+    cy.closeAppearance();
 
     // Theme falls back without touching the saved setting.
     cy.get('body').should('have.css', 'background-color', DARK_BG);
     cy.openThemesHub();
+    cy.get('[data-testid="appearance-tab-theme"]').click();
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
       'have.length',
-      8,
+      9,
     );
     // The relocked-but-still-saved theme shows its lock (the corner
     // badge shows lock over check; the selection border remains).

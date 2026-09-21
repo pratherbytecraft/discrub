@@ -35,7 +35,7 @@ const disableReactionEnrichment = () => {
   cy.window().then((win) => {
     const store = (win as any).__store__;
     store.dispatch({
-      type: 'app/updateSetting/fulfilled',
+      type: 'app/updateAllSettings/fulfilled',
       payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
     });
   });

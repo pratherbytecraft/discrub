@@ -15,7 +15,7 @@ describe('<AccessEndedNotice />', () => {
     const { store } = renderWithProviders(<AccessEndedNotice />, { preloadedState: state });
     expect(screen.getByText('Your supporter access has ended.')).toBeInTheDocument();
     expect(screen.getByText(/Layout and theme are back to Classic and Dark Original\. Your settings are kept\./)).toBeInTheDocument();
-    expect(screen.getByText('After renewing, open Themes and Support and click Refresh.')).toBeInTheDocument();
+    expect(screen.getByText('After renewing, open Appearance, pick Supporter and click Refresh.')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Close'));
     expect(store.getState().supporter.accessEndedNotice).toBe(false);
     expect(screen.queryByTestId('access-ended-notice')).toBeNull();

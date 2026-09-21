@@ -7,6 +7,7 @@ import adventurer from './sprites/adventurer';
 import pker from './sprites/pker';
 import alien from './sprites/alien';
 import ghost from './sprites/ghost';
+import { EXTRA_LINES, type Exchange } from './pairLines';
 
 export type ScrublingId = 'suds' | 'mage' | 'cat' | 'dog' | 'adventurer' | 'pker' | 'alien' | 'ghost';
 export type ScrublingTier = 'free' | 'supporter';
@@ -26,6 +27,8 @@ export interface ScrublingDescriptor {
   /** Played on a click. */
   trick: string;
   events: Record<ScrublingEvent, string>;
+  /** Who commissioned a custom Scrubling. Shown as "Designed by" on its card (owner, 2026-09-21). None of the first eight has one. */
+  designedBy?: string;
   /**
    * The Adventurer's second set (Dharok's). Activity names in the rune set map to
    * their Dharok's version here; anything unmapped plays the rune frames.
@@ -52,7 +55,7 @@ export const SCRUBLINGS: Record<ScrublingId, ScrublingDescriptor> = {
     events: { purge: 'cast', load: 'tele', wait: 'read', done: 'levelup', failed: 'splash', paused: 'doze' },
   },
   cat: {
-    id: 'cat', tier: 'supporter', sheet: cat, idle: 'idle', walk: 'walk', look: 'look', trick: 'stretch',
+    id: 'cat', tier: 'free', sheet: cat, idle: 'idle', walk: 'walk', look: 'look', trick: 'stretch',
     events: { purge: 'bat', load: 'drag', wait: 'loaf', done: 'stretch', failed: 'knock', paused: 'sleep' },
   },
   dog: {
@@ -93,13 +96,21 @@ export interface PairActor { activity: string; motion?: PairMotion }
 /**
  * What two Scrublings do when they meet on the bar and nothing is running. `a`
  * and `b` are sorted ids; `set` marks the variant played while the Adventurer
- * wears Dharok's. The captions show one after the other above the pair.
+ * wears Dharok's. The first character written says the first line and the
+ * other answers; each line shows over its speaker's head.
  */
 export interface PairAction {
+  /** `first+second:firstActivity/secondActivity` as written below; the key into EXTRA_LINES. */
+  scene: string;
+  /** Who says the first line; the other one answers. */
+  first: ScrublingId;
   a: ScrublingId;
   b: ScrublingId;
   actors: { a: PairActor; b: PairActor };
+  /** The scene's original exchange. */
   captions: [string, string];
+  /** Every exchange the scene can show: the original first, then the extras. One is picked per meeting. */
+  lines: Exchange[];
   set?: ScrublingSet;
 }
 
@@ -110,37 +121,38 @@ const P = (
 ): PairAction => {
   const [a, b] = [first, second].sort() as [ScrublingId, ScrublingId];
   const actors = a === first ? { a: firstActor, b: secondActor } : { a: secondActor, b: firstActor };
-  return { a, b, actors, captions, ...(set ? { set } : {}) };
+  const scene = `${first}+${second}:${firstActor.activity}/${secondActor.activity}`;
+  return { scene, first, a, b, actors, captions, lines: [captions, ...(EXTRA_LINES[scene] ?? [])], ...(set ? { set } : {}) };
 };
 const slide = (amount: number, seconds: number): PairMotion => ({ kind: 'slide', amount, seconds });
 const rise = (amount: number, seconds: number): PairMotion => ({ kind: 'rise', amount, seconds });
 
 /** Every pair has one; the Mage and the Adventurer have three (the mockup's 30 scenes). */
 export const PAIR_ACTIONS: PairAction[] = [
-  P('suds', 'cat', { activity: 'scrub' }, { activity: 'onbucket' }, ['Occupied.', 'Still occupied.']),
-  P('suds', 'dog', { activity: 'wring' }, { activity: 'run', motion: slide(80, 1.6) }, ['Fetch!', 'Good dog.']),
-  P('suds', 'adventurer', { activity: 'carry', motion: slide(110, 2.4) }, { activity: 'look' }, ['Trimming armor...', 'Suds has logged out.']),
-  P('suds', 'alien', { activity: 'scrub' }, { activity: 'idle' }, ['Saucer wash, 5 gp', 'No refunds.']),
+  P('suds', 'cat', { activity: 'scrub' }, { activity: 'onbucket' }, ['Bucket, please.', 'Occupied.']),
+  P('suds', 'dog', { activity: 'wring' }, { activity: 'run', motion: slide(80, 1.6) }, ['Fetch!', 'Woof!']),
+  P('suds', 'adventurer', { activity: 'carry', motion: slide(110, 2.4) }, { activity: 'look' }, ['Trimming armor...', 'He logged out.']),
+  P('suds', 'alien', { activity: 'scrub' }, { activity: 'idle' }, ['Saucer wash, 5 gp.', 'What is gp.']),
   P('suds', 'ghost', { activity: 'scrub' }, { activity: 'giggle' }, ['Hold still.', 'Hehe.']),
   P('cat', 'dog', { activity: 'walk', motion: slide(70, 2) }, { activity: 'run', motion: slide(70, 2) }, ['Zoom.', 'Truce.']),
-  P('cat', 'adventurer', { activity: 'hatbat' }, { activity: 'hatoff' }, ['Hey!', 'Not a toy.']),
-  P('cat', 'alien', { activity: 'annoyed', motion: rise(26, 1.4) }, { activity: 'lift' }, ['Abducting...', 'Returned. Unhappy.']),
+  P('cat', 'adventurer', { activity: 'hatbat' }, { activity: 'hatoff' }, ['Bap.', 'Hey! Not a toy.']),
+  P('cat', 'alien', { activity: 'annoyed', motion: rise(26, 1.4) }, { activity: 'lift' }, ['Mrow?!', 'Abducting...']),
   P('cat', 'ghost', { activity: 'arch' }, { activity: 'stare' }, ['...', '......']),
-  P('dog', 'adventurer', { activity: 'stick', motion: slide(60, 1.8) }, { activity: 'whip' }, ['Fetch the whip!', 'Again!']),
+  P('dog', 'adventurer', { activity: 'stick', motion: slide(60, 1.8) }, { activity: 'whip' }, ['Again! Again!', 'Fetch the whip!']),
   P('dog', 'alien', { activity: 'skyward' }, { activity: 'lift' }, ['Stick?', 'Stick...']),
-  P('dog', 'ghost', { activity: 'hide' }, { activity: 'walk' }, ['Boo!', 'Whine.']),
+  P('dog', 'ghost', { activity: 'hide' }, { activity: 'walk' }, ['Whine.', 'Boo!']),
   P('adventurer', 'alien', { activity: 'whip' }, { activity: 'walk', motion: rise(18, 1) }, ['Duel?', 'Draw.']),
   P('adventurer', 'ghost', { activity: 'check' }, { activity: 'hat', motion: rise(6, 1.2) }, ['My hat!', 'Ho ho.']),
   P('mage', 'suds', { activity: 'cast' }, { activity: 'wring' }, ['Humidify.', 'Thanks?']),
-  P('mage', 'cat', { activity: 'cast' }, { activity: 'arch' }, ['Ice Barrage!', 'Cat is frozen.']),
-  P('mage', 'dog', { activity: 'walk', motion: slide(60, 2) }, { activity: 'stick', motion: slide(70, 2) }, ['Give it back.', 'Good boy.']),
+  P('mage', 'cat', { activity: 'cast' }, { activity: 'arch' }, ['Ice Barrage!', 'Mrow. Cold.']),
+  P('mage', 'dog', { activity: 'walk', motion: slide(60, 2) }, { activity: 'stick', motion: slide(70, 2) }, ['Give it back.', 'Woof. No.']),
   P('mage', 'adventurer', { activity: 'cast' }, { activity: 'whip' }, ['Duel?', 'gf']),
   P('mage', 'adventurer', { activity: 'alch' }, { activity: 'hatoff' }, ['High Alch.', 'That was my hat.']),
-  P('mage', 'adventurer', { activity: 'cast' }, { activity: 'dh_swing' }, ['1 hp.', 'Barrage.'], 'dharok'),
+  P('mage', 'adventurer', { activity: 'cast' }, { activity: 'dh_swing' }, ['Barrage.', '1 hp. Perfect.'], 'dharok'),
   P('mage', 'alien', { activity: 'tele' }, { activity: 'walk', motion: rise(20, 0.9) }, ['Tele.', "Where'd he go."]),
   P('mage', 'ghost', { activity: 'walk', motion: slide(50, 2.2) }, { activity: 'walk', motion: slide(50, 2.2) }, ['Brother?', 'Not you.']),
   P('pker', 'suds', { activity: 'skulled' }, { activity: 'scrub' }, ['Skulled.', 'Sit.']),
-  P('pker', 'cat', { activity: 'noscim' }, { activity: 'drag', motion: slide(60, 2) }, ['Yoink.', 'Give it back.']),
+  P('pker', 'cat', { activity: 'noscim' }, { activity: 'drag', motion: slide(60, 2) }, ['Give it back.', 'Yoink.']),
   P('pker', 'dog', { activity: 'run', motion: slide(70, 1.8) }, { activity: 'run', motion: slide(70, 1.8) }, ['Rushed.', 'Teleport!']),
   P('pker', 'adventurer', { activity: 'slash' }, { activity: 'idle' }, ['Come to the wildy.', 'No.']),
   P('pker', 'mage', { activity: 'tb' }, { activity: 'cast' }, ['Teleblock!', 'sit']),

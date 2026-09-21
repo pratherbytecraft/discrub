@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/test-utils';
+import { renderWithProviders, screen, fireEvent, waitFor, act } from '@/test/test-utils';
+import { setSupporterPanelOpen } from '@features/supporter/supporterSlice';
 import { createBaseState } from '@/test/state-factories';
 import { defaultSettings } from '@features/app/storageKeys';
 import AppearanceButton from './AppearanceButton';
@@ -21,7 +22,10 @@ describe('<AppearanceButton />', () => {
     fireEvent.click(screen.getByLabelText('Appearance'));
     expect(await screen.findByTestId('appearance-popover')).toBeInTheDocument();
     expect(screen.getByTestId('layout-card-classic')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByTestId('appearance-hint')).toHaveTextContent('Click to apply. The eye previews a locked one.');
+    // No hint lines in the menu (owner, 2026-09-20).
+    expect(screen.queryByTestId('appearance-hint')).toBeNull();
+    // The segments are text only.
+    expect(screen.getByTestId('appearance-tab-layout').querySelector('svg')).toBeNull();
   });
 
   it('marks supporter layouts as locked without a key, and none as coming soon now that all six are built', async () => {
@@ -36,15 +40,49 @@ describe('<AppearanceButton />', () => {
     expect(screen.getByLabelText('Simple (supporter layout, locked)')).toBeInTheDocument();
   });
 
-  it('opens the Themes and Support hub from the footer and Display settings from the gear', async () => {
+  it('opens Display settings from the gear', async () => {
     const onOpenSettings = vi.fn();
-    const { store } = renderWithProviders(<AppearanceButton onOpenSettings={onOpenSettings} />, { preloadedState: withSettings() });
-    fireEvent.click(screen.getByLabelText('Appearance'));
-    fireEvent.click(await screen.findByTestId('appearance-open-hub'));
-    expect(store.getState().supporter.dialogOpen).toBe(true);
+    renderWithProviders(<AppearanceButton onOpenSettings={onOpenSettings} />, { preloadedState: withSettings() });
     fireEvent.click(screen.getByLabelText('Appearance'));
     fireEvent.click(await screen.findByTestId('appearance-open-settings'));
     expect(onOpenSettings).toHaveBeenCalled();
+  });
+
+  it('holds supporter access in its fourth segment: plans, the key box and the export footer', async () => {
+    renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
+    fireEvent.click(screen.getByLabelText('Appearance'));
+    fireEvent.click(await screen.findByTestId('appearance-tab-supporter'));
+    expect(await screen.findByTestId('supporter-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('supporter-paste-key')).toBeInTheDocument();
+    expect(screen.getByTestId('supporter-purchase-grid')).toBeInTheDocument();
+    expect(screen.getByTestId('supporter-footer-controls')).toBeInTheDocument();
+  });
+
+  it('opens on the Supporter segment when the app asks for it, and clears the flag on close', async () => {
+    const { store } = renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
+    act(() => { store.dispatch(setSupporterPanelOpen(true)); });
+    expect(await screen.findByTestId('supporter-panel')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByTestId('appearance-popover'), { key: 'Escape' });
+    await waitFor(() => expect(store.getState().supporter.panelOpen).toBe(false));
+  });
+
+  it('sends a locked layout pick to the Supporter segment', async () => {
+    renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
+    fireEvent.click(screen.getByLabelText('Appearance'));
+    fireEvent.click(await screen.findByTestId('layout-card-timeline'));
+    expect(await screen.findByTestId('supporter-panel')).toBeInTheDocument();
+  });
+
+  it('keeps the animations toggle and the commission link with the themes', async () => {
+    const { store } = renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
+    fireEvent.click(screen.getByLabelText('Appearance'));
+    fireEvent.click(await screen.findByTestId('appearance-tab-theme'));
+    expect(await screen.findByTestId('supporter-commission-note')).toHaveTextContent('Want a theme of your own?');
+    expect(screen.getByRole('link', { name: 'Commission one on Ko-fi' })).toHaveAttribute('href', 'https://ko-fi.com/prathercc/commissions');
+    const toggle = screen.getByTestId('theme-animations-toggle');
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(store.getState().app.settings?.appThemeAnimations).toBe('false'));
   });
 
   it('shows the theme grid on the Theme tab and applies a pick', async () => {
@@ -78,7 +116,7 @@ describe('<AppearanceButton />', () => {
     expect(store.getState().app.settings?.appLayout ?? 'classic').toBe('classic');
   });
 
-  it('a locked theme card opens the hub, its eye previews the theme', async () => {
+  it('a locked theme card goes to the Supporter segment, its eye previews the theme', async () => {
     const { store } = renderWithProviders(<><AppearanceButton onOpenSettings={vi.fn()} /><PreviewBar /></>, { preloadedState: withSettings() });
     fireEvent.click(screen.getByLabelText('Appearance'));
     fireEvent.click(await screen.findByTestId('appearance-tab-theme'));
@@ -92,7 +130,7 @@ describe('<AppearanceButton />', () => {
     fireEvent.click(screen.getByLabelText('Appearance'));
     fireEvent.click(await screen.findByTestId('appearance-tab-theme'));
     fireEvent.click(await screen.findByLabelText('AMOLED Void (supporter theme, locked)'));
-    expect(store.getState().supporter.dialogOpen).toBe(true);
+    expect(await screen.findByTestId('supporter-panel')).toBeInTheDocument();
     expect(store.getState().app.settings?.appThemeMode).not.toBe('amoled-void');
   });
 });

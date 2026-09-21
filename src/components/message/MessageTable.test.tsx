@@ -33,6 +33,21 @@ describe('<MessageTable />', () => {
     expect(store.getState().message.selectedMessages).toHaveLength(0);
   });
 
+  it('a message with no text says what it holds: the embed title, a plain embed, or a sticker', () => {
+    const messages = [
+      createMockMessage({ id: 'e1', content: '', embeds: [{ title: 'Most attachments shared' }] as never }),
+      createMockMessage({ id: 'e2', content: '', embeds: [{ description: 'all   channels\nAug 2' }] as never }),
+      createMockMessage({ id: 'e3', content: '', embeds: [{ url: 'https://example.com' }] as never }),
+      createMockMessage({ id: 's1', content: '', sticker_items: [{ id: '1', name: 'Wave', format_type: 1 }] as never }),
+      createMockMessage({ id: 'c1', content: '', type: 3, call: { participants: ['1'], ended_timestamp: null } as never }),
+      createMockMessage({ id: 't1', content: 'plain text' }),
+    ];
+    const state = createAuthenticatedState();
+    state.message = { ...state.message, messages, filteredMessages: messages };
+    renderWithProviders(<MessageTable />, { preloadedState: state });
+    expect(screen.getAllByTestId('table-standin').map((el) => el.textContent)).toEqual(['Embed: Most attachments shared', 'Embed: all channels Aug 2', 'Embed', 'Sticker: Wave', expect.stringMatching(/call/i)]);
+  });
+
   it('sorts by date from the column header', () => {
     const { store } = renderWithProviders(<MessageTable />, { preloadedState: withMessages() });
     const before = store.getState().message.order.order;

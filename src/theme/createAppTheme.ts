@@ -177,6 +177,7 @@ export function createAppTheme(descriptor: ThemeDescriptor): Theme {
       // style by virtue of object-key precedence after the spread.
     },
     themeAccent: descriptor.accent,
+    themeEffects: descriptor.effects,
   });
   applyShapeExtensions(theme);
   return theme;

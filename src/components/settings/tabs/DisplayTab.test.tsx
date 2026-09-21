@@ -30,18 +30,11 @@ describe('DisplayTab', () => {
     // Description text
     expect(screen.getByText(/Customize how dates, times/)).toBeInTheDocument();
 
-    // Themes moved to the hub; this tab only points there now.
+    // Layouts, themes and Scrublings live in the Appearance menu; this tab only says so.
     expect(screen.queryByTestId('theme-picker')).not.toBeInTheDocument();
     expect(screen.queryByTestId('theme-card-auto')).not.toBeInTheDocument();
-    expect(screen.getByTestId('display-open-themes-hub')).toBeInTheDocument();
-  });
-
-  it('the themes pointer opens the Supporter hub dialog', () => {
-    const { store } = render(
-      <DisplayTab formValues={defaultSettings} onChange={onChange} />,
-    );
-    fireEvent.click(screen.getByTestId('display-open-themes-hub'));
-    expect(store.getState().supporter.dialogOpen).toBe(true);
+    expect(screen.queryByTestId('display-layout-block')).not.toBeInTheDocument();
+    expect(screen.getByTestId('display-appearance-pointer')).toHaveTextContent('Layouts, themes and Scrublings are under Appearance on the top bar.');
   });
 
   it('displays default date format value', () => {

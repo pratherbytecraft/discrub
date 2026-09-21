@@ -23,12 +23,16 @@ describe('<PreviewBar />', () => {
     expect(store.getState().app.preview).toEqual({ layout: null, theme: null });
   });
 
-  it('a click outside the bar ends it', async () => {
+  it('a press outside the bar keeps the preview and nudges the bar', () => {
     const { store } = renderWithProviders(<><div data-testid="outside">app</div><PreviewBar /></>, { preloadedState: withPreview({ layout: 'workbench', theme: null }) });
-    // ClickAwayListener arms itself a tick after mount so the click that opened it never counts.
-    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByTestId('preview-bar')).toHaveAttribute('data-nudges', '0');
+    fireEvent.pointerDown(screen.getByTestId('outside'));
     fireEvent.click(screen.getByTestId('outside'));
-    expect(store.getState().app.preview).toEqual({ layout: null, theme: null });
+    expect(store.getState().app.preview).toEqual({ layout: 'workbench', theme: null });
+    expect(screen.getByTestId('preview-bar')).toHaveAttribute('data-nudges', '1');
+    // A press on the bar itself is not a miss.
+    fireEvent.pointerDown(screen.getByTestId('preview-end'));
+    expect(screen.getByTestId('preview-bar')).toHaveAttribute('data-nudges', '1');
   });
 
   it('Esc ends it', () => {

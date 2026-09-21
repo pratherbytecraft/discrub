@@ -26,7 +26,9 @@ describe('DM Browsing', () => {
 
   it('loads DM messages and shows header after selecting a DM', () => {
     cy.selectDm('alice_dev');
-    cy.contains('Direct Message').should('be.visible');
+    // The header and the tab name the person, display name first.
+    cy.get('[data-testid="context-title"]').should('have.text', 'Alice');
+    cy.get('[data-testid="thread-tab-bar"]').should('contain.text', 'Alice');
     cy.contains('[data-testid="message-feed-row"]', 'Hey, did you see the latest build?').should('exist');
   });
 

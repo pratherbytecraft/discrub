@@ -200,9 +200,9 @@ describe('Visual Audit', () => {
 
     it('light mode', () => {
       // Pick the light theme from the Themes hub (instant apply).
-      cy.openThemesHub();
+      cy.openThemeGrid();
       cy.get('[data-testid="theme-card-discord-light"]').click();
-      cy.get('[aria-label="Close Supporter dialog"]').click();
+      cy.closeAppearance();
       cy.wait(PAUSE);
       snap('theme/light-mode');
     });

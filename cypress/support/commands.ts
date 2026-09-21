@@ -326,10 +326,25 @@ Cypress.Commands.add(
 );
 
 /**
- * 2.2.0: the Themes and Support hub opens from the Appearance menu's footer.
+ * 2.2.0: supporter access is the Appearance menu's fourth segment (the Themes and Support dialog is gone).
  * The top bar button keeps the gift-button test id.
  */
 Cypress.Commands.add('openThemesHub', () => {
   cy.get('[data-testid="gift-button"]').click();
-  cy.get('[data-testid="appearance-open-hub"]').click();
+  cy.get('[data-testid="appearance-tab-supporter"]').click();
+  cy.get('[data-testid="supporter-panel"]').should('be.visible');
 });
+
+/** Opens the Appearance menu on its Theme segment, where the theme grid lives. */
+Cypress.Commands.add('openThemeGrid', () => {
+  cy.get('[data-testid="gift-button"]').click();
+  cy.get('[data-testid="appearance-tab-theme"]').click();
+  cy.get('[data-testid="supporter-theme-showcase"]').should('be.visible');
+});
+
+/** Closes the Appearance menu. */
+Cypress.Commands.add('closeAppearance', () => {
+  cy.get('body').type('{esc}');
+  cy.get('[data-testid="appearance-popover"]').should('not.exist');
+});
+

@@ -16,18 +16,17 @@ describe('Theme switching from the hub', () => {
   });
 
   const openHub = () => {
-    cy.openThemesHub();
-    cy.get('[data-testid="supporter-theme-showcase"]').scrollIntoView().should('be.visible');
+    cy.openThemeGrid();
   };
 
   it('the gift button opens the hub with the full theme grid', () => {
     openHub();
     cy.get('[data-testid="theme-card-auto"]').should('be.visible');
     cy.get('[data-testid="theme-card-discord-light"]').should('be.visible');
-    // All 8 supporter themes locked for a free user.
+    // All 9 supporter themes locked for a free user.
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
       'have.length',
-      8,
+      9,
     );
   });
 
@@ -35,7 +34,7 @@ describe('Theme switching from the hub', () => {
     openHub();
     cy.get('[data-testid="theme-card-discord-light"]').click();
     cy.get('body').should('have.css', 'background-color', LIGHT_BG);
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
     cy.get('body').should('have.css', 'background-color', LIGHT_BG);
   });
 
@@ -46,7 +45,7 @@ describe('Theme switching from the hub', () => {
 
     cy.get('[data-testid="theme-preview-terminal"]').should('not.exist');
     cy.get('[data-testid="theme-preview-amoled-void"]').click();
-    cy.get('[data-testid="supporter-dialog"]').should('not.exist');
+    cy.get('[data-testid="appearance-popover"]').should('not.exist');
     cy.get('[data-testid="preview-bar"]').should('contain.text', 'Previewing AMOLED Void');
     cy.get('body').should('have.css', 'background-color', 'rgb(0, 0, 0)');
     cy.get('[data-testid="preview-end"]').click();
@@ -57,9 +56,9 @@ describe('Theme switching from the hub', () => {
     cy.get('[data-testid="theme-card-amoled-void"]').click();
     cy.get('body').should('have.css', 'background-color', DARK_BG);
     cy.get('[data-testid="theme-selected-amoled-void"]').should('not.exist');
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
+    cy.get('[data-testid="supporter-panel"]').should('be.visible');
 
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
     cy.get('body').should('have.css', 'background-color', DARK_BG);
   });
 });

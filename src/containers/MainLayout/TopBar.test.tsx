@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderWithProviders, screen, fireEvent, waitFor } from '../../test/test-utils';
 import TopBar from './TopBar';
-import { createBaseState, createAuthenticatedState } from '../../test/state-factories';
+import { createBaseState } from '../../test/state-factories';
 import { createMockUser } from '../../test/fixtures';
 import { initialSupporterState } from '@features/supporter/supporterTypes';
 
@@ -480,14 +480,14 @@ describe('TopBar', () => {
       expect(screen.getByTestId('gift-button')).toBeInTheDocument();
     });
 
-    it('should open the Appearance menu, calm the attention animation, and reach the Supporter dialog from its footer', async () => {
+    it('should open the Appearance menu, calm the attention animation, and reach supporter access from its fourth segment', async () => {
       const { store } = renderLoggedIn();
       expect(store.getState().supporter.giftAttentionSeen).toBe(false);
       fireEvent.click(screen.getByTestId('gift-button'));
       expect(store.getState().supporter.giftAttentionSeen).toBe(true);
       expect(await screen.findByTestId('appearance-popover')).toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('appearance-open-hub'));
-      expect(store.getState().supporter.dialogOpen).toBe(true);
+      fireEvent.click(screen.getByTestId('appearance-tab-supporter'));
+      expect(await screen.findByTestId('supporter-paste-key')).toBeInTheDocument();
     });
   });
 
@@ -530,11 +530,11 @@ describe('TopBar', () => {
       expect(screen.getByLabelText('Appearance')).toBeInTheDocument();
     });
 
-    it('should still open the Supporter dialog from the menu footer', async () => {
-      const { store } = renderWithKeyStatus('valid');
+    it('should show the access card on the Supporter segment', async () => {
+      renderWithKeyStatus('valid');
       fireEvent.click(screen.getByTestId('gift-button'));
-      fireEvent.click(await screen.findByTestId('appearance-open-hub'));
-      expect(store.getState().supporter.dialogOpen).toBe(true);
+      fireEvent.click(await screen.findByTestId('appearance-tab-supporter'));
+      expect(await screen.findByTestId('supporter-status')).toBeInTheDocument();
     });
 
     it('should treat an expired key as non-supporter', () => {
@@ -594,76 +594,5 @@ describe('TopBar wide layout (md and up)', () => {
   it('keeps one tour target for the extras regardless of layout', () => {
     render();
     expect(document.querySelector('[data-tour="topbar-extras"]')).toContainElement(screen.getByLabelText('Supporter Wall'));
-  });
-
-  describe('compact bot spotlight', () => {
-    beforeEach(() => {
-      // The spotlight waits for `lg` ("(min-width:1200px)"); match that too.
-      window.matchMedia = ((query: string) => ({
-        matches: /min-width:\s*(900|1200)px/.test(query),
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      })) as typeof window.matchMedia;
-    });
-
-    it('waits for a bar wide enough (lg), even away from home', () => {
-      // Only the wide-describe's 900px mock: md matches, lg does not.
-      window.matchMedia = ((query: string) => ({
-        matches: /min-width:\s*900px/.test(query),
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      })) as typeof window.matchMedia;
-      renderWithProviders(<TopBar />, { preloadedState: createAuthenticatedState() });
-      expect(screen.queryByTestId('topbar-bot-spot')).not.toBeInTheDocument();
-    });
-
-    it('stays off the welcome screen, where the corkboard already has the job', () => {
-      render();
-      expect(screen.queryByTestId('topbar-bot-spot')).not.toBeInTheDocument();
-    });
-
-    it('appears once a channel is selected', () => {
-      renderWithProviders(<TopBar />, { preloadedState: createAuthenticatedState() });
-      expect(screen.getByTestId('topbar-bot-spot')).toBeInTheDocument();
-      expect(screen.getByTestId('bot-spot-add')).toBeInTheDocument();
-    });
-
-    it('appears in the package view', () => {
-      const state = createBaseState({ user: { currentUser, isLoading: false, error: null } });
-      state.app = { ...state.app, sidebarView: 'package' };
-      renderWithProviders(<TopBar />, { preloadedState: state });
-      expect(screen.getByTestId('topbar-bot-spot')).toBeInTheDocument();
-    });
-
-    it('steps aside while a heavy operation is running', () => {
-      const state = createAuthenticatedState();
-      state.purge = { ...state.purge, isPurging: true };
-      renderWithProviders(<TopBar />, { preloadedState: state });
-      expect(screen.queryByTestId('topbar-bot-spot')).not.toBeInTheDocument();
-    });
-
-    it('fades while a Scrubling is crossing it', () => {
-      // Give the stage room for the default pair and let every rect share one
-      // 400px span, so whoever is on stage is standing on the card.
-      const widthSpy = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(400);
-      const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, width: 400, top: 0, right: 400, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
-      try {
-        renderWithProviders(<TopBar />, { preloadedState: createAuthenticatedState() });
-        expect(screen.getByTestId('bot-spot-fade')).toHaveAttribute('data-covered', 'true');
-      } finally {
-        widthSpy.mockRestore();
-        rectSpy.mockRestore();
-      }
-    });
   });
 });

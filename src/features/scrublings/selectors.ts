@@ -4,7 +4,7 @@ import type { RootState } from '@/app/store';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectHasThemes } from '@features/supporter/supporterSlice';
 import { DEFAULT_PICKED, MAX_PICKED, SCRUBLINGS, isScrublingId, type ScrublingId } from './descriptors';
-import type { OperationView } from './scheduler';
+import { SLOT_W, type OperationView } from './scheduler';
 
 const selectSettingsState = (state: RootState) => state.app.settings;
 
@@ -79,4 +79,14 @@ export const selectScrublingsOperationView = createSelector(
       rateLimitStopped: app.rateLimitStopped === true,
     };
   },
+);
+
+/**
+ * The width a bar keeps free for the stage before it keeps its own words: one
+ * slot per visible character and a step to walk. 0 when Scrublings are off or
+ * none is picked, so a bar gives nothing up for an empty stage.
+ */
+export const selectStageRoom = createSelector(
+  [selectScrublingsVisible],
+  (visible): number => (visible.length === 0 ? 0 : SLOT_W * visible.length + 16),
 );

@@ -27,6 +27,7 @@ const NativeShell = ({ focusedView, drawerOpen, sidebarOpen, onSidebarOpen, onSi
   // Three tiers (2.2.0): desktop keeps everything in place; below lg the inspector becomes a slide-over
   // from the head's toggle; below md the rail and column fold into a drawer behind the head's menu button.
   // jsdom reports no match for either query, which counts as desktop.
+  // The supporter wall gives way before the inspector does: see useWallOverlay (overlay below 1440 px in Native).
   const narrow = useMediaQuery(theme.breakpoints.down('lg'));
   const phone = useMediaQuery(theme.breakpoints.down('md'));
   const sidebarView = useAppSelector(selectSidebarView);

@@ -49,17 +49,18 @@ describe('Scrublings (2.2.0)', () => {
     cy.window().its('__store__').invoke('getState').its('app.settings.appScrublingsPositions').should('contain', '"suds"');
   });
 
-  it('lists the eight in the Appearance tab, two free, six locked, and a locked pick opens the hub', () => {
+  it('lists the eight in the Appearance tab, three free, five locked, and a locked pick goes to the Supporter segment', () => {
     openTab();
     cy.get('[data-testid="scrublings-cards"] [data-testid^="scrubling-card-"]').should('have.length', 8);
     cy.get('[data-testid="scrubling-card-suds"]').should('have.attr', 'aria-checked', 'true');
     cy.get('[data-testid="scrubling-card-mage"]').should('have.attr', 'aria-checked', 'true');
-    cy.get('[data-testid^="scrubling-locked-"]').should('have.length', 6);
+    cy.get('[data-testid^="scrubling-locked-"]').should('have.length', 5);
+    cy.get('[data-testid="scrubling-locked-cat"]').should('not.exist');
     cy.get('[data-testid="scrublings-count"]').should('have.text', '2 of 3 picked');
-    cy.get('[data-testid="appearance-hint"]').should('have.text', 'Suds and the Mage are free. The rest come with supporter access.');
+    cy.get('[data-testid="appearance-hint"]').should('not.exist');
     cy.get('[data-testid="scrubling-card-ghost"]').click();
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.get('[data-testid="supporter-panel"]').should('be.visible');
+    cy.closeAppearance();
     picked().should('eq', '["suds","mage"]');
   });
 
@@ -78,11 +79,10 @@ describe('Scrublings (2.2.0)', () => {
     cy.get('[data-testid="scrublings-stage"]').should('have.attr', 'data-count', '2');
   });
 
-  it('with a key: picks a supporter one, caps at three, and shows the supporter hint', () => {
+  it('with a key: picks a supporter one, and caps at three', () => {
     giveKey();
     openTab();
     cy.get('[data-testid^="scrubling-locked-"]').should('have.length', 0);
-    cy.get('[data-testid="appearance-hint"]').should('have.text', 'Custom Scrublings are made to order on Ko-fi.');
     cy.get('[data-testid="scrubling-card-cat"]').click();
     picked().should('eq', '["suds","mage","cat"]');
     cy.get('[data-testid="scrublings-count"]').should('have.text', '3 of 3 picked');
@@ -123,6 +123,22 @@ describe('Scrublings (2.2.0)', () => {
     cy.get('.MuiAppBar-root [data-testid="scrublings-stage"]').should('have.attr', 'data-count', '2');
   });
 
+  it('keeps room for all three in every layout, with a channel open and the supporter wall showing', () => {
+    giveKey();
+    cy.window().then((win) => (win as any).__store__.dispatch({ type: 'app/updateAllSettings/fulfilled', payload: { ...(win as any).__store__.getState().app.settings, appShowKoFiFeed: 'true', appScrublingsPicked: '["suds","mage","cat"]' } }));
+    // Three slots of 40 px and a step to walk (selectStageRoom). Native's bar is the tightest: 570 px at this width.
+    const roomy = (sel: string) => cy.get(`${sel} [data-testid="scrublings-stage"]`).should(($s) => expect($s[0].getBoundingClientRect().width).to.be.at.least(136));
+    for (const [w, h] of [[1512, 860], [1280, 760]]) {
+      cy.viewport(w, h);
+      setLayout('native'); roomy('[data-testid="native-head"]');
+      setLayout('workbench'); roomy('.MuiAppBar-root');
+      setLayout('simple'); roomy('[data-testid="simple-top"]');
+      setLayout('operator'); roomy('[data-testid="operator-top"]');
+      setLayout('timeline'); roomy('[data-testid="simple-top"]');
+      setLayout('classic'); roomy('.MuiAppBar-root');
+    }
+  });
+
   it('freezes on the idle frame when theme animations are off', () => {
     cy.window().then((win) => (win as any).__store__.dispatch({ type: 'app/updateAllSettings/fulfilled', payload: { ...(win as any).__store__.getState().app.settings, appThemeAnimations: 'false' } }));
     cy.get('[data-testid="scrublings-stage"]').should('have.attr', 'data-frozen', 'true');
@@ -134,5 +150,16 @@ describe('Scrublings (2.2.0)', () => {
   it('shows one on a phone width', () => {
     cy.viewport(390, 844);
     cy.get('[data-testid="scrublings-stage"]').should(($el) => expect(Number($el.attr('data-count'))).to.be.at.most(1));
+  });
+
+  it('keeps the phone slot for a character: the Bots icon leaves the bar in Native, Simple and Operator', () => {
+    for (const key of ['native', 'simple', 'operator']) {
+      cy.viewport(1280, 800);
+      setLayout(key);
+      cy.get('[data-testid="bots-button"]').should('be.visible');
+      cy.viewport(390, 844);
+      cy.get('[data-testid="bots-button"]').should('not.exist');
+      cy.get('[data-testid="scrublings-stage"]').should('have.attr', 'data-count', '1');
+    }
   });
 });

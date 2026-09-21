@@ -1,49 +1,55 @@
-import { useState } from 'react';
-import { Box, Button, IconButton, Popover, ToggleButton, ToggleButtonGroup, Tooltip, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Checkbox, FormControlLabel, IconButton, Link, Popover, ToggleButton, ToggleButtonGroup, Tooltip, Typography, alpha, useTheme } from '@mui/material';
 import { LockOutlined as LockIcon, Check as CheckIcon, Settings as SettingsIcon, VisibilityOutlined as PreviewIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectAppLayout, selectSettings, setPreviewLayout, setPreviewTheme, updateSetting } from '@features/app/appSlice';
 import { selectIsOperationRunning } from '@features/app/operationSelectors';
-import { selectHasThemes, selectSupporter, setSupporterDialogOpen } from '@features/supporter/supporterSlice';
+import { selectHasThemes } from '@features/supporter/supporterSlice';
+import SupporterPanel from '@components/supporter/SupporterPanel';
+import { KOFI_COMMISSIONS_URL } from '@services/kofiLinks';
 import { ThemeGrid } from '@components/settings/tabs/ThemePicker';
 import { LAYOUT_META, type LayoutKey } from '@/layouts/types';
 import { isLayoutBuilt } from '@/layouts/registry';
-import LayoutGlyph from './LayoutGlyph';
 import LayoutMockup from './LayoutMockup';
 import ScrublingsTab from './ScrublingsTab';
 
-export type AppearanceTab = 'layout' | 'theme' | 'scrublings';
+/** Every segment's body scrolls inside this, so the menu never runs off a short window. */
+const BODY_MAX_H = 'min(520px, calc(100vh - 170px))';
+
+export type AppearanceTab = 'layout' | 'theme' | 'scrublings' | 'supporter';
 
 interface AppearancePopoverProps {
   anchorEl: HTMLElement | null;
   open: boolean;
+  tab: AppearanceTab;
+  onTabChange: (tab: AppearanceTab) => void;
   onClose: () => void;
   onOpenSettings: () => void;
 }
 
 /**
- * The Appearance menu (2.2.0): layouts and themes in one popover. Layout cards
- * carry a corner lock and a soft red glow when the key is missing and a check
- * on the current one; hovering shows a larger wireframe of the layout, clicking
- * applies. Themes reuse the theme grid, whose swatches are the preview. There
- * is no live preview of the whole app: one handed out locked layouts and
- * themes for free once the bottom bar was hidden. Footer: the hint, the
- * Themes and Support hub, and Display settings. The header is a segmented
- * control (Layout, Theme, Scrublings); plain tabs read as a title bar and were
- * missed (owner, 2026-09-19). The third segment picks the pixel characters
- * that live on the top bar.
+ * The Appearance menu (2.2.0): layouts, themes, Scrublings and supporter
+ * access in one popover. The header is a segmented control with four text
+ * segments and no icons (owner, 2026-09-20). Layout cards carry a corner lock
+ * and a soft red glow when the key is missing and a check on the current one;
+ * clicking applies, the eye starts a look-only preview of a locked one. The
+ * Theme segment holds the theme grid, the animations toggle and the
+ * commission link. The Supporter segment is what the Themes and Support
+ * dialog used to be: plans, the key box, the access card and the export
+ * footer controls. A locked pick anywhere switches to it. The tab is owned by
+ * AppearanceButton so other parts of the app can open the menu on Supporter.
+ * No hint lines anywhere: the cards explain themselves (owner, 2026-09-20).
+ * The gear beside the segments opens Display settings.
  */
-const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: AppearancePopoverProps) => {
+const AppearancePopover = ({ anchorEl, open, tab, onTabChange, onClose, onOpenSettings }: AppearancePopoverProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const theme = useTheme();
-  const [tab, setTab] = useState<AppearanceTab>('layout');
+  const setTab = onTabChange;
   const settings = useAppSelector(selectSettings);
   const layout = useAppSelector(selectAppLayout);
   const isSupporter = useAppSelector(selectHasThemes);
-  const supporterName = useAppSelector(selectSupporter).payload?.name;
   // A preview cannot start mid-run: the store gate would cut the run off (see previewGuardMiddleware).
   const operationRunning = useAppSelector(selectIsOperationRunning);
   const themeSetting = settings?.[DiscrubSetting.APP_THEME_MODE] ?? 'auto';
@@ -52,7 +58,9 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
     dispatch(updateSetting({ key: DiscrubSetting.APP_LAYOUT, value: key }));
     onClose();
   };
-  const openHub = () => { onClose(); dispatch(setSupporterDialogOpen(true)); };
+  const animationsSetting = settings?.[DiscrubSetting.APP_THEME_ANIMATIONS] ?? 'true';
+  // A locked pick lands on the Supporter segment, where the plans and the key box are.
+  const openHub = () => setTab('supporter');
   // A live preview swaps the frame, which unmounts the bar hosting this menu, so starting one closes the menu;
   // PreviewBar (mounted by MainLayout) takes over until the preview ends.
   const startLayoutPreview = (key: LayoutKey) => { dispatch(setPreviewLayout(key)); onClose(); };
@@ -69,10 +77,17 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.75, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
         <ToggleButtonGroup exclusive size="small" value={tab} onChange={(_, v: AppearanceTab | null) => { if (v) setTab(v); }} data-testid="appearance-segments" sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.5, py: 0.5, gap: 0.75 } }}>
-          <ToggleButton value="layout" data-testid="appearance-tab-layout"><LayoutGlyph layout={layout} color="currentColor" width={20} height={13} />{t('appearance.layout')}</ToggleButton>
+          <ToggleButton value="layout" data-testid="appearance-tab-layout">{t('appearance.layout')}</ToggleButton>
           <ToggleButton value="theme" data-testid="appearance-tab-theme">{t('appearance.theme')}</ToggleButton>
           <ToggleButton value="scrublings" data-testid="appearance-tab-scrublings">{t('appearance.scrublings')}</ToggleButton>
+          <ToggleButton value="supporter" data-testid="appearance-tab-supporter">{t('appearance.supporter')}</ToggleButton>
         </ToggleButtonGroup>
+        <Box sx={{ flex: 1 }} />
+        <Tooltip title={t('appearance.displaySettings')} enterDelay={0} arrow>
+          <IconButton size="small" aria-label={t('appearance.displaySettings')} onClick={() => { onClose(); onOpenSettings(); }} data-testid="appearance-open-settings">
+            <SettingsIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {tab === 'layout' && (
@@ -132,7 +147,7 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
       )}
 
       {tab === 'theme' && (
-        <Box sx={{ p: 1.75, maxHeight: 420, overflowY: 'auto' }}>
+        <Box sx={{ p: 1.75, maxHeight: BODY_MAX_H, overflowY: 'auto' }} data-testid="supporter-theme-showcase">
           <ThemeGrid
             value={themeSetting}
             onChange={(id) => dispatch(updateSetting({ key: DiscrubSetting.APP_THEME_MODE, value: id }))}
@@ -142,24 +157,21 @@ const AppearancePopover = ({ anchorEl, open, onClose, onOpenSettings }: Appearan
             cardWidth={96}
             data-testid="appearance-theme-grid"
           />
+          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', textAlign: 'center', mt: 1.5 }} data-testid="supporter-commission-note">
+            <Trans i18nKey="supporter.wantTheme" components={{ kofi: <Link href={KOFI_COMMISSIONS_URL} target="_blank" rel="noopener noreferrer" underline="hover" sx={{ fontWeight: 600 }} /> }} />
+          </Typography>
+          <FormControlLabel
+            sx={{ mt: 1, alignItems: 'flex-start' }}
+            control={<Checkbox size="small" sx={{ mt: -0.5 }} checked={animationsSetting === 'true'} onChange={(e) => dispatch(updateSetting({ key: DiscrubSetting.APP_THEME_ANIMATIONS, value: e.target.checked ? 'true' : 'false' }))} inputProps={{ 'data-testid': 'theme-animations-toggle' } as object} />}
+            label={<Box><Typography variant="body2">{t('supporter.themeAnimations')}</Typography><Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('supporter.themeAnimationsHelp')}</Typography></Box>}
+          />
         </Box>
       )}
 
       {tab === 'scrublings' && <ScrublingsTab onLockedPick={openHub} />}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.75, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }} noWrap data-testid="appearance-hint">
-          {tab === 'scrublings' ? t(isSupporter ? 'scrublings.hintSupporter' : 'scrublings.hintFree') : t('appearance.hint')}
-        </Typography>
-        <Button size="small" onClick={openHub} data-testid="appearance-open-hub" sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}>
-          {isSupporter && supporterName ? t('appearance.supporterName', { name: supporterName }) : t('appearance.hub')}
-        </Button>
-        <Tooltip title={t('appearance.displaySettings')} enterDelay={0} arrow>
-          <IconButton size="small" aria-label={t('appearance.displaySettings')} onClick={() => { onClose(); onOpenSettings(); }} data-testid="appearance-open-settings">
-            <SettingsIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Tooltip>
-      </Box>
+      {tab === 'supporter' && <Box sx={{ maxHeight: BODY_MAX_H, overflowY: 'auto' }}><SupporterPanel /></Box>}
+
     </Popover>
   );
 };

@@ -28,8 +28,8 @@ describe('Operator layout (2.2.0)', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-operator"]').should('exist');
     cy.get('[data-testid="layout-card-operator"]').click();
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.get('[data-testid="supporter-panel"]').should('be.visible');
+    cy.closeAppearance();
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-preview-operator"]').click();
     cy.get('[data-testid="operator-shell"]').should('exist');
@@ -50,6 +50,17 @@ describe('Operator layout (2.2.0)', () => {
     cy.get('[data-testid="operator-peek"]').within(() => { cy.contains('[data-testid="message-feed-row"]', 'Hello everyone! Welcome to the server.').should('exist'); });
     cy.get('[data-testid="operator-recent"]').should('be.visible');
     cy.get('[data-testid="focus-pill"]').should('not.exist');
+  });
+
+  it('the supporter wall is a column from 1440 px up and an overlay below, so the three columns keep their room', () => {
+    unlock();
+    switchTo('operator');
+    cy.viewport(1500, 800);
+    cy.get('[data-testid="donation-drawer"]').should('be.visible');
+    // At 1280 px the wall used to leave the middle column 300 px wide.
+    cy.viewport(1280, 720);
+    cy.get('[data-testid="donation-drawer"]').should('not.exist');
+    cy.get('[data-testid="operator-run-card"]').then(($c) => expect($c[0].getBoundingClientRect().width).to.be.greaterThan(450));
   });
 
   it('ticks build the queue, Export opens the bulk export over it and Purge the bulk purge', () => {

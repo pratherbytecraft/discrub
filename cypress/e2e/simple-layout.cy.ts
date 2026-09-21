@@ -28,8 +28,8 @@ describe('Simple layout (2.2.0)', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-simple"]').should('exist');
     cy.get('[data-testid="layout-card-simple"]').click();
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.get('[data-testid="supporter-panel"]').should('be.visible');
+    cy.closeAppearance();
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-preview-simple"]').click();
     cy.get('[data-testid="simple-shell"]').should('exist');

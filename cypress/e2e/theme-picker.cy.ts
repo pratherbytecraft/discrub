@@ -12,11 +12,10 @@ describe('Themes hub', () => {
   });
 
   const openHub = () => {
-    cy.openThemesHub();
-    cy.get('[data-testid="supporter-theme-showcase"]').scrollIntoView().should('be.visible');
+    cy.openThemeGrid();
   };
 
-  it('the Settings Display tab has no picker, only a pointer that opens the hub', () => {
+  it('the Settings Display tab has no picker and no layout cards, only a line that points to Appearance', () => {
     cy.get('[aria-label="Settings"]').click();
     cy.get('[role="dialog"]', { timeout: 5000 }).should('be.visible');
     cy.contains('button', 'Display').click();
@@ -24,17 +23,17 @@ describe('Themes hub', () => {
     cy.get('[data-testid="theme-picker"]').should('not.exist');
     cy.get('[data-testid^="theme-card-"]').should('not.exist');
 
-    cy.get('[data-testid="display-open-themes-hub"]').click();
-    cy.get('[data-testid="supporter-theme-showcase"]').scrollIntoView().should('be.visible');
+    cy.get('[data-testid="display-layout-block"]').should('not.exist');
+    cy.get('[data-testid="display-appearance-pointer"]').should('have.text', 'Layouts, themes and Scrublings are under Appearance on the top bar.');
   });
 
   it('shows the full v2.1.0 roster with supporter themes locked', () => {
     openHub();
-    // Auto card + 14 registry themes
-    cy.get('[data-testid^="theme-card-"]').should('have.length', 15);
-    // All 8 supporter themes are locked for a free user, marked on the
+    // Auto card + 15 registry themes
+    cy.get('[data-testid^="theme-card-"]').should('have.length', 16);
+    // All 9 supporter themes are locked for a free user, marked on the
     // swatch corner (the label row keeps its full width).
-    cy.get('[data-testid^="theme-locked-"]').should('have.length', 8);
+    cy.get('[data-testid^="theme-locked-"]').should('have.length', 9);
   });
 
   it('a hub pick persists across a reload', () => {
@@ -56,7 +55,7 @@ describe('Themes hub', () => {
     cy.get('[data-testid="theme-animations-toggle"]').should('not.be.checked');
 
     // No save step: reopening the hub shows the persisted value.
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
     openHub();
     cy.get('[data-testid="theme-animations-toggle"]')
       .scrollIntoView()

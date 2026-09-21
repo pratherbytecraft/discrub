@@ -81,16 +81,15 @@ function pasteSupporterKey() {
     cy.get('[data-testid="supporter-paste-key"]').type(key as string, { delay: 0 });
     cy.get('[data-testid="supporter-paste-apply"]').click();
     cy.get('[data-testid="supporter-status"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
   });
 }
 
 function saveTheme(themeId: string) {
   // Themes live in the hub only; picks apply (and persist) instantly.
-  cy.openThemesHub();
-  cy.get('[data-testid="supporter-theme-showcase"]').scrollIntoView().should('be.visible');
+  cy.openThemeGrid();
   cy.get(`[data-testid="theme-card-${themeId}"]`).click();
-  cy.get('[aria-label="Close Supporter dialog"]').click();
+  cy.closeAppearance();
 }
 
 function openGeneralAndExport() {
@@ -179,8 +178,9 @@ describe('Export theming (slot E)', () => {
         expect(page).to.contain('class="export-theme-synthwave"');
         expect(page).to.contain('<option value="synthwave" selected>');
         expect(page).to.contain('.export-theme-abyss {');
-        // Full roster: 14 dropdown options.
-        expect(page.match(/<option value="/g)).to.have.length(14);
+        // Full roster: 15 dropdown options.
+        expect(page.match(/<option value="/g)).to.have.length(15);
+        expect(page).to.contain('.export-theme-abstract {');
       });
       cy.task<string>('zip:read', {
         fileName: zipName,
@@ -223,7 +223,7 @@ describe('Export theming (slot E)', () => {
       { force: true },
     );
     cy.get('[data-testid="supporter-footer-icon-preview"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
 
     openGeneralAndExport();
     cy.waitForDownload(/^general\.zip$/i, 60000).then((zipName) => {
@@ -241,7 +241,7 @@ describe('Export theming (slot E)', () => {
     cy.task('downloads:clean');
     cy.openThemesHub();
     cy.get('[data-testid="supporter-footer-enabled"]').click();
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.closeAppearance();
 
     cy.contains('button', 'Export').click();
     cy.get('[role="dialog"]').contains('button', /^Export$/).click();

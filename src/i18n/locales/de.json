@@ -43,7 +43,6 @@
     "home": "Start",
     "homeAlt": "Discrub Start",
     "supporter": "Unterstützer",
-    "themesAndSupport": "Designs und Unterstützung",
     "ideasAndContact": "Ideen & Kontakt",
     "settings": "Einstellungen",
     "supporterWall": "Unterstützerwand",
@@ -63,15 +62,13 @@
     "button": "Darstellung",
     "layout": "Layout",
     "theme": "Theme",
-    "hint": "Klicken zum Übernehmen. Das Auge zeigt eine Vorschau von gesperrten.",
     "locked": "Gesperrt",
     "soon": "Bald",
     "lockedLayout": "{{name}} (Supporter-Layout, gesperrt)",
     "soonLayout": "{{name}} (kommt bald)",
-    "hub": "Themes und Support",
-    "supporterName": "Supporter · {{name}}",
+    "supporter": "Supporter",
+    "settingsPointer": "Layouts, Themes und Scrublings findest du unter Darstellung in der oberen Leiste.",
     "displaySettings": "Anzeigeeinstellungen",
-    "layoutHelp": "Wähle, wie Discrub aufgebaut ist. Themes gelten für jedes Layout.",
     "datesAndLanguage": "Datum und Sprache",
     "previewBar": "Vorschau von {{name}}",
     "previewThis": "{{name}} ausprobieren",
@@ -88,8 +85,6 @@
     "free": "Kostenlos",
     "fullHint": "Höchstens {{max}} gleichzeitig. Wähle zuerst einen ab.",
     "lockedOne": "{{name}} (Supporter-Scrubling, gesperrt)",
-    "hintFree": "Suds und der Magier sind kostenlos. Die anderen gibt es mit Supporter-Zugang.",
-    "hintSupporter": "Eigene Scrublings gibt es auf Bestellung bei Ko-fi.",
     "names": {
       "suds": "Suds",
       "mage": "Magier",
@@ -109,10 +104,12 @@
       "pker": "Zaubererhut, Lederbody, schwarze D'hide-Chaps, ein Drachenkrummsäbel. Zeigt den Totenkopf, wenn ein Purge startet.",
       "alien": "Fliegt eine Untertasse. Beamt die Einsen und Nullen hoch, während ein Purge läuft.",
       "ghost": "Der Geist gelöschter Nachrichten. Frisst sie während eines Purge."
-    }
+    },
+    "customFree": "Eigene Scrublings sind für alle kostenlos, sobald sie hinzugefügt wurden.",
+    "request": "Eigenen Scrubling anfragen",
+    "designedBy": "Entworfen von {{name}}"
   },
   "native": {
-    "pickOne": "Wähle einen Server, eine Unterhaltung oder das Paket",
     "loaded": "{{count}} geladen",
     "selected": "{{count}} ausgewählt",
     "inspector": "Inspektor",
@@ -141,7 +138,10 @@
     "date": "Datum",
     "sortByDate": "Nach Datum sortieren",
     "selectRow": "Nachricht auswählen",
-    "attachmentOnly": "{{count}} Anhang"
+    "attachmentOnly": "{{count}} Anhang",
+    "embedOnly": "Einbettung: {{text}}",
+    "embed": "Einbettung",
+    "stickerOnly": "Sticker: {{name}}"
   },
   "workbench": {
     "progress": "Fortschritt",
@@ -157,34 +157,34 @@
     "channelCount": "{{count}} Kanäle"
   },
   "operator": {
-      "pickServer": "Server wählen",
+    "pickServer": "Server wählen",
     "pickServerHint": "Wähle oben einen Server, um seine Kanäle zu sehen.",
-      "queueEmpty": "Hake Kanäle an, um eine Warteschlange zu bilden. Einer reicht, der ganze Server geht auch.",
-      "queued": "{{count}} Kanäle in der Warteschlange",
-      "queueRun": "{{done}} fertig, 1 läuft, {{left}} wartend",
-      "queueCount": "{{count}} Kanäle in der Warteschlange",
-      "queueNone": "Noch nichts in der Warteschlange",
-      "queueHint": "Alle laden arbeitet im offenen Kanal. Export und Purge laufen durch die Warteschlange.",
-      "loadAllIn": "in {{name}}",
-      "loadAllNone": "Zuerst einen Kanal öffnen",
-      "attempt": "Versuch {{attempt}} von {{max}}",
-      "latestIn": "Neuestes in {{name}}",
-      "noConversation": "Keine Unterhaltung offen",
-      "openFeed": "Feed öffnen",
-      "backToRun": "Zurück zum Lauf",
-      "recentExports": "Letzte Exporte",
-      "tabQueue": "Warteschlange",
-      "tabRun": "Lauf",
-      "tabFeed": "Feed",
-      "tabRecent": "Zuletzt",
-      "state": {
-          "idle": "Untätig",
-          "running": "Läuft",
-          "paused": "Pausiert",
-          "restBreak": "Pause",
-          "retrying": "Neuer Versuch",
-          "retryPaused": "Nach Versuchen pausiert"
-      }
+    "queueEmpty": "Hake Kanäle an, um eine Warteschlange zu bilden. Einer reicht, der ganze Server geht auch.",
+    "queued": "{{count}} Kanäle in der Warteschlange",
+    "queueRun": "{{done}} fertig, 1 läuft, {{left}} wartend",
+    "queueCount": "{{count}} Kanäle in der Warteschlange",
+    "queueNone": "Noch nichts in der Warteschlange",
+    "queueHint": "Alle laden arbeitet im offenen Kanal. Export und Purge laufen durch die Warteschlange.",
+    "loadAllIn": "in {{name}}",
+    "loadAllNone": "Zuerst einen Kanal öffnen",
+    "attempt": "Versuch {{attempt}} von {{max}}",
+    "latestIn": "Neuestes in {{name}}",
+    "noConversation": "Keine Unterhaltung offen",
+    "openFeed": "Feed öffnen",
+    "backToRun": "Zurück zum Lauf",
+    "recentExports": "Letzte Exporte",
+    "tabQueue": "Warteschlange",
+    "tabRun": "Lauf",
+    "tabFeed": "Feed",
+    "tabRecent": "Zuletzt",
+    "state": {
+      "idle": "Untätig",
+      "running": "Läuft",
+      "paused": "Pausiert",
+      "restBreak": "Pause",
+      "retrying": "Neuer Versuch",
+      "retryPaused": "Nach Versuchen pausiert"
+    }
   },
   "timeline": {
     "dayCount_one": "{{count, number}} Nachricht",
@@ -515,15 +515,13 @@
     "resetting": "Wird zurückgesetzt…",
     "confirm": "Alles zurücksetzen"
   },
-  "corkboard": {
+  "bots": {
+    "button": "Bots",
+    "title": "Bots vom Entwickler",
+    "learnMore": "Mehr erfahren",
     "addToDiscord": "Zu Discord hinzufügen",
-    "title": "Vom Discrub-Team",
-    "showBoard": "Pinnwand anzeigen",
-    "hideBoard": "Pinnwand ausblenden",
-    "previousBot": "Vorheriger Bot",
-    "nextBot": "Nächster Bot",
-    "showBot": "{{name}} anzeigen",
-    "ideaPrompt": "Hast du eine Idee für einen Bot? <idea>Erzähl mir davon.</idea>"
+    "follow": "@{{handle}} folgen",
+    "idea": "Eine Idee für einen Bot?"
   },
   "welcome": {
     "title": "Willkommen bei Discrub",
@@ -1495,19 +1493,19 @@
   "supporter": {
     "close": "Unterstützer-Dialog schließen",
     "thankYou": "Danke, dass du Discrub unterstützt",
-    "themes": "Designs",
-    "unlocks": "Deine Unterstützung schaltet eine wachsende Sammlung von Designs frei",
+    "themes": "Kosmetik",
+    "unlocks": "Deine Unterstützung schaltet eine wachsende Sammlung kosmetischer Extras frei",
     "keyIssuedTo": "Unterstützerschlüssel ausgestellt für {{name}}",
     "refreshTooltip": "Jetzt aktualisieren. Dein Schlüssel meldet sich von selbst etwa einmal täglich.",
     "refreshKey": "Schlüssel aktualisieren",
     "removeTooltip": "Diesen Schlüssel von diesem Gerät entfernen. Das beendet auch die tägliche Prüfung.",
     "removeKey": "Schlüssel entfernen",
     "feature": {
-      "themes": "Designs",
+      "themes": "Kosmetik",
       "hosted": "Bleeding Edge"
     },
     "blurb": {
-      "themes": "Alle Designs in der App und in Exporten, animierte Akzente, eigene Exportfußzeile",
+      "themes": "Supporter-Layouts, Designs und Scrublings, die Designs auch in Exporten, animierte Akzente, eigene Exportfußzeile",
       "hosted": "Gehostete Vorabversion mit neuen Funktionen, bevor sie die Store-Prüfung durchlaufen"
     },
     "hostedPlanBlurb": "Alles aus Unterstützer, plus die gehostete Vorabversion mit neuen Funktionen, bevor sie die Store-Prüfung durchlaufen",
@@ -1531,7 +1529,7 @@
       "title": "Dein Supporter-Zugang ist abgelaufen.",
       "body": "Layout und Theme sind wieder auf {{layout}} und {{theme}}. Deine Einstellungen bleiben erhalten.",
       "baseTheme": "Dark Original",
-      "after": "Nach dem Verlängern öffne Themes und Support und klicke auf Aktualisieren.",
+      "after": "Nach dem Verlängern öffne Darstellung, wähle Supporter und klicke auf Aktualisieren.",
       "close": "Schließen"
     },
     "revokedNote": "Dieser Schlüssel ist nicht mehr aktiv. Füge unten einen neuen Schlüssel ein.",

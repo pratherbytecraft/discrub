@@ -42,7 +42,7 @@ describe('<ScrublingsStage />', () => {
   });
 
   it('shows as many picks as the stretch holds, and none on a sliver', () => {
-    widthSpy.mockRestore(); setWidth(100);
+    widthSpy.mockRestore(); setWidth(70);
     const { unmount } = renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith() });
     expect(screen.getByTestId('scrublings-stage')).toHaveAttribute('data-count', '1');
     expect(screen.getByTestId('scrubling-suds')).toBeInTheDocument();
@@ -54,14 +54,14 @@ describe('<ScrublingsStage />', () => {
   });
 
   it('hides supporter picks without a key and shows them with one', () => {
-    const picked = { [DiscrubSetting.APP_SCRUBLINGS_PICKED]: '["cat","suds","ghost"]' };
+    const picked = { [DiscrubSetting.APP_SCRUBLINGS_PICKED]: '["dog","suds","ghost"]' };
     const { unmount } = renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith(picked) });
     expect(screen.getByTestId('scrublings-stage')).toHaveAttribute('data-count', '1');
-    expect(screen.queryByTestId('scrubling-cat')).toBeNull();
+    expect(screen.queryByTestId('scrubling-dog')).toBeNull();
     unmount();
     renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith(picked, { supporter: true }) });
     expect(screen.getByTestId('scrublings-stage')).toHaveAttribute('data-count', '3');
-    expect(screen.getByTestId('scrubling-cat')).toBeInTheDocument();
+    expect(screen.getByTestId('scrubling-dog')).toBeInTheDocument();
     expect(screen.getByTestId('scrubling-ghost')).toBeInTheDocument();
   });
 
@@ -79,22 +79,66 @@ describe('<ScrublingsStage />', () => {
     expect(screen.getByTestId('scrubling-suds').getAttribute('data-frame')).toMatch(/^carry/);
     expect(screen.getByTestId('scrubling-mage').getAttribute('data-frame')).toMatch(/^tele|^idle/);
   });
+});
 
-  it('reports when a character is over the obstacle, and clears when nobody is', () => {
-    const makeObstacle = (left: number, width: number) => {
-      const el = document.createElement('div');
-      el.getBoundingClientRect = () => ({ left, width, top: 0, right: left + width, bottom: 0, height: 0, x: left, y: 0, toJSON: () => ({}) });
-      return { current: el };
-    };
-    const onCovered = vi.fn();
-    const { unmount } = renderWithProviders(<ScrublingsStage obstacle={makeObstacle(0, 300)} onObstacleCovered={onCovered} />, { preloadedState: stateWith() });
-    // The obstacle spans the whole stretch, so whoever is on stage is over it.
-    expect(onCovered).toHaveBeenLastCalledWith(true);
-    unmount();
-    // Off the bar entirely: nobody covers it, so the only report is the reset on unmount, if any.
-    onCovered.mockClear();
-    renderWithProviders(<ScrublingsStage obstacle={makeObstacle(1000, 50)} onObstacleCovered={onCovered} />, { preloadedState: stateWith() });
-    act(() => { vi.advanceTimersByTime(400); });
-    expect(onCovered).not.toHaveBeenCalledWith(true);
+describe('teleport on arrive and leave', () => {
+  beforeEach(() => { vi.useFakeTimers(); setWidth(300); });
+  afterEach(() => { widthSpy.mockRestore(); vi.useRealTimers(); });
+
+  it('teleports each character in on load, then clears the effect', async () => {
+    const { TELE_MS } = await import('./ScrublingsStage');
+    renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith() });
+    expect(screen.getByTestId('scrubling-tele-in-suds')).toBeInTheDocument();
+    expect(screen.getByTestId('scrubling-tele-in-mage')).toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(TELE_MS + 200); });
+    expect(screen.queryByTestId('scrubling-tele-in-suds')).toBeNull();
+    expect(screen.getByTestId('scrubling-suds')).toBeInTheDocument();
+  });
+
+  it('teleports a character out when it is unpicked, and the rest stay', async () => {
+    const { TELE_MS } = await import('./ScrublingsStage');
+    const { store } = renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith() });
+    act(() => { vi.advanceTimersByTime(TELE_MS + 200); });
+    const settings = store.getState().app.settings;
+    act(() => { store.dispatch({ type: 'app/updateAllSettings/fulfilled', payload: { ...settings, [DiscrubSetting.APP_SCRUBLINGS_PICKED]: '["suds"]' } }); });
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(screen.queryByTestId('scrubling-mage')).toBeNull();
+    expect(screen.getByTestId('scrubling-tele-out-mage')).toBeInTheDocument();
+    expect(screen.queryByTestId('scrubling-tele-out-suds')).toBeNull();
+    act(() => { vi.advanceTimersByTime(TELE_MS + 200); });
+    expect(screen.queryByTestId('scrubling-tele-out-mage')).toBeNull();
+  });
+
+  it('teleports everyone out when the switch goes off', async () => {
+    const { TELE_MS } = await import('./ScrublingsStage');
+    const { store } = renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith() });
+    act(() => { vi.advanceTimersByTime(TELE_MS + 200); });
+    const settings = store.getState().app.settings;
+    act(() => { store.dispatch({ type: 'app/updateAllSettings/fulfilled', payload: { ...settings, [DiscrubSetting.APP_SCRUBLINGS_ENABLED]: 'false' } }); });
+    expect(screen.getByTestId('scrubling-tele-out-suds')).toBeInTheDocument();
+    expect(screen.getByTestId('scrubling-tele-out-mage')).toBeInTheDocument();
+  });
+
+  it('plays nothing when theme animations are off', () => {
+    renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith({ [DiscrubSetting.APP_THEME_ANIMATIONS]: 'false' }) });
+    expect(screen.getByTestId('scrubling-suds')).toBeInTheDocument();
+    expect(screen.queryByTestId('scrubling-tele-in-suds')).toBeNull();
   });
 });
+
+describe('captionTop', () => {
+  it('leaves the same space above the text as between the text and the head', async () => {
+    const { captionTop } = await import('./ScrublingsStage');
+    // 64px bar, Suds: the head starts 28px down, the 12px line sits at 8, so 8 above and 8 below.
+    expect(captionTop(64, 'suds')).toBe(8);
+    expect(captionTop(56, 'mage')).toBe(4);
+  });
+  it('sits lower over a short character and never leaves the bar', async () => {
+    const { captionTop } = await import('./ScrublingsStage');
+    expect(captionTop(64, 'cat')).toBeGreaterThan(captionTop(64, 'suds'));
+    expect(captionTop(48, 'suds')).toBe(1);
+    // Native's head is 56 now, which gives the tall characters 4 above and 4 below.
+    expect(captionTop(56, 'suds')).toBe(4);
+  });
+});
+

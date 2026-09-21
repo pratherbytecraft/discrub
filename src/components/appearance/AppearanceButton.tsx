@@ -1,18 +1,18 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, ButtonBase, Tooltip, Typography, alpha, useMediaQuery, useTheme, type Theme } from '@mui/material';
 import { ArrowDropDown as ChevronIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectAppLayout, selectSettings } from '@features/app/appSlice';
-import { markGiftAttentionSeen, selectGiftAttentionSeen, selectIsSupporter } from '@features/supporter/supporterSlice';
+import { markGiftAttentionSeen, selectGiftAttentionSeen, selectIsSupporter, selectSupporterPanelOpen, setSupporterPanelOpen } from '@features/supporter/supporterSlice';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { findThemeDescriptor } from '@/theme/descriptors';
 import { resolveThemeIdFromSetting } from '@/theme/theme';
 import { LAYOUT_NAMES } from '@/layouts/types';
-import AppearancePopover from './AppearancePopover';
+import AppearancePopover, { type AppearanceTab } from './AppearancePopover';
 /**
- * Top bar entry for layouts and themes (2.2.0). Replaces the palette icon:
+ * Top bar entry for layouts, themes, Scrublings and supporter access (2.2.0). Replaces the palette icon:
  * the theme dot, the word Appearance and a chevron, with the current layout
  * and theme in its tooltip (the names left the button 2026-09-19, the menu
  * shows them on the cards). Collapses to its dot below the sm breakpoint, opens the Appearance popover on click or Ctrl Shift L. Keeps
@@ -25,7 +25,14 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down('sm'));
   const ref = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
+  const [localOpen, setOpen] = useState(false);
+  const [tab, setTab] = useState<AppearanceTab>('layout');
+  // Anything in the app can ask for the Supporter segment (a locked pick, the access-ended notice): the flag opens this menu on it.
+  const panelOpen = useAppSelector(selectSupporterPanelOpen);
+  useEffect(() => { if (panelOpen) setTab('supporter'); }, [panelOpen]);
+  const open = localOpen || panelOpen;
+  // Supporter is a detour (a locked pick, a notice), so the next open starts on Layout again. Layout, Theme and Scrublings are remembered.
+  const close = () => { setOpen(false); if (panelOpen) dispatch(setSupporterPanelOpen(false)); if (tab === 'supporter') setTab('layout'); };
   const settings = useAppSelector(selectSettings);
   const layout = useAppSelector(selectAppLayout);
   const isSupporter = useAppSelector(selectIsSupporter);
@@ -34,7 +41,7 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
 
   const toggle = () => {
     if (!giftAttentionSeen) dispatch(markGiftAttentionSeen());
-    setOpen((o) => !o);
+    if (open) close(); else setOpen(true);
   };
   useHotkey('openAppearance', toggle, true);
 
@@ -85,14 +92,15 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
         >
           {dot}
           {!compact && (
-            <>
+            // `appearance-label` lets a cramped bar hide the word with a container query and keep the dot.
+            <Box component="span" className="appearance-label" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('appearance.button')}</Typography>
               <ChevronIcon sx={{ fontSize: 18, color: 'text.secondary', ml: -0.5 }} />
-            </>
+            </Box>
           )}
         </ButtonBase>
       </Tooltip>
-      <AppearancePopover anchorEl={ref.current} open={open} onClose={() => setOpen(false)} onOpenSettings={onOpenSettings} />
+      <AppearancePopover anchorEl={ref.current} open={open} tab={tab} onTabChange={setTab} onClose={close} onOpenSettings={onOpenSettings} />
     </>
   );
 };

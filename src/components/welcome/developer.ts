@@ -1,5 +1,5 @@
 /**
- * Data behind the developer card on the WelcomePanel corkboard.
+ * Data behind the developer's line in the Bots menu and the follow stamp on the What's New dialog.
  *
  * The avatar is bundled (a 128px copy of the GitHub avatar) rather than
  * fetched from github.com so the board never shows a broken photo and the

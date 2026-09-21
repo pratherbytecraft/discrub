@@ -138,7 +138,7 @@ describe('Search & Filters', () => {
       cy.wait('@guildSearch');
 
       // All 3 search results should be displayed
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
       cy.contains("Great project! I'll fork it").should('be.visible');
       cy.contains('The project docs have been updated').should('be.visible');
     });
@@ -156,7 +156,7 @@ describe('Search & Filters', () => {
 
       // Initial messages should be gone, search results shown
       cy.contains('Hello everyone').should('not.exist');
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
     });
 
     it('shows correct authors in search results', () => {
@@ -393,7 +393,7 @@ describe('Search & Filters', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         store.dispatch({
-          type: 'app/updateSetting/fulfilled',
+          type: 'app/updateAllSettings/fulfilled',
           payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
         });
       });
@@ -479,7 +479,7 @@ describe('Search & Filters', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         store.dispatch({
-          type: 'app/updateSetting/fulfilled',
+          type: 'app/updateAllSettings/fulfilled',
           payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
         });
       });
@@ -566,7 +566,7 @@ describe('Search & Filters', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         store.dispatch({
-          type: 'app/updateSetting/fulfilled',
+          type: 'app/updateAllSettings/fulfilled',
           payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
         });
       });
@@ -641,7 +641,7 @@ describe('Search & Filters', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         store.dispatch({
-          type: 'app/updateSetting/fulfilled',
+          type: 'app/updateAllSettings/fulfilled',
           payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
         });
       });
@@ -1300,7 +1300,7 @@ describe('Search & Filters', () => {
 
       // Server results replace local messages
       cy.contains('Hello everyone').should('not.exist');
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
 
       // Exactly 1 search API call
       cy.get('@guildSearch.all').should('have.length', 1);
@@ -1387,7 +1387,7 @@ describe('Search & Filters', () => {
       cy.wait('@guildSearch');
 
       // All 3 server results visible
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
       cy.contains("Great project! I'll fork it").should('be.visible');
       cy.contains('The project docs have been updated').should('be.visible');
       cy.contains('3 matches').should('be.visible');
@@ -1629,9 +1629,9 @@ describe('Search & Filters', () => {
 
     it('filter modal renders correctly in light mode', () => {
       // Pick the light theme from the Themes hub (instant apply).
-      cy.openThemesHub();
+      cy.openThemeGrid();
       cy.get('[data-testid="theme-card-discord-light"]').click();
-      cy.get('[aria-label="Close Supporter dialog"]').click();
+      cy.closeAppearance();
       cy.get('body').should('have.css', 'background-color', 'rgb(255, 255, 255)');
 
       // Open filter modal

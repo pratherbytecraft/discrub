@@ -9,7 +9,7 @@ import supporterReducer, {
   removeSupporterKey,
   markGiftAttentionSeen,
   dismissAccessEndedNotice,
-  setSupporterDialogOpen,
+  setSupporterPanelOpen,
   selectIsSupporter,
   selectHasThemes,
   selectHasHosted,
@@ -557,12 +557,12 @@ describe('supporterSlice', () => {
     it('closing the dialog clears any claim error', async () => {
       mockVerify.mockResolvedValue({ status: 'invalid' });
       const store = makeStore();
-      store.dispatch(setSupporterDialogOpen(true));
+      store.dispatch(setSupporterPanelOpen(true));
       await store.dispatch(applyPastedSupporterKey('DSCRB-bad'));
       expect(store.getState().supporter.claimError).toContain("doesn't look like");
 
-      store.dispatch(setSupporterDialogOpen(false));
-      expect(store.getState().supporter.dialogOpen).toBe(false);
+      store.dispatch(setSupporterPanelOpen(false));
+      expect(store.getState().supporter.panelOpen).toBe(false);
       expect(store.getState().supporter.claimError).toBeNull();
     });
   });

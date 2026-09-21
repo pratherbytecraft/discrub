@@ -30,8 +30,8 @@ describe('Timeline layout (2.2.0)', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-timeline"]').should('exist');
     cy.get('[data-testid="layout-card-timeline"]').click();
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.get('[data-testid="supporter-panel"]').should('be.visible');
+    cy.closeAppearance();
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-preview-timeline"]').click();
     cy.get('[data-testid="timeline-shell"]').should('exist');
@@ -114,6 +114,18 @@ describe('Timeline layout (2.2.0)', () => {
     cy.get('[data-testid="focus-pill"]').should('exist');
     cy.get('body').type('{esc}');
     cy.get('[data-testid="timeline-strip"]').should('be.visible');
+  });
+
+  it('never gives the window a sideways scrollbar', () => {
+    unlock();
+    switchTo('timeline');
+    cy.get('[data-testid="timeline-bars"]').should('exist');
+    // The hidden date input was once as wide as the page and pushed the window 14 px wider than its view.
+    for (const [w, h] of [[1280, 800], [900, 1000], [390, 844]]) {
+      cy.viewport(w, h);
+      cy.document().should((doc) => expect(doc.documentElement.scrollWidth).to.be.at.most(w));
+    }
+    cy.viewport(1280, 800);
   });
 
   it('phone width: the actions fold into one menu that also opens the month list', () => {

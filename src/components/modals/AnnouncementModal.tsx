@@ -26,6 +26,7 @@ import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from 'react-i18next';
+import FollowStamp from './FollowStamp';
 
 interface AnnouncementModalProps {
   open: boolean;
@@ -300,6 +301,7 @@ const AnnouncementModal = ({
         </Box>
       </DialogContent>
       <DialogActions>
+        {open && <FollowStamp />}
         <Button onClick={onDismiss} variant="outlined">
           Cancel
         </Button>

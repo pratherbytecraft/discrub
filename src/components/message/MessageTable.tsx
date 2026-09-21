@@ -5,6 +5,8 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 import { SortDirection } from 'discrub-core/common-enum';
 import type { Message } from 'discrub-core/types/discord-types';
+import { selectSelectedGuild } from '@features/guild/guildSlice';
+import { formatSystemMessage } from 'discrub-core/system-messages';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   selectActiveFilteredMessages, selectActiveSelectedMessages, selectActiveOrder, selectActiveTab,
@@ -26,6 +28,21 @@ const ROW_HEIGHT = 36;
  */
 const MessageTable = () => {
   const { t } = useTranslation();
+  const guildName = useAppSelector(selectSelectedGuild)?.name;
+  // A message with no text still says what it is, dim and italic: its files, the embed's title or text, or a sticker's name.
+  // Until 2026-09-21 an embed-only row (a bot's report) had an empty cell.
+  const standIn = (m: Message, files: number): string => {
+    // A call, a pin, a join: the same sentence the feed shows, with the mention markup turned into a plain name.
+    const system = formatSystemMessage(m, { guildName });
+    if (system?.text) return system.text.replace(/<@!?(\d+)>/g, (_, id: string) => (id === m.author?.id ? (m.author?.global_name || m.author?.username || '@user') : '@user')).replace(/\*\*/g, '');
+    if (files) return t('table.attachmentOnly', { count: files });
+    const embed = m.embeds?.find((e) => e.title || e.description);
+    if (embed) return t('table.embedOnly', { text: (embed.title || embed.description || '').replace(/\s+/g, ' ').slice(0, 140) });
+    if (m.embeds?.length) return t('table.embed');
+    const sticker = m.sticker_items?.[0]?.name;
+    if (sticker) return t('table.stickerOnly', { name: sticker });
+    return '';
+  };
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const messages = useAppSelector(selectActiveFilteredMessages);
@@ -94,7 +111,7 @@ const MessageTable = () => {
                   <Box component="img" src={m.author?.avatar ? `https://cdn.discordapp.com/avatars/${m.author.id}/${m.author.avatar}.png?size=32` : undefined} alt="" sx={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, backgroundColor: 'action.hover' }} />
                   <Typography variant="body2" noWrap sx={{ fontSize: 'inherit', fontWeight: 600 }}>{author}</Typography>
                 </Box>
-                <Box sx={cellSx}><Typography variant="body2" noWrap sx={{ fontSize: 'inherit' }}>{m.content || (files ? t('table.attachmentOnly', { count: files }) : '')}</Typography></Box>
+                <Box sx={cellSx}><Typography variant="body2" noWrap data-testid={m.content ? undefined : 'table-standin'} sx={{ fontSize: 'inherit', ...(m.content ? {} : { color: 'text.secondary', fontStyle: 'italic' }) }}>{m.content || standIn(m, files)}</Typography></Box>
                 <Box sx={{ ...cellSx, color: 'text.secondary', gap: 0.5 }}>{files > 0 && <><AttachmentIcon sx={{ fontSize: 14 }} />{files}</>}</Box>
                 <Box sx={{ ...cellSx, gap: 0.5, overflow: 'hidden' }}>{(m.reactions ?? []).slice(0, 3).map((r, i) => <Box key={i} component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>{r.emoji?.name} {r.count}</Box>)}</Box>
                 <Box sx={{ ...cellSx, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}><Typography variant="body2" noWrap sx={{ fontSize: 'inherit' }}>{stamp(m.timestamp)}</Typography></Box>

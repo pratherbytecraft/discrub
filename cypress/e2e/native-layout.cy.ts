@@ -74,6 +74,17 @@ describe('Native layout (2.2.0)', () => {
     cy.get('[data-testid="native-column-title"]').should('have.text', 'Cypress Test Server');
   });
 
+  it('switching to Classic keeps Package mode', () => {
+    // The Classic sidebar used to open on Servers every time, which threw the package view away.
+    cy.get('[data-testid="rail-package"]').click();
+    cy.get('[data-testid="inspector-package"]').should('be.visible');
+    cy.get('body').trigger('keydown', { key: 'L', ctrlKey: true, shiftKey: true });
+    cy.get('[data-testid="layout-card-classic"]').click({ force: true });
+    cy.get('[data-testid="native-shell"]').should('not.exist');
+    cy.get('[role="tab"][aria-selected="true"]').should('contain.text', 'Package');
+    cy.window().its('__store__').invoke('getState').its('app.sidebarView').should('eq', 'package');
+  });
+
   it('switching back to Classic from the menu keeps the open dialog and the channel', () => {
     cy.get('[data-testid="inspector-export"]').click();
     cy.get('[role="dialog"]').should('be.visible').and('contain.text', 'Export');

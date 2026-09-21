@@ -1,6 +1,8 @@
 import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { ChannelType } from 'discrub-core/discord-enum';
 import { useAppSelector } from '@/app/hooks';
+import { selectSidebarView } from '@features/app/appSlice';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectActiveFilteredMessages, selectActivePagination, selectActiveSelectedMessages } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
@@ -17,7 +19,12 @@ const WorkbenchStatusBar = () => {
   const pagination = useAppSelector(selectActivePagination);
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
-  const hasContext = !!channel || !!dm;
+  // In Package mode the counts belong to the package view, not to the live channel left open behind it
+  // (the bar said "0 loaded · more available" there until 2026-09-21).
+  const isPackage = useAppSelector(selectSidebarView) === 'package';
+  // A forum lists posts, and its own header counts them, so the message counts stay out there too.
+  const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
+  const hasContext = !isPackage && !isForum && (!!channel || !!dm);
   const running = summary.tier === 'heavy';
   return (
     <Box data-testid="workbench-status-bar" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, height: 26, borderTop: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', fontSize: '0.72rem', color: 'text.secondary', flexShrink: 0 }}>

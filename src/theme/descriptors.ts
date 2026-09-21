@@ -55,6 +55,8 @@ export interface ThemeAccent {
   durationS: number;
 }
 
+export type ThemeEffectsId = 'abstract';
+
 export interface ThemeDescriptor {
   /** Stable id persisted in APP_THEME_MODE. Never 'auto'. */
   id: string;
@@ -65,6 +67,8 @@ export interface ThemeDescriptor {
   tier: ThemeTier;
   palette: ThemeDescriptorPalette;
   accent?: ThemeAccent;
+  /** A named set of whole-app visual effects, drawn by `ThemeEffects`. Only Abstract has one. */
+  effects?: ThemeEffectsId;
 }
 
 export const DISCORD_DARK_ID = 'discord-dark';
@@ -510,6 +514,47 @@ const abyss: ThemeDescriptor = {
   },
 };
 
+/**
+ * Abstract (2.2.0, owner 2026-09-21): a trippy theme. Misprint colours on
+ * near-black violet, kept dark on the owner's ask. The palette is ordinary;
+ * the warped headings, twisting buttons and drifting colour live in
+ * `ThemeEffects` behind `effects: 'abstract'`.
+ */
+const abstract: ThemeDescriptor = {
+  id: 'abstract',
+  name: 'Abstract',
+  base: 'dark',
+  tier: 'supporter',
+  palette: {
+    primary: { main: '#d63bbd', light: '#f06ad9', dark: '#a02a8d', contrastText: '#12040f' },
+    secondary: { main: '#22c8d6', light: '#6fe3ec', dark: '#16939e' },
+    background: { default: '#08040e', paper: '#0f0819', elevated: '#180d27' },
+    text: { primary: '#ece4f7', secondary: '#a08fbd' },
+    error: '#ff5470',
+    warning: '#e6dc3a',
+    success: '#3ddc97',
+    divider: 'rgba(143, 91, 255, 0.2)',
+    glassBase: '#0f0819',
+    dialog: 'rgba(15, 8, 25, 0.96)',
+    tooltip: 'rgba(8, 4, 14, 0.98)',
+    link: { main: '#3fd4e0', hover: '#86e9f0' },
+    cta: { main: '#a02a8d', hover: '#872377', active: '#6e1c61' },
+    ctaDanger: { main: '#d23f5e', hover: '#b83652', active: '#9c2d45' },
+    gradient: {
+      primary: 'linear-gradient(100deg, #d63bbd 0%, #7a4be0 55%, #22c8d6 100%)',
+      primarySubtle: 'linear-gradient(100deg, rgba(214, 59, 189, 0.08) 0%, rgba(34, 200, 214, 0.08) 100%)',
+      overlay: 'linear-gradient(180deg, rgba(122, 75, 224, 0.05) 0%, transparent 100%)',
+    },
+  },
+  accent: {
+    background: 'linear-gradient(90deg, #d63bbd 0%, #e6dc3a 33%, #22c8d6 66%, #d63bbd 100%)',
+    motion: 'flow',
+    durationS: 11,
+  },
+  effects: 'abstract',
+};
+
+
 /** Registry, in display order. The first entry is the app default. */
 export const THEME_DESCRIPTORS: ThemeDescriptor[] = [
   discordDark,
@@ -526,6 +571,7 @@ export const THEME_DESCRIPTORS: ThemeDescriptor[] = [
   circuit,
   noir,
   abyss,
+  abstract,
 ];
 
 export const DEFAULT_THEME_ID = DISCORD_DARK_ID;

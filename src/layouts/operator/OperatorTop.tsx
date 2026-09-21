@@ -9,7 +9,10 @@ import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { selectIsSupporter } from '@features/supporter/supporterSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
+import BotsButton from '@components/welcome/BotsButton';
+import SupporterWallToggle from '@components/donations/SupporterWallToggle';
 import ScrublingsStage from '@components/scrublings/ScrublingsStage';
+import { selectStageRoom } from '@features/scrublings/selectors';
 import { getDmName } from '@/utils/dmListUtils';
 
 /**
@@ -22,6 +25,7 @@ const OperatorTop = () => {
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('md'));
+  const stageRoom = useAppSelector(selectStageRoom);
   const guild = useAppSelector(selectSelectedGuild);
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -29,10 +33,15 @@ const OperatorTop = () => {
   const user = useAppSelector(selectCurrentUser);
   const isSupporter = useAppSelector(selectIsSupporter);
   const isPackage = sidebarView === 'package';
-  const section = isPackage ? t('sidebar.tabPackage') : guild ? guild.name : t('sidebar.tabDms');
+  // An open DM wins over a server that is still picked behind it: Classic keeps the server when its DMs tab opens a
+  // conversation, and the crumb read "Server / person" after a switch to Operator until 2026-09-21.
+  const inDm = !!dm && !channel;
+  const section = isPackage ? t('sidebar.tabPackage') : guild && !inDm ? guild.name : t('sidebar.tabDms');
   const leaf = isPackage ? '' : channel ? `# ${channel.name}` : dm ? getDmName(dm) : '';
   return (
-    <Box data-testid="operator-top" sx={{ display: 'flex', alignItems: 'center', gap: phone ? 0.75 : 1.25, height: 56, px: phone ? 1 : 2.5, backgroundColor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+    <Box data-testid="operator-top" sx={{ display: 'flex', alignItems: 'center', gap: phone ? 0.75 : 1.25, height: 56, px: phone ? 1 : 2.5, backgroundColor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0,
+      // The Scrublings keep their room (selectStageRoom): a long server and channel name shortens before the stage does.
+      containerType: 'inline-size', ...(stageRoom > 0 ? { '@container (max-width: 760px)': { '& .operator-username': { display: 'none' } }, '@container (max-width: 680px)': { '& .appearance-label': { display: 'none' } } } : {}) }}>
       <Box sx={{ width: 28, height: 28, borderRadius: 2, backgroundColor: 'primary.main', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>D</Box>
       {!phone && (
         <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
@@ -45,14 +54,16 @@ const OperatorTop = () => {
         {leaf && <Typography variant="body2" sx={{ color: 'text.secondary', flexShrink: 0 }}>/</Typography>}
         {leaf && <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0 }}>{leaf}</Typography>}
       </Box>
-      <Box sx={{ flex: '1 1 0', alignSelf: 'stretch', position: 'relative', minWidth: 0 }}><ScrublingsStage /></Box>
+      <Box data-testid="operator-stage" sx={{ flex: '1 1 0', alignSelf: 'stretch', position: 'relative', minWidth: phone ? 0 : stageRoom }}><ScrublingsStage /></Box>
       <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
+      <BotsButton label={false} hideOnPhone />
+      <SupporterWallToggle />
       <Tooltip title={t('topbar.settings')} enterDelay={0} arrow>
         <IconButton size="small" aria-label={t('topbar.settings')} onClick={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} data-testid="operator-settings"><SettingsIcon /></IconButton>
       </Tooltip>
       {!phone && <Box data-tour="user-profile" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, pl: 0.5, pr: 1.25, py: 0.4, borderRadius: 4, backgroundColor: alpha(theme.palette.text.primary, 0.05) }}>
         <Box component="img" alt="" src={user?.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32` : undefined} sx={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid', borderColor: isSupporter ? 'cta.main' : 'transparent', backgroundColor: 'action.hover' }} />
-        <Typography variant="body2" noWrap sx={{ fontWeight: 500, maxWidth: 160 }}>{user?.global_name || user?.username || ''}</Typography>
+        <Typography variant="body2" noWrap className="operator-username" sx={{ fontWeight: 500, maxWidth: 160 }}>{user?.global_name || user?.username || ''}</Typography>
       </Box>}
     </Box>
   );

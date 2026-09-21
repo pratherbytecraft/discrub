@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback } from 'react';
-import { Drawer, Box, Tabs, Tab, keyframes, useMediaQuery, useTheme } from '@mui/material';
+import { Drawer, Box, Tabs, Tab, keyframes } from '@mui/material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSetting, selectKofiOverlayOpen, setKofiOverlayOpen } from '@features/app/appSlice';
 import { useDonations } from './useDonations';
+import { useWallOverlay } from './useWallOverlay';
 import { DonationView } from './donationTypes';
 import DonationFeed from './DonationFeed';
 import DonationLeaderboard from './DonationLeaderboard';
@@ -30,11 +31,10 @@ const skyShimmer = keyframes`
 const DonationDrawer = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
-  const theme = useTheme();
   // Below `md` the feed overlays the app as a temporary drawer (tap
   // outside or the Supporter Wall menu item closes it) instead of
   // reserving a 320px column the phone doesn't have.
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useWallOverlay();
   const showFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const overlayOpen = useAppSelector(selectKofiOverlayOpen);
   // Desktop follows the persisted setting (a remembered column); mobile

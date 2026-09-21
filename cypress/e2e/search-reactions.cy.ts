@@ -196,7 +196,7 @@ describe('Pass 1 reaction enrichment for live-feed search (#163)', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         return store.dispatch({
-          type: 'app/updateSetting/fulfilled',
+          type: 'app/updateAllSettings/fulfilled',
           payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
         });
       });

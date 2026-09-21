@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   List,
   ListItemButton,
@@ -24,7 +24,6 @@ import {
   selectSelectedGuild,
   selectGuildLoading,
   selectSelectedGuilds,
-  fetchGuilds,
   fetchCurrentMember,
   fetchRoles,
   setSelectedGuild,
@@ -40,9 +39,9 @@ import ListSkeleton from '@components/ui/ListSkeleton';
 import EmptyState from '@components/ui/EmptyState';
 import TourButton from '@components/welcome/TourButton';
 import MultiSelectControls from './MultiSelectControls';
+import { useLoadGuilds } from '@/hooks/useLoadGuilds';
 import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
 import { useTranslation } from 'react-i18next';
-import { t as translate } from '@/i18n';
 
 const PAGE_SIZE = 50;
 
@@ -78,22 +77,7 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
 
   const visible = filteredGuilds.slice(0, visibleCount);
 
-  // Fetch guilds on mount (ref prevents strict mode double-fetch)
-  const guildsFetched = useRef(false);
-  useEffect(() => {
-    if (token && guilds.length === 0 && !guildsFetched.current) {
-      guildsFetched.current = true;
-      dispatch(addStatusEntry({ level: 'info', message: translate('nav.loadingServers') }));
-      dispatch(fetchGuilds(token))
-        .unwrap()
-        .then((result) => {
-          dispatch(addStatusEntry({ level: 'info', message: translate('nav.loadedServers', { count: result.length }) }));
-        })
-        .catch(() => {
-          // Error already handled by rejected case in guildSlice
-        });
-    }
-  }, [dispatch, token, guilds.length]);
+  useLoadGuilds();
 
   // Reset visible count when filter changes
   useEffect(() => {

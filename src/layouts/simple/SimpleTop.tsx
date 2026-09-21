@@ -10,7 +10,10 @@ import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { selectIsSupporter } from '@features/supporter/supporterSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
+import BotsButton from '@components/welcome/BotsButton';
+import SupporterWallToggle from '@components/donations/SupporterWallToggle';
 import ScrublingsStage from '@components/scrublings/ScrublingsStage';
+import { selectStageRoom } from '@features/scrublings/selectors';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { getDmName } from '@/utils/dmListUtils';
 
@@ -26,6 +29,7 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('md'));
+  const stageRoom = useAppSelector(selectStageRoom);
   const guild = useAppSelector(selectSelectedGuild);
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -39,7 +43,10 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
   const leaf = isPackage ? '' : channel ? `# ${channel.name}` : dm ? `@ ${getDmName(dm)}` : '';
   const hasContext = !isPackage && (!!channel || !!dm);
   return (
-    <Box data-testid="simple-top" sx={{ display: 'flex', alignItems: 'center', gap: phone ? 0.5 : 1.25, height: 56, px: phone ? 1 : 2.5, backgroundColor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+    <Box data-testid="simple-top" sx={{ display: 'flex', alignItems: 'center', gap: phone ? 0.5 : 1.25, height: 56, px: phone ? 1 : 2.5, backgroundColor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0,
+      // The Scrublings keep their room (selectStageRoom). On a narrow bar the empty spacer left of the picker
+      // closes first (it took half the free width), then the name goes, then the Appearance button drops its word.
+      containerType: 'inline-size', ...(stageRoom > 0 ? { '@container (max-width: 1100px)': { '& .simple-spacer': { flex: '0 0 0px' } }, '@container (max-width: 760px)': { '& .simple-username': { display: 'none' } }, '@container (max-width: 700px)': { '& .appearance-label': { display: 'none' } } } : {}) }}>
       {!phone && <Box sx={{ width: 28, height: 28, borderRadius: 2, backgroundColor: 'primary.main', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 14 }}>D</Box>}
       {!phone && (
         <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
@@ -47,7 +54,7 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
           <Typography variant="caption" data-testid="simple-version" sx={{ color: 'text.secondary', lineHeight: 1.1 }}>{__APP_VERSION__}</Typography>
         </Box>
       )}
-      {!phone && <Box sx={{ flex: 1 }} />}
+      {!phone && <Box className="simple-spacer" sx={{ flex: 1 }} />}
       <Button
         onClick={onOpenPicker}
         data-testid="simple-picker"
@@ -59,7 +66,8 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
         {leaf && <Typography variant="body2" noWrap sx={{ mx: 1, color: 'text.secondary', flexShrink: 0 }}>›</Typography>}
         {leaf && <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0, flexShrink: phone ? 1 : 0 }}>{leaf}</Typography>}
       </Button>
-      {!phone && <Box sx={{ flex: 1, alignSelf: 'stretch', position: 'relative', minWidth: 0 }}><ScrublingsStage /></Box>}
+      {/* A phone keeps one slot for one character, as Classic and Operator do. */}
+      <Box data-testid="simple-stage" sx={phone ? { flex: '0 0 44px', alignSelf: 'stretch', position: 'relative' } : { flex: 1, alignSelf: 'stretch', position: 'relative', minWidth: stageRoom }}><ScrublingsStage /></Box>
       <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
       {hasContext && (
         <HotkeyTooltip actionId="openAnalytics" label={t('serverView.analytics')} arrow>
@@ -71,6 +79,8 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
           <IconButton size="small" aria-label={focusedView ? t('serverView.exitFocus') : t('serverView.focus')} onClick={() => dispatch(toggleFocusedView())} data-testid="simple-focus" data-tour="focus-button">{focusedView ? <ExitFocusIcon /> : <FocusIcon />}</IconButton>
         </HotkeyTooltip>
       )}
+      <BotsButton label={false} hideOnPhone />
+      <SupporterWallToggle />
       <Tooltip title={t('topbar.settings')} enterDelay={0} arrow>
         <IconButton size="small" aria-label={t('topbar.settings')} onClick={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} data-testid="simple-settings"><SettingsIcon /></IconButton>
       </Tooltip>
@@ -78,7 +88,7 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
         <Box sx={{ position: 'relative', display: 'inline-flex' }}>
           <Box component="img" alt="" src={user?.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32` : undefined} sx={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid', borderColor: isSupporter ? 'cta.main' : 'transparent', backgroundColor: 'action.hover' }} />
         </Box>
-        <Typography variant="body2" noWrap sx={{ fontWeight: 500, maxWidth: 160 }}>{user?.global_name || user?.username || ''}</Typography>
+        <Typography variant="body2" noWrap className="simple-username" sx={{ fontWeight: 500, maxWidth: 160 }}>{user?.global_name || user?.username || ''}</Typography>
       </Box>}
     </Box>
   );

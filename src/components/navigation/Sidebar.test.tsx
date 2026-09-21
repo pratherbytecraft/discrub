@@ -65,6 +65,24 @@ describe('Sidebar', () => {
       expect(screen.getByRole('tab', { name: 'DMs' })).toBeInTheDocument();
     });
 
+    it('opens on Package when the app is already in Package mode, and keeps that mode', () => {
+      const base = createBaseState({
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+      });
+      const { store } = renderWithProviders(<Sidebar />, { preloadedState: { ...base, app: { ...base.app, sidebarView: 'package' } } });
+      expect(screen.getByRole('tab', { name: 'Package', selected: true })).toBeInTheDocument();
+      expect(store.getState().app.sidebarView).toBe('package');
+    });
+
+    it('opens on DMs when a DM is already open', () => {
+      const base = createBaseState({
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+      });
+      const dm = createMockChannel({ id: 'dm-1', type: 1, name: null as never });
+      renderWithProviders(<Sidebar />, { preloadedState: { ...base, dm: { ...base.dm, selectedDm: dm } } });
+      expect(screen.getByRole('tab', { name: 'DMs', selected: true })).toBeInTheDocument();
+    });
+
     it('should default to Servers tab', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({

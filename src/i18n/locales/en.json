@@ -43,7 +43,6 @@
     "home": "Home",
     "homeAlt": "Discrub Home",
     "supporter": "Supporter",
-    "themesAndSupport": "Themes and Support",
     "ideasAndContact": "Ideas & Contact",
     "settings": "Settings",
     "supporterWall": "Supporter Wall",
@@ -63,15 +62,13 @@
     "button": "Appearance",
     "layout": "Layout",
     "theme": "Theme",
-    "hint": "Click to apply. The eye previews a locked one.",
     "locked": "Locked",
     "soon": "Soon",
     "lockedLayout": "{{name}} (supporter layout, locked)",
     "soonLayout": "{{name}} (coming soon)",
-    "hub": "Themes and Support",
-    "supporterName": "Supporter · {{name}}",
+    "supporter": "Supporter",
+    "settingsPointer": "Layouts, themes and Scrublings are under Appearance on the top bar.",
     "displaySettings": "Display settings",
-    "layoutHelp": "Pick how Discrub is laid out. Themes apply to every layout.",
     "datesAndLanguage": "Dates and language",
     "previewBar": "Previewing {{name}}",
     "previewThis": "Preview {{name}}",
@@ -88,8 +85,6 @@
     "free": "Free",
     "fullHint": "Up to {{max}} at once. Unpick one first.",
     "lockedOne": "{{name}} (supporter Scrubling, locked)",
-    "hintFree": "Suds and the Mage are free. The rest come with supporter access.",
-    "hintSupporter": "Custom Scrublings are made to order on Ko-fi.",
     "names": {
       "suds": "Suds",
       "mage": "Mage",
@@ -109,10 +104,12 @@
       "pker": "Wizard hat, leather body, black d'hide chaps, a dragon scimitar. Skulls up when a Purge starts.",
       "alien": "Rides a saucer. Beams up the 1s and 0s while a Purge runs.",
       "ghost": "The spirit of deleted messages. Eats them during a Purge."
-    }
+    },
+    "customFree": "Custom Scrublings are free for everyone once they're added.",
+    "request": "Request a custom Scrubling",
+    "designedBy": "Designed by {{name}}"
   },
   "native": {
-    "pickOne": "Pick a server, a conversation or the package",
     "loaded": "{{count}} loaded",
     "selected": "{{count}} selected",
     "inspector": "Inspector",
@@ -141,7 +138,10 @@
     "date": "Date",
     "sortByDate": "Sort by date",
     "selectRow": "Select message",
-    "attachmentOnly": "{{count}} attachment"
+    "attachmentOnly": "{{count}} attachment",
+    "embedOnly": "Embed: {{text}}",
+    "embed": "Embed",
+    "stickerOnly": "Sticker: {{name}}"
   },
   "workbench": {
     "progress": "Progress",
@@ -157,34 +157,34 @@
     "channelCount": "{{count}} channels"
   },
   "operator": {
-      "pickServer": "Pick a server",
+    "pickServer": "Pick a server",
     "pickServerHint": "Pick a server above to see its channels.",
-      "queueEmpty": "Tick channels to build a queue. One is fine, so is the whole server.",
-      "queued": "{{count}} channels queued",
-      "queueRun": "{{done}} done, 1 running, {{left}} queued",
-      "queueCount": "{{count}} channels in the queue",
-      "queueNone": "Nothing queued yet",
-      "queueHint": "Load All works on the open channel. Export and Purge run through the queue.",
-      "loadAllIn": "in {{name}}",
-      "loadAllNone": "Open a channel first",
-      "attempt": "attempt {{attempt}} of {{max}}",
-      "latestIn": "Latest in {{name}}",
-      "noConversation": "No conversation open",
-      "openFeed": "Open feed",
-      "backToRun": "Back to the run",
-      "recentExports": "Recent exports",
-      "tabQueue": "Queue",
-      "tabRun": "Run",
-      "tabFeed": "Feed",
-      "tabRecent": "Recent",
-      "state": {
-          "idle": "Idle",
-          "running": "Running",
-          "paused": "Paused",
-          "restBreak": "Rest break",
-          "retrying": "Retrying",
-          "retryPaused": "Paused after retries"
-      }
+    "queueEmpty": "Tick channels to build a queue. One is fine, so is the whole server.",
+    "queued": "{{count}} channels queued",
+    "queueRun": "{{done}} done, 1 running, {{left}} queued",
+    "queueCount": "{{count}} channels in the queue",
+    "queueNone": "Nothing queued yet",
+    "queueHint": "Load All works on the open channel. Export and Purge run through the queue.",
+    "loadAllIn": "in {{name}}",
+    "loadAllNone": "Open a channel first",
+    "attempt": "attempt {{attempt}} of {{max}}",
+    "latestIn": "Latest in {{name}}",
+    "noConversation": "No conversation open",
+    "openFeed": "Open feed",
+    "backToRun": "Back to the run",
+    "recentExports": "Recent exports",
+    "tabQueue": "Queue",
+    "tabRun": "Run",
+    "tabFeed": "Feed",
+    "tabRecent": "Recent",
+    "state": {
+      "idle": "Idle",
+      "running": "Running",
+      "paused": "Paused",
+      "restBreak": "Rest break",
+      "retrying": "Retrying",
+      "retryPaused": "Paused after retries"
+    }
   },
   "timeline": {
     "dayCount_one": "{{count, number}} message",
@@ -515,15 +515,13 @@
     "resetting": "Resetting…",
     "confirm": "Reset everything"
   },
-  "corkboard": {
+  "bots": {
+    "button": "Bots",
+    "title": "Bots From The Developer",
+    "learnMore": "Learn more",
     "addToDiscord": "Add to Discord",
-    "title": "From the Discrub team",
-    "showBoard": "Show the board",
-    "hideBoard": "Hide the board",
-    "previousBot": "Previous bot",
-    "nextBot": "Next bot",
-    "showBot": "Show {{name}}",
-    "ideaPrompt": "Have an idea for a bot? <idea>Tell me about it.</idea>"
+    "follow": "Follow @{{handle}}",
+    "idea": "Have an idea for a bot?"
   },
   "welcome": {
     "title": "Welcome to Discrub",
@@ -1495,19 +1493,19 @@
   "supporter": {
     "close": "Close Supporter dialog",
     "thankYou": "Thank you for supporting Discrub",
-    "themes": "Themes",
-    "unlocks": "Your support unlocks a growing pack of cosmetic themes",
+    "themes": "Cosmetics",
+    "unlocks": "Your support unlocks a growing pack of cosmetics",
     "keyIssuedTo": "Supporter key issued to {{name}}",
     "refreshTooltip": "Refresh now. Your key checks in on its own about once a day.",
     "refreshKey": "Refresh key",
     "removeTooltip": "Remove this key from this device. That also stops the daily check-in.",
     "removeKey": "Remove key",
     "feature": {
-      "themes": "Themes",
+      "themes": "Cosmetics",
       "hosted": "Bleeding Edge"
     },
     "blurb": {
-      "themes": "Full theme pack in the app and in exports, animated accents, custom export footer",
+      "themes": "Supporter layouts, themes and Scrublings, the themes in exports too, animated accents, custom export footer",
       "hosted": "Hosted early-access build with new features before they clear store review"
     },
     "hostedPlanBlurb": "Everything in Supporter, plus the hosted early-access build with new features before they clear store review",
@@ -1531,7 +1529,7 @@
       "title": "Your supporter access has ended.",
       "body": "Layout and theme are back to {{layout}} and {{theme}}. Your settings are kept.",
       "baseTheme": "Dark Original",
-      "after": "After renewing, open Themes and Support and click Refresh.",
+      "after": "After renewing, open Appearance, pick Supporter and click Refresh.",
       "close": "Close"
     },
     "revokedNote": "This key is no longer active. Paste a fresh key below.",

@@ -25,8 +25,8 @@ describe('Scrublings selectors', () => {
   });
 
   it('shows free picks without a key and hides supporter picks until one is present', () => {
-    const state = stateWith({ [DiscrubSetting.APP_SCRUBLINGS_PICKED]: '["cat","suds","ghost"]' });
-    expect(selectScrublingsPicked(state)).toEqual(['cat', 'suds', 'ghost']);
+    const state = stateWith({ [DiscrubSetting.APP_SCRUBLINGS_PICKED]: '["dog","suds","ghost"]' });
+    expect(selectScrublingsPicked(state)).toEqual(['dog', 'suds', 'ghost']);
     expect(selectScrublingsVisible(state)).toEqual(['suds']);
   });
 

@@ -4,7 +4,7 @@ import {
   createScheduler, stepScheduler, syncScheduler, viewScheduler,
   type OperationView, type SchedulerInput, type SchedulerState,
 } from './scheduler';
-import { SCRUBLINGS, type ScrublingId } from './descriptors';
+import { PAIR_ACTIONS, SCRUBLINGS, type ScrublingId } from './descriptors';
 
 const W = 400;
 const rng = () => 0.5;
@@ -97,6 +97,26 @@ describe('Scrublings scheduler', () => {
     expect(char(s, 'dog').x).not.toBe(x0);
   });
 
+  it('never shows the same exchange twice in a row for a scene', () => {
+    const scene = PAIR_ACTIONS.find((p) => p.scene === 'cat+dog:walk/run')!;
+    let s = createScheduler(['cat', 'dog'], W, { cat: 0.5, dog: 0.55 }, -PAIR_GRACE_MS, rng);
+    let now = 100;
+    let last: string | undefined;
+    const seen = new Set<string>();
+    for (let round = 0; round < 12; round += 1) {
+      s = stepScheduler(s, { ...input(now), rng: () => (round * 0.37) % 1 });
+      expect(s.pair, `round ${round}`).not.toBeNull();
+      const first = viewScheduler(s, now).caption!.text;
+      expect(scene.lines.some(([l]) => l === first)).toBe(true);
+      expect(first).not.toBe(last);
+      last = first; seen.add(first);
+      now += PAIR_COOLDOWN_MS + PAIR_MS + 10;
+      // Put them back side by side: the scene slides them apart.
+      s = { ...s, pair: null, chars: s.chars.map((c) => ({ ...c, mode: 'idle' as const, until: now + 60000, motion: null, x: c.id === 'cat' ? W * 0.5 : W * 0.55 })) };
+    }
+    expect(seen.size).toBeGreaterThan(2);
+  });
+
   it('starts a pair action when two free characters stand close, after a grace period, with a two minute cooldown', () => {
     let s = createScheduler(['cat', 'dog'], W, { cat: 0.5, dog: 0.55 }, 0, rng);
     s = stepScheduler(s, input(100));
@@ -108,9 +128,11 @@ describe('Scrublings scheduler', () => {
     expect(char(s, 'cat').mode).toBe('pair');
     expect(char(s, 'cat').facing).toBe(1);
     expect(char(s, 'dog').facing).toBe(-1);
-    const view = viewScheduler(s, 100);
-    expect(view.caption?.text).toBe('Zoom.');
-    expect(viewScheduler(s, 100 + PAIR_MS / 2 + 1).caption?.text).toBe('Truce.');
+    // One of the scene's exchanges: its first line, then its second.
+    const scene = PAIR_ACTIONS.find((p) => p.scene === 'cat+dog:walk/run')!;
+    const picked = scene.lines.find(([first]) => first === viewScheduler(s, 100).caption?.text);
+    expect(picked).toBeDefined();
+    expect(viewScheduler(s, 100 + PAIR_MS / 2 + 1).caption?.text).toBe(picked![1]);
     s = stepScheduler(s, input(100 + PAIR_MS + 1));
     expect(s.pair).toBeNull();
     expect(char(s, 'cat').mode).toBe('idle');

@@ -20,7 +20,8 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('[data-testid="layout-card-timeline"]').should('not.have.attr', 'aria-disabled');
     cy.get('[data-testid="layout-locked-timeline"]').should('exist');
     cy.get('[data-testid="layout-locked-workbench"]').should('exist');
-    cy.get('[data-testid="appearance-hint"]').should('have.text', 'Click to apply. The eye previews a locked one.');
+    cy.get('[data-testid="appearance-hint"]').should('not.exist');
+    cy.get('[data-testid="appearance-tab-layout"] svg').should('not.exist');
     cy.get('body').type('{esc}');
     cy.get('[data-testid="appearance-popover"]').should('not.exist');
   });
@@ -42,19 +43,19 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('[data-testid="gift-button"]').should('have.attr', 'data-theme-name', 'Terminal');
   });
 
-  it('reaches the Themes and Support hub from the footer', () => {
+  it('holds supporter access in its fourth segment, with the key box in view', () => {
     cy.openThemesHub();
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.get('[data-testid="supporter-paste-key"]').should('be.visible');
+    cy.get('[data-testid="supporter-footer-controls"]').scrollIntoView().should('be.visible');
+    cy.closeAppearance();
   });
 
-  it('shows the layout block in Settings > Display with Classic selected', () => {
+  it('keeps layouts out of Settings > Display', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="appearance-open-settings"]').click();
     cy.get('[role="dialog"]').contains('[role="tab"]', 'Display').click();
-    cy.get('[data-testid="display-layout-block"]').should('be.visible');
-    cy.get('[data-testid="settings-layout-classic"]').should('have.attr', 'aria-pressed', 'true');
-    cy.get('[data-testid="settings-layout-timeline"]').should('not.be.disabled');
+    cy.get('[data-testid="display-layout-block"]').should('not.exist');
+    cy.get('[data-testid="display-appearance-pointer"]').should('be.visible');
     cy.contains('Dates and language').should('be.visible');
     cy.get('body').type('{esc}');
   });
@@ -88,11 +89,14 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('[data-testid="gift-button"]').should('have.attr', 'data-layout', 'classic');
   });
 
-  it('a click outside the bar, or Esc, ends a preview and nothing is saved', () => {
+  it('a click outside the bar keeps the preview, End preview or Esc ends it, and nothing is saved', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-preview-timeline"]').click();
     cy.get('[data-testid="timeline-shell"]').should('exist');
-    cy.get('body').click(640, 600);
+    cy.get('body').click(640, 300);
+    cy.get('[data-testid="timeline-shell"]').should('exist');
+    cy.get('[data-testid="preview-bar"]').should('have.attr', 'data-nudges', '1');
+    cy.get('[data-testid="preview-end"]').click();
     cy.get('[data-testid="timeline-shell"]').should('not.exist');
 
     cy.get('[data-testid="gift-button"]').click();

@@ -1,12 +1,13 @@
+import { EXTRA_LINES, MAX_LINE_LENGTH } from './pairLines';
 import { describe, it, expect } from 'vitest';
 import { MAX_PICKED, PAIR_ACTIONS, SCRUBLINGS, SCRUBLING_IDS, pairActionsFor, pairKey, resolveActivity } from './descriptors';
 import { activityFrames, frameDataUri } from './spriteRender';
 import { SPRITE_H, SPRITE_W } from './spriteTypes';
 
 describe('Scrubling descriptors', () => {
-  it('has eight characters, two of them free, and a cap of three', () => {
+  it('has eight characters, three of them free, and a cap of three', () => {
     expect(SCRUBLING_IDS).toHaveLength(8);
-    expect(SCRUBLING_IDS.filter((id) => SCRUBLINGS[id].tier === 'free')).toEqual(['suds', 'mage']);
+    expect(SCRUBLING_IDS.filter((id) => SCRUBLINGS[id].tier === 'free')).toEqual(['suds', 'mage', 'cat']);
     expect(MAX_PICKED).toBe(3);
   });
 
@@ -73,7 +74,7 @@ describe('Scrubling descriptors', () => {
     expect(pairActionsFor('mage', 'adventurer', 'rune')).toHaveLength(2);
     const dh = pairActionsFor('adventurer', 'mage', 'dharok');
     expect(dh).toHaveLength(1);
-    expect(dh[0].captions[0]).toBe('1 hp.');
+    expect(dh[0].captions[1]).toBe('1 hp. Perfect.');
     // Pairs without a set variant fall back to the rune one.
     expect(pairActionsFor('cat', 'adventurer', 'dharok')).toEqual(pairActionsFor('cat', 'adventurer', 'rune'));
   });
@@ -88,5 +89,32 @@ describe('Scrubling descriptors', () => {
     expect(activityFrames(SCRUBLINGS.suds.sheet, 'nope')).toEqual(SCRUBLINGS.suds.sheet.activities.idle);
     expect(activityFrames(SCRUBLINGS.suds.sheet, 'puzzled')).toEqual(['puzzled', 'idle1']);
     expect(frameDataUri(SCRUBLINGS.suds.sheet, 'idle1')).toBe(uri);
+  });
+
+  describe('pair exchanges', () => {
+    it('every scene has its original plus at least four more, and well over a hundred in all', () => {
+      for (const p of PAIR_ACTIONS) {
+        expect(p.lines[0]).toEqual(p.captions);
+        expect(p.lines.length, p.scene).toBeGreaterThanOrEqual(5);
+      }
+      expect(PAIR_ACTIONS.reduce((n, p) => n + p.lines.length, 0)).toBeGreaterThan(150);
+    });
+
+    it('every extra belongs to a real scene, fits the caption, and no scene repeats an exchange', () => {
+      const scenes = new Set(PAIR_ACTIONS.map((p) => p.scene));
+      for (const key of Object.keys(EXTRA_LINES)) expect(scenes.has(key), key).toBe(true);
+      for (const p of PAIR_ACTIONS) {
+        const seen = new Set<string>();
+        for (const [first, second] of p.lines) {
+          for (const line of [first, second]) {
+            expect(line.length, `${p.scene}: ${line}`).toBeGreaterThan(0);
+            expect(line.length, `${p.scene}: ${line}`).toBeLessThanOrEqual(MAX_LINE_LENGTH);
+          }
+          const both = `${first}|${second}`;
+          expect(seen.has(both), `${p.scene}: ${both}`).toBe(false);
+          seen.add(both);
+        }
+      }
+    });
   });
 });

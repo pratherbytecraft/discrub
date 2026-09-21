@@ -23,24 +23,33 @@ const openTab = async (state = stateWith()) => {
 };
 
 describe('Appearance menu, Scrublings tab', () => {
-  it('lists eight cards, two free and picked, six locked without a key, with the free hint', async () => {
+  it('lists eight cards, three free, two picked, five locked without a key, and no hint line', async () => {
     await openTab();
     expect(screen.getAllByTestId(/^scrubling-card-/)).toHaveLength(8);
     expect(screen.getByTestId('scrubling-card-suds')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-mage')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-cat')).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getAllByTestId(/^scrubling-locked-/)).toHaveLength(6);
-    expect(screen.getByLabelText('Cat (supporter Scrubling, locked)')).toBeInTheDocument();
-    expect(screen.getAllByText('Free')).toHaveLength(2);
+    expect(screen.getAllByTestId(/^scrubling-locked-/)).toHaveLength(5);
+    expect(screen.getByLabelText('Dog (supporter Scrubling, locked)')).toBeInTheDocument();
+    expect(screen.getAllByText('Free')).toHaveLength(3);
     expect(screen.getByTestId('scrublings-count')).toHaveTextContent('2 of 3 picked');
     expect(screen.getByTestId('scrublings-switch').querySelector('input')).toBeChecked();
-    expect(screen.getByTestId('appearance-hint')).toHaveTextContent('Suds and the Mage are free. The rest come with supporter access.');
+    expect(screen.queryByTestId('appearance-hint')).toBeNull();
   });
 
-  it('opens the hub on a locked card and never changes the picks', async () => {
+  it('links to the Ko-fi requests page for a custom Scrubling, and shows no designer on the first eight', async () => {
+    await openTab();
+    const link = screen.getByTestId('scrublings-request');
+    expect(link).toHaveAttribute('href', 'https://ko-fi.com/prathercc/commissions');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveTextContent('Request a custom Scrubling');
+    expect(screen.queryByTestId(/^scrubling-designer-/)).toBeNull();
+  });
+
+  it('goes to the Supporter segment on a locked card and never changes the picks', async () => {
     const { store } = await openTab();
     fireEvent.click(screen.getByTestId('scrubling-card-ghost'));
-    expect(store.getState().supporter.dialogOpen).toBe(true);
+    expect(await screen.findByTestId('supporter-panel')).toBeInTheDocument();
     expect(store.getState().app.settings?.[DiscrubSetting.APP_SCRUBLINGS_PICKED]).toBe('["suds","mage"]');
   });
 
@@ -54,10 +63,9 @@ describe('Appearance menu, Scrublings tab', () => {
     expect(store.getState().app.settings?.[DiscrubSetting.APP_SCRUBLINGS_ENABLED]).toBe('false');
   });
 
-  it('with a key: picks a supporter one, caps at three, and shows the supporter hint', async () => {
+  it('with a key: picks a supporter one, and caps at three', async () => {
     const { store } = await openTab(stateWith({}, true));
     expect(screen.queryAllByTestId(/^scrubling-locked-/)).toHaveLength(0);
-    expect(screen.getByTestId('appearance-hint')).toHaveTextContent('Custom Scrublings are made to order on Ko-fi.');
     fireEvent.click(screen.getByTestId('scrubling-card-cat'));
     expect(store.getState().app.settings?.[DiscrubSetting.APP_SCRUBLINGS_PICKED]).toBe('["suds","mage","cat"]');
     expect(screen.getByTestId('scrublings-count')).toHaveTextContent('3 of 3 picked');

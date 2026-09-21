@@ -25,7 +25,7 @@ const openDonationDrawer = () => {
     const store = (win as any).__store__;
     if (store) {
       store.dispatch({
-        type: 'app/updateSetting/fulfilled',
+        type: 'app/updateAllSettings/fulfilled',
         payload: { ...store.getState().app.settings, appShowKoFiFeed: 'true' },
       });
     }

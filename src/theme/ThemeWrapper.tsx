@@ -8,6 +8,7 @@ import { selectHasThemes, selectSupporter } from '@features/supporter/supporterS
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { getThemeById, findThemeDescriptor, resolveThemeIdFromSetting } from './theme';
 import { globalStyles } from './globalStyles';
+import ThemeEffects from './ThemeEffects';
 
 interface ThemeWrapperProps {
   children: React.ReactNode;
@@ -41,6 +42,7 @@ const ThemeWrapper = ({ children }: ThemeWrapperProps) => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <GlobalStyles styles={globalStyles} />
+      <ThemeEffects />
       {children}
     </ThemeProvider>
   );

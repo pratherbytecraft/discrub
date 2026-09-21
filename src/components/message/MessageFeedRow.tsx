@@ -293,6 +293,9 @@ const MessageFeedRow = memo(function MessageFeedRow({
         display: 'block',
         py: 0.25,
         pr: 6,
+        // The gutter keeps text clear of the hover bar at the top right. In a feed under 420 px it cost a fifth of
+        // the line (Operator's peek wrapped a sentence over five lines), and the bar only covers the name line, so it goes.
+        '@container (max-width: 420px)': { pr: 1 },
         borderRadius: 0.5,
         cursor: 'pointer',
         transition: 'background-color 100ms ease',

@@ -20,9 +20,10 @@ describe('WelcomePanel', () => {
     expect(screen.getByText(/powerful Discord data management tool/)).toBeInTheDocument();
   });
 
-  it('should render the bots corkboard', () => {
+  it('no longer carries the bots board, which moved to the Bots button on the top bar', () => {
     renderWithProviders(<WelcomePanel onStartTour={mockOnStartTour} />);
-    expect(screen.getByText('From the Discrub team')).toBeInTheDocument();
+    expect(screen.queryByTestId('bots-corkboard')).not.toBeInTheDocument();
+    expect(screen.queryByText(/become a founder/i)).not.toBeInTheDocument();
   });
 
   it('should render Take a Tour button', () => {
@@ -52,7 +53,7 @@ describe('WelcomePanel', () => {
       expect(screen.getByTestId('welcome-github-actions')).toBeInTheDocument();
     });
 
-    it('no longer crowds the action row with a Follow button (it moved to the corkboard polaroid)', () => {
+    it('no longer crowds the action row with a Follow button (it lives in the Bots menu and on the What\'s New dialog)', () => {
       renderWithProviders(<WelcomePanel onStartTour={mockOnStartTour} />);
       const cluster = screen.getByTestId('welcome-github-actions');
       expect(cluster.querySelectorAll('a')).toHaveLength(1);

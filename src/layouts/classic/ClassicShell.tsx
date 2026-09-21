@@ -49,22 +49,24 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
         <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
           {!focusedView && <Sidebar open={sidebarOpen} onClose={onSidebarClose} />}
 
-          <Box
-            sx={{
-              flexGrow: 1,
-              overflow: 'auto',
-              backgroundColor: 'background.default',
-            }}
-          >
-            {sidebarView === 'package' ? (
-              <PackageView />
-            ) : (
-              <ServerView onStartShellTour={onStartShellTour} />
-            )}
+          {/* The status log lives in the content column, so the closed bar and the open sheet span the same width and the sidebar runs to the bottom edge. */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0, overflow: 'hidden' }}>
+            <Box
+              sx={{
+                flexGrow: 1,
+                overflow: 'auto',
+                backgroundColor: 'background.default',
+              }}
+            >
+              {sidebarView === 'package' ? (
+                <PackageView />
+              ) : (
+                <ServerView onStartShellTour={onStartShellTour} />
+              )}
+            </Box>
+            {!focusedView && <StatusPanel sheetInset={isMobile ? 0 : SIDEBAR_WIDTH} />}
           </Box>
         </Box>
-
-        {!focusedView && <StatusPanel sheetInset={isMobile ? 0 : SIDEBAR_WIDTH} />}
       </Box>
 
       {!focusedView && <DonationDrawer />}

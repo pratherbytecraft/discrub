@@ -43,7 +43,7 @@ const searchByTerm = (pages: Record<string, ReturnType<typeof msg>[]>, urls: str
 const disableReactionEnrichment = () => {
   cy.window().then((win) => {
     const store = (win as any).__store__;
-    store.dispatch({ type: 'app/updateSetting/fulfilled', payload: { ...store.getState().app.settings, reactionsEnabled: 'false' } });
+    store.dispatch({ type: 'app/updateAllSettings/fulfilled', payload: { ...store.getState().app.settings, reactionsEnabled: 'false' } });
   });
 };
 

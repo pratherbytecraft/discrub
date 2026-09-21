@@ -108,7 +108,7 @@ const TimelineStrip = () => {
             <Chip size="small" variant="outlined" label={t('timeline.newest')} data-testid="timeline-jump-newest" onClick={() => jumpTo([...model.bars].reverse().find((b) => b.count > 0)?.newestId ?? null)} />
             <Chip size="small" variant="outlined" label={t('timeline.oldest')} data-testid="timeline-jump-oldest" onClick={() => jumpTo(model.bars.find((b) => b.count > 0)?.newestId ?? null)} />
             <Chip size="small" variant="outlined" icon={<CalendarIcon sx={{ fontSize: 15 }} />} label={t('timeline.pickDate')} data-testid="timeline-pick-date" onClick={() => { const el = dateInput.current; if (!el) return; if (typeof el.showPicker === 'function') el.showPicker(); else el.focus(); }} />
-            <Box component="input" type="date" ref={dateInput} min={model.firstDay} max={model.lastDay} aria-label={t('timeline.pickDate')} data-testid="timeline-date-input" onChange={(e: React.ChangeEvent<HTMLInputElement>) => jumpToDate(e.target.value)} sx={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }} />
+            <Box component="input" type="date" ref={dateInput} min={model.firstDay} max={model.lastDay} aria-label={t('timeline.pickDate')} data-testid="timeline-date-input" onChange={(e: React.ChangeEvent<HTMLInputElement>) => jumpToDate(e.target.value)} sx={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }} />
           </>
         )}
         <Box sx={{ flex: 1 }} />
@@ -117,7 +117,7 @@ const TimelineStrip = () => {
           {' · '}{loadedLine}{pagination.hasMore && !running && sidebarView !== 'package' ? ` · ${t('timeline.olderNeedLoadAll')}` : ''}
         </Typography>
       </Box>
-      <Box ref={scroller} sx={{ overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'thin' }}>
+      <Box ref={scroller} sx={{ overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'thin', scrollbarColor: `${theme.palette.divider} transparent` }}>
         <Box data-testid="timeline-bars" onPointerOver={(e: React.PointerEvent) => { const d = dragRef.current; if (!d) return; const el = (e.target as HTMLElement).closest('[data-index]'); if (el) { dragRef.current = { start: d.start, end: Number(el.getAttribute('data-index')) }; setDrag(dragRef.current); } }} sx={{ display: 'flex', alignItems: 'flex-end', gap: `${MONTH_GAP}px`, width: 'max-content', userSelect: 'none', touchAction: 'pan-x' }}>
           {groups.map((g, gi) => (
             <Box key={g.month} sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, flexShrink: 0, width: g.bars.length * (barWidth + BAR_GAP) - BAR_GAP }}>

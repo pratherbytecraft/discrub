@@ -22,6 +22,18 @@ describe('Shell behaviours (2.2.0)', () => {
     });
   });
 
+  describe('channel action row', () => {
+    it('wraps inside its card at tablet width, so Export stays on screen', () => {
+      cy.viewport(900, 1000);
+      // The feed column is 580 px wide here. The row used to run past the card and cut Export off.
+      cy.get('[data-tour="export-button"]').first().then(($b) => {
+        expect($b[0].getBoundingClientRect().right).to.be.at.most(900);
+      });
+      cy.get('[data-tour="export-button"]').first().should('be.visible');
+      cy.viewport(1280, 800);
+    });
+  });
+
   describe('access-ended notice', () => {
     const payload = { v: 1, kid: 'k', jti: 'j', name: 'Aaron', eh: 'x', ent: { themes: null }, iat: 1, exp: null };
     it('appears once when a valid key comes back expired, names the fallback, and closes', () => {
@@ -33,7 +45,7 @@ describe('Shell behaviours (2.2.0)', () => {
       cy.get('[data-testid="access-ended-notice"]').should('be.visible')
         .and('contain.text', 'Your supporter access has ended.')
         .and('contain.text', 'Layout and theme are back to Classic and Dark Original. Your settings are kept.')
-        .and('contain.text', 'After renewing, open Themes and Support and click Refresh.');
+        .and('contain.text', 'After renewing, open Appearance, pick Supporter and click Refresh.');
       cy.get('[data-testid="access-ended-notice"] [aria-label="Close"]').click();
       cy.get('[data-testid="access-ended-notice"]').should('not.exist');
       // Still expired on the next refresh: quiet.

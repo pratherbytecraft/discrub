@@ -507,12 +507,18 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
         direction="row"
         spacing={1}
         alignItems="center"
+        useFlexGap
         sx={{
           mb: 1.5,
           px: 1,
           py: 0.75,
           borderRadius: 1,
           backgroundColor: 'action.hover',
+          // In a 580 px column the count and both "selected" buttons broke onto two lines each. The row wraps as a
+          // whole and its words stay on one line.
+          flexWrap: 'wrap',
+          rowGap: 0.75,
+          '& .MuiButton-root, & > .MuiTypography-root': { whiteSpace: 'nowrap' },
         }}
       >
         <Checkbox
@@ -936,17 +942,19 @@ const MessageRow = memo(function MessageRow({
         {avatarInitial}
       </Avatar>
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Stack direction="row" spacing={1} alignItems="baseline">
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        {/* One line: the name and time never break, the long message id gives way first and shortens with an ellipsis. */}
+        <Stack direction="row" spacing={1} alignItems="baseline" sx={{ minWidth: 0 }}>
+          <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0, flexShrink: 1 }}>
             {authorName}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
             {displayTime}
           </Typography>
           <Typography
             variant="caption"
             color="text.disabled"
-            sx={{ fontFamily: 'monospace' }}
+            noWrap
+            sx={{ fontFamily: 'monospace', minWidth: 0, flexShrink: 1000 }}
           >
             {message.id}
           </Typography>

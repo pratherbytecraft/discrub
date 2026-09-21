@@ -315,8 +315,8 @@ const supporterSlice = createSlice({
   name: 'supporter',
   initialState: initialSupporterState,
   reducers: {
-    setSupporterDialogOpen: (state, action: PayloadAction<boolean>) => {
-      state.dialogOpen = action.payload;
+    setSupporterPanelOpen: (state, action: PayloadAction<boolean>) => {
+      state.panelOpen = action.payload;
       if (!action.payload) state.claimError = null;
     },
     clearClaimError: (state) => {
@@ -396,7 +396,7 @@ const supporterSlice = createSlice({
   },
 });
 
-export const { setSupporterDialogOpen, clearClaimError, markGiftAttentionSeen, dismissAccessEndedNotice } =
+export const { setSupporterPanelOpen, clearClaimError, markGiftAttentionSeen, dismissAccessEndedNotice } =
   supporterSlice.actions;
 
 // Selectors
@@ -417,7 +417,7 @@ export const selectSupporterLastRefreshAt = (state: RootState) =>
   state.supporter.lastRefreshAt;
 export const selectSupporterKeyStatus = (state: RootState) => state.supporter.keyStatus;
 export const selectSupporterPayload = (state: RootState) => state.supporter.payload;
-export const selectSupporterDialogOpen = (state: RootState) => state.supporter.dialogOpen;
+export const selectSupporterPanelOpen = (state: RootState) => state.supporter.panelOpen;
 export const selectGiftAttentionSeen = (state: RootState) =>
   state.supporter.giftAttentionSeen;
 export const selectSupporterClaimInProgress = (state: RootState) =>

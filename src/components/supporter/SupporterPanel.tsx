@@ -4,8 +4,6 @@ import {
   Button,
   Checkbox,
   CircularProgress,
-  Dialog,
-  DialogContent,
   Divider,
   FormControlLabel,
   IconButton,
@@ -19,22 +17,15 @@ import {
 } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import {
-  Palette as PaletteIcon,
-  WorkspacePremium as BadgeIcon,
   Autorenew as RefreshIcon,
   DeleteOutline as RemoveIcon,
   FileUpload as UploadIcon,
-  FavoriteBorder as HeartIcon,
   CheckCircle as IncludedIcon,
   RadioButtonUnchecked as NotIncludedIcon,
   Lock as LockIcon,
 } from '@mui/icons-material';
-import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectSetting, updateSetting, setPreviewTheme } from '@features/app/appSlice';
-import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import {
-  selectSupporterDialogOpen,
   selectSupporterKeyStatus,
   selectSupporterPayload,
   selectSupporterClaimInProgress,
@@ -43,7 +34,6 @@ import {
   selectSupporterLastRefreshAt,
   selectIsSupporter,
   selectHasThemes,
-  setSupporterDialogOpen,
   refreshSupporterKey,
   applyPastedSupporterKey,
   removeSupporterKey,
@@ -61,18 +51,14 @@ import {
   FOOTER_ICON_ACCEPTED_TYPES,
   processFooterIconFile,
 } from '@services/exportFooter';
-import { ThemeGrid } from '@components/settings/tabs/ThemePicker';
-import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import KofiIcon from './KofiIcon';
 
 import {
   KOFI_MONTHLY_URL,
   KOFI_SUPPORTER_YEARLY_URL,
   KOFI_BLEEDING_EDGE_YEARLY_URL,
-  KOFI_COMMISSIONS_URL,
   HOSTED_URL,
 } from '@services/kofiLinks';
-import { useFullScreenDialog } from '@/hooks/useFullScreenDialog';
 import { Trans } from 'react-i18next';
 import i18next from 'i18next';
 import { t as translate } from '@/i18n';
@@ -118,23 +104,20 @@ const kofiButtonSx = {
 } as const;
 
 /**
- * The Themes and Supporter hub behind the toolbar palette button: one
- * place for switching themes, supporting, and applying a key.
+ * The Supporter segment of the Appearance popover (2.2.0). It took over from
+ * the Themes and Support dialog, so layouts, themes, Scrublings and supporter
+ * access all live in one place (owner, 2026-09-20).
  *
- * Reading order (owner decision 2026-08-20): who you are and what you
- * have first, then the perks. Supporters see an access card directly
- * under the title (name, one row per feature, Refresh/Remove icon
- * buttons), then the theme grid, animations toggle, and export footer
- * controls. Non-supporters see the purchase grid and paste box first,
- * then the grid with locked previews, and the footer controls shown
- * disabled so the perk is visible rather than hidden. Nothing is
- * pinned; the dialog scrolls naturally.
+ * Reading order (owner decision 2026-08-20): who you are and what you have
+ * first, then the perks. Supporters see an access card (name, one row per
+ * feature, Refresh and Remove), then the export footer controls.
+ * Non-supporters see the plans and the key box first, then the footer
+ * controls shown disabled so the perk is visible rather than hidden. The
+ * theme grid and the animations toggle live in the Theme segment.
  */
-const SupporterDialog = () => {
+const SupporterPanel = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
-  const fullScreen = useFullScreenDialog();
-  const open = useAppSelector(selectSupporterDialogOpen);
   const keyStatus = useAppSelector(selectSupporterKeyStatus);
   const payload = useAppSelector(selectSupporterPayload);
   const claimInProgress = useAppSelector(selectSupporterClaimInProgress);
@@ -142,10 +125,6 @@ const SupporterDialog = () => {
   const lastRefreshAt = useAppSelector(selectSupporterLastRefreshAt);
   const isSupporter = useAppSelector(selectIsSupporter);
   const hasThemes = useAppSelector(selectHasThemes);
-  const operationRunning = useAppSelector(selectIsOperationRunning);
-  const themeSetting = useAppSelector(selectSetting(DiscrubSetting.APP_THEME_MODE)) || 'auto';
-  const animationsSetting =
-    useAppSelector(selectSetting(DiscrubSetting.APP_THEME_ANIMATIONS)) || 'true';
 
   const footer = useAppSelector(selectSupporterFooter);
 
@@ -154,19 +133,6 @@ const SupporterDialog = () => {
   const [footerTextDraft, setFooterTextDraft] = useState<string | null>(null);
   const [iconError, setIconError] = useState<string | null>(null);
   const iconInputRef = useRef<HTMLInputElement>(null);
-
-  const handleClose = () => {
-    dispatch(setSupporterDialogOpen(false));
-  };
-
-  const handleThemePick = (id: string) => {
-    dispatch(updateSetting({ key: DiscrubSetting.APP_THEME_MODE, value: id }));
-  };
-  // A live preview swaps the theme under the whole app, so the hub closes and PreviewBar takes over.
-  const handleThemePreview = (id: string) => {
-    dispatch(setPreviewTheme(id));
-    dispatch(setSupporterDialogOpen(false));
-  };
 
   const handlePasteApply = () => {
     if (!pastedKey.trim() || claimInProgress) return;
@@ -211,44 +177,10 @@ const SupporterDialog = () => {
   const footerRemoved = hasThemes && footer.removed;
 
   return (
-    <Dialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="sm"
-      fullWidth
-      fullScreen={fullScreen}
-      PaperProps={{ sx: { bgcolor: 'background.paper' }, 'data-testid': 'supporter-dialog' } as object}
-    >
-      <Box sx={{ px: 3, pt: 3, pb: 1, textAlign: 'center', position: 'relative', flexShrink: 0 }}>
-        <DialogCloseIcon onClose={handleClose} label={t('supporter.close')} />
-
-        {isSupporter ? (
-          <BadgeIcon sx={{ fontSize: 32, color: 'cta.main' }} />
-        ) : (
-          <PaletteIcon sx={{ fontSize: 32, color: 'cta.main' }} />
-        )}
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          {isSupporter ? t('supporter.thankYou') : t('supporter.themes')}
-        </Typography>
-        {!isSupporter && (
-          <Typography
-            variant="body2"
-            sx={{
-              color: 'text.secondary',
-              mt: 0.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 0.5,
-            }}
-          >
-            {t('supporter.unlocks')}
-            <HeartIcon sx={{ fontSize: 14, color: '#ff5e5b' }} />
-          </Typography>
-        )}
-      </Box>
-
-      <DialogContent sx={{ px: 3, pt: 1, pb: 3 }}>
+    <Box data-testid="supporter-panel" sx={{ p: 1.75 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, textAlign: 'center' }} data-testid="supporter-heading">
+        {isSupporter ? t('supporter.thankYou') : t('supporter.unlocks')}
+      </Typography>
         {/* ---- Access (supporter) or purchase + paste (everyone else) ---- */}
         {payload && keyStatus !== 'none' && keyStatus !== 'invalid' ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
@@ -498,58 +430,6 @@ const SupporterDialog = () => {
           </Box>
         )}
 
-        <Divider sx={{ mb: 2 }} />
-
-        {/* ---- Themes ---- */}
-        <Box data-testid="supporter-theme-showcase">
-          <ThemeGrid
-            value={themeSetting}
-            onChange={handleThemePick}
-            onPreview={operationRunning ? undefined : handleThemePreview}
-            isSupporter={hasThemes}
-            cardWidth={104}
-            centered
-          />
-          <Typography
-            variant="caption"
-            sx={{ display: 'block', color: 'text.secondary', textAlign: 'center', mt: 1.5 }}
-            data-testid="supporter-commission-note"
-          >
-            <Trans
-              i18nKey="supporter.wantTheme"
-              components={{ kofi: <Link href={KOFI_COMMISSIONS_URL} target="_blank" rel="noopener noreferrer" underline="hover" sx={{ fontWeight: 600 }} /> }}
-            />
-          </Typography>
-        </Box>
-
-        <FormControlLabel
-          sx={{ mt: 1.5, alignItems: 'flex-start' }}
-          control={
-            <Checkbox
-              size="small"
-              sx={{ mt: -0.5 }}
-              checked={animationsSetting === 'true'}
-              onChange={(e) =>
-                dispatch(
-                  updateSetting({
-                    key: DiscrubSetting.APP_THEME_ANIMATIONS,
-                    value: e.target.checked ? 'true' : 'false',
-                  }),
-                )
-              }
-              inputProps={{ 'data-testid': 'theme-animations-toggle' } as object}
-            />
-          }
-          label={
-            <Box>
-              <Typography variant="body2">{t('supporter.themeAnimations')}</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {t('supporter.themeAnimationsHelp')}
-              </Typography>
-            </Box>
-          }
-        />
-
         {/* ---- Export footer (live for supporters, shown disabled otherwise) ---- */}
         <Divider sx={{ my: 2 }} />
         <Box
@@ -683,9 +563,8 @@ const SupporterDialog = () => {
             )}
           </Box>
         </Box>
-      </DialogContent>
-    </Dialog>
+    </Box>
   );
 };
 
-export default SupporterDialog;
+export default SupporterPanel;

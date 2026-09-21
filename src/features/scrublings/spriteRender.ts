@@ -39,3 +39,17 @@ export const activityFrames = (sheet: SpriteSheet, activity: string): string[] =
   if (sheet.frames[activity]) return [activity];
   return sheet.activities.idle ?? Object.keys(sheet.frames).slice(0, 1);
 };
+
+const headRows = new Map<string, number>();
+/** The first row with art in a sheet's idle frames, which is where the head starts when the character stands still. */
+export const headRow = (sheet: SpriteSheet): number => {
+  const cached = headRows.get(sheet.id);
+  if (cached !== undefined) return cached;
+  const tops = Object.entries(sheet.frames)
+    .filter(([name]) => name.startsWith('idle'))
+    .map(([, rows]) => rows.findIndex((row) => /[^.\s]/.test(row)))
+    .filter((top) => top >= 0);
+  const top = tops.length ? Math.min(...tops) : 0;
+  headRows.set(sheet.id, top);
+  return top;
+};

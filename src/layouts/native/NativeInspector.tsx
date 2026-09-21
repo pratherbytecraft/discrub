@@ -67,6 +67,8 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
         </Card>
       ) : (
         <Card title={isForum ? t('native.thisForum') : dm ? t('native.thisConversation') : t('native.thisChannel')} testId="inspector-actions">
+          {/* The loaded count lives here too: the head row hides its strip on a narrow bar so the Scrublings keep their room. */}
+          {!isForum && <Typography variant="caption" noWrap data-testid="inspector-loaded" sx={{ color: 'text.secondary', display: 'block', mb: 0.75 }}>{t('native.loaded', { count: messages.length })}{pagination.hasMore ? ` · ${t('serverView.moreAvailable')}` : ''}</Typography>}
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75 }}>
             {!isForum && actionBtn(t('serverView.loadAll'), <LoadAllIcon />, () => open('loadAll'), { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained', testId: 'inspector-load-all' })}
             {actionBtn(t('serverView.export'), <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), { disabled: running || (isForum ? false : messages.length === 0), testId: 'inspector-export' })}

@@ -7,12 +7,14 @@ import {
   DISCORD_LIGHT_ID,
   findThemeDescriptor,
 } from './descriptors';
-import type { ThemeAccent } from './descriptors';
+import type { ThemeAccent, ThemeEffectsId } from './descriptors';
 
 declare module '@mui/material/styles' {
   interface Theme {
     /** Supporter themes' animated accent strip; absent on free themes. */
     themeAccent?: ThemeAccent;
+    /** Whole-app visual effects some themes carry; see ThemeEffects. */
+    themeEffects?: ThemeEffectsId;
     customShadows: {
       elevation1: string;
       elevation2: string;
@@ -39,6 +41,7 @@ declare module '@mui/material/styles' {
   }
   interface ThemeOptions {
     themeAccent?: ThemeAccent;
+    themeEffects?: ThemeEffectsId;
     customShadows?: {
       elevation1?: string;
       elevation2?: string;

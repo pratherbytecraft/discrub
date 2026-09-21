@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor, renderWithProviders } from '@/test/test-utils';
-import { DiscrubSetting } from 'discrub-core/discrub-enum';
-import SupporterDialog from './SupporterDialog';
+import SupporterPanel from './SupporterPanel';
 import { createBaseState } from '@/test/state-factories';
 import { initialSupporterState } from '@features/supporter/supporterTypes';
 import type { SupporterKeyPayload } from '@services/supporterKeyService';
@@ -64,30 +63,24 @@ const payload: SupporterKeyPayload = {
 };
 
 const renderDialog = (supporterOverrides = {}) =>
-  renderWithProviders(<SupporterDialog />, {
+  renderWithProviders(<SupporterPanel />, {
     preloadedState: createBaseState({
-      supporter: { ...initialSupporterState, initialized: true, dialogOpen: true, ...supporterOverrides },
+      supporter: { ...initialSupporterState, initialized: true, ...supporterOverrides },
     }) as never,
   });
 
-describe('SupporterDialog', () => {
+describe('SupporterPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe('non-supporter state', () => {
-    it('shows the pitch, the full theme grid with locks, and the 2x2 purchase grid', () => {
+    it('shows the pitch and the purchase grid, and leaves the theme grid to the Theme segment', () => {
       renderDialog();
 
-      expect(screen.getByText(/growing pack of cosmetic themes/i)).toBeInTheDocument();
+      expect(screen.getByText(/growing pack of cosmetics/i)).toBeInTheDocument();
 
-      // The hub carries the full grid: free themes clickable, supporter
-      // themes locked.
-      const showcase = screen.getByTestId('supporter-theme-showcase');
-      expect(showcase).toBeInTheDocument();
-      expect(screen.getByTestId('theme-card-auto')).toBeInTheDocument();
-      expect(screen.getByTestId('theme-card-terminal')).toBeInTheDocument();
-      expect(screen.getByTestId('theme-locked-amoled-void')).toBeInTheDocument();
+      expect(screen.queryByTestId('theme-card-auto')).toBeNull();
 
       // Two tiers, one Ko-fi button each; the period toggle swaps price + URL.
       expect(screen.getByTestId('supporter-kofi-themes-monthly')).toHaveAttribute(
@@ -117,28 +110,6 @@ describe('SupporterDialog', () => {
       expect(screen.queryByText(/lifetime/i)).toBeNull();
     });
 
-    it('applies a free theme instantly from the grid', async () => {
-      const { store } = renderDialog();
-      fireEvent.click(screen.getByTestId('theme-card-terminal'));
-      await waitFor(() => expect(store.getState().app.settings?.appThemeMode).toBe('terminal'));
-    });
-
-    it('the eye on a locked theme card starts a preview and closes the hub', () => {
-      const { store } = renderDialog();
-      fireEvent.click(screen.getByTestId('theme-preview-amoled-void'));
-      expect(store.getState().app.preview?.theme).toBe('amoled-void');
-      expect(store.getState().supporter.dialogOpen).toBe(false);
-    });
-
-    it('clicking a locked theme card changes nothing', () => {
-      const { store } = renderDialog();
-      const before = store.getState().app.settings?.appThemeMode;
-      fireEvent.click(screen.getByTestId('theme-card-amoled-void'));
-      expect(store.getState().supporter.dialogOpen).toBe(true);
-      expect(store.getState().app.settings?.appThemeMode).toBe(before);
-      expect(screen.queryByTestId('theme-selected-amoled-void')).toBeNull();
-    });
-
     it('discloses key delivery and the daily check-in, and never says "code"', () => {
       renderDialog();
       // The sender address is a mailto link for support questions.
@@ -148,7 +119,7 @@ describe('SupporterDialog', () => {
       );
       expect(screen.getByText(/right after you join/i)).toBeInTheDocument();
       expect(screen.getByText(/about once a day/i)).toBeInTheDocument();
-      expect(screen.getByTestId('supporter-dialog').textContent?.toLowerCase()).not.toContain(
+      expect(screen.getByTestId('supporter-panel').textContent?.toLowerCase()).not.toContain(
         'code',
       );
     });
@@ -165,19 +136,6 @@ describe('SupporterDialog', () => {
       expect(screen.getByTestId('supporter-footer-enabled')).toBeDisabled();
       expect(screen.getByTestId('supporter-footer-enabled')).toBeChecked();
       expect(screen.getByTestId('supporter-footer-upload')).toBeDisabled();
-    });
-
-    it('toggles theme animations instantly from the hub', async () => {
-      const { store } = renderDialog();
-      const toggle = screen.getByTestId('theme-animations-toggle');
-      expect(toggle).toBeChecked();
-
-      fireEvent.click(toggle);
-      await waitFor(() => {
-        expect(
-          store.getState().app.settings?.[DiscrubSetting.APP_THEME_ANIMATIONS],
-        ).toBe('false');
-      });
     });
 
     it('disables Apply until a key is pasted, then unlocks', async () => {
@@ -222,7 +180,7 @@ describe('SupporterDialog', () => {
   });
 
   describe('supporter state', () => {
-    it('shows the access card above the grid with one row per feature', () => {
+    it('shows the access card with one row per feature', () => {
       renderDialog({ keyStatus: 'valid', payload, lastRefreshAt: Date.now() - 3 * 60 * 60 * 1000 });
 
       expect(screen.getByText(/issued to Aaron P\./i)).toBeInTheDocument();
@@ -234,12 +192,6 @@ describe('SupporterDialog', () => {
       expect(screen.getByTestId('supporter-checkin-note')).toHaveTextContent(/Checked 3 hours ago/);
       expect(screen.getByTestId('supporter-checkin-note')).toHaveTextContent(/Renews automatically/);
       expect(screen.getByTestId('supporter-refresh-key')).not.toBeDisabled();
-      expect(screen.queryByTestId('theme-locked-amoled-void')).toBeNull();
-      expect(screen.getByTestId('theme-card-amoled-void')).toBeInTheDocument();
-      // Access card renders before the theme grid in document order.
-      const status = screen.getByTestId('supporter-status');
-      const grid = screen.getByTestId('supporter-theme-showcase');
-      expect(status.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       // No purchase grid for supporters.
       expect(screen.queryByTestId('supporter-purchase-grid')).toBeNull();
     });
@@ -346,12 +298,5 @@ describe('SupporterDialog', () => {
     });
   });
 
-  it('offers theme commissions under the theme grid', () => {
-    renderDialog();
-    const note = screen.getByTestId('supporter-commission-note');
-    expect(note).toHaveTextContent('Want a theme of your own?');
-    const link = screen.getByRole('link', { name: 'Commission one on Ko-fi' });
-    expect(link).toHaveAttribute('href', 'https://ko-fi.com/prathercc/commissions');
-    expect(link).toHaveAttribute('target', '_blank');
-  });
+
 });

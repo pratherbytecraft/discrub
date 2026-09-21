@@ -27,6 +27,7 @@ import ChannelAvatar from '@components/ui/ChannelAvatar';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { selectSelectedChannel, selectChannels, fetchChannelById } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
+import { getDmDisplayName, getDmName } from '@/utils/dmListUtils';
 import { selectSelectedGuild, selectRoles, selectCurrentMemberRoles, selectGuildEmojis, fetchGuildEmojis } from '@features/guild/guildSlice';
 import type { SelectableEmoji } from '@/utils/emojiDataset';
 import { selectAuthToken } from '@features/auth/authSlice';
@@ -350,9 +351,12 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   }, [selectedGuild?.id, selectedGuild?.permissions, memberRoles, currentContext, currentUser?.id]);
 
   // Resolve active context name (thread name when on thread tab, channel/DM name otherwise)
+  // A one to one DM has no name of its own, so it takes the person's: display name first, then username.
+  // Until 2026-09-21 the header and the tab said "Direct Message" for every DM while the other layouts' bars named the person.
+  const baseContextName = currentContext?.name || (selectedDm ? getDmDisplayName(selectedDm) || getDmName(selectedDm) : '') || t('common.directMessage');
   const activeContextName = activeTab && threadTabs[activeTab]
     ? threadTabs[activeTab].threadName
-    : currentContext?.name || t('common.directMessage');
+    : baseContextName;
 
 
   // #226: search criteria and the partial-results warning are per-conversation
@@ -887,7 +891,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
             {isDm
               ? <DmAvatar dm={selectedDm} size={28} />
               : selectedChannel && <ChannelAvatar channel={selectedChannel} size={28} />}
-            <Typography variant="h6" noWrap>
+            <Typography variant="h6" noWrap data-testid="context-title">
               {activeContextName}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
@@ -970,7 +974,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
               )}
             </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap', maxWidth: { xs: '100%', md: 'none' }, whiteSpace: 'nowrap' }}>
+          {/* Capped at the card's width at every size: the column can be 580 px wide in a 900 px window, and uncapped the row pushed Export off the edge. */}
+          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap', maxWidth: '100%', whiteSpace: 'nowrap' }}>
             {!isForumChannel && pagination.hasMore &&
               (pagination.mode === 'paginated' || pagination.mode === 'search') && (
               <HotkeyTooltip actionId="loadAll" label={t('serverView.loadAllMessages')} arrow>
@@ -1127,7 +1132,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
           </Alert>
         )}
 
-      <ThreadTabBar channelName={currentContext?.name || t('common.directMessage')} />
+      <ThreadTabBar channelName={baseContextName} />
 
       {!isForumChannel && (
         <MessageActions

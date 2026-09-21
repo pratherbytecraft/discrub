@@ -6,13 +6,22 @@ import {
 import { activityFrames } from './spriteRender';
 import { SPRITE_W } from './spriteTypes';
 
-/** Rendered width of one character (2x). */
-export const CHAR_W = SPRITE_W * 2;
+/**
+ * How much the 20 by 28 sprites are enlarged on a bar. It was 2 until
+ * 2026-09-20: at 56 px tall the heads were clipped by a 48 px bar and the
+ * caption had nowhere to go. 1.5 gives 30 by 42, which clears every bar. The
+ * sprites are SVG rects, so a half step stays sharp.
+ */
+export const STAGE_SCALE = 1.5;
+/** Rendered width of one character. */
+export const CHAR_W = SPRITE_W * STAGE_SCALE;
 /** Room one character needs on the bar; the stage shows floor(width / SLOT_W) of the picks. */
-export const SLOT_W = 52;
-export const MIN_STAGE_W = 44;
+export const SLOT_W = 40;
+export const MIN_STAGE_W = 34;
 /** Two characters closer than this (centre to centre) can start a pair action. */
-export const PAIR_DISTANCE = 70;
+export const PAIR_DISTANCE = 54;
+/** Pair motions are written in pixels for the old 2x size; this brings them to the current one. */
+const MOTION_SCALE = STAGE_SCALE / 2;
 export const PAIR_MS = 4400;
 export const PAIR_COOLDOWN_MS = 2 * 60 * 1000;
 /** No pair scene right after the bar appears; they settle in first. */
@@ -53,7 +62,7 @@ export interface CharState {
   motion: { kind: 'slide' | 'rise'; amount: number; seconds: number; origin: number } | null;
 }
 
-export interface ActivePair { key: string; a: ScrublingId; b: ScrublingId; action: PairAction; since: number; until: number }
+export interface ActivePair { key: string; a: ScrublingId; b: ScrublingId; action: PairAction; /** The exchange picked for this meeting. */ captions: [string, string]; since: number; until: number }
 
 export interface SchedulerState {
   width: number;
@@ -65,6 +74,8 @@ export interface SchedulerState {
   cooldowns: Record<string, number>;
   pairsAfter: number;
   pair: ActivePair | null;
+  /** The exchange each scene showed last, so the next meeting says something else. */
+  lastLines: Record<string, number>;
   nextSwapAt: number;
 }
 
@@ -88,7 +99,7 @@ export interface CharView {
   lift: number;
   set: ScrublingSet;
 }
-export interface CaptionView { text: string; x: number }
+export interface CaptionView { text: string; x: number; /** Who says it, so the stage can set the text against that character's head. */ speaker: ScrublingId }
 export interface StageView { chars: CharView[]; caption: CaptionView | null }
 
 const FRAME_MS: Record<string, number> = { idle: 600, walk: 180, run: 150, equip: 500, unequip: 500 };
@@ -112,6 +123,7 @@ export const createScheduler = (ids: ScrublingId[], width: number, positions: Re
   cooldowns: {},
   pairsAfter: now + PAIR_GRACE_MS,
   pair: null,
+  lastLines: {},
   nextSwapAt: now + between(SWAP_MIN_MS, SWAP_MAX_MS, rng),
 });
 
@@ -166,6 +178,7 @@ export const stepScheduler = (state: SchedulerState, input: SchedulerInput): Sch
   const dt = Math.max(0, Math.min(1000, now - Math.max(...next.chars.map((c) => c.since), 0))) / 1000;
   let pair = next.pair && now < next.pair.until && !event ? next.pair : null;
   const cooldowns = { ...next.cooldowns };
+  let lastLines = next.lastLines ?? {};
   let nextSwapAt = next.nextSwapAt;
   const clicks = new Set(input.clicks);
 
@@ -200,7 +213,7 @@ export const stepScheduler = (state: SchedulerState, input: SchedulerInput): Sch
         const origin = c.motion?.origin ?? c.x;
         const t = ((now - pair.since) / 1000) / actor.motion.seconds;
         const phase = t % 2 < 1 ? t % 1 : 1 - (t % 1);
-        const amount = actor.motion.amount * phase;
+        const amount = actor.motion.amount * MOTION_SCALE * phase;
         return actor.motion.kind === 'rise'
           ? { ...c, facing, lift: amount, motion: { ...actor.motion, origin } }
           : { ...c, facing, x: wrap(origin + amount * facing, width), motion: { ...actor.motion, origin } };
@@ -243,7 +256,12 @@ export const stepScheduler = (state: SchedulerState, input: SchedulerInput): Sch
         const options = pairActionsFor(a.id, b.id, adventurer?.set ?? 'rune');
         if (options.length === 0) continue;
         const action = options[Math.floor(rng() * options.length) % options.length];
-        pair = { key, a: action.a, b: action.b, action, since: now, until: now + PAIR_MS };
+        // Any exchange but the one this scene showed last.
+        const last = lastLines[action.scene];
+        const pool = action.lines.map((_, n) => n).filter((n) => action.lines.length === 1 || n !== last);
+        const line = pool[Math.floor(rng() * pool.length) % pool.length];
+        lastLines = { ...lastLines, [action.scene]: line };
+        pair = { key, a: action.a, b: action.b, action, captions: action.lines[line], since: now, until: now + PAIR_MS };
         cooldowns[key] = now + PAIR_COOLDOWN_MS;
         chars = chars.map((c): CharState => {
           if (c.id !== action.a && c.id !== action.b) return c;
@@ -268,7 +286,7 @@ export const stepScheduler = (state: SchedulerState, input: SchedulerInput): Sch
     }
   }
 
-  return { ...next, chars, pair, cooldowns, nextSwapAt };
+  return { ...next, chars, pair, cooldowns, lastLines, nextSwapAt };
 };
 
 /** What to draw right now: every character's frame and place, and the one caption if any. */
@@ -290,11 +308,14 @@ export const viewScheduler = (state: SchedulerState, now: number): StageView => 
     const a = state.chars.find((c) => c.id === state.pair!.a); const b = state.chars.find((c) => c.id === state.pair!.b);
     if (a && b) {
       const half = now - state.pair.since < PAIR_MS / 2 ? 0 : 1;
-      caption = { text: state.pair.action.captions[half], x: (centre(a) + centre(b)) / 2 };
+      // Overhead text, the way players talk in OSRS: each line floats over whoever says it.
+      const firstSpeaker = state.pair.action.first === a.id ? a : b;
+      const speaker = half === 0 ? firstSpeaker : firstSpeaker === a ? b : a;
+      caption = { text: state.pair.captions[half], x: centre(speaker), speaker: speaker.id };
     }
   } else if (adv && adv.mode === 'equip') {
     const half = now - adv.since < EQUIP_MS * 0.75 ? 0 : 1;
-    caption = { text: SCRUBLINGS.adventurer.dharok!.captions[half], x: centre(adv) };
+    caption = { text: SCRUBLINGS.adventurer.dharok!.captions[half], x: centre(adv), speaker: adv.id };
   }
   return { chars, caption };
 };

@@ -242,7 +242,8 @@ const ForumThreadList = ({
       )}
 
       {/* Thread cards — always visible when we have data */}
-      {!showFullSkeletons && <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+      {/* In a list under 360 px (Operator's peek column) the time drops under the title, or the title kept only a word. */}
+      {!showFullSkeletons && <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, containerType: 'inline-size', '@container (max-width: 360px)': { '& .forum-title-row': { flexWrap: 'wrap', rowGap: 0 }, '& .forum-title': { flexBasis: 'calc(100% - 32px)' }, '& .forum-time': { flexBasis: '100%', pl: 3 } } }}>
         {filteredThreads.map((thread) => {
           const metadata = (thread as any).thread_metadata;
           const isLocked = metadata?.locked;
@@ -295,7 +296,7 @@ const ForumThreadList = ({
               )}
 
               {/* Title row */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <Box className="forum-title-row" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                 {isLocked ? (
                   <LockedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
                 ) : (
@@ -303,6 +304,7 @@ const ForumThreadList = ({
                 )}
                 <Typography
                   variant="body2"
+                  className="forum-title"
                   sx={{
                     fontWeight: 600,
                     flex: 1,
@@ -314,7 +316,7 @@ const ForumThreadList = ({
                   {thread.name || t('forum.untitledPost')}
                 </Typography>
                 {activityTimestamp && (
-                  <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0 }}>
+                  <Typography variant="caption" color="text.disabled" className="forum-time" sx={{ flexShrink: 0 }}>
                     {timeAgo(activityTimestamp)}
                   </Typography>
                 )}

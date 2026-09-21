@@ -12,6 +12,8 @@ import PackageChannelList from '@components/package/PackageChannelList';
 import DevToolsFlask from '@components/ui/DevToolsFlask';
 
 export const COLUMN_WIDTH = 248;
+/** Height of Native's head and of the column header beside it, so their bottom edges line up. 56 leaves the Scrublings' overhead text the same room above and below as Simple and Operator (owner, 2026-09-21; was 48). */
+export const NATIVE_HEAD_HEIGHT = 56;
 
 /**
  * Channel column (Native): the server's channels when one is picked, the
@@ -40,7 +42,7 @@ const NativeColumn = () => {
         '& [data-tour="multi-select-toggle"] .MuiButton-startIcon': { m: 0 },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.5, height: 48, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.5, height: NATIVE_HEAD_HEIGHT, borderBottom: '1px solid', borderColor: 'divider' }}>
         {selectedGuild && sidebarView === 'server' && (
           <IconButton size="small" aria-label={t('sidebar.backToServers')} onClick={() => dispatch(setSelectedGuild(null))} data-testid="native-column-back"><ArrowBackIcon sx={{ fontSize: 18 }} /></IconButton>
         )}
@@ -53,7 +55,8 @@ const NativeColumn = () => {
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16 }} /></InputAdornment>, sx: { fontSize: '0.85rem', borderRadius: 1.5, backgroundColor: alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.25 : 0.04) } }}
         />
       </Box>
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      {/* The column's own title already says DMs, and the narrow column cut "Direct Messages" to "DIRECT ME...". The row keeps its buttons, right aligned. */}
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', '& [data-testid="dm-list-heading"]': { visibility: 'hidden' } }}>
         {sidebarView === 'package' ? <PackageChannelList filterText={filterText} /> : dmMode ? <DMList filterText={filterText} /> : <ChannelList filterText={filterText} />}
       </Box>
       <Box data-tour="user-profile" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.25, py: 1, borderTop: '1px solid', borderColor: 'divider', backgroundColor: alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.2 : 0.04) }}>

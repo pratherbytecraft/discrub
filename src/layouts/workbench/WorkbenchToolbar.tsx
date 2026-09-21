@@ -1,4 +1,4 @@
-import { Box, Button, IconButton, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Button, IconButton, Typography } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, FilterList as FilterIcon, Forum as ThreadIcon, BarChart as AnalyticsIcon, Fullscreen as FocusIcon, FullscreenExit as ExitFocusIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { ChannelType } from 'discrub-core/discord-enum';
@@ -15,6 +15,13 @@ import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
  * Purge, Filters, Load Thread, Analytics, and Focus at the end. Each opens the
  * same store-driven dialog the other layouts use.
  */
+/**
+ * The labels need about 680 px. The bar measures itself, not the window: it is
+ * 580 px wide in a 900 px window and 640 px beside the supporter wall at
+ * 1280 px, and a window breakpoint let the buttons shrink into each other there.
+ */
+const COMPACT = '@container (max-width: 700px)';
+
 const WorkbenchToolbar = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -26,17 +33,15 @@ const WorkbenchToolbar = () => {
   const pagination = useAppSelector(selectActivePagination);
   const summary = useAppSelector(selectOperationSummary);
   const running = summary.tier === 'heavy';
-  // Phones show icons only; the labels return from md up.
-  const compact = useMediaQuery(useTheme().breakpoints.down('md'));
   const isPackage = sidebarView === 'package';
   const hasContext = !isPackage && (!!channel || !!dm);
   const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
   const open = (dialog: 'loadAll' | 'export' | 'forumExport' | 'purge' | 'filters' | 'threadLoad' | 'analytics') => dispatch(setDialogOpen({ dialog, open: true }));
   const btn = (label: string, icon: React.ReactNode, onClick: () => void, testId: string, opts: { disabled?: boolean; color?: 'primary' | 'error' | 'inherit'; variant?: 'contained' | 'outlined' | 'text'; tour?: string } = {}) => (
-    <Button size="small" variant={opts.variant ?? 'outlined'} color={opts.color ?? 'inherit'} startIcon={icon} onClick={onClick} disabled={opts.disabled} data-testid={testId} data-tour={opts.tour} aria-label={label} sx={{ textTransform: 'none', borderColor: 'divider', whiteSpace: 'nowrap', minWidth: 0, ...(compact ? { px: 1, '& .MuiButton-startIcon': { m: 0 } } : {}) }}>{compact ? null : label}</Button>
+    <Button size="small" variant={opts.variant ?? 'outlined'} color={opts.color ?? 'inherit'} startIcon={icon} onClick={onClick} disabled={opts.disabled} data-testid={testId} data-tour={opts.tour} aria-label={label} sx={{ textTransform: 'none', borderColor: 'divider', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 0, [COMPACT]: { px: 1, '& .MuiButton-startIcon': { m: 0 }, '& .wb-label': { display: 'none' } } }}><span className="wb-label">{label}</span></Button>
   );
   return (
-    <Box data-testid="workbench-toolbar" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, height: 44, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', flexShrink: 0, overflowX: 'auto' }}>
+    <Box data-testid="workbench-toolbar" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, height: 44, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', flexShrink: 0, overflowX: 'auto', containerType: 'inline-size' }}>
       {hasContext ? (
         <>
           {!isForum && btn(t('serverView.loadAll'), <LoadAllIcon />, () => open('loadAll'), 'wb-load-all', { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained' })}

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   AppBar, Toolbar, Avatar, Typography, IconButton, Box, Tooltip,
   Dialog, DialogContent, Menu, MenuItem, ListItemIcon, ListItemText,
@@ -15,6 +15,7 @@ import {
   Reddit as RedditIcon,
   WarningAmber as WarningIcon,
   MoreVert as MoreIcon,
+  SmartToy as BotsIcon,
   Menu as MenuIcon,
   Star as StarIcon,
 } from '@mui/icons-material';
@@ -24,15 +25,17 @@ import { selectCurrentUser } from '@features/user/userSlice';
 import { clearToken, forgetRememberedToken } from '@features/auth/authSlice';
 import { clearCurrentUser } from '@features/user/userSlice';
 import { clearGuilds, setSelectedGuild } from '@features/guild/guildSlice';
-import { clearChannels, setSelectedChannel, selectSelectedChannel } from '@features/channel/channelSlice';
-import { clearDMs, setSelectedDm, selectSelectedDm } from '@features/dm/dmSlice';
+import { clearChannels, setSelectedChannel } from '@features/channel/channelSlice';
+import { clearDMs, setSelectedDm } from '@features/dm/dmSlice';
 import { clearMessages } from '@features/message/messageSlice';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
-import { selectSetting, updateSetting, setMinimized, setKofiOverlayOpen, selectSidebarView,
+import { selectSetting, updateSetting, setMinimized, setKofiOverlayOpen,
   setDialogOpen,
 } from '@features/app/appSlice';
-import TopBarBotSpot from '@components/welcome/TopBarBotSpot';
+import BotsButton, { BotsPopover } from '@components/welcome/BotsButton';
 import ScrublingsStage from '@components/scrublings/ScrublingsStage';
+import { selectStageRoom } from '@features/scrublings/selectors';
+import { useWallOverlay } from '@components/donations/useWallOverlay';
 import { selectIsHeavyOperationRunning, selectOperationSummary } from '@features/app/operationSelectors';
 import { reopenAnnouncement, fetchAnnouncementMarkdownThunk } from '@features/announcement/announcementSlice';
 import { isOverlayMode, closeOverlay, minimizeOverlay } from '@/extension/messaging';
@@ -76,39 +79,15 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   // compact bar (no username/version text; Settings + Logout live in
   // the More menu) so a 390px phone fits without horizontal scroll.
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const wallOverlay = useWallOverlay();
+  const stageRoom = useAppSelector(selectStageRoom);
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'));
   // `md` and up: room for everything, so Supporter Wall, r/discrub and
   // View Announcement sit inline and the More menu (which would be empty)
   // is not rendered at all.
   const isWide = useMediaQuery(theme.breakpoints.up('md'));
-  // The bot spotlight needs real acreage. A window media query alone lies
-  // here — the donation drawer takes 320px off the bar — so the bar's
-  // middle is measured directly and the spotlight renders only when the
-  // gap can actually hold it. The `lg` gate spares narrow windows the
-  // observer entirely; jsdom (no ResizeObserver) keeps the default true
-  // so tests exercise the spotlight under the mocked media query.
-  const hasSpotRoom = useMediaQuery(theme.breakpoints.up('lg'));
-  const middleRef = useRef<HTMLDivElement>(null);
-  const [middleFits, setMiddleFits] = useState(true);
-  // The spotlight card, measured by the Scrublings stage so it can fade while a character crosses it.
-  const spotRef = useRef<HTMLDivElement>(null);
-  const [spotCovered, setSpotCovered] = useState(false);
-  useLayoutEffect(() => {
-    const el = middleRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    // ~400px holds the spot with the tagline ellipsizing; below that the
-    // card collapses into its buttons and the bar is better off bare.
-    const measure = () => setMiddleFits(el.offsetWidth >= 400);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
   const currentUser = useAppSelector(selectCurrentUser);
   const cachedUserMap = useAppSelector(selectCachedUserMap);
-  const selectedChannel = useAppSelector(selectSelectedChannel);
-  const selectedDm = useAppSelector(selectSelectedDm);
-  const sidebarView = useAppSelector(selectSidebarView);
   const showKofiFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
   const operationSummary = useAppSelector(selectOperationSummary);
@@ -118,6 +97,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [ideasOpen, setIdeasOpen] = useState(false);
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
+  const [botsAnchor, setBotsAnchor] = useState<null | HTMLElement>(null);
 
   const handleGoHome = () => {
     dispatch(setSelectedGuild(null));
@@ -131,7 +111,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   };
 
   const handleToggleKofi = () => {
-    if (isMobile) {
+    if (wallOverlay) {
       // Phone: open the wall as an overlay; the persisted column setting is untouched.
       dispatch(setKofiOverlayOpen(true));
       return;
@@ -192,10 +172,20 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
         color: 'text.primary',
         borderBottom: 1,
         borderColor: 'divider',
+        // The bar is the measured box, so the Toolbar's own gap can follow the bar's width (a box cannot query itself).
+        containerType: 'inline-size',
         boxShadow: (theme) => theme.customShadows?.elevation1 || '0 2px 8px rgba(0, 0, 0, 0.2)',
       }}
     >
-      <Toolbar sx={{ gap: { xs: 1, sm: 2 }, minWidth: 0, overflow: 'hidden' }}>
+      {/* The Scrublings keep their room (selectStageRoom) before the bar keeps its words. Beside the supporter
+          wall at 1280 px the bar is 960 px, and the stage used to get 60 px there, one character. In order:
+          the version goes and the gaps tighten, a long name shortens with an ellipsis (it never pushes Log out
+          off the bar), then the name goes, then the Appearance button drops its word. */}
+      <Toolbar sx={{ gap: { xs: 1, sm: 2 }, minWidth: 0, overflow: 'hidden', ...(stageRoom > 0 ? {
+        '@container (max-width: 1100px)': { gap: 1, '& .topbar-version': { display: 'none' }, '& .topbar-right': { gap: 0.75 }, '& .bots-label': { display: 'none' }, '& [data-testid="bots-button"]': { minWidth: 0, px: 1 }, '& [data-testid="bots-button"] .MuiButton-startIcon': { mx: 0 } },
+        '@container (max-width: 880px)': { '& .topbar-username': { display: 'none' } },
+        '@container (max-width: 800px)': { '& .appearance-label': { display: 'none' } },
+      } : {}) }}>
         {isMobile && onMenuClick && (
           <IconButton
             color="inherit"
@@ -248,6 +238,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
           )}
           <Typography
             variant="caption"
+            className="topbar-version"
             sx={{
               display: isCompact ? 'none' : undefined,
               color: (theme: Theme) => alpha(theme.palette.primary.main, 0.7),
@@ -263,35 +254,21 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
           </Typography>
         </Box>
 
-        {/* The bar's flexible middle. Away from the welcome screen (the
-            corkboard's home) it carries the compact bot spotlight; it
-            steps aside whenever a heavy operation needs the user's eyes,
-            and only bars 1200px and up have the room for it at all. */}
-        <Box ref={middleRef} sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', position: 'relative', minWidth: 0, px: 1, overflow: 'hidden' }}>
-          {/* The Scrublings walk the free stretch in front of the spotlight.
-              While one is passing over the card it fades almost out, so the
-              character reads clearly, and comes back once they are off it
-              (owner, 2026-09-20). */}
-          {currentUser && <Box sx={{ position: 'absolute', inset: 0, zIndex: 2 }}><ScrublingsStage obstacle={spotRef} onObstacleCovered={setSpotCovered} /></Box>}
-          {hasSpotRoom &&
-            middleFits &&
-            currentUser &&
-            !isOperationRunning &&
-            (Boolean(selectedChannel || selectedDm) || sidebarView === 'package') && (
-              <Box ref={spotRef} data-testid="bot-spot-fade" data-covered={spotCovered ? 'true' : 'false'} sx={{ opacity: spotCovered ? 0.08 : 1, transition: 'opacity 250ms ease' }}>
-                <TopBarBotSpot />
-              </Box>
-            )}
+        {/* The bar's flexible middle is the Scrublings' stage. */}
+        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', position: 'relative', minWidth: isCompact ? 0 : stageRoom, px: 1, overflow: 'hidden' }}>
+          {currentUser && <Box sx={{ position: 'absolute', inset: 0, zIndex: 2 }}><ScrublingsStage /></Box>}
         </Box>
 
         {currentUser && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 }, flexShrink: 0 }}>
+          <Box className="topbar-right" sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 }, flexShrink: 1, minWidth: 0, '& > *': { flexShrink: 0 } }}>
             <Box
               onClick={handleProfileClick}
               data-tour="user-profile"
               sx={{
                 display: 'flex',
                 alignItems: 'center',
+                minWidth: 0,
+                '&&': { flexShrink: 1 },
                 gap: 1,
                 cursor: 'pointer',
                 padding: { xs: '4px', sm: '4px 12px' },
@@ -346,7 +323,9 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
               <Typography
                 variant="body2"
                 noWrap
+                className="topbar-username"
                 sx={{
+                  minWidth: 0,
                   display: isCompact ? 'none' : undefined,
                   transition: 'color 200ms ease',
                 }}
@@ -355,7 +334,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
               </Typography>
             </Box>
 
-            {/* Layouts and themes in one menu (2.2.0). Replaces the palette icon; the Themes and Support hub opens from its footer. */}
+            {/* Layouts and themes in one menu (2.2.0). Replaces the palette icon; supporter access is its fourth segment. */}
             <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
 
             {/* App group: Ideas, Compatibility, Settings. Groups are separated
@@ -392,6 +371,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
             <Box data-tour="topbar-extras" data-testid="topbar-group-community" sx={GROUP_SX}>
               {isWide && (
                 <>
+                  {/* The word is the first text the bar gives up as it narrows (see the container rules on the toolbar). */}
+                  <BotsButton size="medium" />
                   <Tooltip title={t('topbar.supporterWall')} enterDelay={0} arrow>
                     <IconButton
                       color="inherit"
@@ -439,6 +420,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                 </>
               )}
 
+              {!isWide && <BotsButton label={false} hideOnPhone />}
               {!isWide && (
                 <Tooltip title={t('topbar.more')} enterDelay={0} arrow>
                   <IconButton
@@ -490,6 +472,14 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                 </ListItemIcon>
                 <ListItemText>r/discrub</ListItemText>
               </MenuItem>
+              {isCompact && (
+                <MenuItem onClick={() => { setBotsAnchor(moreMenuAnchor); setMoreMenuAnchor(null); }} data-testid="more-menu-bots">
+                  <ListItemIcon>
+                    <BotsIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>{t('bots.button')}</ListItemText>
+                </MenuItem>
+              )}
               {isCompact && (
                 <MenuItem
                   onClick={() => {
@@ -559,6 +549,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                 </MenuItem>
               )}
             </Menu>
+            <BotsPopover anchor={botsAnchor} onClose={() => setBotsAnchor(null)} />
 
             {!isCompact && <SectionDivider />}
             {!isCompact && (

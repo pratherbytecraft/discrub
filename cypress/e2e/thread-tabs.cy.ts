@@ -208,7 +208,7 @@ describe('Thread Tabs — Comprehensive', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         store.dispatch({
-          type: 'app/updateSetting/fulfilled',
+          type: 'app/updateAllSettings/fulfilled',
           payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
         });
       });
@@ -1091,7 +1091,7 @@ describe('Thread Tabs — Comprehensive', () => {
       cy.wait('@guildSearch');
 
       // Main should show search results
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
       // Search chip visible on main
       cy.contains('content: project').should('be.visible');
 
@@ -1115,7 +1115,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       // Step 4: Switch back to main — should still have server search results
       switchToMain();
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
       // Main's search chip should be back
       cy.contains('content: project').should('be.visible');
       // Thread's refine chip should not be on main
@@ -1170,7 +1170,7 @@ describe('Thread Tabs — Comprehensive', () => {
       cy.get('[role="dialog"]').find('input[placeholder="Search message content..."]').scrollIntoView().type('project');
       cy.get('[role="dialog"]').find('button[class*="contained"]').contains('Search').click();
       cy.wait('@guildSearch');
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
 
       // Server search on thread
       cy.fixture('thread-search-results.json').then((results) => {
@@ -1190,7 +1190,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       // Switch to main — should still have its search results
       switchToMain();
-      cy.contains('Check out this cool project').should('be.visible');
+      cy.contains('Check out this cool project').scrollIntoView().should('be.visible');
       cy.get('.MuiChip-filled').contains('content: project').should('be.visible');
 
       // Switch to thread — should still have its search results

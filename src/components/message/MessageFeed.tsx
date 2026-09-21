@@ -489,6 +489,8 @@ const MessageFeed = ({
             flex: 1,
             minHeight: 0,
             overflow: 'auto',
+            // Rows read this width: in a narrow feed (Operator's peek column) they give up their right gutter. See MessageFeedRow.
+            containerType: 'inline-size',
             '&::-webkit-scrollbar': { width: 8 },
             '&::-webkit-scrollbar-track': { backgroundColor: 'transparent', borderRadius: 3 },
             '&::-webkit-scrollbar-thumb': {

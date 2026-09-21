@@ -468,9 +468,10 @@ describe('Feature Showcase — Documentation Screenshots', () => {
     });
 
     it('light theme', () => {
-      cy.get('[data-testid="gift-button"]').click({ force: true });
+      // The theme grid lives on the Appearance menu's Theme segment (2.2.0).
+      cy.openThemeGrid();
       cy.get('[data-testid="theme-card-discord-light"]').click();
-      cy.get('[aria-label="Close Supporter dialog"]').click();
+      cy.closeAppearance();
       cy.wait(PAUSE);
       screenshot('ui/theme-light');
     });

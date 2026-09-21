@@ -28,8 +28,8 @@ describe('Workbench layout (2.2.0)', () => {
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-locked-workbench"]').should('exist');
     cy.get('[data-testid="layout-card-workbench"]').click();
-    cy.get('[data-testid="supporter-dialog"]').should('be.visible');
-    cy.get('[aria-label="Close Supporter dialog"]').click();
+    cy.get('[data-testid="supporter-panel"]').should('be.visible');
+    cy.closeAppearance();
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-preview-workbench"]').click();
     cy.get('[data-testid="workbench-shell"]').should('exist');
@@ -48,6 +48,22 @@ describe('Workbench layout (2.2.0)', () => {
     cy.contains('[data-testid="table-row"]', 'Hello everyone! Welcome to the server.').should('exist');
     cy.get('[data-testid="workbench-dock"]').should('be.visible').and('contain.text', 'Nothing running');
     cy.get('[data-testid="workbench-status-bar"]').should('contain.text', 'loaded');
+  });
+
+  it('tablet width: the toolbar drops its labels and no button runs into the next', () => {
+    unlock();
+    switchTo('workbench');
+    cy.viewport(900, 1000);
+    // The bar is 580 px wide here. It measures itself, so the labels go even though the window is not a phone.
+    cy.get('[data-testid="wb-export"] .wb-label').should('not.be.visible');
+    cy.get('[data-testid="workbench-toolbar"] button').then(($buttons) => {
+      const rects = [...$buttons].map((b) => b.getBoundingClientRect()).sort((a, b) => a.left - b.left);
+      for (let i = 1; i < rects.length; i++) expect(rects[i].left, `button ${i} starts after button ${i - 1} ends`).to.be.at.least(rects[i - 1].right);
+    });
+    // With room for them the labels come back. At 1280 px beside the supporter wall the bar is 640 px, still short.
+    cy.viewport(1600, 900);
+    cy.get('[data-testid="wb-export"] .wb-label').should('be.visible');
+    cy.viewport(1280, 800);
   });
 
   it('selects rows, selects all, and sorts from the table header', () => {

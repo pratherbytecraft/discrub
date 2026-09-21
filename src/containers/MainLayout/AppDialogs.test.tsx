@@ -2,19 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/test-utils';
 import { createBaseState } from '@/test/state-factories';
 import { setDialogOpen } from '@features/app/appSlice';
-import { setSupporterDialogOpen } from '@features/supporter/supporterSlice';
 import { HotkeyProvider } from '@features/hotkeys/HotkeyProvider';
 import AppDialogs from './AppDialogs';
 
 describe('<AppDialogs />', () => {
-  it('mounts Settings from the store flag and the Supporter hub from its slice', async () => {
+  it('mounts Settings from the store flag', async () => {
     const { store } = renderWithProviders(<HotkeyProvider><AppDialogs /></HotkeyProvider>, { preloadedState: createBaseState() });
     expect(screen.queryByRole('dialog')).toBeNull();
     store.dispatch(setDialogOpen({ dialog: 'settings', open: true }));
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     store.dispatch(setDialogOpen({ dialog: 'settings', open: false }));
-    store.dispatch(setSupporterDialogOpen(true));
-    await waitFor(() => expect(screen.getByTestId('supporter-dialog')).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('toggles Settings with the openSettings hotkey', () => {

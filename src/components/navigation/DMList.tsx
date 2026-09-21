@@ -417,8 +417,11 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
     ) : null;
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1 }}>
+    // Rows read the list's width: under 240 px (Operator's queue in a 900 px window is 232, Native's column is 248 and keeps it) the small username line goes so
+    // the time shows in full. The display name above it still says who it is.
+    <Box sx={{ containerType: 'inline-size', '@container (max-width: 240px)': { '& .dm-row-username': { display: 'none' } } }}>
+      {/* Tight gaps: in the 320 px sidebar the heading, the open by id button and Multi-select fit with a few pixels to spare, and with looser gaps the heading read "DIRECT ME...". */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, pl: 2, pr: 0.5, py: 1 }}>
         <Typography
           variant="caption"
           sx={{
@@ -426,8 +429,11 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
             color: 'text.secondary',
             textTransform: 'uppercase',
             fontWeight: 600,
+            fontSize: '0.7rem',
+            letterSpacing: 0,
           }}
           noWrap
+          data-testid="dm-list-heading"
         >
           {t('dm.directMessages')}
         </Typography>
@@ -437,7 +443,7 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
             aria-label={t('dm.openByIdTitle')}
             data-testid="open-dm-by-id-button"
             onClick={() => setOpenByIdOpen(true)}
-            sx={{ mr: 0.5, color: 'text.secondary' }}
+            sx={{ color: 'text.secondary' }}
           >
             <TagIcon fontSize="small" />
           </IconButton>
@@ -451,7 +457,7 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
           aria-label={t('nav.toggleMultiSelect')}
           data-tour="multi-select-toggle"
           startIcon={multiSelectMode ? <SelectModeIcon fontSize="small" /> : <SelectModeOffIcon fontSize="small" />}
-          sx={{ textTransform: 'none', minWidth: 0, px: 1, fontSize: '0.75rem', whiteSpace: 'nowrap', flexShrink: 0 }}
+          sx={{ textTransform: 'none', minWidth: 0, px: 0.75, fontSize: '0.75rem', whiteSpace: 'nowrap', flexShrink: 0, '& .MuiButton-startIcon': { mr: 0.5, ml: 0 } }}
         >
           <Box component="span" className="multi-select-label">{t('nav.multiSelect')}</Box>
         </TourButton>}
@@ -505,13 +511,16 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
             {queue?.marks?.[dm.id] && (
               <Box data-testid={`queue-mark-${queue.marks[dm.id]}`} sx={{ width: 8, height: 8, borderRadius: '50%', mr: 1, flexShrink: 0, backgroundColor: queue.marks[dm.id] === 'done' ? 'success.main' : 'primary.main' }} />
             )}
-            <ListItemAvatar>
-              <DmAvatar dm={dm} size={40} />
+            {/* A group's stack is wider than the 56 px slot, so it gets its own gap. The queue column is
+                narrower and also holds a tick box, so there the stack is smaller: one face and a count. */}
+            <ListItemAvatar sx={{ ...(queue ? { minWidth: 44 } : {}), ...(isGroupDm(dm) ? { mr: 1 } : {}) }}>
+              <DmAvatar dm={dm} size={queue ? 32 : 40} maxGroup={queue ? 2 : 3} />
             </ListItemAvatar>
             <ListItemText
               primary={getDmDisplayName(dm) || getDmName(dm)}
               secondary={
-                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, overflow: 'hidden' }}>
+                  {/* One line always: names shorten with an ellipsis, the time never wraps. */}
                   {/* #227: groups are visually distinct from 1:1 DMs even
                       when only one (or zero) recipients remain. */}
                   {isGroupDm(dm) && (
@@ -519,7 +528,7 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
                       component="span"
                       variant="caption"
                       data-testid="group-dm-indicator"
-                      sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600 }}
+                      sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1000, '& svg': { verticalAlign: '-2px', mr: 0.25 } }}
                     >
                       <GroupsIcon sx={{ fontSize: 13 }} />
                       Group · {getGroupMemberCount(dm)} member{getGroupMemberCount(dm) !== 1 ? 's' : ''}
@@ -532,18 +541,18 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
                     <Typography
                       component="span"
                       variant="caption"
-                      sx={{ color: 'text.disabled', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                      sx={{ color: 'text.disabled', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1000 }}
                     >
                       {dm.recipients!.map((r) => r.username).join(', ')}
                     </Typography>
                   )}
                   {getDmDisplayName(dm) && (
-                    <Typography component="span" variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem' }}>
+                    <Typography component="span" variant="caption" className="dm-row-username" sx={{ color: 'text.disabled', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1000 }}>
                       {getDmName(dm)}
                     </Typography>
                   )}
                   {getDmLastActive(dm) && (
-                    <Typography component="span" variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
+                    <Typography component="span" variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem', whiteSpace: 'nowrap', flexShrink: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {getDmLastActive(dm)}
                     </Typography>
                   )}

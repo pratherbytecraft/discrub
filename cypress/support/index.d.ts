@@ -55,8 +55,12 @@ declare namespace Cypress {
      * Click the "Package" sidebar tab.
      */
     openPackageTab(): Chainable<void>;
-    /** Opens the Themes and Support hub through the Appearance menu footer (2.2.0). */
+    /** Opens the Appearance menu on its Supporter segment (2.2.0). */
     openThemesHub(): Chainable<void>;
+    /** Opens the Appearance menu on its Theme segment. */
+    openThemeGrid(): Chainable<void>;
+    /** Closes the Appearance menu. */
+    closeAppearance(): Chainable<void>;
 
     /**
      * Wait for a completed browser download whose filename matches
