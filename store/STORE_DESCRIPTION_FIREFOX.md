@@ -32,3 +32,5 @@ Additional
 - Guided tour and contextual help icons
 - Pause, resume, and cancel for long operations
 - Discrub Classic (v1) built in
+
+Video walkthrough: https://youtu.be/0yrJleikuBc
