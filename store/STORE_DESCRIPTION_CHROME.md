@@ -62,7 +62,10 @@ Supporter cosmetics
 
 Additional
 - Interface in English or German, auto-detected on first run and switchable in Settings
-- Theme picker with live preview, from Discord-style dark and light to terminal, high contrast, and more
+- Appearance menu on the top bar for layouts, themes and Scrublings, with a look-only preview before you pick
+- Layouts: Classic and Native (looks like Discord) are free, with more for supporters
+- Themes from Discord-style dark and light to terminal, high contrast, and more
+- Scrublings: small pixel characters that walk along the top bar and react to what Discrub is doing, with a switch to hide them
 - Forum channel support showing both active and archived posts
 - Guided tour and contextual help icons
 - Pause, resume, and cancel for long operations
