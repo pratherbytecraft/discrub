@@ -20,6 +20,31 @@ describe('Shell behaviours (2.2.0)', () => {
       cy.get('[aria-label="Collapse log"]').click({ force: true });
       cy.get('[data-tour="status-panel"]').should('not.have.attr', 'data-sheet');
     });
+
+    // 2.2.1: with the supporter wall open the closed bar stopped at the wall
+    // but the open sheet ran under it to the window edge.
+    it('stops at the supporter wall while the wall is open', () => {
+      cy.window().then((win) => {
+        const store = (win as any).__store__;
+        store.dispatch({
+          type: 'app/updateAllSettings/fulfilled',
+          payload: { ...store.getState().app.settings, appShowKoFiFeed: 'true' },
+        });
+      });
+      cy.get('[data-testid="donation-drawer"]').should('be.visible');
+      cy.get('[aria-label="Expand log"]').click({ force: true });
+      cy.get('[data-tour="status-panel"]').should('have.attr', 'data-sheet', 'true');
+      cy.get('[data-testid="donation-drawer"]').then(($d) => {
+        const wallLeft = $d[0].getBoundingClientRect().left;
+        cy.get('[data-tour="status-panel"]').then(($p) => {
+          const r = $p[0].getBoundingClientRect();
+          expect(Math.round(r.right)).to.eq(Math.round(wallLeft));
+          expect(Math.round(r.bottom)).to.eq(Cypress.config('viewportHeight'));
+        });
+      });
+      cy.screenshot('classic-log-sheet-beside-wall', { capture: 'viewport', overwrite: true });
+      cy.get('[aria-label="Collapse log"]').click({ force: true });
+    });
   });
 
   describe('channel action row', () => {

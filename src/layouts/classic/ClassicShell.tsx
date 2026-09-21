@@ -64,7 +64,8 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
                 <ServerView onStartShellTour={onStartShellTour} />
               )}
             </Box>
-            {!focusedView && <StatusPanel sheetInset={isMobile ? 0 : SIDEBAR_WIDTH} />}
+            {/* The open sheet is fixed to the window, so it takes the wall's width as its right inset while the wall is open (2.2.1). */}
+            {!focusedView && <StatusPanel sheetInset={isMobile ? 0 : SIDEBAR_WIDTH} sheetRightInset={drawerOpen ? DRAWER_WIDTH : 0} />}
           </Box>
         </Box>
       </Box>
