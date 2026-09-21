@@ -638,6 +638,7 @@ async function fetchAllChannelMessages(
         guildId,
         criteria: searchCriteria as SearchCriteria,
         getState,
+        dispatch,
       })) {
         if (checkCancelled(getState)) break;
         lastPage = page;

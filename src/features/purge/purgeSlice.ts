@@ -650,6 +650,21 @@ interface ChannelPurgeResult {
 }
 
 /**
+ * 2.2.1: carry the in-flight accumulator on any error thrown out of a
+ * channel helper, the way `CancelledError` already does, so the bulk
+ * catch can keep the channel's work in the final summary. Before this a
+ * search page that failed after thousands of deletes ended with
+ * "Complete, 0 messages deleted". A `CancelledError` keeps the snapshot
+ * it was thrown with.
+ */
+const attachPartialResult = (error: unknown, partial: unknown): void => {
+  if (error instanceof CancelledError) return;
+  if (typeof error !== 'object' || error === null) return;
+  const carrier = error as { partialResult?: unknown };
+  if (carrier.partialResult === undefined) carrier.partialResult = partial;
+};
+
+/**
  * Purge messages from a single channel using the Search API.
  * Tracks searchOffset to avoid infinite loops on system-message-only batches.
  * Deduplicates flattened results and throttles progress dispatches.
@@ -927,6 +942,7 @@ async function purgeChannelMessages(
           guildId,
           criteria: searchCriteria,
           getState,
+          dispatch,
         });
     const pagesWithFinalPass = targetIsDeleted || !finalPassApplies
       ? pageSource
@@ -1367,6 +1383,9 @@ async function purgeChannelMessages(
     finalPass: totalFinalPass,
   };
 
+  } catch (error) {
+    attachPartialResult(error, partialMessages());
+    throw error;
   } finally {
     flushLiveDeletions();
     // Re-archive any threads we un-archived during this run — restore
@@ -1703,6 +1722,9 @@ async function purgeChannelClearAllReactions(
 
     onProgress(totalScanned, totalCleared);
     return { scanned: totalScanned, reactionsRemoved: totalCleared, failed: totalFailed };
+  } catch (error) {
+    attachPartialResult(error, { scanned: totalScanned, reactionsRemoved: totalCleared, failed: totalFailed });
+    throw error;
   } finally {
     await guard.cleanup();
   }
@@ -1922,6 +1944,9 @@ async function purgeChannelReactions(
   onProgress(totalScanned, totalReactionsRemoved);
 
   return { scanned: totalScanned, reactionsRemoved: totalReactionsRemoved, failed: totalFailed };
+  } catch (error) {
+    attachPartialResult(error, partialReactions());
+    throw error;
   } finally {
     await guard.cleanup();
   }
@@ -2382,37 +2407,35 @@ const executeBulkPurge = async (
             }
           }
         } catch (error) {
-          if (error instanceof CancelledError) {
-            // Recover the in-flight accumulator from the cancelled call
-            // (#140) so the final summary reflects work that actually
-            // happened before the cancel signal — without this, a
-            // mid-channel cancel reports zero even when N reactions /
-            // messages were really removed.
-            const partial = error.partialResult as
-              | (Partial<ChannelPurgeResult> & Partial<ReactionPurgeResult>)
-              | undefined;
-            if (partial) {
-              if (typeof partial.deleted === 'number') {
-                completedStats.deleted += partial.deleted;
-              }
-              if (typeof partial.skipped === 'number') {
-                completedStats.skipped += partial.skipped;
-              }
-              if (typeof partial.editedAttachmentsOnly === 'number') {
-                completedStats.editedAttachmentsOnly += partial.editedAttachmentsOnly;
-              }
-              if (typeof partial.failed === 'number') {
-                completedStats.failed += partial.failed;
-              }
-              if (typeof partial.finalPass === 'number') {
-                completedStats.finalPass += partial.finalPass;
-              }
-              if (typeof partial.reactionsRemoved === 'number') {
-                completedStats.reactionsRemoved += partial.reactionsRemoved;
-              }
+          // Recover the in-flight accumulator from the failed or cancelled
+          // call (#140, 2.2.1) so the final summary reflects work that
+          // actually happened before the throw. Without this a mid-channel
+          // cancel or error reports zero even when N reactions / messages
+          // were really removed.
+          const partial = (error as { partialResult?: unknown } | null)?.partialResult as
+            | (Partial<ChannelPurgeResult> & Partial<ReactionPurgeResult>)
+            | undefined;
+          if (partial) {
+            if (typeof partial.deleted === 'number') {
+              completedStats.deleted += partial.deleted;
             }
-            break;
+            if (typeof partial.skipped === 'number') {
+              completedStats.skipped += partial.skipped;
+            }
+            if (typeof partial.editedAttachmentsOnly === 'number') {
+              completedStats.editedAttachmentsOnly += partial.editedAttachmentsOnly;
+            }
+            if (typeof partial.failed === 'number') {
+              completedStats.failed += partial.failed;
+            }
+            if (typeof partial.finalPass === 'number') {
+              completedStats.finalPass += partial.finalPass;
+            }
+            if (typeof partial.reactionsRemoved === 'number') {
+              completedStats.reactionsRemoved += partial.reactionsRemoved;
+            }
           }
+          if (error instanceof CancelledError) break;
           const errorMsg = error instanceof Error ? error.message : t('status.purge.unknownError');
           errors.push(`${channelName}: ${errorMsg}`);
           dispatch(addStatusEntry({

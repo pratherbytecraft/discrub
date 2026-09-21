@@ -1667,6 +1667,7 @@
       "searchThreadFailedNoResponse": "Failed to search thread messages. Discord did not answer, check your connection and try again.",
       "searchThreadFailedIndexing": "Failed to search thread messages. Discord is still indexing this thread, try again in a little while.",
       "searchIndexingWait": "Search: Discord is still indexing, retrying in {{seconds}}s (attempt {{attempt}}/5)",
+      "searchPageRetry": "Search: {{answer}}, retrying in {{seconds}}s (attempt {{attempt}}/5)",
       "searchRetry": "Search: connection failed, retrying in {{seconds}}s (attempt {{attempt}}/5)",
       "searchCancelled": "Search cancelled",
       "searchComplete": "Search complete: {{count}} results found",

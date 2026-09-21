@@ -165,6 +165,14 @@ vi.mock('@utils/operationLoopUtils', () => ({
   waitWhilePaused: vi.fn().mockResolvedValue(undefined),
   checkCancelled: vi.fn().mockReturnValue(false),
   cancellableDelay: vi.fn().mockResolvedValue(false),
+  // 2.2.1: the search wrapper retries a thrown page on the same contract.
+  TRANSIENT_RETRIES: 5,
+  isTransientApiFailure: vi.fn((r: { success: boolean; status?: number }) =>
+    !r.success && (r.status === undefined || r.status >= 500 || r.status === 408 || r.status === 425)),
+  transientRetryDelayMs: vi.fn(() => 0),
+  retryBaseDelayMs: vi.fn(() => 0),
+  describeAnswer: vi.fn((r: { status?: number }) =>
+    r.status !== undefined ? `Discord answered HTTP ${r.status}` : 'Discord did not answer'),
   CancelledError: class CancelledError extends Error {
     // Mirrors the real shape (#140) — accepts an optional partial
     // accumulator so the caller's catch can recover work-already-done.
@@ -1506,6 +1514,94 @@ describe('purgeSlice thunks', () => {
 
       expect(bulkPurgeChannels.fulfilled.match(result)).toBe(true);
       expect(mockDeleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('2.2.1: retries a dropped search request mid-walk and deletes the rest of the channel', async () => {
+      const page1 = {
+        success: true,
+        data: {
+          messages: [
+            { ...mockMessage('m1'), timestamp: '2026-01-03T00:00:00Z' },
+            { ...mockMessage('m2'), timestamp: '2026-01-02T00:00:00Z' },
+          ],
+          total_results: 4,
+        },
+      };
+      const page2 = {
+        success: true,
+        data: {
+          messages: [
+            { ...mockMessage('m3'), timestamp: '2026-01-01T00:00:00Z' },
+            { ...mockMessage('m4'), timestamp: '2025-12-31T00:00:00Z' },
+          ],
+          total_results: 2,
+        },
+      };
+      mockFetchSearchMessageData
+        .mockResolvedValueOnce(page1)
+        // The fetch threw inside the service: no status at all.
+        .mockResolvedValueOnce({ success: false })
+        .mockResolvedValueOnce(page2)
+        .mockResolvedValue({ success: true, data: { messages: [], total_results: 0 } });
+      mockDeleteMessage.mockResolvedValue({ success: true });
+
+      // A second, empty channel so the rolled-up stats of the first are
+      // readable from progress afterwards.
+      const result = await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general'), mockChannel('ch2', 'random')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      expect(bulkPurgeChannels.fulfilled.match(result)).toBe(true);
+      expect(mockDeleteMessage).toHaveBeenCalledTimes(4);
+      expect((result.payload as any).errors).toBeUndefined();
+      expect(selectPurgeProgress(store.getState())?.bulk?.completedStats.deleted).toBe(4);
+
+      // The retry resumed from the oldest message already handled.
+      const retryCriteria = mockFetchSearchMessageData.mock.calls[2][4];
+      expect(retryCriteria.searchBeforeDate).toEqual(new Date('2026-01-02T00:00:00Z'));
+
+      const messages = store.getState().status.entries.map((e: any) => e.message);
+      expect(messages.some((m: string) => m.includes('Discord did not answer') && m.includes('attempt 1/5'))).toBe(true);
+      expect(messages.some((m: string) => m.includes('Search request failed'))).toBe(false);
+    });
+
+    it('2.2.1: keeps a channel\'s deletes in the summary when its search fails part way', async () => {
+      mockFetchSearchMessageData
+        .mockResolvedValueOnce({
+          success: true,
+          data: {
+            messages: [
+              { ...mockMessage('m1'), timestamp: '2026-01-03T00:00:00Z' },
+              { ...mockMessage('m2'), timestamp: '2026-01-02T00:00:00Z' },
+            ],
+            total_results: 4,
+          },
+        })
+        // A 403 is not retried, so the channel ends here.
+        .mockResolvedValueOnce({ success: false, status: 403 })
+        .mockResolvedValue({ success: true, data: { messages: [], total_results: 0 } });
+      mockDeleteMessage
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({ success: false, status: 404 });
+
+      const result = await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general'), mockChannel('ch2', 'random')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      expect(bulkPurgeChannels.fulfilled.match(result)).toBe(true);
+      expect((result.payload as any).errors).toHaveLength(1);
+      expect((result.payload as any).errors[0]).toContain('HTTP 403');
+      const stats = selectPurgeProgress(store.getState())?.bulk?.completedStats;
+      expect(stats?.deleted).toBe(1);
+      expect(stats?.failed).toBe(1);
     });
 
     it('processes multiple target user IDs sequentially', async () => {
@@ -3914,15 +4010,16 @@ describe('purgeSlice thunks', () => {
         mockChannel('ch2', 'random'),
       ];
 
-      let searchCall = 0;
+      // ch1 never gets an answer (2.2.1: the search wrapper retries that
+      // five times before giving the channel up); ch2 works fine.
+      let ch2Calls = 0;
       mockFetchSearchMessageData.mockImplementation(
         (_token: string, _offset: number, channelId: string) => {
-          searchCall++;
           if (channelId === 'ch1') {
             return Promise.reject(new Error('API rate limited'));
           }
-          // ch2 works fine
-          if (searchCall === 2) {
+          ch2Calls++;
+          if (ch2Calls === 1) {
             return Promise.resolve({
               success: true,
               data: { messages: [[mockMessage('m1')]] },

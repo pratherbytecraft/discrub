@@ -1667,6 +1667,7 @@
       "searchThreadFailedNoResponse": "Thread-Nachrichten konnten nicht durchsucht werden. Discord hat nicht geantwortet, prüfe deine Verbindung und versuche es erneut.",
       "searchThreadFailedIndexing": "Thread-Nachrichten konnten nicht durchsucht werden. Discord indexiert diesen Thread noch, versuche es in Kürze erneut.",
       "searchIndexingWait": "Suche: Discord indexiert noch, neuer Versuch in {{seconds}} s (Versuch {{attempt}}/5)",
+      "searchPageRetry": "Suche: {{answer}}, neuer Versuch in {{seconds}} s (Versuch {{attempt}}/5)",
       "searchRetry": "Suche: Verbindung fehlgeschlagen, neuer Versuch in {{seconds}} s (Versuch {{attempt}}/5)",
       "searchCancelled": "Suche abgebrochen",
       "searchComplete": "Suche abgeschlossen: {{count}} Ergebnisse gefunden",

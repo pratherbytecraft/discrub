@@ -466,6 +466,7 @@ export const bulkEditChannels = createAsyncThunk<
             guildId: guildId ?? null,
             criteria,
             getState: getState as () => RootState,
+            dispatch,
           })) {
             await waitWhilePaused(getState as () => RootState);
             if (checkCancelled(getState as () => RootState)) { cancelled = true; break; }
