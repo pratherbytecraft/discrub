@@ -274,9 +274,15 @@ A dropped connection does not end a run. Exports, purge scans, thread Load All a
 
 ### Themes
 
-Pick a theme in Settings, with a live preview on hover. Six themes are free: Dark Original (the default), Light Original, Terminal, High Contrast, Overcast and Classic. The picker can also follow your system preference.
+Everything about how Discrub looks is under **Appearance** in the top bar: Layout, Theme, Scrublings and Supporter.
 
-Supporters unlock eight more cosmetic themes (AMOLED Void, Synthwave, Bytecraft, Ember, Nekonoir, Circuit, Noir, Abyss), a theme switcher in HTML exports, and a custom export footer. Open the palette icon in the top bar for the Themes hub and paste the key from your Ko-fi email. Every Discrub feature stays free; supporter perks are cosmetic only.
+**Layouts.** Six ways to arrange the same data and tools. Classic (the 2.1 layout) and Native (looks like Discord) are free. Workbench (a compact table), Simple (one wide column), Operator (queue and progress up front) and Timeline (messages grouped by day) come with supporter access. The eye on a card previews a layout before you pick it.
+
+**Themes.** Six themes are free: Dark Original (the default), Light Original, Terminal, High Contrast, Overcast and Classic. The picker can also follow your system preference. Supporters unlock nine more (AMOLED Void, Synthwave, Bytecraft, Ember, Nekonoir, Circuit, Noir, Abyss, Abstract), a theme switcher in HTML exports, and a custom export footer.
+
+**Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. Suds, the Mage and the Cat are free, five more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all, and a link to request a custom one, which is added for everyone once it's drawn.
+
+To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free; supporter perks are cosmetic only.
 
 ![Dark Theme](docs/screenshots/ui/theme-dark.png)
 ![Light Theme](docs/screenshots/ui/theme-light.png)
@@ -290,7 +296,7 @@ Discrub runs in English or German. A fresh install follows the browser language.
 - **Donation Wall**: Ko-Fi supporter feed with tiers and a leaderboard
 - **Ideas & Contact**: links to email and GitHub issues
 - **Announcements**: in-app announcements rendered from GitHub-hosted markdown, shown once per version, with a list of every previous announcement in the same dialog
-- **From the Discrub team**: a corkboard on the welcome screen with the studio's Discord bots (Retrostat first) and a note from the developer
+- **Bots**: a button on the top bar that lists the developer's Discord bots (Retrostat, Scour and Vested)
 - **Role Colors & Icons**: author names colored by highest-position role, with role icons next to author names in the feed and user profiles
 - **Copy to Clipboard**: copy server, channel or DM lists
 - **Reset Discrub Data**: a Settings button that wipes Discrub's local IndexedDB databases, for recovering from corrupted state without uninstalling the extension
@@ -537,7 +543,7 @@ Yes. Each user runs Discrub in their own browser with their own token. There is 
 
 ### How do I report bugs or request features?
 
-Use the Ideas & Contact button (the lightbulb in the top bar) to reach support@pratherbytecraft.com, GitHub issues, or Ko-fi commissions. On wide windows the Supporter Wall, r/discrub and the latest announcement also sit on the top bar; on narrow ones they fold into the More menu.
+Use the Ideas & Contact button (the lightbulb in the top bar) to reach support@pratherbytecraft.com, GitHub issues, or Ko-fi commissions. On wide windows the Bots list, the Supporter Wall, r/discrub and the latest announcement also sit on the top bar; on narrow ones they fold into the More menu.
 
 ### How do I update Discrub?
 
@@ -596,6 +602,6 @@ in derivative or competing works.
 
 ---
 
-To sponsor a feature or commission a theme, use [Ko-fi Commissions](https://ko-fi.com/prathercc/commissions). For a Discord bot of your own, write to workbench@pratherbytecraft.com.
+To sponsor a feature, commission a theme or request a custom Scrubling, use [Ko-fi Commissions](https://ko-fi.com/prathercc/commissions). For a Discord bot of your own, write to workbench@pratherbytecraft.com.
 
 Built by [Prather Bytecraft](https://github.com/pratherbytecraft) · [pratherbytecraft.com](https://pratherbytecraft.com)

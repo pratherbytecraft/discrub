@@ -46,7 +46,7 @@ Discrub 2.0 is the next major version. These features were not in Discrub Classi
 - **Rich Stickers & Polls**: Sticker-only and poll-only messages render as the sticker image and a poll vote-bar card, in the feed and in HTML exports.
 - **Analytics Modal**: Nine ranked reports on the loaded messages (most active members, most mentioned, most reacted, keywords, linked domains and more), each with a chart and CSV export.
 - **10 Export Presets**: Quick Text Backup, Full Archive, Data Analysis, Spreadsheet Export, Media Gallery, Lightweight Backup, Chronological Log, Images Only, Thread Archive, Plain Text. Custom presets can be added.
-- **Themes**: A theme picker in Settings with live preview. Six free themes (Dark Original, Light Original, Terminal, High Contrast, Overcast, Classic). Supporters unlock eight more cosmetic themes, export theming and a custom export footer with a key emailed from Ko-fi. All features stay free.
+- **Appearance**: One menu on the top bar for layouts, themes and Scrublings. Two layouts (Classic, Native), six themes (Dark Original, Light Original, Terminal, High Contrast, Overcast, Classic) and three Scrublings are free. Supporters unlock four more layouts, nine more themes, five more Scrublings, export theming and a custom export footer with a key emailed from Ko-fi. All features stay free.
 - **Donation Wall**: Ko-Fi supporter feed with tiers and a leaderboard.
 - **Role Colors & Icons**: Author names colored by their highest role, with role icons in the feed and user profiles.
 - **Reply Indicators**: Replies show the referenced author and a preview of the original. Click the reply bar to jump to it.
