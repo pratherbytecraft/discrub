@@ -341,6 +341,42 @@ describe('cacheSlice', () => {
       expect(state.cache.userMap['user1'].timestamp).toBe(2000); // Kept newer timestamp
     });
 
+    it('keeps the current map by identity and writes nothing when nothing changed (2.2.1 perf)', async () => {
+      const existingUserMap = {
+        user1: { userName: 'User One', timestamp: 1000, guilds: { g1: { nick: 'one' } } },
+      };
+      await store.dispatch(setCachedUserMap(existingUserMap as any));
+      const before = store.getState().cache.userMap;
+      storageMock.setMany.mockClear();
+      const setMany = storageMock.setMany;
+      await store.dispatch(mergeCachedUserMap({ user1: { userName: 'User One', timestamp: 900, guilds: { g1: { nick: 'one' } } } } as any));
+      expect(store.getState().cache.userMap).toBe(before);
+      expect(setMany).not.toHaveBeenCalled();
+      await store.dispatch(mergeCachedUserMap(before));
+      expect(store.getState().cache.userMap).toBe(before);
+      expect(setMany).not.toHaveBeenCalled();
+    });
+
+    it('writes only the entries that changed', async () => {
+      await store.dispatch(setCachedUserMap({
+        user1: { userName: 'User One', timestamp: 1000 },
+        user2: { userName: 'User Two', timestamp: 1000 },
+      } as any));
+      const before = store.getState().cache.userMap;
+      storageMock.setMany.mockClear();
+      const setMany = storageMock.setMany;
+      await store.dispatch(mergeCachedUserMap({
+        user1: { userName: 'User One', timestamp: 1000 },
+        user2: { userName: 'User Two renamed', timestamp: 2000 },
+      } as any));
+      const after = store.getState().cache.userMap;
+      expect(after).not.toBe(before);
+      expect(after.user1).toBe(before.user1);
+      expect(after.user2.userName).toBe('User Two renamed');
+      expect(setMany).toHaveBeenCalledTimes(1);
+      expect((setMany.mock.calls[0][0] as Array<[string, unknown]>).map(([k]) => k)).toEqual(['users:user2']);
+    });
+
     it('should handle missing guilds property', async () => {
       const existingUserMap = {
         'user1': { userName: 'User One', timestamp: 1000 },

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Message } from 'discrub-core/types/discord-types';
-import { chunkMessages, localDayKey, CHUNK_WINDOW_MS } from './messageChunking';
+import { chunkMessages, localDayKey, messageDayKey, CHUNK_WINDOW_MS } from './messageChunking';
 
 const msg = (
   id: string,
@@ -152,5 +152,97 @@ describe('chunkMessages with splitByDay (Timeline)', () => {
   it('gives an empty key for a missing or unreadable timestamp', () => {
     expect(localDayKey(undefined)).toBe('');
     expect(localDayKey('not a date')).toBe('');
+  });
+});
+
+describe('chunkMessages reuse (2.2.1 perf)', () => {
+  const t = (n: number) => new Date(Date.UTC(2026, 6, 17, 10, n)).toISOString();
+
+  it('returns the same chunk object when its messages did not change', () => {
+    const a1 = msg('1', 'a', t(0));
+    const a2 = msg('2', 'a', t(1));
+    const b1 = msg('3', 'b', t(2));
+    const first = chunkMessages([a1, a2, b1]);
+    const older = msg('4', 'c', t(5));
+    const next = chunkMessages([a1, a2, b1, older], {}, first);
+    expect(next).toHaveLength(3);
+    expect(next[0]).toBe(first[0]);
+    expect(next[1]).toBe(first[1]);
+    expect(next[2].key).toBe('4');
+  });
+
+  it('makes a new chunk when a message inside it was removed', () => {
+    const a1 = msg('1', 'a', t(0));
+    const a2 = msg('2', 'a', t(1));
+    const b1 = msg('3', 'b', t(2));
+    const first = chunkMessages([a1, a2, b1]);
+    const next = chunkMessages([a1, b1], {}, first);
+    expect(next[0]).not.toBe(first[0]);
+    expect(next[0].messages).toEqual([a1]);
+    expect(next[1]).toBe(first[1]);
+  });
+
+  it('makes a new chunk when a message grew into it', () => {
+    const a1 = msg('1', 'a', t(0));
+    const b1 = msg('3', 'b', t(2));
+    const first = chunkMessages([a1, b1]);
+    const a2 = msg('2', 'a', t(1));
+    const next = chunkMessages([a1, a2, b1], {}, first);
+    expect(next[0]).not.toBe(first[0]);
+    expect(next[0].messages).toEqual([a1, a2]);
+  });
+
+  it('works without a previous result', () => {
+    expect(chunkMessages([msg('1', 'a', t(0))], {}, undefined)).toHaveLength(1);
+    expect(chunkMessages([msg('1', 'a', t(0))], {}, [])).toHaveLength(1);
+  });
+});
+
+describe('messageDayKey', () => {
+  it('matches localDayKey and remembers the answer per message object', () => {
+    const m = msg('1', 'a', new Date(2026, 6, 17, 23, 30).toISOString());
+    expect(messageDayKey(m)).toBe(localDayKey(m.timestamp));
+    expect(messageDayKey(m)).toBe('2026-07-17');
+    const changed = { ...m, timestamp: new Date(2026, 6, 18, 1, 0).toISOString() } as Message;
+    expect(messageDayKey(changed)).toBe('2026-07-18');
+    expect(messageDayKey(m)).toBe('2026-07-17');
+  });
+
+  it('gives an empty key for a missing timestamp', () => {
+    expect(messageDayKey({ timestamp: '' } as Message)).toBe('');
+  });
+});
+
+describe('chunkMessages appended page (2.2.1 perf)', () => {
+  const t = (n: number) => new Date(Date.UTC(2026, 6, 17, 10, n)).toISOString();
+
+  it('keeps every earlier chunk and re-chunks only the end when a page is appended at the tail', () => {
+    const a1 = msg('1', 'a', t(0)); const a2 = msg('2', 'a', t(1)); const b1 = msg('3', 'b', t(2));
+    const first = chunkMessages([a1, a2, b1]);
+    const b2 = msg('4', 'b', t(3)); const c1 = msg('5', 'c', t(4));
+    const next = chunkMessages([a1, a2, b1, b2, c1], {}, first);
+    expect(next.map((c) => c.messages.map((m) => m.id))).toEqual([['1', '2'], ['3', '4'], ['5']]);
+    expect(next[0]).toBe(first[0]);
+    expect(next).toEqual(chunkMessages([a1, a2, b1, b2, c1]));
+  });
+
+  it('keeps every later chunk when a page is added at the head', () => {
+    const b1 = msg('3', 'b', t(2)); const c1 = msg('5', 'c', t(4));
+    const first = chunkMessages([b1, c1]);
+    const a1 = msg('1', 'a', t(0)); const b0 = msg('2', 'b', t(1));
+    const next = chunkMessages([a1, b0, b1, c1], {}, first);
+    expect(next.map((c) => c.messages.map((m) => m.id))).toEqual([['1'], ['2', '3'], ['5']]);
+    expect(next[2]).toBe(first[1]);
+    expect(next).toEqual(chunkMessages([a1, b0, b1, c1]));
+  });
+
+  it('chains across several appended pages', () => {
+    let list = [msg('1', 'a', t(0))];
+    let chunks = chunkMessages(list);
+    for (let i = 2; i <= 12; i++) {
+      list = [...list, msg(String(i), i % 3 === 0 ? 'b' : 'a', t(i * 10))];
+      chunks = chunkMessages(list, {}, chunks);
+      expect(chunks).toEqual(chunkMessages(list));
+    }
   });
 });

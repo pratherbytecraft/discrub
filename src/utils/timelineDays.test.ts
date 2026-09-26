@@ -75,3 +75,65 @@ describe('addDays and rangeToDates', () => {
     expect(b).toEqual(a);
   });
 });
+
+describe('buildTimeline incremental folding (2.2.1 perf)', () => {
+  it('gives the same counts when a page is appended at the end', () => {
+    const base = [at('5', 2026, 7, 17, 21), at('4', 2026, 7, 17, 9), at('3', 2026, 7, 15)];
+    const first = buildTimeline(base);
+    const extended = [...base, at('2', 2026, 7, 14), at('1', 2026, 7, 14, 8)];
+    const m = buildTimeline(extended);
+    expect(m).toEqual(buildTimeline([...extended]));
+    expect(m.total).toBe(5);
+    expect(m.dayCounts.get('2026-07-14')).toBe(2);
+    expect(m.dayCounts.get('2026-07-17')).toBe(2);
+    expect(first.total).toBe(3);
+    expect(m.bars.find((b) => b.from === '2026-07-14')?.newestId).toBe('2');
+  });
+
+  it('gives the same counts when a page is added at the front', () => {
+    const base = [at('3', 2026, 7, 15), at('2', 2026, 7, 14)];
+    buildTimeline(base);
+    const extended = [at('5', 2026, 7, 17, 21), at('4', 2026, 7, 17, 9), ...base];
+    const m = buildTimeline(extended);
+    expect(m.total).toBe(4);
+    expect(m.dayCounts.get('2026-07-17')).toBe(2);
+    expect(m.months[0].newestId).toBe('5');
+    expect(m).toEqual(buildTimeline(extended.slice()));
+  });
+
+  it('rebuilds from scratch when messages were removed', () => {
+    const a = at('3', 2026, 7, 15); const b = at('2', 2026, 7, 14); const c = at('1', 2026, 7, 14, 8);
+    buildTimeline([a, b, c]);
+    const m = buildTimeline([a, c]);
+    expect(m.total).toBe(2);
+    expect(m.dayCounts.get('2026-07-14')).toBe(1);
+  });
+
+  it('does not fold a different list that merely shares its ends', () => {
+    const a = at('3', 2026, 7, 15); const b = at('2', 2026, 7, 14); const c = at('1', 2026, 7, 14, 8);
+    buildTimeline([a, c]);
+    const m = buildTimeline([a, b, c, at('0', 2026, 7, 13)]);
+    expect(m.total).toBe(4);
+    expect(m.dayCounts.get('2026-07-14')).toBe(2);
+  });
+});
+
+describe('buildTimeline after a delete flush (2.2.1 perf)', () => {
+  it('takes the removed messages out of the counts without a full walk', () => {
+    const a = at('5', 2026, 7, 17, 21); const b = at('4', 2026, 7, 17, 9); const c = at('3', 2026, 7, 15); const d = at('2', 2026, 7, 14);
+    buildTimeline([a, b, c, d]);
+    const m = buildTimeline([a, c]);
+    expect(m.total).toBe(2);
+    expect(m.dayCounts.get('2026-07-17')).toBe(1);
+    expect(m.dayCounts.has('2026-07-14')).toBe(false);
+    expect(m).toEqual(buildTimeline([a, c].slice()));
+  });
+
+  it('walks again when a removed message was the newest of its day', () => {
+    const a = at('5', 2026, 7, 17, 21); const b = at('4', 2026, 7, 17, 9); const c = at('3', 2026, 7, 15);
+    buildTimeline([a, b, c]);
+    const m = buildTimeline([b, c]);
+    expect(m.bars.find((x) => x.from === '2026-07-17')?.newestId).toBe('4');
+    expect(m.months[0].newestId).toBe('4');
+  });
+});

@@ -30,6 +30,7 @@ import {
 } from './inlineRenderers';
 import { getDateLocale } from '@/i18n/dateLocale';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 /** Collapse content bodies past this pixel height behind a "Show more" toggle. */
 const COLLAPSED_MAX_HEIGHT = 220;
@@ -75,7 +76,7 @@ interface MessageFeedRowProps {
   onOpenReactions: (message: Message) => void;
 }
 
-const MessageFeedRow = memo(function MessageFeedRow({
+const MessageFeedRow = function MessageFeedRow({
   message,
   isFirstInChunk,
   selected,
@@ -96,6 +97,7 @@ const MessageFeedRow = memo(function MessageFeedRow({
   const { t } = useTranslation();
   const theme = useTheme();
   const dispatch = useAppDispatch();
+  perfCount('MessageFeedRow');
   const isDark = theme.palette.mode === 'dark';
 
   const [expanded, setExpanded] = useState(false);
@@ -687,6 +689,19 @@ const MessageFeedRow = memo(function MessageFeedRow({
       </Box>
     </Box>
   );
-});
+};
 
-export default MessageFeedRow;
+/** Same test React.memo makes by default, with the perf build naming the prop that changed. */
+export const rowPropsAreEqual = (prev: MessageFeedRowProps, next: MessageFeedRowProps): boolean => {
+  const keys = Object.keys(next) as (keyof MessageFeedRowProps)[];
+  if (keys.length !== Object.keys(prev).length) return false;
+  for (const key of keys) {
+    if (prev[key] !== next[key]) {
+      perfCount(`MessageFeedRow changed:${key}`);
+      return false;
+    }
+  }
+  return true;
+};
+
+export default memo(MessageFeedRow, rowPropsAreEqual);

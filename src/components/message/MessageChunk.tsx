@@ -13,6 +13,7 @@ import SystemMessageRow from './SystemMessageRow';
 import type { MessageChunk as MessageChunkType } from '@/utils/messageChunking';
 import { getDateLocale } from '@/i18n/dateLocale';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 interface MessageChunkProps {
   chunk: MessageChunkType;
@@ -59,6 +60,7 @@ const MessageChunk = function MessageChunk({
 }: MessageChunkProps) {
   const { t } = useTranslation();
   const theme = useTheme();
+  perfCount('MessageChunk');
 
   const first = chunk.messages[0];
 
@@ -260,7 +262,10 @@ const MessageChunk = function MessageChunk({
 export const chunkPropsAreEqual = (prev: MessageChunkProps, next: MessageChunkProps): boolean => {
   for (const key of Object.keys(next) as (keyof MessageChunkProps)[]) {
     if (key === 'selectedIds') continue;
-    if (prev[key] !== next[key]) return false;
+    if (prev[key] !== next[key]) {
+      perfCount(`MessageChunk changed:${key}`);
+      return false;
+    }
   }
   if (prev.selectedIds === next.selectedIds) return true;
   return next.chunk.messages.every((m) => prev.selectedIds.has(m.id) === next.selectedIds.has(m.id));

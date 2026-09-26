@@ -149,6 +149,25 @@ export const updateCachedUser = createAsyncThunk(
  * Merge user data into the existing cache. Preserves per-guild data on
  * collision. Writes only the changed users (not the whole map).
  */
+/** Field by field comparison of two cached users, guild entries included. */
+export const sameCachedUser = (a: ExportUserMap[string], b: ExportUserMap[string]): boolean => {
+  if (a === b) return true;
+  const fields = (u: ExportUserMap[string]) => (Object.keys(u) as (keyof ExportUserMap[string])[]).filter((k) => k !== 'guilds');
+  const aKeys = fields(a);
+  if (aKeys.length !== fields(b).length) return false;
+  for (const k of aKeys) if (a[k] !== b[k]) return false;
+  // A missing guilds map and an empty one say the same thing.
+  const ag = a.guilds || {};
+  const bg = b.guilds || {};
+  const agKeys = Object.keys(ag);
+  if (agKeys.length !== Object.keys(bg).length) return false;
+  for (const g of agKeys) {
+    if (ag[g] === bg[g]) continue;
+    if (!bg[g] || JSON.stringify(ag[g]) !== JSON.stringify(bg[g])) return false;
+  }
+  return true;
+};
+
 export const mergeCachedUserMap = createAsyncThunk(
   'cache/mergeCachedUserMap',
   async (newUserMap: ExportUserMap, { getState, rejectWithValue }) => {
@@ -158,24 +177,31 @@ export const mergeCachedUserMap = createAsyncThunk(
       const mergedUserMap: ExportUserMap = { ...currentUserMap };
       const writeBatch: Array<[string, ExportUserMap[string]]> = [];
 
+      // 2.2.1 perf: enrichment runs on every Load All page and delete
+      // flush and usually brings nothing new. An entry that reads the same
+      // as the cached one is left as is and not written again, and when
+      // nothing changed the current map is returned by identity so no
+      // surface keyed on it re-renders.
       Object.entries(newUserMap).forEach(([userId, userData]) => {
         const existing = mergedUserMap[userId];
-        if (existing) {
-          mergedUserMap[userId] = {
-            ...userData,
-            guilds: {
-              ...(existing.guilds || {}),
-              ...(userData.guilds || {}),
-            },
-            timestamp: Math.max(existing.timestamp || 0, userData.timestamp || 0),
-          };
-        } else {
-          mergedUserMap[userId] = userData;
-        }
-        writeBatch.push([userKey(userId), mergedUserMap[userId]]);
+        if (existing === userData) return;
+        const merged = existing
+          ? {
+              ...userData,
+              guilds: {
+                ...(existing.guilds || {}),
+                ...(userData.guilds || {}),
+              },
+              timestamp: Math.max(existing.timestamp || 0, userData.timestamp || 0),
+            }
+          : userData;
+        if (existing && sameCachedUser(existing, merged)) return;
+        mergedUserMap[userId] = merged;
+        writeBatch.push([userKey(userId), merged]);
       });
 
-      if (writeBatch.length > 0) await storage.cache.setMany(writeBatch);
+      if (writeBatch.length === 0) return currentUserMap;
+      await storage.cache.setMany(writeBatch);
       return mergedUserMap;
     } catch (error) {
       console.error('Failed to merge user map cache:', error);

@@ -1,4 +1,5 @@
 import { createSelector } from '@reduxjs/toolkit';
+import { shallowEqual } from 'react-redux';
 import type { RootState } from '@/app/store';
 import { t } from '@/i18n';
 import { TRANSIENT_RETRIES } from '@/utils/operationLoopUtils';
@@ -355,6 +356,10 @@ export const selectOperationSummary = createSelector(
     if (base.isPaused) return { ...base, name, state: 'paused', stateColor: STATE_COLORS.paused };
     return { ...base, name, state: 'running', stateColor: STATE_COLORS.running };
   },
+  // 2.2.1 perf: the summary reads the message slice, which changes several
+  // times per Load All page; hand out the previous object when nothing in it
+  // changed so the surfaces that show it render once per real change.
+  { memoizeOptions: { resultEqualityCheck: shallowEqual } },
 );
 
 export const selectIsOperationRunning = createSelector(

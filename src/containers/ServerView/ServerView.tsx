@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
 import { Box, Typography, Paper, Button, Alert, AlertTitle, Chip } from '@mui/material';
 import { Joyride } from 'react-joyride';
 import {
@@ -44,7 +44,8 @@ import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import type { Channel } from 'discrub-core/types/discord-types';
-import { overlayMessageAuthors } from '@/utils/messageAuthorOverlay';
+import { overlayMessageAuthors, sameAuthorEntries, sameAuthorFields, sameEntriesByRef, type AuthorOverlayEntry } from '@/utils/messageAuthorOverlay';
+import { extendedRange, removedFrom } from '@/utils/listExtension';
 import {
   selectActiveFilteredMessages,
   selectClearSeq,
@@ -123,6 +124,7 @@ import {
   selectDiscoveredThreadsForChannel,
 } from '@features/channel/channelSlice';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 interface ServerViewProps {
   onStartShellTour?: () => void;
@@ -138,6 +140,7 @@ interface ServerViewProps {
  * ServerView container - displays messages for selected channel or DM
  */
 const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) => {
+  perfCount('ServerView');
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
@@ -398,35 +401,71 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   // Build userMap from message authors for markdown rendering
   // Merge with cached data to include nicknames and display names
+  // 2.2.1 perf: both maps are rebuilt on every Load All page and delete
+  // flush, and `userMap` feeds `formattingContext`, so a new object here
+  // re-runs the markdown formatting of every visible row. When the rebuilt
+  // map says the same thing as the last one, the last one is kept.
+  const userMapRef = useRef<{ map: Record<string, AuthorOverlayEntry>; messages: Message[] | null; cachedUserMap: typeof cachedUserMap | null; guildId: string | null }>({ map: {}, messages: null, cachedUserMap: null, guildId: null });
   const userMap = useMemo(() => {
-    const map: Record<string, { userName?: string; displayName?: string; nick?: string }> = {};
+    const held = userMapRef.current;
+    const guildId = selectedGuild?.id ?? null;
+    let map: Record<string, AuthorOverlayEntry>;
 
-    // Start with cached data
-    Object.keys(cachedUserMap).forEach((userId) => {
-      const cached = cachedUserMap[userId];
-      const guildData = selectedGuild?.id ? cached.guilds?.[selectedGuild.id] : null;
-      map[userId] = {
-        userName: cached.userName || undefined,
-        displayName: cached.displayName || undefined,
-        nick: guildData?.nick || undefined,
-      };
-    });
+    // An appended page over the same cache: overlay only the new messages
+    // onto a copy of the last map instead of walking every loaded message.
+    const sameBase = held.cachedUserMap === cachedUserMap && held.guildId === guildId;
+    const ext = sameBase ? extendedRange(held.messages, allMessages) : null;
+    if (sameBase && held.messages && !ext && removedFrom(held.messages, allMessages)) {
+      // A delete flush brings no author the map has not seen; an entry for
+      // an author whose last message went is harmless.
+      map = held.map;
+    } else if (ext) {
+      map = { ...held.map };
+      overlayMessageAuthors(map, allMessages.slice(ext.from, ext.to));
+    } else {
+      map = {};
+      // Start with cached data
+      Object.keys(cachedUserMap).forEach((userId) => {
+        const cached = cachedUserMap[userId];
+        const guildData = guildId ? cached.guilds?.[guildId] : null;
+        map[userId] = {
+          userName: cached.userName || undefined,
+          displayName: cached.displayName || undefined,
+          nick: guildData?.nick || undefined,
+        };
+      });
+      // Overlay message author data (#263: skips authors already recorded
+      // unchanged, since this runs on every Load All page and delete flush).
+      overlayMessageAuthors(map, allMessages);
+    }
 
-    // Overlay message author data (#263: skips authors already recorded
-    // unchanged, since this runs on every Load All page and delete flush).
-    overlayMessageAuthors(map, allMessages);
-
-    return map;
+    const next = sameAuthorEntries(held.map, map) ? held.map : map;
+    userMapRef.current = { map: next, messages: allMessages, cachedUserMap, guildId };
+    return next;
   }, [allMessages, cachedUserMap, selectedGuild?.id]);
 
   // Build full user map with complete User objects for profile modals
+  // Every message carries its own copy of its author, so the map keeps the
+  // copy it already holds unless the author's name or avatar changed;
+  // otherwise each page would swap every entry for the newest copy and the
+  // map would never keep its identity.
+  const fullUserMapRef = useRef<Record<string, User>>({});
+  const fullUserMessagesRef = useRef<Message[] | null>(null);
   const fullUserMap = useMemo(() => {
+    const held = fullUserMapRef.current;
+    const before = fullUserMessagesRef.current;
+    fullUserMessagesRef.current = allMessages;
+    // A delete flush: every author is already in the map.
+    if (before && removedFrom(before, allMessages)) return held;
     const map: Record<string, User> = {};
     allMessages.forEach((msg) => {
-      if (msg.author) {
-        map[msg.author.id] = msg.author;
-      }
+      const author = msg.author;
+      if (!author) return;
+      const cur = map[author.id] ?? held[author.id];
+      map[author.id] = cur && sameAuthorFields(cur, author) ? cur : author;
     });
+    if (sameEntriesByRef(held, map)) return held;
+    fullUserMapRef.current = map;
     return map;
   }, [allMessages]);
 
@@ -446,8 +485,15 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     guildRoles,
   }), [userMap, channelMap, guildRoles]);
 
-  // Trigger user enrichment when main channel messages change
+  // Trigger user enrichment when main channel messages change. 2.2.1 perf:
+  // a list that only shrank (a delete flush) holds no author the last pass
+  // did not see, so it is skipped; before, every flush walked all 30K
+  // messages again and flipped isEnriching twice.
+  const enrichedLengthRef = useRef(0);
   useEffect(() => {
+    const grew = mainMessages.length > enrichedLengthRef.current;
+    enrichedLengthRef.current = mainMessages.length;
+    if (!grew) return;
     if (mainMessages.length > 0 && token && settings) {
       const shouldEnrich =
         settings[DiscrubSetting.DISPLAY_NAME_LOOKUP] === 'true' ||
@@ -795,12 +841,17 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     }
   };
 
+  // Read through a ref so the callback keeps its identity while a run
+  // starts and ends; a new callback here re-renders every visible chunk.
+  const openThreadGateRef = useRef({ token, isOperationRunning });
+  openThreadGateRef.current = { token, isOperationRunning };
   const handleOpenThread = useCallback((message: Message) => {
+    const { token, isOperationRunning } = openThreadGateRef.current;
     if (!token || isOperationRunning) return;
     const thread = (message as any).thread;
     if (!thread) return;
     dispatch(openThreadTab({ threadId: thread.id, threadName: thread.name || `Thread`, token }));
-  }, [token, isOperationRunning, dispatch]);
+  }, [dispatch]);
 
   // #190 phase 1: the DM-vs-guild ternary used to pick a fresh function
   // ref on every render. Memoize the chosen handler so MessageFeed's
@@ -1294,4 +1345,6 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   );
 };
 
-export default ServerView;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(ServerView);

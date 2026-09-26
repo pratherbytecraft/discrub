@@ -1,4 +1,4 @@
-import type { Message } from 'discrub-core/types/discord-types';
+import type { Message, User } from 'discrub-core/types/discord-types';
 
 export interface AuthorOverlayEntry {
   userName?: string;
@@ -30,3 +30,30 @@ export const overlayMessageAuthors = (
   });
   return map;
 };
+
+/** True when both maps hold the same ids with the same name fields. */
+export const sameAuthorEntries = (
+  a: Record<string, AuthorOverlayEntry>,
+  b: Record<string, AuthorOverlayEntry>,
+): boolean => {
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  for (const id of aKeys) {
+    const x = a[id];
+    const y = b[id];
+    if (!y || x.userName !== y.userName || x.displayName !== y.displayName || x.nick !== y.nick) return false;
+  }
+  return true;
+};
+
+/** True when both maps hold the same ids pointing at the same objects. */
+export const sameEntriesByRef = <T,>(a: Record<string, T>, b: Record<string, T>): boolean => {
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  for (const id of aKeys) if (a[id] !== b[id]) return false;
+  return true;
+};
+
+/** True when two author copies show the same person the same way. */
+export const sameAuthorFields = (a: User, b: User): boolean =>
+  a === b || (a.id === b.id && a.username === b.username && a.global_name === b.global_name && a.avatar === b.avatar && a.discriminator === b.discriminator && a.bot === b.bot);

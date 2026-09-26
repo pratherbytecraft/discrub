@@ -1090,3 +1090,22 @@ describe('operationSelectors', () => {
     });
   });
 });
+
+describe('selectOperationSummary identity (2.2.1 perf)', () => {
+  it('hands out the same object when a store change left the summary unchanged', () => {
+    const base = createBaseState();
+    const first = selectOperationSummary(base);
+    // A message slice change that does not touch anything the summary reads.
+    const next = { ...base, message: { ...base.message, messages: [...base.message.messages] } };
+    expect(selectOperationSummary(next)).toBe(first);
+  });
+
+  it('hands out a new object when a field changed', () => {
+    const base = createBaseState();
+    const first = selectOperationSummary(base);
+    const running = { ...base, message: { ...base.message, isDeleting: true } };
+    const second = selectOperationSummary(running);
+    expect(second).not.toBe(first);
+    expect(second.isRunning).toBe(true);
+  });
+});

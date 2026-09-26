@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { overlayMessageAuthors } from './messageAuthorOverlay';
+import { overlayMessageAuthors, sameAuthorEntries, sameEntriesByRef } from './messageAuthorOverlay';
 import { createMockMessage, createMockUser } from '../test/fixtures';
 
 const msgFrom = (id: string, username: string, global_name: string | null) =>
@@ -46,5 +46,21 @@ describe('overlayMessageAuthors (#263)', () => {
   it('skips messages without an author', () => {
     const map = overlayMessageAuthors({}, [createMockMessage({ author: undefined as any })]);
     expect(map).toEqual({});
+  });
+});
+
+describe('sameAuthorEntries and sameEntriesByRef (2.2.1 perf)', () => {
+  it('treats maps with the same ids and name fields as the same', () => {
+    expect(sameAuthorEntries({ u1: { userName: 'a', displayName: 'A' } }, { u1: { userName: 'a', displayName: 'A' } })).toBe(true);
+    expect(sameAuthorEntries({ u1: { userName: 'a' } }, { u1: { userName: 'a', nick: 'n' } })).toBe(false);
+    expect(sameAuthorEntries({ u1: { userName: 'a' } }, { u1: { userName: 'a' }, u2: { userName: 'b' } })).toBe(false);
+    expect(sameAuthorEntries({ u1: { userName: 'a' } }, { u2: { userName: 'a' } })).toBe(false);
+  });
+
+  it('compares entries by reference', () => {
+    const u = createMockUser({ id: 'u1' });
+    expect(sameEntriesByRef({ u1: u }, { u1: u })).toBe(true);
+    expect(sameEntriesByRef({ u1: u }, { u1: { ...u } })).toBe(false);
+    expect(sameEntriesByRef({}, { u1: u })).toBe(false);
   });
 });

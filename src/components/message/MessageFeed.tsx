@@ -37,12 +37,13 @@ import { selectSettings, setFeedScrollAnchor, selectFeedScrollAnchor } from '@fe
 import UserProfileModal from '@/components/modals/UserProfileModal';
 import AttachmentModal from '@/components/modals/AttachmentModal';
 import ReactionModal from '@/components/modals/ReactionModal';
-import { chunkMessages, localDayKey } from '@/utils/messageChunking';
+import { chunkMessages, messageDayKey, type MessageChunk as MessageChunkType } from '@/utils/messageChunking';
 import { createChunkSizeEstimator } from '@/utils/chunkSizeEstimator';
 import MessageChunk from './MessageChunk';
 import MessageFeedToolbar from './MessageFeedToolbar';
 import MessageDayHeading from './MessageDayHeading';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 interface MessageFeedProps {
   formattingContext: HtmlFormattingContext;
@@ -77,6 +78,7 @@ const MessageFeed = ({
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const messages = useAppSelector(selectActiveFilteredMessages);
+  perfCount('MessageFeed');
   const selectedMessages = useAppSelector(selectActiveSelectedMessages);
   const order = useAppSelector(selectActiveOrder);
   const token = useAppSelector(selectAuthToken);
@@ -108,19 +110,35 @@ const MessageFeed = ({
     [selectedMessages],
   );
 
-  const chunks = useMemo(() => chunkMessages(messages, { splitByDay: groupByDay }), [messages, groupByDay]);
+  // 2.2.1 perf: hand the chunker the previous result so a chunk whose
+  // messages did not change keeps its object, and its memoised row skips
+  // the render when a page is appended or a delete batch lands elsewhere.
+  const prevChunksRef = useRef<MessageChunkType[]>([]);
+  const chunks = useMemo(() => {
+    const next = chunkMessages(messages, { splitByDay: groupByDay }, prevChunksRef.current);
+    prevChunksRef.current = next;
+    return next;
+  }, [messages, groupByDay]);
+
+  // The lists behind the callbacks below, read through refs so the
+  // callbacks keep their identity across pages and delete flushes (a new
+  // callback would re-render every visible chunk).
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const selectedMessagesRef = useRef(selectedMessages);
+  selectedMessagesRef.current = selectedMessages;
 
   // Timeline: messages per local day, read by the day headings.
   const dayCounts = useMemo(() => {
     const counts = new Map<string, number>();
     if (!groupByDay) return counts;
-    for (const m of messages) { const k = localDayKey(m.timestamp); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
+    for (const m of messages) { const k = messageDayKey(m); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
     return counts;
   }, [messages, groupByDay]);
   const selectedDayCounts = useMemo(() => {
     const counts = new Map<string, number>();
     if (!groupByDay) return counts;
-    for (const m of selectedMessages) { const k = localDayKey(m.timestamp); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
+    for (const m of selectedMessages) { const k = messageDayKey(m); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
     return counts;
   }, [selectedMessages, groupByDay]);
 
@@ -152,9 +170,10 @@ const MessageFeed = ({
     getScrollElement: () => parentRef.current,
     estimateSize,
     overscan: 20,
-    getItemKey: useCallback((index: number) => chunks[index]?.key ?? index, [chunks]),
+    getItemKey: useCallback((index: number) => chunksRef.current[index]?.key ?? index, []),
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
+  useEffect(() => { perfCount('virtualizer identity'); }, [rowVirtualizer]);
 
   // Scroll anchor (2.2.0 layouts foundation). A layout swap or a Focus
   // toggle remounts this component; remember the first visible message on
@@ -187,6 +206,7 @@ const MessageFeed = ({
   // virtualizer's own measureElement. Kept ref-stable so rows don't re-attach.
   const measureChunk = useCallback(
     (el: Element | null) => {
+      perfCount(el ? 'measureChunk' : 'measureChunk:detach');
       if (el) {
         const idxAttr = el.getAttribute('data-index');
         const idx = idxAttr != null ? Number(idxAttr) : NaN;
@@ -267,11 +287,11 @@ const MessageFeed = ({
         // Full message objects, not just ids: refine can hide selected
         // messages from `messages`, and the union below must carry them
         // through instead of silently dropping them.
-        baseMessages: selectedMessages,
+        baseMessages: selectedMessagesRef.current,
       };
       dragMovedRef.current = false;
     },
-    [selectedMessages],
+    [],
   );
 
   const handleSelectDragEnter = useCallback(
@@ -285,6 +305,7 @@ const MessageFeed = ({
         dragStateRef.current = null;
         return;
       }
+      const messages = messagesRef.current;
       const a = messages.findIndex((m) => m.id === drag.anchorId);
       const b = messages.findIndex((m) => m.id === message.id);
       if (a === -1 || b === -1) return;
@@ -304,7 +325,7 @@ const MessageFeed = ({
         dispatch(setSelectedMessages(union));
       }
     },
-    [messages, activeTab, dispatch],
+    [activeTab, dispatch],
   );
 
   // End the drag on ANY mouseup, wherever it lands (row, gutter, outside
@@ -358,14 +379,16 @@ const MessageFeed = ({
 
   // Select day ticks every shown message from that day; a second click unticks them.
   const handleToggleDay = useCallback((dayKey: string) => {
-    const dayIds = new Set(messages.filter((m) => localDayKey(m.timestamp) === dayKey).map((m) => m.id));
+    const messages = messagesRef.current;
+    const selectedMessages = selectedMessagesRef.current;
+    const dayIds = new Set(messages.filter((m) => messageDayKey(m) === dayKey).map((m) => m.id));
     const allSelected = selectedMessages.filter((m) => dayIds.has(m.id)).length === dayIds.size;
     const next = allSelected
       ? selectedMessages.filter((m) => !dayIds.has(m.id))
       : [...selectedMessages.filter((m) => !dayIds.has(m.id)), ...messages.filter((m) => dayIds.has(m.id))];
     if (activeTab) dispatch(setThreadSelectedMessages({ threadId: activeTab, messages: next }));
     else dispatch(setSelectedMessages(next));
-  }, [activeTab, dispatch, messages, selectedMessages]);
+  }, [activeTab, dispatch]);
 
   const handleToggleSort = useCallback(() => {
     const newOrder = {
@@ -511,15 +534,18 @@ const MessageFeed = ({
             {virtualItems.map((virtualRow) => {
               const chunk = chunks[virtualRow.index];
               if (!chunk) return null;
-              const dayKey = groupByDay ? localDayKey(chunk.firstTimestamp) : '';
+              const dayKey = groupByDay ? messageDayKey(chunk.messages[0]) : '';
               const prevChunk = virtualRow.index > 0 ? chunks[virtualRow.index - 1] : undefined;
-              const startsDay = !!dayKey && (!prevChunk || localDayKey(prevChunk.firstTimestamp) !== dayKey);
+              const startsDay = !!dayKey && (!prevChunk || messageDayKey(prevChunk.messages[0]) !== dayKey);
+              // A plain element with an inline transform: the wrapper moves on
+              // every scroll and page, and an sx object here would be
+              // serialised by emotion for each visible chunk each time.
               return (
-                <Box
+                <div
                   key={chunk.key}
                   data-index={virtualRow.index}
                   ref={measureChunk}
-                  sx={{
+                  style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
@@ -554,7 +580,7 @@ const MessageFeed = ({
                     onOpenReactions={handleOpenReactions}
                     onOpenThread={onOpenThread}
                   />
-                </Box>
+                </div>
               );
             })}
           </Box>

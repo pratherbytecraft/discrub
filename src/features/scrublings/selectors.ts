@@ -1,4 +1,5 @@
 import { createSelector } from '@reduxjs/toolkit';
+import { shallowEqual } from 'react-redux';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import type { RootState } from '@/app/store';
 import { selectOperationSummary } from '@features/app/operationSelectors';
@@ -79,6 +80,7 @@ export const selectScrublingsOperationView = createSelector(
       rateLimitStopped: app.rateLimitStopped === true,
     };
   },
+  { memoizeOptions: { resultEqualityCheck: shallowEqual } },
 );
 
 /**

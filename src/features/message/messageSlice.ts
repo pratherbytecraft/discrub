@@ -128,11 +128,15 @@ export const deleteMessage = createAsyncThunk(
  * `messages`/`filteredMessages`/`selectedMessages` array identities, which
  * makes MessageFeed rebuild its chunking memo and re-measure the virtualizer
  * (O(N) work). Per-message writes made a 1000-message delete O(N·D) — the
- * reported "page unresponsive" freeze. 25 keeps the table visibly draining
- * (a flush every few seconds at typical delete delays) while cutting the
- * O(N) re-renders by 25x.
+ * reported "page unresponsive" freeze. A batch keeps the table visibly
+ * draining (a flush every second or two at typical delete delays) while
+ * cutting the O(N) writes by the batch size.
  */
-export const DELETE_BATCH_SIZE = 25;
+// 2.2.1 perf: 25 flushes read as one long task each at 30K loaded (about
+// 90 ms, a whole screen of chunks redrawn when the deleted rows are the
+// visible ones). Ten keeps each flush under the 50 ms long task line and the
+// list moves more steadily while a run deletes what the person is looking at.
+export const DELETE_BATCH_SIZE = 10;
 
 /**
  * Delete multiple messages
@@ -2764,6 +2768,15 @@ const getActiveContainer = (state: import('./messageTypes').MessageState) => {
  */
 const plain = <T,>(arr: T[]): T[] => (isDraft(arr) ? (original(arr) as T[]) : arr);
 
+/**
+ * 2.2.1 perf: a replaced array handed to immer already frozen. Immer deep
+ * freezes every new object a reducer leaves in the draft and skips objects
+ * that are frozen already, so freezing the array here (its elements are the
+ * frozen message objects from before) saves the walk over 30K elements on
+ * every Load All page and every delete flush. Same end state as before.
+ */
+const sealed = <T,>(arr: T[]): T[] => Object.freeze(arr) as T[];
+
 const resolveCapturedContainer = (
   state: import('./messageTypes').MessageState,
   containerId: string | null,
@@ -2810,9 +2823,13 @@ const messageSlice = createSlice({
       const container = resolveCapturedContainer(state, action.payload.containerId);
       if (!container) return;
       const ids = new Set(action.payload.ids);
-      container.messages = plain(container.messages).filter((m) => !ids.has(m.id));
-      container.filteredMessages = plain(container.filteredMessages).filter((m) => !ids.has(m.id));
-      container.selectedMessages = plain(container.selectedMessages).filter((m) => !ids.has(m.id));
+      const messages = plain(container.messages);
+      const filtered = plain(container.filteredMessages);
+      const nextMessages = sealed(messages.filter((m) => !ids.has(m.id)));
+      container.messages = nextMessages;
+      // With no refine active the two arrays are one, keep it that way.
+      container.filteredMessages = filtered === messages ? nextMessages : sealed(filtered.filter((m) => !ids.has(m.id)));
+      container.selectedMessages = sealed(plain(container.selectedMessages).filter((m) => !ids.has(m.id)));
     },
     // F13 (#183 follow-up): batched in-place replacement used by the
     // bulk-edit loop — same shape as messagesRemoved. Pre-fix, bulk edit
@@ -2920,9 +2937,10 @@ const messageSlice = createSlice({
       // #263: merge the page at the right end instead of re-sorting the
       // whole list every page (quadratic at 30K). When no refine is active
       // filteredMessages is the same array, not a copy.
-      const sorted = appendSortedPage(existing, fresh, state.order.order);
+      const sorted = sealed(appendSortedPage(existing, fresh, state.order.order));
       state.messages = sorted;
-      state.filteredMessages = applyRefineCriteria(sorted, state.refineCriteria);
+      const filtered = applyRefineCriteria(sorted, state.refineCriteria);
+      state.filteredMessages = filtered === sorted ? sorted : sealed(filtered);
       if (totalCount !== undefined) state.pagination.totalCount = totalCount;
       if (searchOffset !== undefined) state.pagination.searchOffset = searchOffset;
     },

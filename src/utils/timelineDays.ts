@@ -1,5 +1,6 @@
 import type { Message } from 'discrub-core/types/discord-types';
-import { localDayKey } from './messageChunking';
+import { messageDayKey } from './messageChunking';
+import { extendedRange, removedFrom } from './listExtension';
 
 const DAY_MS = 86400000;
 /** Up to this many days the strip draws one bar per day, then per week, then per month. */
@@ -44,18 +45,66 @@ export const addDays = (key: string, n: number): string => { const d = startOfDa
  * bars, the month list and the per-day counts all add up to `total`.
  * Messages without a readable timestamp are left out of all of them.
  */
-export const buildTimeline = (messages: Message[]): TimelineModel => {
-  const dayCounts = new Map<string, number>();
-  const newestByDay = new Map<string, { id: string; ts: number }>();
-  let total = 0; let firstDay = ''; let lastDay = '';
-  for (const m of messages) {
-    const key = localDayKey(m.timestamp);
+type Newest = { id: string; ts: number };
+interface DayFold { messages: Message[]; dayCounts: Map<string, number>; newestByDay: Map<string, Newest>; total: number }
+
+const foldMessages = (fold: DayFold, messages: Message[], from: number, to: number): void => {
+  for (let i = from; i < to; i++) {
+    const m = messages[i];
+    const key = messageDayKey(m);
     if (!key) continue;
-    total += 1;
-    dayCounts.set(key, (dayCounts.get(key) ?? 0) + 1);
+    fold.total += 1;
+    fold.dayCounts.set(key, (fold.dayCounts.get(key) ?? 0) + 1);
     const ts = new Date(m.timestamp).getTime();
-    const cur = newestByDay.get(key);
-    if (!cur || ts > cur.ts) newestByDay.set(key, { id: m.id, ts });
+    const cur = fold.newestByDay.get(key);
+    if (!cur || ts > cur.ts) fold.newestByDay.set(key, { id: m.id, ts });
+  }
+};
+
+/**
+ * 2.2.1 perf: Load All appends a page to one end of the list and keeps
+ * every other element, so when the new list extends the last one seen
+ * (same objects at the shared end), only the new messages are folded into
+ * a copy of the last day maps instead of walking the whole list again.
+ */
+let lastFold: DayFold | null = null;
+const foldFor = (messages: Message[]): DayFold => {
+  const prev = lastFold;
+  const ext = prev ? extendedRange(prev.messages, messages) : null;
+  if (prev && ext) {
+    const fold: DayFold = { messages, dayCounts: new Map(prev.dayCounts), newestByDay: new Map(prev.newestByDay), total: prev.total };
+    foldMessages(fold, messages, ext.from, ext.to);
+    lastFold = fold;
+    return fold;
+  }
+  if (prev && prev.messages === messages) return prev;
+  // A delete flush: the new list is the old one with a few messages taken
+  // out. Take them out of the day maps too, unless one was a day's newest
+  // message, which needs the full walk to find the next newest.
+  const removed = prev ? removedFrom(prev.messages, messages) : null;
+  if (prev && removed && removed.every((m) => prev.newestByDay.get(messageDayKey(m))?.id !== m.id)) {
+    const fold: DayFold = { messages, dayCounts: new Map(prev.dayCounts), newestByDay: prev.newestByDay, total: prev.total };
+    for (const m of removed) {
+      const key = messageDayKey(m);
+      if (!key) continue;
+      fold.total -= 1;
+      const left = (fold.dayCounts.get(key) ?? 1) - 1;
+      if (left > 0) fold.dayCounts.set(key, left);
+      else { fold.dayCounts.delete(key); if (fold.newestByDay === prev.newestByDay) fold.newestByDay = new Map(prev.newestByDay); fold.newestByDay.delete(key); }
+    }
+    lastFold = fold;
+    return fold;
+  }
+  const fold: DayFold = { messages, dayCounts: new Map(), newestByDay: new Map(), total: 0 };
+  foldMessages(fold, messages, 0, messages.length);
+  lastFold = fold;
+  return fold;
+};
+
+export const buildTimeline = (messages: Message[]): TimelineModel => {
+  const { dayCounts, newestByDay, total } = foldFor(messages);
+  let firstDay = ''; let lastDay = '';
+  for (const key of dayCounts.keys()) {
     if (!firstDay || key < firstDay) firstDay = key;
     if (!lastDay || key > lastDay) lastDay = key;
   }
