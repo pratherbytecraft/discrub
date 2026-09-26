@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, memo } from 'react';
 import {
   List,
   ListItemButton,
@@ -70,6 +70,7 @@ import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
 import BulkEditDialog from '@containers/PurgeView/BulkEditDialog';
 import { t as translate } from '@/i18n';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 const PAGE_SIZE = 50;
 
@@ -241,6 +242,7 @@ interface DMListProps {
  * DMList component - displays all DM channels
  */
 const DMList = ({ filterText = '', queue }: DMListProps) => {
+  perfCount('DMList');
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const dms = useAppSelector(selectDMs);
@@ -602,4 +604,6 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
   );
 };
 
-export default DMList;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(DMList);

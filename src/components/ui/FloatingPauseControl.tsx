@@ -6,6 +6,7 @@ import {
   selectOperationSummary,
 } from '@features/app/operationSelectors';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
+import { perfCount } from '@/utils/perfCounters';
 
 /**
  * Amber glow pulse applied to the floating pill while the operation is
@@ -38,6 +39,7 @@ const pausedPulse = keyframes`
  * the pause/cancel hotkeys twice and double-toggle).
  */
 const FloatingPauseControl = () => {
+  perfCount('FloatingPauseControl');
   const isRunning = useAppSelector(selectIsHeavyOperationRunning);
   const isPaused = useAppSelector(selectDiscrubPaused);
   const operationSummary = useAppSelector(selectOperationSummary);

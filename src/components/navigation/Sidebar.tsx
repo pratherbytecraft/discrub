@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 
 import { SIDEBAR_WIDTH } from './sidebarConstants';
 import { Box, Tabs, Tab, Drawer, useMediaQuery, useTheme, TextField, InputAdornment, IconButton, Typography, alpha } from '@mui/material';
@@ -23,6 +23,7 @@ import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors'
 import ScienceIcon from '@mui/icons-material/Science';
 import Chip from '@mui/material/Chip';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 interface SidebarProps {
   open?: boolean;
@@ -33,6 +34,7 @@ interface SidebarProps {
  * Sidebar component - contains navigation for servers, DMs, and channels
  */
 const Sidebar = ({ open = false, onClose }: SidebarProps) => {
+  perfCount('Sidebar');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   // The sidebar mounts fresh on every switch into Classic or Workbench, so it opens on the tab that matches
@@ -323,4 +325,6 @@ const Sidebar = ({ open = false, onClose }: SidebarProps) => {
   return sidebarContent;
 };
 
-export default Sidebar;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(Sidebar);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, memo } from 'react';
 import {
   List,
   ListItemButton,
@@ -42,6 +42,7 @@ import MultiSelectControls from './MultiSelectControls';
 import { useLoadGuilds } from '@/hooks/useLoadGuilds';
 import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 const PAGE_SIZE = 50;
 
@@ -53,6 +54,7 @@ interface ServerListProps {
  * ServerList component - displays all guilds/servers
  */
 const ServerList = ({ filterText = '' }: ServerListProps) => {
+  perfCount('ServerList');
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const guilds = useAppSelector(selectGuilds);
@@ -267,4 +269,6 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
   );
 };
 
-export default ServerList;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(ServerList);

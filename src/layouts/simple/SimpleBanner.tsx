@@ -1,13 +1,16 @@
+import { memo } from 'react';
 import { Box, LinearProgress, Typography, alpha } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
+import { perfCount } from '@/utils/perfCounters';
 
 const STATE_HEX: Record<string, string> = { neutral: '#8b949e', success: '#3fb950', warning: '#d29922', info: '#58a6ff', error: '#f85149' };
 
 /** Banner above the feed while an operation runs (Simple): the shared state block, its bar, and a calm sentence. */
 const SimpleBanner = () => {
+  perfCount('SimpleBanner');
   const { t } = useTranslation();
   const summary = useAppSelector(selectOperationSummary);
   if (summary.tier !== 'heavy') return null;
@@ -21,4 +24,6 @@ const SimpleBanner = () => {
   );
 };
 
-export default SimpleBanner;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(SimpleBanner);

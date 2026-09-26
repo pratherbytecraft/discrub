@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box, ButtonBase, Typography, alpha, useTheme } from '@mui/material';
 import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +9,7 @@ import { selectSelectedDm } from '@features/dm/dmSlice';
 import { getDateLocale } from '@/i18n/dateLocale';
 import { dayKeyToDate } from '@/utils/timelineDays';
 import { useTimeline } from './useTimeline';
+import { perfCount } from '@/utils/perfCounters';
 
 const card = { border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.5 } as const;
 const head = { fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'text.secondary', mb: 1 } as const;
@@ -18,6 +20,7 @@ const head = { fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransf
  * and a card that says what the strip does or which range is showing.
  */
 const TimelineSide = ({ onPicked }: { onPicked?: () => void }) => {
+  perfCount('TimelineSide');
   const { t } = useTranslation();
   const theme = useTheme();
   const pagination = useAppSelector(selectActivePagination);
@@ -58,4 +61,6 @@ const TimelineSide = ({ onPicked }: { onPicked?: () => void }) => {
   );
 };
 
-export default TimelineSide;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(TimelineSide);

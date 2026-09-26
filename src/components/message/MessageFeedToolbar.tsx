@@ -6,6 +6,7 @@ import {
 } from '@mui/icons-material';
 import { SortDirection } from 'discrub-core/common-enum';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 interface MessageFeedToolbarProps {
   totalCount: number;
@@ -22,6 +23,7 @@ const MessageFeedToolbar = memo(function MessageFeedToolbar({
   onToggleSelectAll,
   onToggleSort,
 }: MessageFeedToolbarProps) {
+  perfCount('MessageFeedToolbar');
   const { t } = useTranslation();
   const allSelected = totalCount > 0 && selectedCount === totalCount;
   const someSelected = selectedCount > 0 && !allSelected;

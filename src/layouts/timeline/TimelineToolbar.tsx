@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Box, Button, ListItemIcon, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, FilterList as FilterIcon, Forum as ThreadIcon, CalendarViewMonth as MonthsIcon, MoreHoriz as MoreIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectActiveFilteredMessages, selectActivePagination } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
+import { perfCount } from '@/utils/perfCounters';
 
 type DialogKey = 'loadAll' | 'export' | 'forumExport' | 'purge' | 'filters' | 'threadLoad';
 
@@ -19,6 +20,7 @@ type DialogKey = 'loadAll' | 'export' | 'forumExport' | 'purge' | 'filters' | 't
  * button opens the month list; on a phone the whole row folds into one menu.
  */
 const TimelineToolbar = ({ phone, showMonths, onOpenMonths }: { phone: boolean; showMonths: boolean; onOpenMonths: () => void }) => {
+  perfCount('TimelineToolbar');
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
@@ -65,4 +67,6 @@ const TimelineToolbar = ({ phone, showMonths, onOpenMonths }: { phone: boolean; 
   );
 };
 
-export default TimelineToolbar;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(TimelineToolbar);

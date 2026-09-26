@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box, Button, Typography, alpha, useTheme } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, BarChart as AnalyticsIcon, Forum as ThreadIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,7 @@ import { selectStatusEntries } from '@features/status/statusSlice';
 import { countActiveFilters } from 'discrub-core/filtering';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
 import { ChannelType } from 'discrub-core/discord-enum';
+import { perfCount } from '@/utils/perfCounters';
 
 export const INSPECTOR_WIDTH = 300;
 
@@ -31,6 +33,7 @@ const Card = ({ title, children, testId, action }: { title: string; children: Re
  * dialog the Classic header opens; the dialogs live in ServerView.
  */
 const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
+  perfCount('NativeInspector');
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const theme = useTheme();
@@ -101,4 +104,6 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
   );
 };
 
-export default NativeInspector;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(NativeInspector);

@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { Box, Checkbox, Typography, alpha, useTheme } from '@mui/material';
 import { ArrowDownward as DescIcon, ArrowUpward as AscIcon, AttachFile as AttachmentIcon } from '@mui/icons-material';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { SortDirection } from 'discrub-core/common-enum';
 import type { Message } from 'discrub-core/types/discord-types';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
@@ -16,8 +17,10 @@ import {
 import { selectSettings } from '@features/app/appSlice';
 import { format } from 'date-fns';
 import { getDateLocale } from '@/i18n/dateLocale';
+import { perfCount } from '@/utils/perfCounters';
 
 const ROW_HEIGHT = 36;
+const cellSx = { px: 1, display: 'flex', alignItems: 'center', minWidth: 0, height: '100%', fontSize: '0.8rem' } as const;
 
 /**
  * Dense table presenter for the Workbench layout (2.2.0). One row per
@@ -27,11 +30,12 @@ const ROW_HEIGHT = 36;
  * every dialog behave the same in both presenters.
  */
 const MessageTable = () => {
+  perfCount('MessageTable');
   const { t } = useTranslation();
   const guildName = useAppSelector(selectSelectedGuild)?.name;
   // A message with no text still says what it is, dim and italic: its files, the embed's title or text, or a sticker's name.
   // Until 2026-09-21 an embed-only row (a bot's report) had an empty cell.
-  const standIn = (m: Message, files: number): string => {
+  const standIn = useCallback((m: Message, files: number): string => {
     // A call, a pin, a join: the same sentence the feed shows, with the mention markup turned into a plain name.
     const system = formatSystemMessage(m, { guildName });
     if (system?.text) return system.text.replace(/<@!?(\d+)>/g, (_, id: string) => (id === m.author?.id ? (m.author?.global_name || m.author?.username || '@user') : '@user')).replace(/\*\*/g, '');
@@ -42,7 +46,7 @@ const MessageTable = () => {
     const sticker = m.sticker_items?.[0]?.name;
     if (sticker) return t('table.stickerOnly', { name: sticker });
     return '';
-  };
+  }, [guildName, t]);
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const messages = useAppSelector(selectActiveFilteredMessages);
@@ -68,8 +72,9 @@ const MessageTable = () => {
 
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({ count: messages.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW_HEIGHT, overscan: 30 });
-  const stamp = (ts: string) => { try { return format(new Date(ts), `${settings?.dateFormat || 'MM/dd/yyyy'} ${settings?.timeFormat || 'h:mm aa'}`, { locale: getDateLocale() }); } catch { return ''; } };
-  const cellSx = { px: 1, display: 'flex', alignItems: 'center', minWidth: 0, height: '100%', fontSize: '0.8rem' } as const;
+  const dateFormat = settings?.dateFormat || 'MM/dd/yyyy';
+  const timeFormat = settings?.timeFormat || 'h:mm aa';
+  const stamp = useCallback((ts: string) => { try { return format(new Date(ts), `${dateFormat} ${timeFormat}`, { locale: getDateLocale() }); } catch { return ''; } }, [dateFormat, timeFormat]);
   const grid = '40px 180px minmax(200px, 1fr) 70px 120px 150px';
 
   return (
@@ -88,34 +93,19 @@ const MessageTable = () => {
         <Box sx={{ height: virtualizer.getTotalSize(), position: 'relative', minWidth: 640 }}>
           {virtualizer.getVirtualItems().map((row) => {
             const m = messages[row.index];
-            const isSelected = selectedIds.has(m.id);
-            const author = m.author?.global_name || m.author?.username || '';
-            const files = m.attachments?.length ?? 0;
             return (
-              <Box
+              <MessageTableRow
                 key={m.id}
-                role="row"
-                aria-selected={isSelected}
-                data-testid="table-row"
-                data-message-id={m.id}
-                onClick={() => toggle(m)}
-                sx={{
-                  position: 'absolute', top: 0, left: 0, width: '100%', height: row.size, transform: `translateY(${row.start}px)`,
-                  display: 'grid', gridTemplateColumns: grid, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider',
-                  backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.14) : 'transparent',
-                  '&:hover': { backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.18) : alpha(theme.palette.text.primary, 0.04) },
-                }}
-              >
-                <Box sx={{ ...cellSx, px: 0.5 }}><Checkbox size="small" checked={isSelected} tabIndex={-1} onClick={(e) => e.stopPropagation()} onChange={() => toggle(m)} inputProps={{ 'aria-label': t('table.selectRow') }} sx={{ p: 0.5 }} /></Box>
-                <Box sx={{ ...cellSx, gap: 0.75 }}>
-                  <Box component="img" src={m.author?.avatar ? `https://cdn.discordapp.com/avatars/${m.author.id}/${m.author.avatar}.png?size=32` : undefined} alt="" sx={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, backgroundColor: 'action.hover' }} />
-                  <Typography variant="body2" noWrap sx={{ fontSize: 'inherit', fontWeight: 600 }}>{author}</Typography>
-                </Box>
-                <Box sx={cellSx}><Typography variant="body2" noWrap data-testid={m.content ? undefined : 'table-standin'} sx={{ fontSize: 'inherit', ...(m.content ? {} : { color: 'text.secondary', fontStyle: 'italic' }) }}>{m.content || standIn(m, files)}</Typography></Box>
-                <Box sx={{ ...cellSx, color: 'text.secondary', gap: 0.5 }}>{files > 0 && <><AttachmentIcon sx={{ fontSize: 14 }} />{files}</>}</Box>
-                <Box sx={{ ...cellSx, gap: 0.5, overflow: 'hidden' }}>{(m.reactions ?? []).slice(0, 3).map((r, i) => <Box key={i} component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>{r.emoji?.name} {r.count}</Box>)}</Box>
-                <Box sx={{ ...cellSx, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}><Typography variant="body2" noWrap sx={{ fontSize: 'inherit' }}>{stamp(m.timestamp)}</Typography></Box>
-              </Box>
+                message={m}
+                isSelected={selectedIds.has(m.id)}
+                top={row.start}
+                height={row.size}
+                stamp={stamp}
+                standIn={standIn}
+                onToggle={toggle}
+                grid={grid}
+                t={t}
+              />
             );
           })}
         </Box>
@@ -123,5 +113,47 @@ const MessageTable = () => {
     </Box>
   );
 };
+
+/**
+ * 2.2.1 perf: one memoised row. The table used to draw every visible row
+ * inline, so each appended Load All page (and every render of the shell
+ * above) re-ran the sx of about fifty rows; now a row renders when its
+ * message, selection or position changes.
+ */
+const MessageTableRow = memo(function MessageTableRow({
+  message: m, isSelected, top, height, stamp, standIn, onToggle, grid, t,
+}: {
+  message: Message; isSelected: boolean; top: number; height: number;
+  stamp: (ts: string) => string; standIn: (m: Message, files: number) => string; onToggle: (m: Message) => void; grid: string; t: TFunction;
+}) {
+  const theme = useTheme();
+  const author = m.author?.global_name || m.author?.username || '';
+  const files = m.attachments?.length ?? 0;
+  return (
+    <Box
+      role="row"
+      aria-selected={isSelected}
+      data-testid="table-row"
+      data-message-id={m.id}
+      onClick={() => onToggle(m)}
+      sx={{
+        position: 'absolute', top: 0, left: 0, width: '100%', height, transform: `translateY(${top}px)`,
+        display: 'grid', gridTemplateColumns: grid, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider',
+        backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.14) : 'transparent',
+        '&:hover': { backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.18) : alpha(theme.palette.text.primary, 0.04) },
+      }}
+    >
+      <Box sx={{ ...cellSx, px: 0.5 }}><Checkbox size="small" checked={isSelected} tabIndex={-1} onClick={(e) => e.stopPropagation()} onChange={() => onToggle(m)} inputProps={{ 'aria-label': t('table.selectRow') }} sx={{ p: 0.5 }} /></Box>
+      <Box sx={{ ...cellSx, gap: 0.75 }}>
+        <Box component="img" src={m.author?.avatar ? `https://cdn.discordapp.com/avatars/${m.author.id}/${m.author.avatar}.png?size=32` : undefined} alt="" sx={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, backgroundColor: 'action.hover' }} />
+        <Typography variant="body2" noWrap sx={{ fontSize: 'inherit', fontWeight: 600 }}>{author}</Typography>
+      </Box>
+      <Box sx={cellSx}><Typography variant="body2" noWrap data-testid={m.content ? undefined : 'table-standin'} sx={{ fontSize: 'inherit', ...(m.content ? {} : { color: 'text.secondary', fontStyle: 'italic' }) }}>{m.content || standIn(m, files)}</Typography></Box>
+      <Box sx={{ ...cellSx, color: 'text.secondary', gap: 0.5 }}>{files > 0 && <><AttachmentIcon sx={{ fontSize: 14 }} />{files}</>}</Box>
+      <Box sx={{ ...cellSx, gap: 0.5, overflow: 'hidden' }}>{(m.reactions ?? []).slice(0, 3).map((r, i) => <Box key={i} component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>{r.emoji?.name} {r.count}</Box>)}</Box>
+      <Box sx={{ ...cellSx, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}><Typography variant="body2" noWrap sx={{ fontSize: 'inherit' }}>{stamp(m.timestamp)}</Typography></Box>
+    </Box>
+  );
+});
 
 export default MessageTable;

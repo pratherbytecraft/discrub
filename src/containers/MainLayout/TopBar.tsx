@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import {
   AppBar, Toolbar, Avatar, Typography, IconButton, Box, Tooltip,
   Dialog, DialogContent, Menu, MenuItem, ListItemIcon, ListItemText,
@@ -657,4 +657,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   );
 };
 
-export default TopBar;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(TopBar);

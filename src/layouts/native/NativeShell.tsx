@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import { useAppSelector } from '@/app/hooks';
 import { selectSidebarView } from '@features/app/appSlice';
@@ -13,6 +13,8 @@ import NativeRail, { RAIL_WIDTH } from './NativeRail';
 import NativeColumn, { COLUMN_WIDTH } from './NativeColumn';
 import NativeHead from './NativeHead';
 import NativeInspector, { INSPECTOR_WIDTH } from './NativeInspector';
+import { perfCount } from '@/utils/perfCounters';
+import { PerfProfiler } from '@/utils/PerfProfiler';
 
 /**
  * Native layout (2.2.0, the free headline): a Discord-like frame. Server rail
@@ -23,6 +25,7 @@ import NativeInspector, { INSPECTOR_WIDTH } from './NativeInspector';
  * The status log opens as a sheet over the feed from the inspector.
  */
 const NativeShell = ({ focusedView, drawerOpen, sidebarOpen, onSidebarOpen, onSidebarClose, onStartShellTour }: ShellProps) => {
+  perfCount('NativeShell');
   const theme = useTheme();
   // Three tiers (2.2.0): desktop keeps everything in place; below lg the inspector becomes a slide-over
   // from the head's toggle; below md the rail and column fold into a drawer behind the head's menu button.
@@ -34,6 +37,8 @@ const NativeShell = ({ focusedView, drawerOpen, sidebarOpen, onSidebarOpen, onSi
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [inspectorSheet, setInspectorSheet] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const openLog = useCallback(() => setLogOpen(true), []);
+  const openLogFromSheet = useCallback(() => { setInspectorSheet(false); setLogOpen(true); }, []);
   const inspectorInline = !focusedView && inspectorOpen && !narrow;
   const navInline = !focusedView && !phone;
   const navWidth = navInline ? RAIL_WIDTH + COLUMN_WIDTH : 0;
@@ -51,41 +56,43 @@ const NativeShell = ({ focusedView, drawerOpen, sidebarOpen, onSidebarOpen, onSi
           transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
         }}
       >
-        {navInline && <NativeRail />}
-        {navInline && <NativeColumn />}
+        {navInline && <PerfProfiler id="NativeRail"><NativeRail /></PerfProfiler>}
+        {navInline && <PerfProfiler id="NativeColumn"><NativeColumn /></PerfProfiler>}
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <NativeHead
+          <PerfProfiler id="NativeHead"><NativeHead
             inspectorOpen={narrow ? inspectorSheet : inspectorInline}
             onToggleInspector={toggleInspector}
             canToggleInspector={!focusedView}
             showMenu={phone && !focusedView}
             onMenu={onSidebarOpen}
-          />
+          /></PerfProfiler>
           <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
-            {sidebarView === 'package' ? <PackageView /> : <ServerView onStartShellTour={onStartShellTour} variant="native" />}
+            {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} variant="native" /></PerfProfiler>}
           </Box>
         </Box>
-        {inspectorInline && <NativeInspector onOpenLog={() => setLogOpen(true)} />}
+        {inspectorInline && <NativeInspector onOpenLog={openLog} />}
       </Box>
       {/* Tablet and phone: the inspector slides over from the right; the rail and column ride in a drawer on phones. */}
       <Drawer anchor="right" open={narrow && !focusedView && inspectorSheet} onClose={() => setInspectorSheet(false)} PaperProps={{ sx: { backgroundColor: 'background.default' } }}>
-        <NativeInspector onOpenLog={() => { setInspectorSheet(false); setLogOpen(true); }} />
+        <NativeInspector onOpenLog={openLogFromSheet} />
       </Drawer>
       <Drawer anchor="left" open={phone && !focusedView && sidebarOpen} onClose={onSidebarClose} PaperProps={{ sx: { backgroundColor: 'background.default' } }}>
         <Box sx={{ display: 'flex', height: '100%' }}>
-          <NativeRail />
-          <NativeColumn />
+          <PerfProfiler id="NativeRail"><NativeRail /></PerfProfiler>
+          <PerfProfiler id="NativeColumn"><NativeColumn /></PerfProfiler>
         </Box>
       </Drawer>
       {!focusedView && (
-        <StatusPanel sheetInset={navWidth} sheetRightInset={drawerOpen ? DRAWER_WIDTH : 0} open={logOpen} onOpenChange={setLogOpen} hideBar />
+        <PerfProfiler id="StatusPanel"><StatusPanel sheetInset={navWidth} sheetRightInset={drawerOpen ? DRAWER_WIDTH : 0} open={logOpen} onOpenChange={setLogOpen} hideBar /></PerfProfiler>
       )}
-      {!focusedView && <DonationDrawer />}
+      {!focusedView && <PerfProfiler id="DonationDrawer"><DonationDrawer /></PerfProfiler>}
       {focusedView && <FloatingPauseControl />}
       {focusedView && <FocusPill />}
     </>
   );
 };
 
-export default NativeShell;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(NativeShell);
 export { INSPECTOR_WIDTH };

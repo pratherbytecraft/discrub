@@ -14,6 +14,7 @@ import { selectScrublingsEnabled, selectScrublingsOperationView, selectScrubling
 import { frameDataUri, headRow } from '@features/scrublings/spriteRender';
 import { SPRITE_FEET_ROW, SPRITE_H } from '@features/scrublings/spriteTypes';
 import { setStageSlots } from '@features/scrublings/stageSlots';
+import { perfCount } from '@/utils/perfCounters';
 
 const CHAR_H = SPRITE_H * STAGE_SCALE;
 /** The rows under the feet hang below the bar's edge so the feet stand on it. */
@@ -84,6 +85,7 @@ interface Pointer { id: ScrublingId; offset: number; startX: number; dragging: b
  * animations are off or the OS asks for reduced motion. Never in exports.
  */
 const ScrublingsStage = () => {
+  perfCount('ScrublingsStage');
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const theme = useTheme();
@@ -205,7 +207,8 @@ const ScrublingsStage = () => {
         data-testid="scrublings-stage"
         data-count={show ? view.chars.length : 0}
         data-frozen={frozen ? 'true' : 'false'}
-        sx={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', userSelect: 'none' }}
+        // willChange (2.2.1 perf): the stage is its own compositor layer, so a step of the walk repaints the stage, not the window.
+        sx={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', userSelect: 'none', willChange: 'transform' }}
       >
         {show && ['left', 'right'].map((side) => (
           <Box key={side} data-testid={`scrublings-door-${side}`} sx={{ position: 'absolute', [side]: 0, top: 8, bottom: 8, width: 2, bgcolor: 'primary.main', opacity: 0.25 }} />

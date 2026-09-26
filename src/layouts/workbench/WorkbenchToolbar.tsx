@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, FilterList as FilterIcon, Forum as ThreadIcon, BarChart as AnalyticsIcon, Fullscreen as FocusIcon, FullscreenExit as ExitFocusIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -66,4 +67,6 @@ const WorkbenchToolbar = () => {
   );
 };
 
-export default WorkbenchToolbar;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(WorkbenchToolbar);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { Box, Button, Chip, Tooltip, Typography, alpha, useMediaQuery, useTheme } from '@mui/material';
 import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
 import { format } from 'date-fns';
@@ -12,6 +12,7 @@ import { selectSelectedDm } from '@features/dm/dmSlice';
 import { getDateLocale } from '@/i18n/dateLocale';
 import { dayKeyToDate, type TimelineBar } from '@/utils/timelineDays';
 import { useTimeline } from './useTimeline';
+import { perfCount } from '@/utils/perfCounters';
 
 const BAR_HEIGHT = 46;
 const BAR_GAP = 2;
@@ -24,6 +25,7 @@ const MONTH_GAP = 10;
  * line above says what the strip covers and how much is loaded.
  */
 const TimelineStrip = () => {
+  perfCount('TimelineStrip');
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const theme = useTheme();
@@ -153,4 +155,6 @@ const TimelineStrip = () => {
   );
 };
 
-export default TimelineStrip;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(TimelineStrip);

@@ -1,7 +1,8 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, memo } from 'react';
 import { Drawer, Box, Tabs, Tab, keyframes } from '@mui/material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { selectSetting, selectKofiOverlayOpen, setKofiOverlayOpen } from '@features/app/appSlice';
 import { useDonations } from './useDonations';
 import { useWallOverlay } from './useWallOverlay';
@@ -40,6 +41,12 @@ const DonationDrawer = () => {
   // Desktop follows the persisted setting (a remembered column); mobile
   // follows a transient flag so the wall never covers the app on load.
   const open = isMobile ? overlayOpen : showFeed === 'true';
+  // 2.2.1 perf: the wall's glows and shimmers animate box and text shadows,
+  // which repaint every frame. They pause while a heavy operation runs, the
+  // same rule as the theme accent strip, so a purge or a Load All does not
+  // pay for them; the paper is its own compositor layer so the frames that
+  // do run repaint the wall, not the whole window.
+  const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
   const handleClose = () => dispatch(setKofiOverlayOpen(false));
   const { donations, isLoading } = useDonations(open);
   const [view, setView] = useState<DonationView>(DonationView.FEED);
@@ -70,7 +77,7 @@ const DonationDrawer = () => {
       open={open}
       onClose={isMobile ? handleClose : undefined}
       ModalProps={isMobile ? { keepMounted: false } : undefined}
-      PaperProps={{ 'data-testid': 'donation-drawer' } as object}
+      PaperProps={{ 'data-testid': 'donation-drawer', 'data-running': isOperationRunning ? 'true' : 'false' } as object}
       sx={{
         width: open && !isMobile ? DRAWER_WIDTH : 0,
         flexShrink: 0,
@@ -82,7 +89,9 @@ const DonationDrawer = () => {
           borderColor: 'divider',
           boxSizing: 'border-box',
           overflow: 'hidden',
+          willChange: 'transform',
         },
+        '& .MuiDrawer-paper[data-running="true"] *': { animationPlayState: 'paused' },
       }}
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -166,4 +175,6 @@ const DonationDrawer = () => {
   );
 };
 
-export default DonationDrawer;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(DonationDrawer);

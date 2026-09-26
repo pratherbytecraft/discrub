@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box, Tooltip, alpha, useTheme } from '@mui/material';
 import { AlternateEmail as DmIcon, Inventory2Outlined as PackageIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -99,4 +100,6 @@ const NativeRail = () => {
   );
 };
 
-export default NativeRail;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(NativeRail);

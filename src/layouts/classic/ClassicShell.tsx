@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box } from '@mui/material';
 import { useAppSelector } from '@/app/hooks';
 import { selectSidebarView } from '@features/app/appSlice';
@@ -13,6 +14,8 @@ import FloatingPauseControl from '@components/ui/FloatingPauseControl';
 import FocusPill from '@components/ui/FocusPill';
 import { useMediaQuery, useTheme } from '@mui/material';
 import type { ShellProps } from '../types';
+import { perfCount } from '@/utils/perfCounters';
+import { PerfProfiler } from '@/utils/PerfProfiler';
 
 /**
  * Classic layout: the 2.1 frame as is. Top bar, accent strip, sidebar,
@@ -25,6 +28,7 @@ import type { ShellProps } from '../types';
  * same ShellProps.
  */
 const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen, onStartShellTour }: ShellProps) => {
+  perfCount('ClassicShell');
   const sidebarView = useAppSelector(selectSidebarView);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -43,11 +47,11 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
         }}
       >
         {/* Focus hides navigation, side panels and the dock; the top bar stays so Appearance and the user chip never vanish (2.2.0, A2). */}
-        <TopBar onMenuClick={onSidebarOpen} />
-        <ThemeAccentStrip />
+        <PerfProfiler id="TopBar"><TopBar onMenuClick={onSidebarOpen} /></PerfProfiler>
+        <PerfProfiler id="ThemeAccentStrip"><ThemeAccentStrip /></PerfProfiler>
 
         <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
-          {!focusedView && <Sidebar open={sidebarOpen} onClose={onSidebarClose} />}
+          {!focusedView && <PerfProfiler id="Sidebar"><Sidebar open={sidebarOpen} onClose={onSidebarClose} /></PerfProfiler>}
 
           {/* The status log lives in the content column, so the closed bar and the open sheet span the same width and the sidebar runs to the bottom edge. */}
           <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0, overflow: 'hidden' }}>
@@ -59,18 +63,18 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
               }}
             >
               {sidebarView === 'package' ? (
-                <PackageView />
+                <PerfProfiler id="PackageView"><PackageView /></PerfProfiler>
               ) : (
-                <ServerView onStartShellTour={onStartShellTour} />
+                <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} /></PerfProfiler>
               )}
             </Box>
             {/* The open sheet is fixed to the window, so it takes the wall's width as its right inset while the wall is open (2.2.1). */}
-            {!focusedView && <StatusPanel sheetInset={isMobile ? 0 : SIDEBAR_WIDTH} sheetRightInset={drawerOpen ? DRAWER_WIDTH : 0} />}
+            {!focusedView && <PerfProfiler id="StatusPanel"><StatusPanel sheetInset={isMobile ? 0 : SIDEBAR_WIDTH} sheetRightInset={drawerOpen ? DRAWER_WIDTH : 0} /></PerfProfiler>}
           </Box>
         </Box>
       </Box>
 
-      {!focusedView && <DonationDrawer />}
+      {!focusedView && <PerfProfiler id="DonationDrawer"><DonationDrawer /></PerfProfiler>}
 
       {/* Focused view hides the StatusPanel (the only other
           PauseResumeControls mount), so float a compact pill above the
@@ -85,4 +89,6 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
   );
 };
 
-export default ClassicShell;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(ClassicShell);

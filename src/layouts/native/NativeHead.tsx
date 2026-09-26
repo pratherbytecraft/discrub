@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box, Button, IconButton, Tooltip, Typography, alpha, useTheme } from '@mui/material';
 import { Tag as HashIcon, AlternateEmail as AtIcon, ViewSidebar as InspectorIcon, FullscreenExit as ExitFocusIcon, Fullscreen as FocusIcon, Menu as MenuIcon, FilterList as FilterIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,7 @@ import { selectStageRoom } from '@features/scrublings/selectors';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { getDmName } from '@/utils/dmListUtils';
+import { perfCount } from '@/utils/perfCounters';
 
 interface NativeHeadProps {
   inspectorOpen: boolean;
@@ -34,6 +36,7 @@ interface NativeHeadProps {
  * Native's top bar, so it stays in Focus.
  */
 const NativeHead = ({ inspectorOpen, canToggleInspector, onToggleInspector, showMenu = false, onMenu }: NativeHeadProps) => {
+  perfCount('NativeHead');
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const theme = useTheme();
@@ -122,4 +125,6 @@ const NativeHead = ({ inspectorOpen, canToggleInspector, onToggleInspector, show
   );
 };
 
-export default NativeHead;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(NativeHead);

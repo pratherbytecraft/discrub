@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Box, LinearProgress, Tab, Tabs, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
@@ -6,6 +6,7 @@ import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectRecentExports } from '@features/history/historySlice';
 import { selectStatusEntries } from '@features/status/statusSlice';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
+import { perfCount } from '@/utils/perfCounters';
 
 type DockTab = 'progress' | 'runs' | 'log';
 
@@ -15,6 +16,7 @@ type DockTab = 'progress' | 'runs' | 'log';
  * and the Status log tab opens the log sheet over the table (A3).
  */
 const WorkbenchDock = ({ onOpenLog }: { onOpenLog: () => void }) => {
+  perfCount('WorkbenchDock');
   const { t } = useTranslation();
   const [tab, setTab] = useState<DockTab>('progress');
   const summary = useAppSelector(selectOperationSummary);
@@ -63,4 +65,6 @@ const WorkbenchDock = ({ onOpenLog }: { onOpenLog: () => void }) => {
   );
 };
 
-export default WorkbenchDock;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(WorkbenchDock);

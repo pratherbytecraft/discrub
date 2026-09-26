@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import { useAppSelector } from '@/app/hooks';
 import { selectSidebarView } from '@features/app/appSlice';
@@ -15,6 +15,8 @@ import SimpleTop from './SimpleTop';
 import SimpleSearchCard from './SimpleSearchCard';
 import SimpleBanner from './SimpleBanner';
 import SimpleHintBar from './SimpleHintBar';
+import { perfCount } from '@/utils/perfCounters';
+import { PerfProfiler } from '@/utils/PerfProfiler';
 
 export const SIMPLE_COLUMN = 1120;
 
@@ -26,6 +28,7 @@ export const SIMPLE_COLUMN = 1120;
  * and the feed and hides the rest.
  */
 const SimpleShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen, onStartShellTour }: ShellProps) => {
+  perfCount('SimpleShell');
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('md'));
   const sidebarView = useAppSelector(selectSidebarView);
@@ -39,31 +42,33 @@ const SimpleShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, 
           backgroundColor: 'background.default', marginRight: drawerOpen ? `${DRAWER_WIDTH}px` : 0, transition: 'margin-right 225ms cubic-bezier(0, 0, 0.2, 1)',
         }}
       >
-        <SimpleTop onOpenPicker={onSidebarOpen} />
+        <PerfProfiler id="SimpleTop"><SimpleTop onOpenPicker={onSidebarOpen} /></PerfProfiler>
         <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', px: phone ? 1 : 2.5, pt: focusedView ? 1 : 2 }}>
           <Box sx={{ width: '100%', maxWidth: SIMPLE_COLUMN, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             {!focusedView && sidebarView !== 'package' && <SimpleSearchCard />}
-            <SimpleBanner />
+            <PerfProfiler id="SimpleBanner"><SimpleBanner /></PerfProfiler>
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              {sidebarView === 'package' ? <PackageView /> : <ServerView onStartShellTour={onStartShellTour} variant="simple" />}
+              {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} variant="simple" /></PerfProfiler>}
             </Box>
           </Box>
         </Box>
         {!focusedView && !phone && <SimpleHintBar />}
-        {!focusedView && <StatusPanel sheetInset={0} sheetRightInset={drawerOpen ? DRAWER_WIDTH : 0} open={logOpen} onOpenChange={setLogOpen} />}
+        {!focusedView && <PerfProfiler id="StatusPanel"><StatusPanel sheetInset={0} sheetRightInset={drawerOpen ? DRAWER_WIDTH : 0} open={logOpen} onOpenChange={setLogOpen} /></PerfProfiler>}
       </Box>
       {/* keepMounted: the channel and DM lists own the bulk Purge dialog, so they must exist while the drawer is shut. */}
       <Drawer anchor="left" open={!focusedView && sidebarOpen} onClose={onSidebarClose} ModalProps={{ keepMounted: true }} PaperProps={{ sx: { backgroundColor: 'background.default' } }}>
         <Box sx={{ display: 'flex', height: '100%' }} onClick={(e) => { if ((e.target as HTMLElement).closest('li, a, [role="button"], [data-testid="rail-package"]')) setTimeout(onSidebarClose, 150); }}>
-          <NativeRail />
-          <NativeColumn />
+          <PerfProfiler id="NativeRail"><NativeRail /></PerfProfiler>
+          <PerfProfiler id="NativeColumn"><NativeColumn /></PerfProfiler>
         </Box>
       </Drawer>
-      {!focusedView && <DonationDrawer />}
+      {!focusedView && <PerfProfiler id="DonationDrawer"><DonationDrawer /></PerfProfiler>}
       {focusedView && <FloatingPauseControl />}
       {focusedView && <FocusPill />}
     </>
   );
 };
 
-export default SimpleShell;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(SimpleShell);

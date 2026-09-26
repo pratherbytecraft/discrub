@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { ChannelType } from 'discrub-core/discord-enum';
@@ -7,11 +8,13 @@ import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectActiveFilteredMessages, selectActivePagination, selectActiveSelectedMessages } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
+import { perfCount } from '@/utils/perfCounters';
 
 const STATE_HEX: Record<string, string> = { neutral: '#8b949e', success: '#3fb950', warning: '#d29922', info: '#58a6ff', error: '#f85149' };
 
 /** One-line status bar (Workbench): the operation's state and label, or loaded, more available and selected counts. */
 const WorkbenchStatusBar = () => {
+  perfCount('WorkbenchStatusBar');
   const { t } = useTranslation();
   const summary = useAppSelector(selectOperationSummary);
   const messages = useAppSelector(selectActiveFilteredMessages);
@@ -44,4 +47,6 @@ const WorkbenchStatusBar = () => {
   );
 };
 
-export default WorkbenchStatusBar;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(WorkbenchStatusBar);

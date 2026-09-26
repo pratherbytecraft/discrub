@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, memo } from 'react';
 import {
   List,
   ListItemButton,
@@ -53,6 +53,7 @@ import BulkExportDialog from '@containers/ExportView/BulkExportDialog';
 import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
 import BulkEditDialog from '@containers/PurgeView/BulkEditDialog';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 export type QueueMarks = Record<string, 'done' | 'running'>;
 interface ChannelListProps {
@@ -70,6 +71,7 @@ interface ChannelListProps {
  * ChannelList component - displays channels for selected guild
  */
 const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
+  perfCount('ChannelList');
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const channels = useAppSelector(selectChannels);
@@ -522,4 +524,6 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
   );
 };
 
-export default ChannelList;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(ChannelList);

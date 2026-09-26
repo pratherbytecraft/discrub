@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Box, Button, IconButton, Tooltip, Typography, alpha, useMediaQuery, useTheme } from '@mui/material';
 import { ExpandMore as ChevronIcon, BarChart as AnalyticsIcon, Settings as SettingsIcon, Fullscreen as FocusIcon, FullscreenExit as ExitFocusIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -94,4 +95,6 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
   );
 };
 
-export default SimpleTop;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(SimpleTop);

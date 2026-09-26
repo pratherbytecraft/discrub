@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Box } from '@mui/material';
 import { Joyride } from 'react-joyride';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
@@ -63,12 +63,15 @@ import AppDialogs from './AppDialogs';
 import PreviewBar from '@components/appearance/PreviewBar';
 import { useWallOverlay } from '@components/donations/useWallOverlay';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
+import { PerfProfiler } from '@/utils/PerfProfiler';
 
 /**
  * MainLayout component - main application shell
  * Contains TopBar, Sidebar, content area, and DonationDrawer
  */
 const MainLayout = () => {
+  perfCount('MainLayout');
   const dispatch = useAppDispatch();
   const showFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const sidebarView = useAppSelector(selectSidebarView);
@@ -81,6 +84,9 @@ const MainLayout = () => {
   // TopBar hamburger, and the Ko-fi feed overlays instead of reserving
   // a 320px column (2.1.0 mobile pass).
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Stable so a memoised shell does not render on every MainLayout render.
+  const openSidebar = useCallback(() => setSidebarOpen(true), []);
+  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
   const selectedChannelId = selectedChannel?.id ?? null;
@@ -289,14 +295,14 @@ const MainLayout = () => {
         }}
       />
       <Box data-testid="shell-frame" sx={{ display: 'contents' }} {...(previewing ? { inert: '' } : {})}>
-        <Shell
+        <PerfProfiler id="Shell"><Shell
           focusedView={focusedView}
           sidebarOpen={sidebarOpen}
-          onSidebarOpen={() => setSidebarOpen(true)}
-          onSidebarClose={() => setSidebarOpen(false)}
+          onSidebarOpen={openSidebar}
+          onSidebarClose={closeSidebar}
           drawerOpen={drawerOpen}
           onStartShellTour={shellTour.start}
-        />
+        /></PerfProfiler>
       </Box>
       <PreviewBar />
 

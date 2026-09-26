@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import { ButtonGroup, Button, Box, Typography, LinearProgress, Popover, useTheme, keyframes, alpha } from '@mui/material';
 import {
   Pause as PauseIcon,
@@ -17,6 +17,7 @@ import { addStatusEntry } from '@features/status/statusSlice';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 interface PauseResumeControlsProps {
   label?: string;
@@ -66,6 +67,7 @@ const STATE_HEX: Record<OperationStateColor, string> = { neutral: '#8b949e', suc
 const spin = keyframes`to { transform: rotate(360deg); }`;
 
 const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
+  perfCount('PauseResumeControls');
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const labelPulse = useMemo(
@@ -256,6 +258,9 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
             color: 'text.secondary',
             whiteSpace: 'nowrap',
             ml: 0.5,
+            // 2.2.1 perf: own compositor layer, so the pulse that restarts
+            // on every counter change repaints the label, not the window.
+            willChange: 'transform',
             animation: `${labelPulse} 600ms ease-out`,
             '@media (prefers-reduced-motion: reduce)': {
               animation: 'none',
@@ -287,4 +292,6 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
   );
 };
 
-export default PauseResumeControls;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(PauseResumeControls);

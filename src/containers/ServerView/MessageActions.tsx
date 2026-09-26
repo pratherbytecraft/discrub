@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Paper, Box, Button, Chip, Tooltip } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -19,6 +19,7 @@ import AddReactionsModal from '@components/modals/AddReactionsModal';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
 import { selectActiveSelectedMessages } from '@features/message/messageSlice';
+import { perfCount } from '@/utils/perfCounters';
 
 interface MessageActionsProps {
   /** #263: read from the store when omitted, so the parent view does not
@@ -66,6 +67,7 @@ const MessageActions = ({
   guildEmojis,
   onFetchReactingUsers,
 }: MessageActionsProps) => {
+  perfCount('MessageActions');
   const { t } = useTranslation();
   const selectedFromStore = useAppSelector(selectActiveSelectedMessages);
   const selectedMessages = selectedMessagesProp ?? selectedFromStore;
@@ -245,4 +247,6 @@ const MessageActions = ({
   );
 };
 
-export default MessageActions;
+// 2.2.1 perf: rendered again only when its own store reads or props change,
+// not whenever the shell above it renders (three times per Load All page).
+export default memo(MessageActions);

@@ -18,6 +18,7 @@ import type { StatusLevel, StatusLogEntry } from '@features/status/statusTypes';
 import PauseResumeControls from './PauseResumeControls';
 import OperationTip from './OperationTip';
 import { useTranslation } from 'react-i18next';
+import { perfCount } from '@/utils/perfCounters';
 
 const PAGE_SIZE = 50;
 const PANEL_HEIGHT = 150;
@@ -30,6 +31,8 @@ function clampPanelHeight(value: number): number {
   const max = Math.max(PANEL_HEIGHT, window.innerHeight - MAX_VIEWPORT_OFFSET);
   return Math.max(PANEL_HEIGHT, Math.min(value, max));
 }
+
+const spin = keyframes`to { transform: rotate(360deg); }`;
 
 const blink = keyframes`
   0%, 100% { opacity: 1; }
@@ -158,6 +161,7 @@ interface StatusPanelProps {
 }
 
 const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hideBar = false }: StatusPanelProps = {}) => {
+  perfCount('StatusPanel');
   const dispatch = useAppDispatch();
   const { t, i18n } = useTranslation();
   const entries = useAppSelector(selectStatusEntries);
@@ -366,11 +370,18 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
             <CircularProgress
               size={12}
               thickness={5}
-              variant={operationSummary.isPaused ? 'determinate' : 'indeterminate'}
-              value={operationSummary.isPaused ? 100 : undefined}
+              // 2.2.1 perf: a fixed arc turned by a transform animation instead
+              // of MUI's indeterminate dash, whose stroke animation repainted
+              // the window on every frame of a run. The turn composites, so a
+              // run paints nothing for the spinner.
+              variant="determinate"
+              value={operationSummary.isPaused ? 100 : 30}
               sx={{
                 color: STATUS_DOT[operationSummary.stateColor],
                 flexShrink: 0,
+                willChange: 'transform',
+                animation: operationSummary.isPaused ? 'none' : `${spin} 1.4s linear infinite`,
+                '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
               }}
               aria-label={operationSummary.isPaused ? t('statusPanel.operationPaused') : t('statusPanel.operationInProgress')}
             />
