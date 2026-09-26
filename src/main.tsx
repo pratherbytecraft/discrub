@@ -39,8 +39,8 @@ if (import.meta.env.DEV) {
 // loaded-set harness can drive a production bundle the way a user does.
 if (import.meta.env.VITE_PERF_HOOKS === 'true') {
   (window as any).__store__ = store;
-  Promise.all([import('./features/auth/authSlice'), import('./features/message/messageSlice')]).then(
-    ([auth, message]) => {
+  Promise.all([import('./features/auth/authSlice'), import('./features/message/messageSlice'), import('./features/purge/purgeSlice')]).then(
+    ([auth, message, purge]) => {
       (window as any).__perfThunks__ = {
         authenticateWithToken: auth.authenticateWithToken,
         fetchMessages: message.fetchMessages,
@@ -48,6 +48,7 @@ if (import.meta.env.VITE_PERF_HOOKS === 'true') {
         deleteMessages: message.deleteMessages,
         selectAllMessages: message.selectAllMessages,
         toggleMessageSelection: message.toggleMessageSelection,
+        bulkPurgeDMs: purge.bulkPurgeDMs,
       };
     },
   );

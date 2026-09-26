@@ -32,6 +32,11 @@ export default defineConfig({
       '@theme': path.resolve(__dirname, './src/theme'),
       '@utils': path.resolve(__dirname, './src/utils'),
       '@containers': path.resolve(__dirname, './src/containers'),
+      // Perf build only: the profiling build of react-dom so React.Profiler
+      // reports render times (tooling/perf/render-count.cjs). Off otherwise.
+      ...(process.env.VITE_PERF_HOOKS === 'true'
+        ? { 'react-dom/client': path.resolve(__dirname, 'node_modules/react-dom/profiling.js'), 'react-dom$': path.resolve(__dirname, 'node_modules/react-dom/profiling.js') }
+        : {}),
     },
   },
   optimizeDeps: {
