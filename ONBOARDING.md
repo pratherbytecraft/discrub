@@ -109,6 +109,8 @@ Discrub 2.0 is the next major version. These features were not in Discrub Classi
 | Deleted Accounts | Search finds nothing, so nothing is purged | Detects the empty search, warns you, and scans the full message history so a deleted user's messages are removed |
 | Dropped Connection Mid-Scan | Scan ended quietly | Page fetch retried with backoff while you are offline; a scan that still cannot continue is reported as incomplete. If Discord stops answering while your connection is up, the run stops |
 | Multi-Server Purge | No | Select servers in the server list and purge your own messages from every readable channel in each, one operation with per-server progress, pause and cancel |
+| Waits From Discord | Shown in the status log | Every layout names the wait and counts it down |
+| Purge Percentage | No | Follows progress inside each channel, and across channels and servers in a bulk run |
 | Rate-Limit Storms | Waited forever | Five 429s in a row, or a retry_after past 60 seconds, stop the operation with a status-log line instead of pausing for Resume |
 | Final Pass | No | After the search runs dry, the newest page of each channel is read directly and matching messages the search index had not caught yet are deleted; the summary reports the count |
 

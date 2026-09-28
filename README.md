@@ -280,7 +280,7 @@ Everything about how Discrub looks is under **Appearance** in the top bar: Layou
 
 **Themes.** Six themes are free: Dark Original (the default), Light Original, Terminal, High Contrast, Overcast and Classic. The picker can also follow your system preference. Supporters unlock nine more (AMOLED Void, Synthwave, Bytecraft, Ember, Nekonoir, Circuit, Noir, Abyss, Abstract), a theme switcher in HTML exports, and a custom export footer.
 
-**Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. Suds, the Mage and the Cat are free, five more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all, and a link to request a custom one, which is added for everyone once it's drawn.
+**Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. While something runs they say what it is, such as how far a Purge or Load All has got or how long a wait has left, and on a phone they say a shorter version. Suds, the Mage and the Cat are free, five more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all, and a link to request a custom one, which is added for everyone once it's drawn.
 
 To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free; supporter perks are cosmetic only.
 
@@ -487,7 +487,7 @@ Discrub runs in your browser and your Discord token never leaves your device. Th
 
 ### Will I get rate limited?
 
-Discrub waits between API calls (default 1s search, 2s delete) with randomization. If Discord returns HTTP 429, Discrub waits the `retry_after` duration before retrying. Adjust delays in Settings > Operation Delays. Search and delete delays go up to 30s; anything above 10s is marked Safest and is meant for very long runs such as a full-server export.
+Discrub waits between API calls (default 1s search, 2s delete) with randomization. If Discord returns HTTP 429, Discrub waits the `retry_after` duration before retrying, and every layout names the wait and counts it down. Adjust delays in Settings > Operation Delays. Search and delete delays go up to 30s; anything above 10s is marked Safest and is meant for very long runs such as a full-server export.
 
 Two more guards run on their own. When Discord keeps rate limiting the account, or stops answering requests while your connection is up, Discrub stops the operation and tells you to wait instead of retrying. After every 45 minutes of activity, a long operation takes a 10 minute rest break (Settings > Operation Delays > Rest breaks, on by default; click Resume to skip one). Long runs without breaks send many requests from your account, so the breaks stay on unless you have a reason to turn them off.
 
