@@ -3,13 +3,13 @@ import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep a
 import { useTranslation } from 'react-i18next';
 import { ChannelType } from 'discrub-core/discord-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectSidebarView, setDialogOpen } from '@features/app/appSlice';
+import { selectSidebarView, setDialogOpen, setOperationHold } from '@features/app/appSlice';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectSelectedChannel, selectSelectedChannels } from '@features/channel/channelSlice';
 import { selectSelectedDm, selectSelectedDms } from '@features/dm/dmSlice';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectActivePagination } from '@features/message/messageSlice';
-import PauseResumeControls from '@components/ui/PauseResumeControls';
+import PauseResumeControls, { useOperationHeadline } from '@components/ui/PauseResumeControls';
 import { getDmName } from '@/utils/dmListUtils';
 import { useSteadyValue } from '@/hooks/useSteadyValue';
 
@@ -38,6 +38,7 @@ const OperatorRunCard = () => {
   const selectedDms = useAppSelector(selectSelectedDms);
   const pagination = useAppSelector(selectActivePagination);
   const sidebarView = useAppSelector(selectSidebarView);
+  const headline = useOperationHeadline();
   const running = summary.tier === 'heavy';
   const dmMode = !guild;
   const queued = dmMode ? selectedDms.length : selectedChannels.length;
@@ -58,7 +59,16 @@ const OperatorRunCard = () => {
         </Box>
         {pct != null && <Typography data-testid="operator-pct" sx={{ fontSize: 56, fontWeight: 700, lineHeight: 1, letterSpacing: '-0.02em' }}>{pct}<Box component="small" sx={{ fontSize: 24, color: 'text.secondary', fontWeight: 500, ml: 0.25 }}>%</Box></Typography>}
         {pct != null && <LinearProgress variant="determinate" value={pct} sx={{ height: 10, borderRadius: 5, '& .MuiLinearProgress-bar': { backgroundColor: c } }} />}
-        <PauseResumeControls label={summary.label} progress={summary.progress} />
+        {/* 2.2.2: the state and the label have rows of their own that wrap; beside the buttons they ran off the card. The big bar above is the only bar. */}
+        <PauseResumeControls buttonsOnly />
+        {headline && (
+          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1 }}>
+            <Typography variant="body2" data-testid="operation-state-headline" sx={{ color: c, fontWeight: 600, overflowWrap: 'anywhere' }}>{headline}</Typography>
+            {/* Clearing the hold ends the retry wait early, as in the shared controls. */}
+            {summary.state === 'retrying' && <Button size="small" data-testid="operator-retry-now" onClick={() => dispatch(setOperationHold(null))} sx={{ minWidth: 0, px: 1, py: 0, color: c, textTransform: 'none' }}>{t('pause.retryNow')}</Button>}
+          </Box>
+        )}
+        {!headline && summary.label && <Typography variant="caption" data-testid="operator-label" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>{summary.label}</Typography>}
         {summary.sentence && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{summary.sentence}</Typography>}
       </Box>
     );

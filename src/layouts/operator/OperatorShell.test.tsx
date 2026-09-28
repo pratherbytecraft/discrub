@@ -81,6 +81,32 @@ describe('<OperatorShell />', () => {
     expect(screen.getByTestId('operator-run-card')).not.toHaveAttribute('data-state', 'idle');
   });
 
+  it('gives the running label its own row, and the wait Discord asked for in its place (2.2.2)', () => {
+    const state = withChannel();
+    const bulk = { currentIndex: 0, totalChannels: 1, currentChannelName: 'general', completedStats: { deleted: 0, skipped: 0, reactionsRemoved: 0 } };
+    state.purge = { ...state.purge, isPurging: true, purgeProgress: { processed: 100, deleted: 100, skipped: 0, reactionsRemoved: 0, bulk }, expectedTotal: 400, channelFraction: 0.25 };
+    const { unmount } = renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(screen.getByTestId('operator-label')).toHaveTextContent('Purging... Channel 1/1: general · 100 processed (100 deleted)');
+    expect(screen.getByTestId('operator-pct')).toHaveTextContent('25%');
+    unmount();
+    state.app = { ...state.app, operationHold: { kind: 'discordWait', until: Date.now() + 8000 } };
+    renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(screen.getByTestId('operator-run-card')).toHaveAttribute('data-state', 'discordWait');
+    expect(screen.getByTestId('operator-state')).toHaveTextContent('Waiting on Discord');
+    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent(/Discord asked for a wait, resumes in \d+ s/);
+    expect(screen.queryByTestId('operator-label')).toBeNull();
+    expect(screen.queryByTestId('operator-retry-now')).toBeNull();
+  });
+
+  it('keeps Retry now on the card during a retry wait (2.2.2)', () => {
+    const state = withChannel();
+    state.export = { ...state.export, isExporting: true };
+    state.app = { ...state.app, operationHold: { kind: 'retryWait', until: Date.now() + 8000, attempt: 2, max: 5, answer: 'Discord answered HTTP 502' } };
+    const { store } = renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
+    fireEvent.click(screen.getByTestId('operator-retry-now'));
+    expect(store.getState().app.operationHold).toBeNull();
+  });
+
   it('shows the package view under the Package segment with no run tiles', () => {
     const state = withChannel();
     state.app = { ...state.app, sidebarView: 'package' };
