@@ -126,6 +126,37 @@ describe('teleport on arrive and leave', () => {
   });
 });
 
+describe('short lines on a narrow window (2.2.2)', () => {
+  const innerWidth = window.innerWidth;
+  const setWindow = (w: number) => { Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: w }); };
+  const loading = () => {
+    const state = stateWith({}, { exporting: true });
+    state.message = { ...state.message, pagination: { ...state.message.pagination, loadAllProgress: { current: 1204, total: 5000 } } } as typeof state.message;
+    return state;
+  };
+  beforeEach(() => { vi.useFakeTimers(); setWidth(300); });
+  afterEach(() => { widthSpy.mockRestore(); vi.useRealTimers(); setWindow(innerWidth); });
+
+  it('shows the short line under 600 px', () => {
+    setWindow(599);
+    renderWithProviders(<ScrublingsStage />, { preloadedState: loading() });
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(screen.getByTestId('scrublings-caption')).toHaveTextContent('1,204 hauled');
+  });
+
+  it('shows the full line at 600 px and over', () => {
+    setWindow(600);
+    const { unmount } = renderWithProviders(<ScrublingsStage />, { preloadedState: loading() });
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(screen.getByTestId('scrublings-caption')).toHaveTextContent('Hauling #chat, 1,204 so far');
+    unmount();
+    setWindow(1440);
+    renderWithProviders(<ScrublingsStage />, { preloadedState: loading() });
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(screen.getByTestId('scrublings-caption')).toHaveTextContent('Hauling #chat, 1,204 so far');
+  });
+});
+
 describe('captionTop', () => {
   it('leaves the same space above the text as between the text and the head', async () => {
     const { captionTop } = await import('./ScrublingsStage');

@@ -106,6 +106,8 @@ export interface SchedulerInput {
   rng: () => number;
   /** What the event lines are filled with (2.2.1). Missing means no line. */
   lineContext?: LineContext;
+  /** True on a window narrower than SHORT_LINE_MAX_W, which gets the short lines (2.2.2). */
+  shortLines?: boolean;
 }
 
 export interface CharView {
@@ -200,6 +202,7 @@ export const stepScheduler = (state: SchedulerState, input: SchedulerInput): Sch
   let speakerTurn = next.speakerTurn ?? 0;
   let run = next.run ?? { purge: false, n: 0 };
   const ctx = input.lineContext;
+  const short = input.shortLines === true;
   const speak = (text: string, speaker: ScrublingId, count: number, eventSince: number): void => {
     line = { text, speaker, since: now, until: now + ONE_SHOT_MS, count, eventSince };
   };
@@ -212,14 +215,14 @@ export const stepScheduler = (state: SchedulerState, input: SchedulerInput): Sch
     const spokenForThis = line != null && line.eventSince === event.since;
     if (event.kind === 'purge' || event.kind === 'load') {
       if (!spokenForThis) {
-        if (ctx.n > 0) { const speaker = nextSpeaker(); speak(lineFor(speaker, event.kind, ctx, now), speaker, ctx.n, event.since); }
+        if (ctx.n > 0) { const speaker = nextSpeaker(); speak(lineFor(speaker, event.kind, ctx, now, short), speaker, ctx.n, event.since); }
       } else if (line && ids.includes(line.speaker) && now - line.since >= LINE_REFRESH_MS && Math.abs(ctx.n - line.count) >= LINE_COUNT_STEP) {
-        speak(lineFor(line.speaker, event.kind, ctx, now), line.speaker, ctx.n, event.since);
+        speak(lineFor(line.speaker, event.kind, ctx, now, short), line.speaker, ctx.n, event.since);
       }
     } else if (!spokenForThis && (event.kind === 'wait' || event.kind === 'paused' || run.purge)) {
       const speaker = nextSpeaker();
       const n = Math.max(ctx.n, run.n);
-      speak(lineFor(speaker, event.kind, { ...ctx, n }, now), speaker, n, event.since);
+      speak(lineFor(speaker, event.kind, { ...ctx, n }, now, short), speaker, n, event.since);
     }
   }
   if (!event && line && now >= line.until) line = null;

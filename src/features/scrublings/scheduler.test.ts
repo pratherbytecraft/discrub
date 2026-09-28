@@ -245,6 +245,12 @@ describe('Scrublings event lines (2.2.2)', () => {
     expect(caption(s, 100 + ONE_SHOT_MS + 1)).toBeNull();
   });
 
+  it('says the short line when the input asks for short lines', () => {
+    let s = createScheduler(['suds', 'mage'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: purge, lineContext: ctx(12), shortLines: true }));
+    expect(caption(s, 100)).toEqual({ text: '12 scrubbed', x: expect.any(Number), speaker: 'suds' });
+  });
+
   it('says nothing without a line context', () => {
     let s = createScheduler(['suds'], W, {}, 0, rng);
     s = stepScheduler(s, input(100, { op: purge }));

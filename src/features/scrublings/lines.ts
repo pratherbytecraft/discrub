@@ -36,6 +36,28 @@ export const LINES: Record<ScrublingId, Record<ScrublingEvent, string>> = {
 /** Shared by everyone during a rest break. */
 export const REST_BREAK_LINE = 'Rest break. Back in {m} min.';
 
+/**
+ * The short lines (2.2.2). A window narrower than SHORT_LINE_MAX_W gets these,
+ * because the stage on a phone is narrower than a full line. They drop the
+ * channel and keep the number. Same order and placeholders as LINES, less {ch}.
+ */
+export const SHORT_LINES: Record<ScrublingId, Record<ScrublingEvent, string>> = {
+  suds: { purge: '{n} scrubbed', load: '{n} hauled', wait: 'Coffee. {s}s', done: 'Clean.', failed: '{f} stuck.', paused: 'Zzz.' },
+  mage: { purge: '{n} alched', load: '{n} ported in', wait: 'Reading. {s}s', done: '{n} gone.', failed: 'Splash. {f}', paused: 'Napping.' },
+  cat: { purge: '{n} knocked', load: '{n} dragged', wait: 'Loaf. {s}s', done: 'Mrow. {n}', failed: '{f} left.', paused: 'zzz' },
+  dog: { purge: '{n} fetched', load: 'Fetching {n}', wait: 'Sit. {s}s', done: '{n} gone.', failed: '{f} left.', paused: 'Asleep.' },
+  adventurer: { purge: '{n} xp', load: 'Mining {n}', wait: 'Fishing. {s}s', done: 'Level up.', failed: '{f} left.', paused: 'AFK.' },
+  pker: { purge: '{n} kills', load: 'Running {n}', wait: 'Eating. {s}s', done: 'ez. {n}', failed: 'Died. {f}', paused: 'Logged out.' },
+  alien: { purge: '{n} beamed', load: 'Scanning {n}', wait: 'Landed. {s}s', done: 'Beep. {n}', failed: '{f} missed.', paused: 'Hatch shut.' },
+  ghost: { purge: '{n} eaten', load: 'Trailing {n}', wait: 'Fading. {s}s', done: 'Boo. {n}', failed: '{f} left.', paused: 'Still.' },
+};
+
+/** The short rest break line (2.2.2). */
+export const SHORT_REST_BREAK_LINE = 'Break. {m} min';
+
+/** A window narrower than this many pixels gets the short lines (2.2.2). */
+export const SHORT_LINE_MAX_W = 600;
+
 /** A channel name longer than this is cut with an ellipsis so the line stays short enough for a narrow bar. */
 export const CHANNEL_MAX = 18;
 const shortChannel = (ch: string): string => { const chars = Array.from(ch.replace(/^#/, '')); return chars.length > CHANNEL_MAX ? `${chars.slice(0, CHANNEL_MAX - 1).join('')}…` : chars.join(''); };
@@ -51,9 +73,9 @@ export const fillLine = (template: string, values: { n?: number; ch?: string; s?
     .replace(/\{m\}/g, formatCount(values.m ?? 0))
     .replace(/\{ch\}/g, shortChannel(values.ch ?? EMPTY_LINE_CONTEXT.ch));
 
-/** The line a character says for an event right now; a rest break wait uses the shared line. */
-export const lineFor = (id: ScrublingId, event: ScrublingEvent, ctx: LineContext, now: number): string => {
+/** The line a character says for an event right now; a rest break wait uses the shared line. `short` picks the short lines (2.2.2). */
+export const lineFor = (id: ScrublingId, event: ScrublingEvent, ctx: LineContext, now: number, short = false): string => {
   const left = ctx.holdUntil == null ? 0 : Math.max(0, ctx.holdUntil - now);
-  if (event === 'wait' && ctx.restBreak) return fillLine(REST_BREAK_LINE, { m: Math.max(1, Math.ceil(left / 60_000)) });
-  return fillLine(LINES[id][event], { n: ctx.n, ch: ctx.ch, f: ctx.f, s: Math.ceil(left / 1000) });
+  if (event === 'wait' && ctx.restBreak) return fillLine(short ? SHORT_REST_BREAK_LINE : REST_BREAK_LINE, { m: Math.max(1, Math.ceil(left / 60_000)) });
+  return fillLine((short ? SHORT_LINES : LINES)[id][event], { n: ctx.n, ch: ctx.ch, f: ctx.f, s: Math.ceil(left / 1000) });
 };

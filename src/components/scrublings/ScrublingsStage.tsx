@@ -13,6 +13,7 @@ import {
 import { selectScrublingsEnabled, selectScrublingsOperationView, selectScrublingsPositions, selectScrublingsVisible, selectScrublingLineContext } from '@features/scrublings/selectors';
 import { frameDataUri, headRow } from '@features/scrublings/spriteRender';
 import { SPRITE_FEET_ROW, SPRITE_H } from '@features/scrublings/spriteTypes';
+import { SHORT_LINE_MAX_W } from '@features/scrublings/lines';
 import { setStageSlots } from '@features/scrublings/stageSlots';
 import { perfCount } from '@/utils/perfCounters';
 
@@ -168,7 +169,7 @@ const ScrublingsStage = () => {
       const current = sched.current
         ? syncScheduler(sched.current, ids, width, positionsRef.current, now)
         : createScheduler(ids, width, positionsRef.current, now);
-      sched.current = stepScheduler(current, { now, width, op: opRef.current, hover: hover.current, drag: drag.current, clicks: clicks.current, frozen, rng: Math.random, lineContext: lineRef.current });
+      sched.current = stepScheduler(current, { now, width, op: opRef.current, hover: hover.current, drag: drag.current, clicks: clicks.current, frozen, rng: Math.random, lineContext: lineRef.current, shortLines: window.innerWidth < SHORT_LINE_MAX_W });
       clicks.current = [];
       const next = viewScheduler(sched.current, now);
       noteChars(next.chars, now);
