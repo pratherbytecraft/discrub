@@ -11,6 +11,10 @@ import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectActivePagination } from '@features/message/messageSlice';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
 import { getDmName } from '@/utils/dmListUtils';
+import { useSteadyValue } from '@/hooks/useSteadyValue';
+
+/** How often the running card takes new numbers (2.2.2). A state change is never held back. */
+export const RUN_CARD_STEP_MS = 500;
 
 const STATE_HEX: Record<string, string> = { neutral: '#8b949e', success: '#3fb950', warning: '#d29922', info: '#58a6ff', error: '#f85149' };
 
@@ -24,7 +28,9 @@ const STATE_HEX: Record<string, string> = { neutral: '#8b949e', success: '#3fb95
 const OperatorRunCard = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
-  const summary = useAppSelector(selectOperationSummary);
+  // The counters move with every delete; drawing each one kept the card repainting for a whole purge.
+  const liveSummary = useAppSelector(selectOperationSummary);
+  const summary = useSteadyValue(liveSummary, `${liveSummary.tier}|${liveSummary.state}|${liveSummary.name}`, RUN_CARD_STEP_MS);
   const guild = useAppSelector(selectSelectedGuild);
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -44,7 +50,7 @@ const OperatorRunCard = () => {
     const pct = summary.progress != null ? Math.round(summary.progress) : null;
     const detail = summary.hold?.attempt != null ? t('operator.attempt', { attempt: summary.hold.attempt, max: summary.hold.max ?? 0 }) : summary.hold?.answer ?? '';
     return (
-      <Box data-testid="operator-run-card" data-state={summary.state} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: alpha(c, 0.55), backgroundColor: alpha(c, 0.08), display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+      <Box data-testid="operator-run-card" data-state={summary.state} sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: alpha(c, 0.55), backgroundColor: alpha(c, 0.08), display: 'flex', flexDirection: 'column', gap: 1.25, contain: 'layout paint' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
           <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: c, flexShrink: 0 }} />
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{summary.name}</Typography>
