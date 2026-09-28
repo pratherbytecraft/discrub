@@ -1100,6 +1100,16 @@ describe('operationSelectors', () => {
       expect(selectOperationSummary(plain)).toMatchObject({ state: 'paused', stateColor: 'warning' });
     });
 
+    it('reports a wait Discord asked for, and a pause over it (2.2.2)', () => {
+      const state = exporting();
+      state.app = { ...state.app, operationHold: { kind: 'discordWait', until: 4242 } };
+      const s = selectOperationSummary(state);
+      expect(s).toMatchObject({ state: 'discordWait', stateColor: 'warning', hold: { until: 4242 } });
+      expect(s.sentence).toBe('Discord asks for a wait every so often. Export carries on by itself.');
+      const paused = { ...state, app: { ...state.app, discrubPaused: true } };
+      expect(selectOperationSummary(paused)).toMatchObject({ state: 'paused' });
+    });
+
     it('never marks a light operation as holding', () => {
       const state = createBaseState({ message: { ...createBaseState().message, isLoading: true } });
       state.app = { ...state.app, operationHold: { kind: 'retryWait', until: 1, attempt: 1, max: 5, answer: 'x' } };

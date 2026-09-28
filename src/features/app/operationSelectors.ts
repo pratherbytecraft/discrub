@@ -9,10 +9,10 @@ export type OperationTier = 'heavy' | 'light' | 'idle';
 /**
  * Why the operation is where it is (2.2.0 item 2, decision A4). One state,
  * one colour and one sentence that every layout renders in its own spot.
- * restBreak, retrying and retryPaused only apply to heavy operations; a
+ * restBreak, retrying, retryPaused and discordWait (2.2.2) only apply to heavy operations; a
  * light operation is running and nothing is idle.
  */
-export type OperationState = 'idle' | 'running' | 'paused' | 'restBreak' | 'retrying' | 'retryPaused';
+export type OperationState = 'idle' | 'running' | 'paused' | 'restBreak' | 'retrying' | 'retryPaused' | 'discordWait';
 export type OperationStateColor = 'neutral' | 'success' | 'warning' | 'info' | 'error';
 export interface OperationHoldView {
   /** Wall-clock ms the hold ends (rest break, retry wait). */
@@ -312,7 +312,7 @@ const selectBaseSummary = createSelector(
 );
 
 const STATE_COLORS: Record<OperationState, OperationStateColor> = {
-  idle: 'neutral', running: 'success', paused: 'warning', restBreak: 'warning', retrying: 'info', retryPaused: 'error',
+  idle: 'neutral', running: 'success', paused: 'warning', restBreak: 'warning', retrying: 'info', retryPaused: 'error', discordWait: 'warning',
 };
 
 const operationName = (exportState: RootState['export'], purgeState: RootState['purge'], packageState: RootState['package'], messageState: RootState['message']): string => {
@@ -353,6 +353,13 @@ export const selectOperationSummary = createSelector(
         ...base, name, state: 'retryPaused', stateColor: STATE_COLORS.retryPaused,
         hold: { max: TRANSIENT_RETRIES, answer: hold.answer, loaded: hold.loaded },
         sentence: t('operation.state.retryPausedSentence', { answer: hold.answer, count: hold.loaded.toLocaleString() }),
+      };
+    }
+    if (hold?.kind === 'discordWait' && !base.isPaused) {
+      return {
+        ...base, name, state: 'discordWait', stateColor: STATE_COLORS.discordWait,
+        hold: { until: hold.until },
+        sentence: t('operation.state.discordWaitSentence', { name }),
       };
     }
     if (base.isPaused) return { ...base, name, state: 'paused', stateColor: STATE_COLORS.paused };

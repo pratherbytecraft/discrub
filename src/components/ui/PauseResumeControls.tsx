@@ -22,6 +22,8 @@ import { perfCount } from '@/utils/perfCounters';
 interface PauseResumeControlsProps {
   label?: string;
   progress?: number;
+  /** 2.2.2: the buttons alone. The Operator run card prints the state and the label on rows of their own. */
+  buttonsOnly?: boolean;
 }
 
 /**
@@ -66,7 +68,19 @@ const useCountdown = (until: number | null | undefined): string => {
 const STATE_HEX: Record<OperationStateColor, string> = { neutral: '#8b949e', success: '#3fb950', warning: '#d29922', info: '#58a6ff', error: '#f85149' };
 const spin = keyframes`to { transform: rotate(360deg); }`;
 
-const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
+/** The state headline with its live countdown, empty while nothing holds the operation (2.2.2: shared with the Operator run card). */
+export const useOperationHeadline = (): string => {
+  const { t } = useTranslation();
+  const summary = useAppSelector(selectOperationSummary);
+  const countdown = useCountdown(summary.hold?.until);
+  if (summary.state === 'restBreak') return t('operation.state.restBreak', { time: countdown });
+  if (summary.state === 'retrying') return t('operation.state.retrying', { time: countdown, attempt: summary.hold?.attempt, max: summary.hold?.max });
+  if (summary.state === 'retryPaused') return t('operation.state.retryPaused', { max: summary.hold?.max });
+  if (summary.state === 'discordWait') return t('operation.state.discordWait', { time: countdown });
+  return '';
+};
+
+const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResumeControlsProps) => {
   perfCount('PauseResumeControls');
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -79,15 +93,8 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
   const isRunning = useAppSelector(selectIsHeavyOperationRunning);
   const isPaused = useAppSelector(selectDiscrubPaused);
   const summary = useAppSelector(selectOperationSummary);
-  const countdown = useCountdown(summary.hold?.until);
-  const inHold = summary.state === 'restBreak' || summary.state === 'retrying' || summary.state === 'retryPaused';
-  const headline = summary.state === 'restBreak'
-    ? t('operation.state.restBreak', { time: countdown })
-    : summary.state === 'retrying'
-      ? t('operation.state.retrying', { time: countdown, attempt: summary.hold?.attempt, max: summary.hold?.max })
-      : summary.state === 'retryPaused'
-        ? t('operation.state.retryPaused', { max: summary.hold?.max })
-        : '';
+  const headline = useOperationHeadline();
+  const inHold = headline !== '';
   const stateHex = STATE_HEX[summary.stateColor];
   const [helpAnchor, setHelpAnchor] = useState<HTMLButtonElement | null>(null);
   const tourEntry = getTourEntry('pause-resume-controls', t);
@@ -221,7 +228,7 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
         </Popover>
       )}
 
-      {inHold && (
+      {inHold && !buttonsOnly && (
         <Box data-testid="operation-state" data-state={summary.state} sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 0.5, minWidth: 0 }}>
           <Box
             aria-hidden
@@ -232,7 +239,7 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
               '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
             }}
           >
-            {summary.state === 'restBreak' && <HoldIcon sx={{ fontSize: 11 }} />}
+            {(summary.state === 'restBreak' || summary.state === 'discordWait') && <HoldIcon sx={{ fontSize: 11 }} />}
             {summary.state === 'retrying' && <RetryIcon sx={{ fontSize: 12 }} />}
             {summary.state === 'retryPaused' && <FailedIcon sx={{ fontSize: 12 }} />}
           </Box>
@@ -250,7 +257,7 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
         </Box>
       )}
 
-      {label && !inHold && (
+      {label && !inHold && !buttonsOnly && (
         <Typography
           key={pulseKey}
           variant="caption"
@@ -271,7 +278,7 @@ const PauseResumeControls = ({ label, progress }: PauseResumeControlsProps) => {
         </Typography>
       )}
 
-      {progress != null && (
+      {progress != null && !buttonsOnly && (
         <LinearProgress
           variant="determinate"
           value={progress}

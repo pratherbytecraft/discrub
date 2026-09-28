@@ -127,6 +127,34 @@ describe('discordService singleton', () => {
       expect(last?.message).toBe('Rate limited by Discord (global limit), retrying in 2.5s, 3 in a row');
     });
 
+    it('shows a wait of two seconds or more to the layouts and takes it away after (2.2.2)', async () => {
+      vi.useFakeTimers();
+      try {
+        const { showDiscordWait } = await import('./discordService');
+        const { store } = await import('@/app/store');
+        const { selectOperationHold, setOperationHold } = await import('@features/app/appSlice');
+        store.dispatch(setOperationHold(null));
+
+        showDiscordWait(store, 1.5);
+        expect(selectOperationHold(store.getState())).toBeNull();
+
+        showDiscordWait(store, 8);
+        expect(selectOperationHold(store.getState())).toMatchObject({ kind: 'discordWait' });
+        vi.advanceTimersByTime(8000);
+        expect(selectOperationHold(store.getState())).toBeNull();
+
+        // A retry hold already showing is left alone, by the wait and by its timer.
+        const retry = { kind: 'retryWait' as const, until: 1, attempt: 1, max: 5, answer: 'x' };
+        store.dispatch(setOperationHold(retry));
+        showDiscordWait(store, 8);
+        vi.advanceTimersByTime(8000);
+        expect(selectOperationHold(store.getState())).toEqual(retry);
+        store.dispatch(setOperationHold(null));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('stops the operation when core gives up on a storm: error log, cancel flag, toast', async () => {
       const { getDiscordService, storeReady, RATE_LIMIT_STOP_MESSAGE } = await import('./discordService');
       const { store } = await import('@/app/store');

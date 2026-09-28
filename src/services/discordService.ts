@@ -1,7 +1,7 @@
 import { DiscordService } from 'discrub-core/discord-service';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { addStatusEntry, showToast } from '@features/status/statusSlice';
-import { setDiscrubCancelled, setDiscrubPaused, setRateLimitStopped, setRequestsRefusedStopped, selectRequestsRefusedStopped } from '@features/app/appSlice';
+import { setDiscrubCancelled, setDiscrubPaused, setOperationHold, setRateLimitStopped, setRequestsRefusedStopped, selectRequestsRefusedStopped } from '@features/app/appSlice';
 import { isBrowserOnline } from '@/utils/operationLoopUtils';
 
 import { RATE_LIMIT_STOP_TOAST, RATE_LIMIT_STOP_MESSAGE } from '@/constants/rateLimitMessages';
@@ -39,6 +39,26 @@ const dispatchNow = (action: Parameters<AppStore['dispatch']>[0]) => {
   void getStore().then((store) => store.dispatch(action));
 };
 
+/** A wait shorter than this is over before anyone could read it, so the layouts are not told (2.2.2). */
+export const DISCORD_WAIT_MIN_SECONDS = 2;
+
+/**
+ * 2.2.2: put the wait Discord asked for where the layouts can show it, and
+ * take it away when the wait is over. A retry hold already on screen is
+ * left alone, and only this wait's own hold is cleared.
+ */
+export const showDiscordWait = (store: Pick<AppStore, 'dispatch' | 'getState'>, retryAfter: number) => {
+  if (retryAfter < DISCORD_WAIT_MIN_SECONDS) return;
+  const current = store.getState().app.operationHold ?? null;
+  if (current && current.kind !== 'discordWait') return;
+  const until = Date.now() + retryAfter * 1000;
+  store.dispatch(setOperationHold({ kind: 'discordWait', until }));
+  setTimeout(() => {
+    const hold = store.getState().app.operationHold ?? null;
+    if (hold?.kind === 'discordWait' && hold.until === until) store.dispatch(setOperationHold(null));
+  }, retryAfter * 1000);
+};
+
 /**
  * Get or create the Discord service instance
  * @param settings - Optional app settings to reinitialize the service with
@@ -60,6 +80,7 @@ export const getDiscordService = (settings?: AppSettings): DiscordService => {
         level: 'warning',
         message: `Rate limited by Discord${scope}, retrying in ${retryAfter.toFixed(1)}s${streak}`,
       }));
+      showDiscordWait(store, retryAfter);
     };
     // #254: a 429 storm (retry_after past the cap, or five 429s back to
     // back on one request) stops the whole operation instead of pausing

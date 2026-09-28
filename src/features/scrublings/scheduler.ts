@@ -162,7 +162,7 @@ export const syncScheduler = (state: SchedulerState, ids: ScrublingId[], width: 
 
 const eventFromOp = (op: OperationView): ScrublingEvent | null => {
   if (!op.heavy) return null;
-  if (op.state === 'restBreak' || op.state === 'retrying') return 'wait';
+  if (op.state === 'restBreak' || op.state === 'retrying' || op.state === 'discordWait') return 'wait';
   if (op.state === 'paused' || op.state === 'retryPaused') return 'paused';
   return op.kind === 'purge' ? 'purge' : 'load';
 };

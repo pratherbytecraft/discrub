@@ -182,7 +182,8 @@
       "paused": "Pausiert",
       "restBreak": "Pause",
       "retrying": "Neuer Versuch",
-      "retryPaused": "Nach Versuchen pausiert"
+      "retryPaused": "Nach Versuchen pausiert",
+      "discordWait": "Warten auf Discord"
     }
   },
   "timeline": {
@@ -301,7 +302,9 @@
       "retrying": "Neuer Versuch in {{time}}, Versuch {{attempt}} von {{max}}",
       "retryingSentence": "{{answer}}. Jeder Versuch wartet doppelt so lange, dann pausiert {{name}} für dich.",
       "retryPaused": "Nach {{max}} fehlgeschlagenen Versuchen pausiert",
-      "retryPausedSentence": "{{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen."
+      "retryPausedSentence": "{{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen.",
+      "discordWait": "Discord bittet um eine Pause, geht weiter in {{time}}",
+      "discordWaitSentence": "Discord bittet ab und zu um eine Pause. {{name}} macht danach von selbst weiter."
     }
   },
   "landing": {

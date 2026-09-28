@@ -28,7 +28,9 @@ export type FeedDialogs = Record<FeedDialog, boolean>;
  */
 export type OperationHold =
   | { kind: 'retryWait'; until: number; attempt: number; max: number; answer: string }
-  | { kind: 'retryExhausted'; answer: string; loaded: number };
+  | { kind: 'retryExhausted'; answer: string; loaded: number }
+  /** 2.2.2: Discord answered 429 and the request waits until `until` before it goes again. */
+  | { kind: 'discordWait'; until: number };
 
 export interface FeedScrollAnchor {
   /** `<conversation id>:<thread tab id or main>`. */
