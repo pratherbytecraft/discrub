@@ -77,6 +77,13 @@ export interface PurgeState {
   // toast must not read as a clean success when this is non-zero; the
   // per-channel details are in the status log.
   channelErrorCount: number;
+  /**
+   * 2.2.2: how many matches Discord reported for the channel being purged,
+   * added up over its searches. Null until a search has reported one.
+   */
+  expectedTotal: number | null;
+  /** 2.2.2: how far through the current channel the run is, 0 to 0.99. It never moves back. */
+  channelFraction: number;
 }
 
 export const initialPurgeState: PurgeState = {
@@ -84,4 +91,6 @@ export const initialPurgeState: PurgeState = {
   purgeProgress: null,
   purgeError: null,
   channelErrorCount: 0,
+  expectedTotal: null,
+  channelFraction: 0,
 };

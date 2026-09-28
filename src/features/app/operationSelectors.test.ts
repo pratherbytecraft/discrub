@@ -1038,6 +1038,23 @@ describe('operationSelectors', () => {
       expect(summary.label).toBe('Purging... 7 processed (2 deleted, 3 stripped, 1 failed)');
     });
 
+    it('counts the share of the current channel in the percentage (2.2.2)', () => {
+      const bulk = { currentIndex: 0, totalChannels: 1, currentChannelName: 'general', completedStats: { deleted: 0, skipped: 0, reactionsRemoved: 0 } };
+      const progress: PurgeProgress = { processed: 100, deleted: 100, skipped: 0, reactionsRemoved: 0, bulk };
+      const one = createBaseState({ purge: { ...createBaseState().purge, isPurging: true, purgeProgress: progress, expectedTotal: 400, channelFraction: 0.25 } });
+      expect(selectOperationSummary(one).progress).toBe(25);
+      const second = createBaseState({ purge: { ...createBaseState().purge, isPurging: true, purgeProgress: { ...progress, bulk: { ...bulk, currentIndex: 1, totalChannels: 4 } }, expectedTotal: 400, channelFraction: 0.5 } });
+      expect(selectOperationSummary(second).progress).toBe(38);
+    });
+
+    it('gives the non-bulk branch a percentage once Discord has reported a total (2.2.2)', () => {
+      const progress: PurgeProgress = { processed: 30, deleted: 30, skipped: 0, reactionsRemoved: 0 };
+      const none = createBaseState({ purge: { ...createBaseState().purge, isPurging: true, purgeProgress: progress } });
+      expect(selectOperationSummary(none).progress).toBeUndefined();
+      const some = createBaseState({ purge: { ...createBaseState().purge, isPurging: true, purgeProgress: progress, expectedTotal: 60, channelFraction: 0.5 } });
+      expect(selectOperationSummary(some).progress).toBe(50);
+    });
+
     it('uses the translated paused label on the non-bulk branch', () => {
       const progress: PurgeProgress = { processed: 7, deleted: 2, skipped: 1, reactionsRemoved: 0 };
       const state = createBaseState({

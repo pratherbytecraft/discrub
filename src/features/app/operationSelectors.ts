@@ -95,7 +95,8 @@ const selectBaseSummary = createSelector(
             });
         const isReactionsMode = progress.reactionsRemoved > 0 || completedStats.reactionsRemoved > 0;
 
-        const channelFraction = totalChannels > 0 ? (currentIndex) / totalChannels : 0;
+        // 2.2.2: the share of the current channel counts too, so a one channel run moves off 0%.
+        const channelFraction = totalChannels > 0 ? (currentIndex + (purgeState.channelFraction ?? 0)) / totalChannels : 0;
         const overallFraction = server && server.total > 0
           ? (server.index + channelFraction) / server.total
           : channelFraction;
@@ -133,6 +134,7 @@ const selectBaseSummary = createSelector(
           label: isPaused
             ? t('operation.pausedPurging')
             : t('operation.purgingProgress', { processed: progress.processed, detail }),
+          ...(purgeState.expectedTotal ? { progress: Math.round((purgeState.channelFraction ?? 0) * 100) } : {}),
         };
       }
       return { isRunning: true, isPaused, tier: 'heavy', label: isPaused ? t('operation.pausedPurging') : t('operation.purging') };

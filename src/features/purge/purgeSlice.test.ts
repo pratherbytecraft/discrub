@@ -3,6 +3,8 @@ import { createTestStore, TestStore } from '@/test/test-utils';
 import purgeReducer, {
   purgeGuilds,
   setPurgeProgress,
+  addPurgeExpected,
+  MAX_CHANNEL_FRACTION,
   resetPurge,
   selectPurge,
   selectIsPurging,
@@ -31,6 +33,47 @@ describe('purgeSlice', () => {
       expect(state.purge.isPurging).toBe(false);
       expect(state.purge.purgeProgress).toBeNull();
       expect(state.purge.purgeError).toBeNull();
+    });
+  });
+
+  describe('channel progress (2.2.2)', () => {
+    const bulk = (currentIndex: number) => ({ currentIndex, totalChannels: 2, currentChannelName: 'general', completedStats: { deleted: 0, skipped: 0, reactionsRemoved: 0 } });
+    const at = (processed: number, index = 0): PurgeProgress => ({ processed, deleted: processed, skipped: 0, reactionsRemoved: 0, bulk: bulk(index) });
+
+    it('stays at zero until Discord has reported a total', () => {
+      store.dispatch(setPurgeProgress(at(0)));
+      store.dispatch(setPurgeProgress(at(10)));
+      expect(store.getState().purge).toMatchObject({ expectedTotal: null, channelFraction: 0 });
+    });
+
+    it('follows processed over the reported total and stops just short of full', () => {
+      store.dispatch(setPurgeProgress(at(0)));
+      store.dispatch(addPurgeExpected(400));
+      store.dispatch(setPurgeProgress(at(100)));
+      expect(store.getState().purge.channelFraction).toBe(0.25);
+      store.dispatch(setPurgeProgress(at(450)));
+      expect(store.getState().purge.channelFraction).toBe(MAX_CHANNEL_FRACTION);
+    });
+
+    it('never moves back when a later search adds to the total', () => {
+      store.dispatch(setPurgeProgress(at(0)));
+      store.dispatch(addPurgeExpected(100));
+      store.dispatch(setPurgeProgress(at(80)));
+      store.dispatch(addPurgeExpected(300));
+      store.dispatch(setPurgeProgress(at(90)));
+      expect(store.getState().purge).toMatchObject({ expectedTotal: 400, channelFraction: 0.8 });
+    });
+
+    it('starts again on the next channel and on reset', () => {
+      store.dispatch(setPurgeProgress(at(0)));
+      store.dispatch(addPurgeExpected(100));
+      store.dispatch(setPurgeProgress(at(50)));
+      store.dispatch(setPurgeProgress(at(0, 1)));
+      expect(store.getState().purge).toMatchObject({ expectedTotal: null, channelFraction: 0 });
+      store.dispatch(addPurgeExpected(10));
+      store.dispatch(setPurgeProgress(at(5, 1)));
+      store.dispatch(resetPurge());
+      expect(store.getState().purge).toMatchObject({ expectedTotal: null, channelFraction: 0 });
     });
   });
 

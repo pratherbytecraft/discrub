@@ -956,6 +956,7 @@ async function purgeChannelMessages(
         announcedTotal = true;
         totalForThisUser = page.totalResults;
         if (totalForThisUser > 0) {
+          dispatch(addPurgeExpected(totalForThisUser));
           dispatch(addStatusEntry({
             level: 'info',
             message: t('status.purge.discordReports', { count: totalForThisUser, label }),
@@ -2730,18 +2731,36 @@ export const bulkPurgeDMs = createAsyncThunk<
 
 // ─── Slice ──────────────────────────────────────────────────────────────────
 
+/** A channel reads as finished only when it is, so its share of the bar stops just short (2.2.2). */
+export const MAX_CHANNEL_FRACTION = 0.99;
+
 const purgeSlice = createSlice({
   name: 'purge',
   initialState: initialPurgeState,
   reducers: {
     setPurgeProgress: (state, action: PayloadAction<PurgeProgress>) => {
+      const before = state.purgeProgress?.bulk;
+      const after = action.payload.bulk;
+      // A new channel starts its own count (2.2.2).
+      if (after && (!before || before.currentIndex !== after.currentIndex || before.server?.index !== after.server?.index)) {
+        state.expectedTotal = null;
+        state.channelFraction = 0;
+      }
       state.purgeProgress = action.payload;
+      if (state.expectedTotal) {
+        state.channelFraction = Math.max(state.channelFraction, Math.min(action.payload.processed / state.expectedTotal, MAX_CHANNEL_FRACTION));
+      }
+    },
+    addPurgeExpected: (state, action: PayloadAction<number>) => {
+      state.expectedTotal = (state.expectedTotal ?? 0) + action.payload;
     },
     resetPurge: (state) => {
       state.isPurging = false;
       state.purgeProgress = null;
       state.purgeError = null;
       state.channelErrorCount = 0;
+      state.expectedTotal = null;
+      state.channelFraction = 0;
     },
   },
   extraReducers: (builder) => {
@@ -2752,6 +2771,8 @@ const purgeSlice = createSlice({
         state.purgeError = null;
         state.purgeProgress = null;
         state.channelErrorCount = 0;
+        state.expectedTotal = null;
+        state.channelFraction = 0;
       })
       .addCase(bulkPurgeChannels.fulfilled, (state, action) => {
         state.isPurging = false;
@@ -2767,6 +2788,8 @@ const purgeSlice = createSlice({
         state.purgeError = null;
         state.purgeProgress = null;
         state.channelErrorCount = 0;
+        state.expectedTotal = null;
+        state.channelFraction = 0;
       })
       .addCase(bulkPurgeDMs.fulfilled, (state, action) => {
         state.isPurging = false;
@@ -2782,6 +2805,8 @@ const purgeSlice = createSlice({
         state.purgeError = null;
         state.purgeProgress = null;
         state.channelErrorCount = 0;
+        state.expectedTotal = null;
+        state.channelFraction = 0;
       })
       .addCase(purgeGuilds.fulfilled, (state, action) => {
         state.isPurging = false;
@@ -2794,7 +2819,7 @@ const purgeSlice = createSlice({
   },
 });
 
-export const { setPurgeProgress, resetPurge } = purgeSlice.actions;
+export const { setPurgeProgress, addPurgeExpected, resetPurge } = purgeSlice.actions;
 
 export const selectPurge = (state: RootState) => state.purge;
 export const selectIsPurging = (state: RootState) => state.purge.isPurging;
