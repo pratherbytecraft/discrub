@@ -19,8 +19,8 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REPO = 'https://github.com/pratherbytecraft/discrub-ext.git';
 
 export const CLASSIC_PINS = {
-  chrome: { branch: 'development', sha: '86a2b4570a29432c2fb9355b5ba7bcb086d4d978' },
-  firefox: { branch: 'firefox-port', sha: 'a136a4a9daba6fb7934b237fcb9fd70e2ebe5459' },
+  chrome: { branch: 'development', sha: 'c580eeb60e9d57a6fe70f636a9bc46c37601d5d4' },
+  firefox: { branch: 'firefox-port', sha: 'bdc6745ef06b2e7c713a425f57fd5293eec4cd62' },
 };
 
 const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: 'inherit' });
