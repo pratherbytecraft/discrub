@@ -60,7 +60,8 @@ describe('Operator layout (2.2.0)', () => {
     // At 1280 px the wall used to leave the middle column 300 px wide.
     cy.viewport(1280, 720);
     cy.get('[data-testid="donation-drawer"]').should('not.exist');
-    cy.get('[data-testid="operator-run-card"]').then(($c) => expect($c[0].getBoundingClientRect().width).to.be.greaterThan(450));
+    // should() retries, the column is still widening for a moment after the wall leaves.
+    cy.get('[data-testid="operator-run-card"]').should(($c) => expect($c[0].getBoundingClientRect().width).to.be.greaterThan(450));
   });
 
   it('ticks build the queue, Export opens the bulk export over it and Purge the bulk purge', () => {
