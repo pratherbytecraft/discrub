@@ -1,3 +1,4 @@
+import { lineFor, type LineContext } from './lines';
 import type { OperationState } from '@features/app/operationSelectors';
 import {
   SCRUBLINGS, pairActionsFor, pairKey, resolveActivity,
@@ -31,6 +32,10 @@ export const TRICK_MS = 1600;
 export const EQUIP_MS = 4000;
 export const SWAP_MIN_MS = 10 * 60 * 1000;
 export const SWAP_MAX_MS = 20 * 60 * 1000;
+/** A running purge or load repeats its line no sooner than this (2.2.1). */
+export const LINE_REFRESH_MS = 90 * 1000;
+/** And only once the count has moved by this much since the last line. */
+export const LINE_COUNT_STEP = 250;
 const WALK_PX_PER_S = 24;
 const LOAD_RANGE = 48;
 
@@ -62,6 +67,9 @@ export interface CharState {
   motion: { kind: 'slide' | 'rise'; amount: number; seconds: number; origin: number } | null;
 }
 
+/** The event line on the bar: who says it and until when (2.2.1). It stays after `until` so a refresh knows the last count. */
+export interface ActiveLine { text: string; speaker: ScrublingId; since: number; until: number; count: number; /** The event this line belongs to, by its start. */ eventSince: number }
+
 export interface ActivePair { key: string; a: ScrublingId; b: ScrublingId; action: PairAction; /** The exchange picked for this meeting. */ captions: [string, string]; since: number; until: number }
 
 export interface SchedulerState {
@@ -77,6 +85,13 @@ export interface SchedulerState {
   /** The exchange each scene showed last, so the next meeting says something else. */
   lastLines: Record<string, number>;
   nextSwapAt: number;
+  line: ActiveLine | null;
+  /** Rotates the speaker through the picks so the same one does not talk every time. */
+  speakerTurn: number;
+  /** The run the finish line talks about: whether it is a purge, and the highest count seen (progress can reset before the run ends). */
+  run: { purge: boolean; n: number };
+  /** When the last tick ran, so movement is measured per tick (2.2.1: it was measured from the last mode change, which made lone walkers far too fast). */
+  lastTick: number;
 }
 
 export interface SchedulerInput {
@@ -89,6 +104,8 @@ export interface SchedulerInput {
   /** Animations off or reduced motion: everyone holds the first idle frame. */
   frozen: boolean;
   rng: () => number;
+  /** What the event lines are filled with (2.2.1). Missing means no line. */
+  lineContext?: LineContext;
 }
 
 export interface CharView {
@@ -125,6 +142,10 @@ export const createScheduler = (ids: ScrublingId[], width: number, positions: Re
   pair: null,
   lastLines: {},
   nextSwapAt: now + between(SWAP_MIN_MS, SWAP_MAX_MS, rng),
+  line: null,
+  speakerTurn: 0,
+  run: { purge: false, n: 0 },
+  lastTick: now,
 });
 
 /** Keep the roster and the width in step with the stage; existing characters keep their fraction. */
@@ -169,13 +190,47 @@ export const stepScheduler = (state: SchedulerState, input: SchedulerInput): Sch
     else event = null;
   }
   if (!op.heavy && !event) sawFailure = false;
-  next = { ...next, event, sawFailure, lastOp: op };
+
+  // Event lines (2.2.2): an event gets one line from the next speaker in turn, shown for
+  // ONE_SHOT_MS. A purge or load waits for its first count (a run starts with its progress reset)
+  // and says it again on the refresh cadence. The finish and stopped lines talk about deleting,
+  // so only a purge gets them. A pair's captions come first (an event has already ended it).
+  const ids = next.chars.map((c) => c.id);
+  let line = next.line;
+  let speakerTurn = next.speakerTurn ?? 0;
+  let run = next.run ?? { purge: false, n: 0 };
+  const ctx = input.lineContext;
+  const speak = (text: string, speaker: ScrublingId, count: number, eventSince: number): void => {
+    line = { text, speaker, since: now, until: now + ONE_SHOT_MS, count, eventSince };
+  };
+  const nextSpeaker = (): ScrublingId => { const id = ids[speakerTurn % ids.length]; speakerTurn += 1; return id; };
+  if (op.heavy) {
+    const fresh = !next.lastOp.heavy;
+    run = { purge: op.kind === 'purge', n: Math.max(fresh ? 0 : run.n, ctx?.n ?? 0) };
+  }
+  if (ctx && ids.length > 0 && event) {
+    const spokenForThis = line != null && line.eventSince === event.since;
+    if (event.kind === 'purge' || event.kind === 'load') {
+      if (!spokenForThis) {
+        if (ctx.n > 0) { const speaker = nextSpeaker(); speak(lineFor(speaker, event.kind, ctx, now), speaker, ctx.n, event.since); }
+      } else if (line && ids.includes(line.speaker) && now - line.since >= LINE_REFRESH_MS && Math.abs(ctx.n - line.count) >= LINE_COUNT_STEP) {
+        speak(lineFor(line.speaker, event.kind, ctx, now), line.speaker, ctx.n, event.since);
+      }
+    } else if (!spokenForThis && (event.kind === 'wait' || event.kind === 'paused' || run.purge)) {
+      const speaker = nextSpeaker();
+      const n = Math.max(ctx.n, run.n);
+      speak(lineFor(speaker, event.kind, { ...ctx, n }, now), speaker, n, event.since);
+    }
+  }
+  if (!event && line && now >= line.until) line = null;
+  next = { ...next, event, sawFailure, lastOp: op, line, speakerTurn, run };
 
   if (input.frozen) {
-    return { ...next, pair: null, chars: next.chars.map((c) => (c.mode === 'idle' && c.activity === SCRUBLINGS[c.id].idle ? c : setMode(c, 'idle', SCRUBLINGS[c.id].idle, now))) };
+    return { ...next, lastTick: now, pair: null, chars: next.chars.map((c) => (c.mode === 'idle' && c.activity === SCRUBLINGS[c.id].idle ? c : setMode(c, 'idle', SCRUBLINGS[c.id].idle, now))) };
   }
 
-  const dt = Math.max(0, Math.min(1000, now - Math.max(...next.chars.map((c) => c.since), 0))) / 1000;
+  const dt = Math.max(0, Math.min(1000, now - (next.lastTick ?? now))) / 1000;
+  next = { ...next, lastTick: now };
   let pair = next.pair && now < next.pair.until && !event ? next.pair : null;
   const cooldowns = { ...next.cooldowns };
   let lastLines = next.lastLines ?? {};
@@ -316,6 +371,9 @@ export const viewScheduler = (state: SchedulerState, now: number): StageView => 
   } else if (adv && adv.mode === 'equip') {
     const half = now - adv.since < EQUIP_MS * 0.75 ? 0 : 1;
     caption = { text: SCRUBLINGS.adventurer.dharok!.captions[half], x: centre(adv), speaker: adv.id };
+  } else if (state.line && now < state.line.until) {
+    const speaker = state.chars.find((c) => c.id === state.line!.speaker);
+    if (speaker) caption = { text: state.line.text, x: centre(speaker), speaker: speaker.id };
   }
   return { chars, caption };
 };

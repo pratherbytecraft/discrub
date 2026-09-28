@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  CHAR_W, EQUIP_MS, IDLE_OPERATION, ONE_SHOT_MS, PAIR_COOLDOWN_MS, PAIR_GRACE_MS, PAIR_MS, SWAP_MAX_MS, TRICK_MS,
+  CHAR_W, EQUIP_MS, IDLE_OPERATION, LINE_COUNT_STEP, LINE_REFRESH_MS, ONE_SHOT_MS, PAIR_COOLDOWN_MS, PAIR_GRACE_MS, PAIR_MS, SWAP_MAX_MS, TRICK_MS,
   createScheduler, stepScheduler, syncScheduler, viewScheduler,
   type OperationView, type SchedulerInput, type SchedulerState,
 } from './scheduler';
 import { PAIR_ACTIONS, SCRUBLINGS, type ScrublingId } from './descriptors';
+import type { LineContext } from './lines';
 
 const W = 400;
 const rng = () => 0.5;
@@ -45,6 +46,22 @@ describe('Scrublings scheduler', () => {
     const x = char(s, 'suds').x;
     expect(x).toBeGreaterThanOrEqual(0);
     expect(x).toBeLessThan(W);
+  });
+
+  // 2.2.1: movement was measured from the last mode change, so a lone walker ran at several times the speed.
+  it('walks at the meant speed however few characters share the stage', () => {
+    let s = createScheduler(['cat'], 400, { cat: 0.1 }, 0, rng);
+    let walkedFrom: { t: number; x: number } | null = null;
+    let speed: number | null = null;
+    for (let t = 80; t <= 20000 && speed == null; t += 80) {
+      s = stepScheduler(s, input(t));
+      const c = char(s, 'cat');
+      if (c.mode === 'walk' && !walkedFrom) walkedFrom = { t, x: c.x };
+      else if (c.mode === 'walk' && walkedFrom && t - walkedFrom.t >= 1000) speed = Math.abs(c.x - walkedFrom.x) / ((t - walkedFrom.t) / 1000);
+    }
+    expect(speed).not.toBeNull();
+    expect(speed!).toBeGreaterThan(18);
+    expect(speed!).toBeLessThan(30);
   });
 
   it('plays the purge activity while a purge runs and the finished one when it returns to idle', () => {
@@ -214,4 +231,89 @@ describe('Scrublings scheduler', () => {
     s = stepScheduler(s, input(1000));
     expect(viewScheduler(s, 1000 + 10 * 260).chars[0].frame).toBe('cheer2');
   });
+});
+
+describe('Scrublings event lines (2.2.2)', () => {
+  const ctx = (n: number, over: Partial<LineContext> = {}): LineContext => ({ n, ch: 'general', f: 0, holdUntil: null, restBreak: false, ...over });
+  const caption = (s: SchedulerState, now: number) => viewScheduler(s, now).caption;
+
+  it('says one line when an event starts, for ONE_SHOT_MS, with the count and the channel', () => {
+    let s = createScheduler(['suds', 'mage'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: purge, lineContext: ctx(12) }));
+    expect(caption(s, 100)).toEqual({ text: '12 scrubbed in #general', x: expect.any(Number), speaker: 'suds' });
+    s = stepScheduler(s, input(100 + ONE_SHOT_MS + 1, { op: purge, lineContext: ctx(40) }));
+    expect(caption(s, 100 + ONE_SHOT_MS + 1)).toBeNull();
+  });
+
+  it('says nothing without a line context', () => {
+    let s = createScheduler(['suds'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: purge }));
+    expect(caption(s, 100)).toBeNull();
+  });
+
+  it('rotates the speaker through the picks from one event to the next', () => {
+    let s = createScheduler(['suds', 'mage', 'cat'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: purge, lineContext: ctx(1) }));
+    expect(caption(s, 100)?.speaker).toBe('suds');
+    s = stepScheduler(s, input(200, { op: IDLE_OPERATION, lineContext: ctx(1) }));
+    expect(caption(s, 200)).toEqual(expect.objectContaining({ speaker: 'mage', text: 'Spell complete. 1 gone.' }));
+    s = stepScheduler(s, input(200 + ONE_SHOT_MS + 1, { lineContext: ctx(1) }));
+    s = stepScheduler(s, input(200 + ONE_SHOT_MS + 2, { op: load, lineContext: ctx(5) }));
+    expect(caption(s, 200 + ONE_SHOT_MS + 2)).toEqual(expect.objectContaining({ speaker: 'cat', text: 'Dragged 5 home from #general' }));
+  });
+
+  it('repeats a running line only after the refresh wait and once the count moved enough', () => {
+    let s = createScheduler(['suds'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: purge, lineContext: ctx(10) }));
+    // Count moved, but too soon.
+    s = stepScheduler(s, input(100 + LINE_REFRESH_MS - 1, { op: purge, lineContext: ctx(10 + LINE_COUNT_STEP) }));
+    expect(caption(s, 100 + LINE_REFRESH_MS - 1)).toBeNull();
+    // Late enough, but the count barely moved.
+    s = stepScheduler(s, input(100 + LINE_REFRESH_MS, { op: purge, lineContext: ctx(10 + LINE_COUNT_STEP - 1) }));
+    expect(caption(s, 100 + LINE_REFRESH_MS)).toBeNull();
+    // Both.
+    s = stepScheduler(s, input(100 + LINE_REFRESH_MS + 1, { op: purge, lineContext: ctx(10 + LINE_COUNT_STEP) }));
+    expect(caption(s, 100 + LINE_REFRESH_MS + 1)?.text).toBe('260 scrubbed in #general');
+  });
+
+  it('waits for the first count before a purge or load line', () => {
+    let s = createScheduler(['suds'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: load, lineContext: ctx(0) }));
+    expect(caption(s, 100)).toBeNull();
+    s = stepScheduler(s, input(900, { op: load, lineContext: ctx(100) }));
+    expect(caption(s, 900)?.text).toBe('Hauling #general, 100 so far');
+  });
+
+  it('says no finish line after a load, since nothing was deleted', () => {
+    let s = createScheduler(['mage'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: load, lineContext: ctx(100) }));
+    s = stepScheduler(s, input(100 + ONE_SHOT_MS + 1, { op: load, lineContext: ctx(335) }));
+    s = stepScheduler(s, input(100 + ONE_SHOT_MS + 2, { op: IDLE_OPERATION, lineContext: ctx(0) }));
+    expect(s.event?.kind).toBe('done');
+    expect(caption(s, 100 + ONE_SHOT_MS + 2)).toBeNull();
+  });
+
+  it('fills the finish line with the highest count the purge reached, even if progress was reset', () => {
+    let s = createScheduler(['mage'], W, {}, 0, rng);
+    s = stepScheduler(s, input(100, { op: purge, lineContext: ctx(40) }));
+    s = stepScheduler(s, input(200, { op: purge, lineContext: ctx(75) }));
+    s = stepScheduler(s, input(300, { op: IDLE_OPERATION, lineContext: ctx(0) }));
+    expect(caption(s, 300)?.text).toBe('Spell complete. 75 gone.');
+    // The next run starts its count over.
+    s = stepScheduler(s, input(300 + ONE_SHOT_MS + 1, { lineContext: ctx(0) }));
+    s = stepScheduler(s, input(300 + ONE_SHOT_MS + 2, { op: purge, lineContext: ctx(3) }));
+    s = stepScheduler(s, input(300 + ONE_SHOT_MS + 3, { op: IDLE_OPERATION, lineContext: ctx(0) }));
+    expect(caption(s, 300 + ONE_SHOT_MS + 3)?.text).toBe('Spell complete. 3 gone.');
+  });
+
+  it('uses the shared rest break line during a rest break and the seconds during a retry wait', () => {
+    let s = createScheduler(['dog'], W, {}, 0, rng);
+    const rest = op({ heavy: true, kind: 'purge', state: 'restBreak' });
+    s = stepScheduler(s, input(1000, { op: rest, lineContext: ctx(3, { holdUntil: 1000 + 3 * 60_000, restBreak: true }) }));
+    expect(caption(s, 1000)?.text).toBe('Rest break. Back in 3 min.');
+    s = stepScheduler(s, input(2000, { op: purge, lineContext: ctx(3) }));
+    s = stepScheduler(s, input(3000, { op: op({ heavy: true, kind: 'purge', state: 'retrying' }), lineContext: ctx(3, { holdUntil: 3000 + 8000 }) }));
+    expect(caption(s, 3000)?.text).toBe('Sit. 8s.');
+  });
+
 });

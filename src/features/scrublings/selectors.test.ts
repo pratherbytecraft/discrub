@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { createBaseState } from '@/test/state-factories';
 import { defaultSettings } from '@features/app/storageKeys';
-import { parsePicked, parsePositions, selectScrublingsOperationView, selectScrublingsPicked, selectScrublingsVisible } from './selectors';
+import { parsePicked, parsePositions, selectScrublingLineContext, selectScrublingsOperationView, selectScrublingsPicked, selectScrublingsVisible } from './selectors';
 
 const stateWith = (settings: Partial<Record<string, string>>, extra: Record<string, unknown> = {}) => {
   const base = createBaseState() as any;
@@ -49,4 +49,30 @@ describe('Scrublings selectors', () => {
     const stopped = { ...base, app: { ...base.app, rateLimitStopped: true } };
     expect(selectScrublingsOperationView(stopped).rateLimitStopped).toBe(true);
   });
+});
+
+describe('Scrubling line context (2.2.1)', () => {
+  it('reads the purge counts and channel, else the open channel, else chat', () => {
+    const idle = selectScrublingLineContext(stateWith({}));
+    expect(idle).toEqual({ n: 0, ch: 'chat', f: 0, holdUntil: null, restBreak: false });
+
+    const base = stateWith({}) as any;
+    const purging = {
+      ...base,
+      purge: { ...base.purge, isPurging: true, purgeProgress: { processed: 40, deleted: 30, skipped: 0, reactionsRemoved: 0, failed: 1, bulk: { currentIndex: 1, totalChannels: 3, currentChannelName: '#general', completedStats: { deleted: 1200, skipped: 0, reactionsRemoved: 0, failed: 1 } } } },
+    };
+    expect(selectScrublingLineContext(purging)).toMatchObject({ n: 1230, ch: 'general', f: 2 });
+
+    const withChannel = { ...base, channel: { ...base.channel, selectedChannel: { id: 'c', name: 'dev-chat', type: 0 } } };
+    expect(selectScrublingLineContext(withChannel).ch).toBe('dev-chat');
+  });
+
+  it('carries the rest break end for the shared line', () => {
+    const base = stateWith({}) as any;
+    const resting = { ...base, app: { ...base.app, discrubPaused: true, restBreakUntil: 5000 }, export: { ...base.export, isExporting: true } };
+    const ctx = selectScrublingLineContext(resting);
+    expect(ctx.restBreak).toBe(true);
+    expect(ctx.holdUntil).toBe(5000);
+  });
+
 });

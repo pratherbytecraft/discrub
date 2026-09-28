@@ -83,7 +83,6 @@
     "fits_one": "{{count}} passt auf diesen Bildschirm",
     "fits_other": "{{count}} passen auf diesen Bildschirm",
     "free": "Kostenlos",
-    "fullHint": "Höchstens {{max}} gleichzeitig. Wähle zuerst einen ab.",
     "lockedOne": "{{name}} (Supporter-Scrubling, gesperrt)",
     "names": {
       "suds": "Suds",

@@ -10,7 +10,7 @@ import {
   CHAR_W, MIN_STAGE_W, SLOT_W, STAGE_SCALE, createScheduler, stepScheduler, syncScheduler, viewScheduler,
   type SchedulerState, type StageView,
 } from '@features/scrublings/scheduler';
-import { selectScrublingsEnabled, selectScrublingsOperationView, selectScrublingsPositions, selectScrublingsVisible } from '@features/scrublings/selectors';
+import { selectScrublingsEnabled, selectScrublingsOperationView, selectScrublingsPositions, selectScrublingsVisible, selectScrublingLineContext } from '@features/scrublings/selectors';
 import { frameDataUri, headRow } from '@features/scrublings/spriteRender';
 import { SPRITE_FEET_ROW, SPRITE_H } from '@features/scrublings/spriteTypes';
 import { setStageSlots } from '@features/scrublings/stageSlots';
@@ -93,6 +93,7 @@ const ScrublingsStage = () => {
   const visible = useAppSelector(selectScrublingsVisible);
   const positions = useAppSelector(selectScrublingsPositions);
   const op = useAppSelector(selectScrublingsOperationView);
+  const lineContext = useAppSelector(selectScrublingLineContext);
   const animations = useAppSelector(selectSetting(DiscrubSetting.APP_THEME_ANIMATIONS));
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   // A phone shows one at most, however wide the stretch happens to be (owner, 2026-09-19).
@@ -123,6 +124,7 @@ const ScrublingsStage = () => {
   const drag = useRef<{ id: ScrublingId; x: number } | null>(null);
   const clicks = useRef<ScrublingId[]>([]);
   const opRef = useRef(op); opRef.current = op;
+  const lineRef = useRef(lineContext); lineRef.current = lineContext;
   const positionsRef = useRef(positions); positionsRef.current = positions;
   const [view, setView] = useState<StageView>(EMPTY);
   const [rect, setRect] = useState<{ left: number; top: number; height: number } | null>(null);
@@ -152,7 +154,7 @@ const ScrublingsStage = () => {
       const current = sched.current
         ? syncScheduler(sched.current, ids, width, positionsRef.current, now)
         : createScheduler(ids, width, positionsRef.current, now);
-      sched.current = stepScheduler(current, { now, width, op: opRef.current, hover: hover.current, drag: drag.current, clicks: clicks.current, frozen, rng: Math.random });
+      sched.current = stepScheduler(current, { now, width, op: opRef.current, hover: hover.current, drag: drag.current, clicks: clicks.current, frozen, rng: Math.random, lineContext: lineRef.current });
       clicks.current = [];
       const next = viewScheduler(sched.current, now);
       noteChars(next.chars, now);

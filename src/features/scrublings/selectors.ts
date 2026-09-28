@@ -4,8 +4,13 @@ import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import type { RootState } from '@/app/store';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectHasThemes } from '@features/supporter/supporterSlice';
+import { selectRestBreakUntil } from '@features/app/appSlice';
+import { selectSelectedChannel } from '@features/channel/channelSlice';
+import { selectSelectedDm } from '@features/dm/dmSlice';
+import { getDmName } from '@/utils/dmListUtils';
 import { DEFAULT_PICKED, MAX_PICKED, SCRUBLINGS, isScrublingId, type ScrublingId } from './descriptors';
 import { SLOT_W, type OperationView } from './scheduler';
+import { EMPTY_LINE_CONTEXT, type LineContext } from './lines';
 
 const selectSettingsState = (state: RootState) => state.app.settings;
 
@@ -91,4 +96,31 @@ export const selectScrublingsOperationView = createSelector(
 export const selectStageRoom = createSelector(
   [selectScrublingsVisible],
   (visible): number => (visible.length === 0 ? 0 : SLOT_W * visible.length + 16),
+);
+
+/**
+ * 2.2.1: the numbers and the name the event lines are filled with. Nothing is
+ * computed that the operation summary and the purge slice do not already
+ * carry. The channel is the one the purge is in, else the open channel or
+ * conversation, else "chat".
+ */
+export const selectScrublingLineContext = createSelector(
+  [selectOperationSummary, selectPurge, selectMessage, selectSelectedChannel, selectSelectedDm, selectRestBreakUntil],
+  (summary, purge, message, channel, dm, restBreakUntil): LineContext => {
+    const progress = purge.purgeProgress;
+    const bulk = progress?.bulk;
+    const purgeN = progress ? (bulk?.completedStats.deleted ?? 0) + progress.deleted : 0;
+    const purgeF = progress ? (bulk?.completedStats.failed ?? 0) + (progress.failed ?? 0) : 0;
+    const loadN = message.pagination?.loadAllProgress?.current ?? 0;
+    const name = bulk?.currentChannelName || channel?.name || (dm ? getDmName(dm) : '') || EMPTY_LINE_CONTEXT.ch;
+    const restBreak = summary.state === 'restBreak';
+    const holdUntil = restBreak ? restBreakUntil : summary.hold?.until ?? null;
+    return {
+      n: purge.isPurging ? purgeN : Math.max(purgeN, loadN),
+      ch: name.replace(/^#/, ''),
+      f: purgeF,
+      holdUntil,
+      restBreak,
+    };
+  },
 );

@@ -83,7 +83,6 @@
     "fits_one": "{{count}} shows on this screen",
     "fits_other": "{{count}} show on this screen",
     "free": "Free",
-    "fullHint": "Up to {{max}} at once. Unpick one first.",
     "lockedOne": "{{name}} (supporter Scrubling, locked)",
     "names": {
       "suds": "Suds",

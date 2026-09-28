@@ -93,4 +93,16 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
     expect(screen.getByText('Content renders fine')).toBeInTheDocument();
   });
+
+  // 2.2.1: the Ghost keeps the fallback page company, drawn without the store.
+  it('shows the Ghost with its line beside the heading', () => {
+    render(
+      <ErrorBoundary>
+        <ThrowingComponent shouldThrow />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByTestId('error-ghost')).toBeInTheDocument();
+    expect(screen.getByText("Wasn't me.")).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+  });
 });

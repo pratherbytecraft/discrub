@@ -1,4 +1,4 @@
-import { Box, Checkbox, Link, Switch, Tooltip, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Checkbox, Link, Switch, Typography, alpha, useTheme } from '@mui/material';
 import { LockOutlined as LockIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
@@ -71,51 +71,50 @@ const ScrublingsTab = ({ onLockedPick }: ScrublingsTabProps) => {
           const blocked = !isPicked && full && !locked;
           const label = locked ? t('scrublings.lockedOne', { name }) : name;
           return (
-            <Tooltip key={id} title={blocked ? t('scrublings.fullHint', { max: MAX_PICKED }) : ''} enterDelay={300} arrow>
-              <Box
-                role="checkbox"
-                tabIndex={0}
-                aria-checked={isPicked}
-                aria-label={label}
-                aria-disabled={blocked || undefined}
-                data-testid={`scrubling-card-${id}`}
-                onClick={() => toggle(id)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(id); } }}
-                sx={{
-                  position: 'relative', textAlign: 'left', cursor: blocked ? 'default' : 'pointer',
-                  p: '10px 10px 8px', borderRadius: 2, border: '1px solid',
-                  borderColor: isPicked ? 'primary.main' : 'divider',
-                  backgroundColor: isPicked ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
-                  opacity: blocked ? 0.55 : 1,
-                  boxShadow: locked ? `0 0 0 1px ${alpha(theme.palette.error.main, 0.35)}, 0 0 10px ${alpha(theme.palette.error.main, 0.25)}` : 'none',
-                  '&:hover': blocked ? {} : { backgroundColor: isPicked ? alpha(theme.palette.primary.main, 0.14) : alpha(theme.palette.text.primary, 0.05) },
-                  '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
-                }}
-              >
-                <Box sx={{ display: 'grid', placeItems: 'center', height: 64, mb: 0.75, opacity: locked ? 0.75 : 1 }}>
-                  <Box
-                    aria-hidden
-                    sx={{ width: SPRITE_W * 2, height: SPRITE_H * 2, backgroundImage: `url("${frameDataUri(d.sheet, d.sheet.activities[d.idle]?.[0] ?? 'idle1')}")`, backgroundSize: '100% 100%', imageRendering: 'pixelated' }}
-                  />
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Checkbox size="small" checked={isPicked} tabIndex={-1} disableRipple sx={{ p: 0, pointerEvents: 'none' }} inputProps={{ 'aria-hidden': true }} />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{name}</Typography>
-                  {d.tier === 'free' && (
-                    <Box component="span" sx={{ ml: 'auto', fontSize: '0.65rem', color: 'text.secondary', border: '1px solid', borderColor: 'divider', borderRadius: 0.5, px: 0.5 }}>{t('scrublings.free')}</Box>
-                  )}
-                </Box>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.35, minHeight: 31, mt: 0.5 }}>{t(`scrublings.blurbs.${id}`)}</Typography>
-                {d.designedBy && (
-                  <Typography variant="caption" data-testid={`scrubling-designer-${id}`} sx={{ color: 'text.secondary', display: 'block', fontStyle: 'italic', mt: 0.25 }}>{t('scrublings.designedBy', { name: d.designedBy })}</Typography>
-                )}
-                {locked && (
-                  <Box data-testid={`scrubling-locked-${id}`} sx={{ position: 'absolute', right: 6, top: 6, width: 18, height: 18, borderRadius: '50%', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', display: 'grid', placeItems: 'center' }}>
-                    <LockIcon sx={{ fontSize: 11, color: 'error.main' }} />
-                  </Box>
+            <Box
+              key={id}
+              role="checkbox"
+              tabIndex={0}
+              aria-checked={isPicked}
+              aria-label={label}
+              aria-disabled={blocked || undefined}
+              data-testid={`scrubling-card-${id}`}
+              onClick={() => toggle(id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(id); } }}
+              sx={{
+                position: 'relative', textAlign: 'left', cursor: blocked ? 'default' : 'pointer',
+                p: '10px 10px 8px', borderRadius: 2, border: '1px solid',
+                borderColor: isPicked ? 'primary.main' : 'divider',
+                backgroundColor: isPicked ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                opacity: blocked ? 0.55 : 1,
+                boxShadow: locked ? `0 0 0 1px ${alpha(theme.palette.error.main, 0.35)}, 0 0 10px ${alpha(theme.palette.error.main, 0.25)}` : 'none',
+                '&:hover': blocked ? {} : { backgroundColor: isPicked ? alpha(theme.palette.primary.main, 0.14) : alpha(theme.palette.text.primary, 0.05) },
+                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
+              }}
+            >
+              <Box sx={{ display: 'grid', placeItems: 'center', height: 64, mb: 0.75, opacity: locked ? 0.75 : 1 }}>
+                <Box
+                  aria-hidden
+                  sx={{ width: SPRITE_W * 2, height: SPRITE_H * 2, backgroundImage: `url("${frameDataUri(d.sheet, d.sheet.activities[d.idle]?.[0] ?? 'idle1')}")`, backgroundSize: '100% 100%', imageRendering: 'pixelated' }}
+                />
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Checkbox size="small" checked={isPicked} tabIndex={-1} disableRipple sx={{ p: 0, pointerEvents: 'none' }} inputProps={{ 'aria-hidden': true }} />
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{name}</Typography>
+                {d.tier === 'free' && (
+                  <Box component="span" sx={{ ml: 'auto', fontSize: '0.65rem', color: 'text.secondary', border: '1px solid', borderColor: 'divider', borderRadius: 0.5, px: 0.5 }}>{t('scrublings.free')}</Box>
                 )}
               </Box>
-            </Tooltip>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.35, minHeight: 31, mt: 0.5 }}>{t(`scrublings.blurbs.${id}`)}</Typography>
+              {d.designedBy && (
+                <Typography variant="caption" data-testid={`scrubling-designer-${id}`} sx={{ color: 'text.secondary', display: 'block', fontStyle: 'italic', mt: 0.25 }}>{t('scrublings.designedBy', { name: d.designedBy })}</Typography>
+              )}
+              {locked && (
+                <Box data-testid={`scrubling-locked-${id}`} sx={{ position: 'absolute', right: 6, top: 6, width: 18, height: 18, borderRadius: '50%', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', display: 'grid', placeItems: 'center' }}>
+                  <LockIcon sx={{ fontSize: 11, color: 'error.main' }} />
+                </Box>
+              )}
+            </Box>
           );
         })}
       </Box>
