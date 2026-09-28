@@ -246,3 +246,71 @@ describe('chunkMessages appended page (2.2.1 perf)', () => {
     }
   });
 });
+
+describe('chunkMessages changed stretch (2.2.2 perf)', () => {
+  // A long list with mixed authors and gaps, from a fixed seed so a failure repeats.
+  const seeded = (seed: number) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; };
+  const build = (n: number, rnd: () => number): Message[] => {
+    const out: Message[] = [];
+    let minute = 0;
+    for (let i = 0; i < n; i++) {
+      minute += rnd() < 0.2 ? 9 : 1;
+      out.push(msg(String(i + 1), rnd() < 0.7 ? 'a' : rnd() < 0.5 ? 'b' : 'c', new Date(Date.UTC(2026, 6, 17, 0, minute)).toISOString(), rnd() < 0.05 ? { type: 19 } as Partial<Message> : {}));
+    }
+    return out;
+  };
+  const plain = (chunks: ReturnType<typeof chunkMessages>) => chunks.map((c) => ({ key: c.key, ids: c.messages.map((m) => m.id) }));
+
+  it('gives the same chunks as chunking the whole list, through many delete batches', () => {
+    const rnd = seeded(7);
+    let list = build(600, rnd);
+    let chunks = chunkMessages(list);
+    for (let round = 0; round < 40 && list.length > 12; round++) {
+      const start = Math.floor(rnd() * (list.length - 10));
+      const gone = new Set(list.slice(start, start + 10).filter(() => rnd() < 0.8).map((m) => m.id));
+      list = list.filter((m) => !gone.has(m.id));
+      chunks = chunkMessages(list, {}, chunks);
+      expect(plain(chunks)).toEqual(plain(chunkMessages(list)));
+    }
+  });
+
+  it('gives the same chunks when the deletes are scattered, at the ends, or split by day', () => {
+    const rnd = seeded(21);
+    for (const opts of [{}, { splitByDay: true }]) {
+      let list = build(400, rnd);
+      let chunks = chunkMessages(list, opts);
+      for (let round = 0; round < 30 && list.length > 5; round++) {
+        const kind = round % 3;
+        const gone = new Set(
+          kind === 0 ? list.filter(() => rnd() < 0.03).map((m) => m.id)
+            : kind === 1 ? list.slice(0, 4).map((m) => m.id)
+              : list.slice(-4).map((m) => m.id),
+        );
+        list = list.filter((m) => !gone.has(m.id));
+        chunks = chunkMessages(list, opts, chunks);
+        expect(plain(chunks)).toEqual(plain(chunkMessages(list, opts)));
+      }
+    }
+  });
+
+  it('keeps the chunk objects on both sides of the change', () => {
+    const rnd = seeded(3);
+    const list = build(300, rnd);
+    const first = chunkMessages(list);
+    const next = chunkMessages(list.filter((m) => m.id !== '150'), {}, first);
+    expect(next[0]).toBe(first[0]);
+    expect(next[1]).toBe(first[1]);
+    expect(next[next.length - 1]).toBe(first[first.length - 1]);
+    expect(next[next.length - 2]).toBe(first[first.length - 2]);
+  });
+
+  it('handles a message put in the middle and a list emptied of all but one', () => {
+    const rnd = seeded(11);
+    const list = build(200, rnd);
+    const first = chunkMessages(list);
+    const added = list.slice(0, 100).concat(msg('new', 'a', list[100].timestamp), list.slice(100));
+    expect(plain(chunkMessages(added, {}, first))).toEqual(plain(chunkMessages(added)));
+    const one = [list[57]];
+    expect(plain(chunkMessages(one, {}, first))).toEqual(plain(chunkMessages(one)));
+  });
+});

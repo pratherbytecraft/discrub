@@ -135,7 +135,8 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
     t,
   ]);
 
-  const mediaSummary = useMemo(() => categorizeMessageAttachments(messages), [messages]);
+  // Only while the dialog is open (2.2.2): it stays mounted, and walking every loaded message on each delete flush cost a closed dialog real time.
+  const mediaSummary = useMemo(() => (open ? categorizeMessageAttachments(messages) : []), [open, messages]);
 
   // "Rehydrate before export" toggle — package-only; only useful when
   // the channel hasn't already been rehydrated.

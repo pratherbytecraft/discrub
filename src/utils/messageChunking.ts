@@ -105,10 +105,72 @@ export const chunkMessages = (
     return result;
   }
 
+  // A change in the middle (2.2.2 perf, a delete flush): keep the chunks on
+  // both sides of it and chunk only the stretch between them.
+  const src = prev ? sourceOf.get(prev) : undefined;
+  if (src && prev && prev.length > 0) {
+    const spliced = rechunkChangedStretch(prev, src, messages, opts);
+    if (spliced) {
+      sourceOf.set(spliced, messages);
+      return spliced;
+    }
+  }
+
   const prevByKey = prev && prev.length > 0 ? new Map(prev.map((c) => [c.key, c])) : null;
   const result = chunkRange(messages, 0, messages.length, opts, prevByKey);
   sourceOf.set(result, messages);
   return result;
+};
+
+/**
+ * The list changed somewhere inside: the same objects lead it and end it as
+ * before. Chunks that lie wholly in the unchanged lead or end are kept,
+ * except the one next to the change on each side, which is chunked again
+ * with the stretch because its neighbour may have changed. Returns null
+ * when nothing can be kept, and the caller chunks the whole list.
+ */
+const rechunkChangedStretch = (
+  prev: MessageChunk[],
+  src: Message[],
+  messages: Message[],
+  opts: { splitByDay?: boolean },
+): MessageChunk[] | null => {
+  const shorter = Math.min(src.length, messages.length);
+  let lead = 0;
+  while (lead < shorter && src[lead] === messages[lead]) lead++;
+  let end = 0;
+  while (end < shorter - lead && src[src.length - 1 - end] === messages[messages.length - 1 - end]) end++;
+  if (lead === 0 && end === 0) return null;
+
+  // Chunks wholly inside the lead, less the last of them.
+  let headCount = 0;
+  let headLength = 0;
+  let at = 0;
+  for (const chunk of prev) {
+    if (at + chunk.messages.length > lead) break;
+    at += chunk.messages.length;
+    headCount++;
+  }
+  if (headCount > 0) { headCount--; at -= prev[headCount].messages.length; }
+  headLength = at;
+
+  // Chunks wholly inside the end, less the first of them.
+  let tailCount = 0;
+  let tailLength = 0;
+  for (let i = prev.length - 1; i >= headCount; i--) {
+    if (tailLength + prev[i].messages.length > end) break;
+    tailLength += prev[i].messages.length;
+    tailCount++;
+  }
+  if (tailCount > 0) { tailCount--; tailLength -= prev[prev.length - tailCount - 1].messages.length; }
+  if (headCount === 0 && tailCount === 0) return null;
+
+  const from = headLength;
+  const to = messages.length - tailLength;
+  if (from > to) return null;
+  const between = prev.slice(headCount, prev.length - tailCount);
+  const middle = from < to ? chunkRange(messages, from, to, opts, new Map(between.map((c) => [c.key, c]))) : [];
+  return prev.slice(0, headCount).concat(middle, tailCount > 0 ? prev.slice(prev.length - tailCount) : []);
 };
 
 /** The list each chunk array was built from, so the next call can tell an appended page apart. */

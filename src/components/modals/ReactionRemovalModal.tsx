@@ -75,9 +75,10 @@ const ReactionRemovalModal = ({
   const abortRef = useRef(false);
 
   // Messages with reactions
+  // Only while open (2.2.2): the modal stays mounted and the selection changes on every delete flush.
   const messagesWithReactions = useMemo(
-    () => selectedMessages.filter((m) => m.reactions && m.reactions.length > 0),
-    [selectedMessages],
+    () => (open ? selectedMessages.filter((m) => m.reactions && m.reactions.length > 0) : []),
+    [open, selectedMessages],
   );
 
   // Collect unique emojis from selected messages (with full emoji data for rendering).
