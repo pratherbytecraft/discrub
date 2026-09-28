@@ -254,8 +254,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
           </Typography>
         </Box>
 
-        {/* The bar's flexible middle is the Scrublings' stage. */}
-        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', position: 'relative', minWidth: isCompact ? 0 : stageRoom, px: 1, overflow: 'hidden' }}>
+        {/* The bar's flexible middle is the Scrublings' stage. On a phone it has no padding, so it can shrink to nothing (2.2.2). */}
+        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch', position: 'relative', minWidth: isCompact ? 0 : stageRoom, px: isCompact ? 0 : 1, overflow: 'hidden' }}>
           {currentUser && <Box sx={{ position: 'absolute', inset: 0, zIndex: 2 }}><ScrublingsStage /></Box>}
         </Box>
 
@@ -268,7 +268,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                 display: 'flex',
                 alignItems: 'center',
                 minWidth: 0,
-                '&&': { flexShrink: 1 },
+                // On a phone the box holds only the picture, so it keeps its width. A narrower box let the picture cover the Appearance button at 320 px (2.2.2).
+                '&&': { flexShrink: isCompact ? 0 : 1 },
                 gap: 1,
                 cursor: 'pointer',
                 padding: { xs: '4px', sm: '4px 12px' },
