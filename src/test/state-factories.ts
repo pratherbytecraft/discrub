@@ -46,6 +46,7 @@ export function createBaseState(overrides?: Partial<RootState>): RootState {
     hotkeys: { ...initialHotkeysState },
     dev: { ...initialDevState },
     supporter: { ...initialSupporterState },
+    notice: { loaded: true, seenId: null },
     ...overrides,
   } as RootState;
 }

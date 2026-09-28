@@ -9,6 +9,7 @@ import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { getThemeById, findThemeDescriptor, resolveThemeIdFromSetting } from './theme';
 import { globalStyles } from './globalStyles';
 import ThemeEffects from './ThemeEffects';
+import { isUnlocked } from '@features/appearance/groups';
 
 interface ThemeWrapperProps {
   children: React.ReactNode;
@@ -26,10 +27,12 @@ const ThemeWrapper = ({ children }: ThemeWrapperProps) => {
     let id = resolveThemeIdFromSetting(previewTheme ?? themeModeSetting);
     // A stored supporter theme without a valid key falls back to auto
     // (setting untouched — re-claiming brings the theme straight back).
+    // A holiday theme stays unlocked through its season (2.2.3).
     // Until key verification resolves on boot, honor the stored choice
     // so legitimate supporters never see a theme flash.
     if (!previewTheme && supporterInitialized && !isSupporter) {
-      if (findThemeDescriptor(id)?.tier === 'supporter') {
+      const d = findThemeDescriptor(id);
+      if (d && !isUnlocked(d, false)) {
         id = resolveThemeIdFromSetting('auto');
       }
     }

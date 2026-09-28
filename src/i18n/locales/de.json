@@ -75,7 +75,17 @@
     "endPreview": "Vorschau beenden",
     "current": "Aktuell",
     "previewBusy": "Zuerst den laufenden Vorgang beenden",
-    "scrublings": "Scrublings"
+    "scrublings": "Scrublings",
+    "groups": {
+      "standard": "Standard",
+      "holiday": "Feiertage",
+      "commissioned": "Auftragsarbeiten"
+    },
+    "groupEmpty": "Hier ist noch nichts.",
+    "holidayOpen": "{{name}} ist bis {{date}} für alle offen.",
+    "auto": "Auto",
+    "autoTooltip": "Discord oder der Systemeinstellung folgen",
+    "supporterTheme": "Supporter-Theme"
   },
   "scrublings": {
     "show": "Scrublings anzeigen",
@@ -92,7 +102,8 @@
       "adventurer": "Abenteurer",
       "pker": "Pker",
       "alien": "Alien",
-      "ghost": "Geist"
+      "ghost": "Geist",
+      "spider": "Spinne '26"
     },
     "blurbs": {
       "suds": "Der Schrubber. Blasen, ein Schwamm und ein Eimer.",
@@ -102,7 +113,8 @@
       "adventurer": "Weihnachtsmütze, komplettes Rune, eine Abyssal-Peitsche. Steigt eine Stufe auf, wenn ein Lauf fertig ist.",
       "pker": "Zaubererhut, Lederbody, schwarze D'hide-Chaps, ein Drachenkrummsäbel. Zeigt den Totenkopf, wenn ein Purge startet.",
       "alien": "Fliegt eine Untertasse. Beamt die Einsen und Nullen hoch, während ein Purge läuft.",
-      "ghost": "Der Geist gelöschter Nachrichten. Frisst sie während eines Purge."
+      "ghost": "Der Geist gelöschter Nachrichten. Frisst sie während eines Purge.",
+      "spider": "Treibt sich an Halloween herum. Wickelt ein, was sie fängt."
     },
     "customFree": "Eigene Scrublings sind für alle kostenlos, sobald sie hinzugefügt wurden.",
     "request": "Eigenen Scrubling anfragen",

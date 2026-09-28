@@ -11,6 +11,8 @@ import { findThemeDescriptor } from '@/theme/descriptors';
 import { resolveThemeIdFromSetting } from '@/theme/theme';
 import { LAYOUT_NAMES } from '@/layouts/types';
 import AppearancePopover, { type AppearanceTab } from './AppearancePopover';
+import SeasonalNotice from './SeasonalNotice';
+import { markSeasonalNoticeSeen, selectSeasonalNoticeTheme } from '@features/appearance/noticeSlice';
 /**
  * Top bar entry for layouts, themes, Scrublings and supporter access (2.2.0). Replaces the palette icon:
  * the theme dot, the word Appearance and a chevron, with the current layout
@@ -39,8 +41,11 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
   const giftAttentionSeen = useAppSelector(selectGiftAttentionSeen);
   const themeName = findThemeDescriptor(resolveThemeIdFromSetting(settings?.[DiscrubSetting.APP_THEME_MODE] ?? 'auto'))?.name ?? '';
 
+  // 2.2.3: while the seasonal notice hangs from the button, the first click opens on the Theme tab and puts the notice away for good.
+  const seasonalNotice = useAppSelector(selectSeasonalNoticeTheme);
   const toggle = () => {
     if (!giftAttentionSeen) dispatch(markGiftAttentionSeen());
+    if (seasonalNotice && !open) { dispatch(markSeasonalNoticeSeen(seasonalNotice.id)); setTab('theme'); }
     if (open) close(); else setOpen(true);
   };
   useHotkey('openAppearance', toggle, true);
@@ -100,6 +105,7 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
           )}
         </ButtonBase>
       </Tooltip>
+      <SeasonalNotice anchor={ref} />
       <AppearancePopover anchorEl={ref.current} open={open} tab={tab} onTabChange={setTab} onClose={close} onOpenSettings={onOpenSettings} />
     </>
   );

@@ -49,12 +49,15 @@ describe('Scrublings (2.2.0)', () => {
     cy.window().its('__store__').invoke('getState').its('app.settings.appScrublingsPositions').should('contain', '"suds"');
   });
 
-  it('lists the eight in the Appearance tab, three free, five locked, and a locked pick goes to the Supporter segment', () => {
+  it('lists the nine in the Appearance tab, three free, the rest locked, and a locked pick goes to the Supporter segment', () => {
     openTab();
-    cy.get('[data-testid="scrublings-cards"] [data-testid^="scrubling-card-"]').should('have.length', 8);
+    cy.get('[data-testid="scrublings-cards"] [data-testid^="scrubling-card-"]').should('have.length', 9);
     cy.get('[data-testid="scrubling-card-suds"]').should('have.attr', 'aria-checked', 'true');
     cy.get('[data-testid="scrubling-card-mage"]').should('have.attr', 'aria-checked', 'true');
-    cy.get('[data-testid^="scrubling-locked-"]').should('have.length', 5);
+    // The Spider '26 is unlocked for everyone through Halloween on the real clock (holiday.cy.ts pins the dates).
+    const now = new Date();
+    const inSeason = now.getFullYear() === 2026 && ((now.getMonth() === 9) || (now.getMonth() === 10 && now.getDate() <= 2));
+    cy.get('[data-testid^="scrubling-locked-"]').should('have.length', inSeason ? 5 : 6);
     cy.get('[data-testid="scrubling-locked-cat"]').should('not.exist');
     cy.get('[data-testid="scrublings-count"]').should('have.text', '2 of 3 picked');
     cy.get('[data-testid="appearance-hint"]').should('not.exist');

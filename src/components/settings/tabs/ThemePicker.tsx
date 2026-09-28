@@ -6,11 +6,14 @@ import {
   BrightnessAuto as AutoIcon,
   VisibilityOutlined as PreviewIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import {
   THEME_DESCRIPTORS,
   findThemeDescriptor,
   type ThemeDescriptor,
 } from '@/theme/theme';
+import { groupItems, inSeason, isUnlocked, type ItemGroup } from '@features/appearance/groups';
+import { formatSeasonEnd } from '@features/appearance/seasonText';
 
 const CARD_WIDTH = 132;
 
@@ -145,6 +148,11 @@ export interface ThemeGridProps {
  * miniature of the app in that theme, so it is the preview; there is no
  * live preview of the whole app (2.2.0 decision, a live preview handed
  * out locked themes for free). Picks apply instantly via onChange.
+ *
+ * 2.2.3: the cards sit in groups with a heading each, Standard, Holiday and
+ * Commissioned. Holiday leads while one of its themes is in season, and a
+ * holiday theme is unlocked for everyone through its season. Commissioned
+ * shows a line when it is empty.
  */
 export const ThemeGrid = ({
   value,
@@ -158,6 +166,7 @@ export const ThemeGrid = ({
   'data-testid': testId = 'theme-grid',
 }: ThemeGridProps) => {
   const theme = useTheme();
+  const { t } = useTranslation();
 
   // Normalize the form value the same way ThemeWrapper does: legacy
   // aliases resolve to their canonical id, unknown ids behave as auto.
@@ -244,7 +253,7 @@ export const ThemeGrid = ({
           )}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.75, minHeight: 20 }}>
-          <Typography variant="caption" sx={{ fontWeight: selected ? 700 : 600, flex: 1, color: selected ? 'primary.main' : 'inherit' }} noWrap data-testid={selected ? `theme-current-${id}` : undefined}>
+          <Typography variant="caption" sx={{ fontWeight: selected ? 700 : 600, flex: 1, color: selected ? 'primary.main' : 'inherit', lineHeight: 1.2, overflowWrap: 'anywhere' }} data-testid={selected ? `theme-current-${id}` : undefined}>
             {label}
           </Typography>
         </Box>
@@ -280,33 +289,54 @@ export const ThemeGrid = ({
     );
   };
 
-  return (
-    <Box data-testid={testId}>
-      <Box
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 1.25,
-          ...(centered && { justifyContent: 'center' }),
-        }}
-      >
-        {renderCard({
-          id: 'auto',
-          label: 'Auto',
-          tooltip: 'Match Discord or your system preference',
-          swatch: <AutoSwatch dark={defaultDark} light={defaultLight} />,
-        })}
-        {descriptors.map((d) => {
-          const locked = d.tier === 'supporter' && !isSupporter;
-          return renderCard({
-            id: d.id,
-            label: d.name,
-            locked,
-            tooltip: locked ? 'Supporter theme' : undefined,
-            swatch: <Swatch descriptor={d} />,
-          });
-        })}
+  const groups = groupItems(descriptors);
+  const heading = (group: ItemGroup, items: ThemeDescriptor[]) => {
+    const open = items.find((d) => inSeason(d.season));
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap', mb: 0.75 }}>
+        <Typography variant="overline" sx={{ lineHeight: 1.6, letterSpacing: '0.08em', color: 'text.secondary' }} data-testid={`theme-group-${group}`}>
+          {t(`appearance.groups.${group}`)}
+        </Typography>
+        {open?.season && (
+          <Typography variant="caption" sx={{ color: 'text.secondary' }} data-testid="theme-group-holiday-open">
+            {t('appearance.holidayOpen', { name: open.name, date: formatSeasonEnd(open.season) })}
+          </Typography>
+        )}
       </Box>
+    );
+  };
+
+  return (
+    <Box data-testid={testId} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      {groups.map(({ group, items }) => (
+        <Box key={group} data-testid={`theme-group-section-${group}`}>
+          {heading(group, items)}
+          {items.length === 0 && group !== 'standard' ? (
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }} data-testid={`theme-group-empty-${group}`}>
+              {t('appearance.groupEmpty')}
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, ...(centered && { justifyContent: 'center' }) }}>
+              {group === 'standard' && renderCard({
+                id: 'auto',
+                label: t('appearance.auto'),
+                tooltip: t('appearance.autoTooltip'),
+                swatch: <AutoSwatch dark={defaultDark} light={defaultLight} />,
+              })}
+              {items.map((d) => {
+                const locked = !isUnlocked(d, isSupporter);
+                return renderCard({
+                  id: d.id,
+                  label: d.name,
+                  locked,
+                  tooltip: locked ? t('appearance.supporterTheme') : undefined,
+                  swatch: <Swatch descriptor={d} />,
+                });
+              })}
+            </Box>
+          )}
+        </Box>
+      ))}
     </Box>
   );
 };

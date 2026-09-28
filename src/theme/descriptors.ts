@@ -13,6 +13,8 @@
  * verbatim (every hex below matches the pre-factory `theme.ts`).
  */
 
+import { halloween, type ItemGroup, type Season } from '@features/appearance/groups';
+
 export type ThemeBase = 'dark' | 'light';
 export type ThemeTier = 'free' | 'supporter';
 
@@ -55,7 +57,7 @@ export interface ThemeAccent {
   durationS: number;
 }
 
-export type ThemeEffectsId = 'abstract';
+export type ThemeEffectsId = 'abstract' | 'halloween';
 
 export interface ThemeDescriptor {
   /** Stable id persisted in APP_THEME_MODE. Never 'auto'. */
@@ -67,8 +69,12 @@ export interface ThemeDescriptor {
   tier: ThemeTier;
   palette: ThemeDescriptorPalette;
   accent?: ThemeAccent;
-  /** A named set of whole-app visual effects, drawn by `ThemeEffects`. Only Abstract has one. */
+  /** A named set of whole-app visual effects, drawn by `ThemeEffects`. Abstract and the holiday themes have one. */
   effects?: ThemeEffectsId;
+  /** Where the picker lists it (2.2.3). Missing means Standard. */
+  group?: ItemGroup;
+  /** A holiday theme is free for everyone inside its season, then supporter only (owner, 2026-09-29). */
+  season?: Season;
 }
 
 export const DISCORD_DARK_ID = 'discord-dark';
@@ -555,6 +561,48 @@ const abstract: ThemeDescriptor = {
 };
 
 
+/**
+ * Halloween '26: the first holiday drop (2.2.3). Pumpkin orange on a night
+ * purple, with bone white text and a slime green second colour. The bats and
+ * the corner web live in `ThemeEffects` behind `effects: 'halloween'`. Free
+ * from October 1 to November 2, supporter only after.
+ */
+const halloween26: ThemeDescriptor = {
+  id: 'halloween-26',
+  name: "Halloween '26",
+  base: 'dark',
+  tier: 'supporter',
+  group: 'holiday',
+  season: halloween(2026),
+  palette: {
+    primary: { main: '#ff8c2a', light: '#ffb066', dark: '#cc6a12', contrastText: '#1a0a00' },
+    secondary: { main: '#8ef05a', light: '#b8ff8a', dark: '#5fb832' },
+    background: { default: '#0d0812', paper: '#16101f', elevated: '#1f1729' },
+    text: { primary: '#f3e9dc', secondary: '#b9a6c9' },
+    error: '#ff4d5e',
+    warning: '#ffc233',
+    success: '#8ef05a',
+    divider: 'rgba(255, 140, 42, 0.18)',
+    glassBase: '#16101f',
+    dialog: 'rgba(22, 16, 31, 0.96)',
+    tooltip: 'rgba(13, 8, 18, 0.98)',
+    link: { main: '#c88bff', hover: '#dfb3ff' },
+    cta: { main: '#cc6a12', hover: '#a85410', active: '#853f0b' },
+    ctaDanger: { main: '#c93a4a', hover: '#ad3140', active: '#8f2835' },
+    gradient: {
+      primary: 'linear-gradient(120deg, #ff8c2a 0%, #8b3fd6 55%, #8ef05a 100%)',
+      primarySubtle: 'linear-gradient(120deg, rgba(255, 140, 42, 0.08) 0%, rgba(139, 63, 214, 0.08) 100%)',
+      overlay: 'linear-gradient(180deg, rgba(139, 63, 214, 0.05) 0%, transparent 100%)',
+    },
+  },
+  accent: {
+    background: 'linear-gradient(90deg, #ff8c2a 0%, #8b3fd6 33%, #8ef05a 66%, #ff8c2a 100%)',
+    motion: 'flow',
+    durationS: 13,
+  },
+  effects: 'halloween',
+};
+
 /** Registry, in display order. The first entry is the app default. */
 export const THEME_DESCRIPTORS: ThemeDescriptor[] = [
   discordDark,
@@ -572,6 +620,7 @@ export const THEME_DESCRIPTORS: ThemeDescriptor[] = [
   noir,
   abyss,
   abstract,
+  halloween26,
 ];
 
 export const DEFAULT_THEME_ID = DISCORD_DARK_ID;

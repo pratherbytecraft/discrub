@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { useTheme } from '@mui/material/styles';
 import { screen, renderWithProviders } from '@/test/test-utils';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
@@ -56,6 +56,19 @@ const renderWrapper = (opts: {
   );
 
 describe('ThemeWrapper supporter fallback', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('keeps a holiday theme through its season without a key, and falls back after (2.2.3)', () => {
+    const halloweenBackground = findThemeDescriptor('halloween-26')!.palette.background.default;
+    vi.setSystemTime(new Date(2026, 9, 20));
+    const first = renderWrapper({ themeSetting: 'halloween-26', supporter: { initialized: true, keyStatus: 'none' } });
+    expect(screen.getByTestId('probe')).toHaveTextContent(halloweenBackground);
+    first.unmount();
+    vi.setSystemTime(new Date(2026, 10, 3));
+    renderWrapper({ themeSetting: 'halloween-26', supporter: { initialized: true, keyStatus: 'none' } });
+    expect(screen.getByTestId('probe')).toHaveTextContent(defaultDarkBackground);
+  });
+
   it('renders a saved supporter theme for a valid supporter', () => {
     renderWrapper({
       themeSetting: SUPPORTER_ID,

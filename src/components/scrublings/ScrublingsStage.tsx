@@ -16,6 +16,7 @@ import { SPRITE_FEET_ROW, SPRITE_H } from '@features/scrublings/spriteTypes';
 import { SHORT_LINE_MAX_W } from '@features/scrublings/lines';
 import { setStageSlots } from '@features/scrublings/stageSlots';
 import { perfCount } from '@/utils/perfCounters';
+import { OVERHEAD_TEXT_SX } from './overheadText';
 
 const CHAR_H = SPRITE_H * STAGE_SCALE;
 /** The rows under the feet hang below the bar's edge so the feet stand on it. */
@@ -284,11 +285,9 @@ const ScrublingsStage = () => {
             data-testid="scrublings-caption"
             aria-hidden
             sx={{
+              ...OVERHEAD_TEXT_SX,
               position: 'fixed', left: captionLeft(rect.left, rect.width, view.caption.x, view.caption.text, window.innerWidth), top: rect.top + captionTop(rect.height, view.caption.speaker), transform: 'translateX(-50%)',
-              zIndex: theme.zIndex.appBar + 1, pointerEvents: 'none', whiteSpace: 'nowrap',
-              // OSRS overhead chat: yellow, no box, a black edge on every side so it reads on any theme.
-              color: '#ffff00', font: '700 11px/12px ui-monospace, Menlo, monospace', letterSpacing: '0.02em',
-              textShadow: '1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 1px 1px #000, -1px -1px #000, 1px -1px #000, -1px 1px #000',
+              zIndex: theme.zIndex.appBar + 1,
             }}
           >
             {view.caption.text}

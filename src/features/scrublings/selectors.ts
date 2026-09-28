@@ -11,6 +11,7 @@ import { getDmName } from '@/utils/dmListUtils';
 import { DEFAULT_PICKED, MAX_PICKED, SCRUBLINGS, isScrublingId, type ScrublingId } from './descriptors';
 import { SLOT_W, type OperationView } from './scheduler';
 import { EMPTY_LINE_CONTEXT, type LineContext } from './lines';
+import { isUnlocked, selectDayKey } from '@features/appearance/groups';
 
 const selectSettingsState = (state: RootState) => state.app.settings;
 
@@ -55,14 +56,18 @@ export const selectScrublingsPositions = createSelector(
   (settings) => parsePositions(settings?.[DiscrubSetting.APP_SCRUBLINGS_POSITIONS]),
 );
 
-/** Whether the key on hand unlocks a Scrubling: free ones always, supporter ones with themes access. */
+/** Whether a Scrubling is unlocked: free ones always, supporter ones with themes access, holiday ones in season too. */
 export const selectScrublingUnlocked = (id: ScrublingId) => (state: RootState): boolean =>
-  SCRUBLINGS[id].tier === 'free' || selectHasThemes(state);
+  isUnlocked(SCRUBLINGS[id], selectHasThemes(state));
 
-/** The picks the bar may show: unlocked ones only. A lapsed key hides the locked picks but keeps the setting. */
+/**
+ * The picks the bar may show: unlocked ones only. A lapsed key or a season
+ * that ended hides the locked picks but keeps the setting. The day key makes
+ * this recompute once a day, so a season ending takes effect on the next load or day.
+ */
 export const selectScrublingsVisible = createSelector(
-  [selectScrublingsPicked, selectHasThemes, selectScrublingsEnabled],
-  (picked, hasThemes, enabled): ScrublingId[] => (enabled ? picked.filter((id) => SCRUBLINGS[id].tier === 'free' || hasThemes) : []),
+  [selectScrublingsPicked, selectHasThemes, selectScrublingsEnabled, selectDayKey],
+  (picked, hasThemes, enabled): ScrublingId[] => (enabled ? picked.filter((id) => isUnlocked(SCRUBLINGS[id], hasThemes)) : []),
 );
 
 const selectPurge = (state: RootState) => state.purge;

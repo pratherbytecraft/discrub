@@ -227,4 +227,53 @@ export const EXTRA_LINES: Record<string, Exchange[]> = {
     ['we come in peace', 'rest in peace'],
     ['bloop', 'boo'],
   ],
+  // Spider '26 (2.2.3).
+  'suds+spider:scrub/boo': [
+    ['Web. Gone.', 'That took a week.'],
+    ['Dusting.', 'I am not dust.'],
+    ['Corner is mine.', 'Corner is mine.'],
+    ['Soap?', 'Silk.'],
+  ],
+  'mage+spider:cast/dangle': [
+    ['Float.', 'Already floating.'],
+    ['Watch this.', 'Watch this.'],
+    ['Air Strike!', 'Rope.'],
+    ['Tele up?', 'I have a thread.'],
+  ],
+  'cat+spider:bat/dangle': [
+    ['Toy.', 'Not a toy.'],
+    ['Bap bap.', 'Stop that.'],
+    ['Mrow?', 'Down here.'],
+    ['String!', 'Silk.'],
+  ],
+  'dog+spider:hide/walk': [
+    ['Whimper.', 'I am tiny.'],
+    ['Woof?', 'Skitter.'],
+    ['Nope.', 'Same.'],
+    ['Big spider.', 'Big dog.'],
+  ],
+  'adventurer+spider:check/spin': [
+    ['Slayer task?', 'Not today.'],
+    ['Any drops?', 'Silk.'],
+    ['Cave spider?', 'Bar spider.'],
+    ['Need a torch.', 'Need a break.'],
+  ],
+  'pker+spider:eat/tangled': [
+    ['Snack?', 'Absolutely not.'],
+    ['Shark.', 'Spider.'],
+    ['Skulled.', 'Legged.'],
+    ['ez', 'no'],
+  ],
+  'alien+spider:lift/hang': [
+    ['Eight legs.', 'Two eyes. Yours?'],
+    ['Sample.', 'Nope.'],
+    ['Beam.', 'Thread.'],
+    ['Take me home.', 'This is home.'],
+  ],
+  'ghost+spider:wave/boo': [
+    ['Boo.', 'Boo.'],
+    ['Scared?', 'Of you? No.'],
+    ['Nice web.', 'Nice sheet.'],
+    ['Same corner.', 'Same corner.'],
+  ],
 };

@@ -5,8 +5,8 @@ import { activityFrames, frameDataUri } from './spriteRender';
 import { SPRITE_H, SPRITE_W } from './spriteTypes';
 
 describe('Scrubling descriptors', () => {
-  it('has eight characters, three of them free, and a cap of three', () => {
-    expect(SCRUBLING_IDS).toHaveLength(8);
+  it('has nine characters, three of them free, and a cap of three', () => {
+    expect(SCRUBLING_IDS).toHaveLength(9);
     expect(SCRUBLING_IDS.filter((id) => SCRUBLINGS[id].tier === 'free')).toEqual(['suds', 'mage', 'cat']);
     expect(MAX_PICKED).toBe(3);
   });
@@ -47,16 +47,16 @@ describe('Scrubling descriptors', () => {
     expect(resolveActivity(SCRUBLINGS.cat, 'walk', 'dharok')).toBe('walk');
   });
 
-  it('covers all 28 pairs, with three for the Mage and the Adventurer', () => {
+  it('covers all 36 pairs, with three for the Mage and the Adventurer', () => {
     const keys = new Set(PAIR_ACTIONS.map((p) => pairKey(p.a, p.b)));
-    expect(keys.size).toBe(28);
+    expect(keys.size).toBe(36);
     for (let i = 0; i < SCRUBLING_IDS.length; i += 1) {
       for (let j = i + 1; j < SCRUBLING_IDS.length; j += 1) {
         expect(keys.has(pairKey(SCRUBLING_IDS[i], SCRUBLING_IDS[j]))).toBe(true);
       }
     }
     expect(PAIR_ACTIONS.filter((p) => pairKey(p.a, p.b) === pairKey('mage', 'adventurer'))).toHaveLength(3);
-    expect(PAIR_ACTIONS).toHaveLength(30);
+    expect(PAIR_ACTIONS).toHaveLength(38);
   });
 
   it('every pair actor names an activity on its own sheet, sorted a before b, two captions each', () => {

@@ -7,9 +7,11 @@ import adventurer from './sprites/adventurer';
 import pker from './sprites/pker';
 import alien from './sprites/alien';
 import ghost from './sprites/ghost';
+import spider from './sprites/spider';
 import { EXTRA_LINES, type Exchange } from './pairLines';
+import { halloween, type ItemGroup, type Season } from '@features/appearance/groups';
 
-export type ScrublingId = 'suds' | 'mage' | 'cat' | 'dog' | 'adventurer' | 'pker' | 'alien' | 'ghost';
+export type ScrublingId = 'suds' | 'mage' | 'cat' | 'dog' | 'adventurer' | 'pker' | 'alien' | 'ghost' | 'spider';
 export type ScrublingTier = 'free' | 'supporter';
 /** The six app events a Scrubling answers. */
 export type ScrublingEvent = 'purge' | 'load' | 'wait' | 'done' | 'failed' | 'paused';
@@ -29,6 +31,10 @@ export interface ScrublingDescriptor {
   events: Record<ScrublingEvent, string>;
   /** Who commissioned a custom Scrubling. Shown as "Designed by" on its card (owner, 2026-09-21). None of the first eight has one. */
   designedBy?: string;
+  /** Where the picker lists it (2.2.3). Missing means Standard; a commissioned one belongs in Commissioned. */
+  group?: ItemGroup;
+  /** A holiday Scrubling is free for everyone inside its season, then supporter only. */
+  season?: Season;
   /**
    * The Adventurer's second set (Dharok's). Activity names in the rune set map to
    * their Dharok's version here; anything unmapped plays the rune frames.
@@ -41,7 +47,7 @@ export interface ScrublingDescriptor {
   };
 }
 
-export const SCRUBLING_IDS: ScrublingId[] = ['suds', 'mage', 'cat', 'dog', 'adventurer', 'pker', 'alien', 'ghost'];
+export const SCRUBLING_IDS: ScrublingId[] = ['suds', 'mage', 'cat', 'dog', 'adventurer', 'pker', 'alien', 'ghost', 'spider'];
 export const MAX_PICKED = 3;
 export const DEFAULT_PICKED: ScrublingId[] = ['suds', 'mage'];
 
@@ -81,6 +87,11 @@ export const SCRUBLINGS: Record<ScrublingId, ScrublingDescriptor> = {
   ghost: {
     id: 'ghost', tier: 'supporter', sheet: ghost, idle: 'idle', walk: 'walk', look: 'look', trick: 'pop',
     events: { purge: 'inhale', load: 'trail', wait: 'faint', done: 'pop', failed: 'small', paused: 'still' },
+  },
+  // Spider '26: the Halloween Scrubling (2.2.3). Free for everyone through its season, supporter only after.
+  spider: {
+    id: 'spider', tier: 'supporter', group: 'holiday', season: halloween(2026), sheet: spider, idle: 'idle', walk: 'walk', look: 'look', trick: 'boo',
+    events: { purge: 'wrap', load: 'spin', wait: 'hang', done: 'dangle', failed: 'tangled', paused: 'sleep' },
   },
 };
 
@@ -159,6 +170,15 @@ export const PAIR_ACTIONS: PairAction[] = [
   P('pker', 'alien', { activity: 'noscim' }, { activity: 'lift' }, ["Where's my scim.", 'Beamed.']),
   P('pker', 'ghost', { activity: 'eat' }, { activity: 'giggle' }, ['Died to a pker?', 'Same.']),
   P('alien', 'ghost', { activity: 'wave', motion: rise(14, 2) }, { activity: 'wave', motion: rise(14, 2) }, ['beep', 'boo']),
+  // Spider '26 (2.2.3): one scene with each of the eight.
+  P('suds', 'spider', { activity: 'scrub' }, { activity: 'boo' }, ['Cobwebs. Out.', 'Hey. I live there.']),
+  P('mage', 'spider', { activity: 'cast' }, { activity: 'dangle' }, ['Levitate.', 'I do that already.']),
+  P('cat', 'spider', { activity: 'bat' }, { activity: 'dangle' }, ['Bap.', 'Rude.']),
+  P('dog', 'spider', { activity: 'hide' }, { activity: 'walk', motion: slide(40, 2) }, ['Whine.', 'Eight legs, zero bark.']),
+  P('adventurer', 'spider', { activity: 'check' }, { activity: 'spin' }, ['Giant spider?', 'Regular sized.']),
+  P('pker', 'spider', { activity: 'eat' }, { activity: 'tangled' }, ['Spider on a stick?', 'No.']),
+  P('alien', 'spider', { activity: 'lift' }, { activity: 'hang' }, ['Specimen.', 'Put me down.']),
+  P('ghost', 'spider', { activity: 'wave', motion: rise(10, 1.5) }, { activity: 'boo' }, ['Boo.', 'Boo yourself.']),
 ];
 
 export const pairKey = (x: ScrublingId, y: ScrublingId): string => [x, y].sort().join('+');

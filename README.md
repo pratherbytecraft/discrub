@@ -280,7 +280,9 @@ Everything about how Discrub looks is under **Appearance** in the top bar: Layou
 
 **Themes.** Six themes are free: Dark Original (the default), Light Original, Terminal, High Contrast, Overcast and Classic. The picker can also follow your system preference. Supporters unlock nine more (AMOLED Void, Synthwave, Bytecraft, Ember, Nekonoir, Circuit, Noir, Abyss, Abstract), a theme switcher in HTML exports, and a custom export footer.
 
-**Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. While something runs they say what it is, such as how far a Purge or Load All has got or how long a wait has left, and on a phone they say a shorter version. Suds, the Mage and the Cat are free, five more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all, and a link to request a custom one, which is added for everyone once it's drawn.
+**Holiday themes and Scrublings.** The Theme and Scrublings tabs list their cards in groups: Standard, Holiday and Commissioned. A holiday item is open to everyone during its own holiday and joins the supporter set after. Halloween '26 (a theme with bats and a corner web) and the Spider '26 Scrubling are open from October 1 to November 2. While a holiday is on, the Spider hangs from the Appearance button to say so, and goes away the first time the button is clicked.
+
+**Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. While something runs they say what it is, such as how far a Purge or Load All has got or how long a wait has left, and on a phone they say a shorter version. Suds, the Mage and the Cat are free, six more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all, and a link to request a custom one, which is added for everyone once it's drawn.
 
 To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free; supporter perks are cosmetic only.
 

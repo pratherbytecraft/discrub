@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { renderWithProviders, screen, fireEvent, waitFor, act } from '@/test/test-utils';
 import { setSupporterPanelOpen } from '@features/supporter/supporterSlice';
 import { createBaseState } from '@/test/state-factories';
@@ -13,6 +13,31 @@ const withSettings = () => {
 };
 
 describe('<AppearanceButton />', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('hangs the seasonal notice from the button during Halloween and puts it away on the first click, opening on Theme', async () => {
+    vi.setSystemTime(new Date(2026, 9, 10));
+    renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
+    expect(screen.getByTestId('seasonal-notice')).toHaveAttribute('data-theme-id', 'halloween-26');
+    expect(screen.getByTestId('seasonal-notice-line')).toHaveTextContent("Halloween '26 is in.");
+    fireEvent.click(screen.getByLabelText('Appearance'));
+    expect(await screen.findByTestId('appearance-theme-grid')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('seasonal-notice')).toBeNull());
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+  });
+
+  it('shows no seasonal notice outside the season or once it was seen', () => {
+    vi.setSystemTime(new Date(2026, 8, 15));
+    const { unmount } = renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
+    expect(screen.queryByTestId('seasonal-notice')).toBeNull();
+    unmount();
+    vi.setSystemTime(new Date(2026, 9, 10));
+    const seen = withSettings();
+    seen.notice = { loaded: true, seenId: 'halloween-26' };
+    renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: seen });
+    expect(screen.queryByTestId('seasonal-notice')).toBeNull();
+  });
+
   it('carries the current layout and theme as data and opens the menu', async () => {
     renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
     expect(screen.getByTestId('gift-button')).toHaveAttribute('data-layout', 'classic');

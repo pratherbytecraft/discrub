@@ -27,13 +27,20 @@ describe('Themes hub', () => {
     cy.get('[data-testid="display-appearance-pointer"]').should('have.text', 'Layouts, themes and Scrublings are under Appearance on the top bar.');
   });
 
-  it('shows the full v2.1.0 roster with supporter themes locked', () => {
+  it('shows the full roster with supporter themes locked', () => {
     openHub();
-    // Auto card + 15 registry themes
-    cy.get('[data-testid^="theme-card-"]').should('have.length', 16);
-    // All 9 supporter themes are locked for a free user, marked on the
-    // swatch corner (the label row keeps its full width).
-    cy.get('[data-testid^="theme-locked-"]').should('have.length', 9);
+    // Auto card + 16 registry themes (2.2.3 added Halloween '26)
+    cy.get('[data-testid^="theme-card-"]').should('have.length', 17);
+    // All 10 supporter themes are locked for a free user, marked on the
+    // swatch corner (the label row keeps its full width). Halloween '26
+    // counts as locked here because this spec runs on the real clock only
+    // outside its season; holiday.cy.ts covers the season itself.
+    cy.window().then((win) => {
+      const now = new Date();
+      const inSeason = now.getFullYear() === 2026 && ((now.getMonth() === 9) || (now.getMonth() === 10 && now.getDate() <= 2));
+      cy.get('[data-testid^="theme-locked-"]').should('have.length', inSeason ? 9 : 10);
+      void win;
+    });
   });
 
   it('a hub pick persists across a reload', () => {

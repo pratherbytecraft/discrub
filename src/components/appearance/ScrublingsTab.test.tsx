@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
 import { createBaseState } from '@/test/state-factories';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
@@ -23,13 +23,38 @@ const openTab = async (state = stateWith()) => {
 };
 
 describe('Appearance menu, Scrublings tab', () => {
-  it('lists eight cards, three free, two picked, five locked without a key, and no hint line', async () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('groups the cards: Standard, then Holiday, then Commissioned with its empty line, out of season', async () => {
+    vi.setSystemTime(new Date(2026, 8, 15));
     await openTab();
-    expect(screen.getAllByTestId(/^scrubling-card-/)).toHaveLength(8);
+    const sections = screen.getAllByTestId(/^scrublings-group-section-/).map((el) => el.getAttribute('data-testid'));
+    expect(sections).toEqual(['scrublings-group-section-standard', 'scrublings-group-section-holiday', 'scrublings-group-section-commissioned']);
+    expect(screen.getByTestId('scrublings-group-section-holiday')).toContainElement(screen.getByTestId('scrubling-card-spider'));
+    expect(screen.getByTestId('scrublings-group-empty-commissioned')).toHaveTextContent('Nothing here yet.');
+    expect(screen.getByTestId('scrubling-locked-spider')).toBeInTheDocument();
+    expect(screen.queryByTestId('scrublings-group-holiday-open')).toBeNull();
+  });
+
+  it('puts Holiday first and unlocks the Spider for everyone during Halloween', async () => {
+    vi.setSystemTime(new Date(2026, 9, 10));
+    await openTab();
+    const sections = screen.getAllByTestId(/^scrublings-group-section-/).map((el) => el.getAttribute('data-testid'));
+    expect(sections[0]).toBe('scrublings-group-section-holiday');
+    expect(screen.queryByTestId('scrubling-locked-spider')).toBeNull();
+    expect(screen.getByTestId('scrublings-group-holiday-open')).toHaveTextContent("Spider '26 is open to everyone through November 2.");
+    fireEvent.click(screen.getByTestId('scrubling-card-spider'));
+    expect(screen.getByTestId('scrubling-card-spider')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('lists nine cards, three free, two picked, six locked without a key out of season, and no hint line', async () => {
+    vi.setSystemTime(new Date(2026, 8, 15));
+    await openTab();
+    expect(screen.getAllByTestId(/^scrubling-card-/)).toHaveLength(9);
     expect(screen.getByTestId('scrubling-card-suds')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-mage')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-cat')).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getAllByTestId(/^scrubling-locked-/)).toHaveLength(5);
+    expect(screen.getAllByTestId(/^scrubling-locked-/)).toHaveLength(6);
     expect(screen.getByLabelText('Dog (supporter Scrubling, locked)')).toBeInTheDocument();
     expect(screen.getAllByText('Free')).toHaveLength(3);
     expect(screen.getByTestId('scrublings-count')).toHaveTextContent('2 of 3 picked');

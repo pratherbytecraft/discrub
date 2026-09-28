@@ -19,6 +19,7 @@ import packageReducer from '@features/package/packageSlice';
 import hotkeysReducer from '@features/hotkeys/hotkeysSlice';
 import devReducer from '@features/dev/devSlice';
 import supporterReducer from '@features/supporter/supporterSlice';
+import noticeReducer from '@features/appearance/noticeSlice';
 
 /**
  * Redux store configuration
@@ -44,6 +45,7 @@ export const store = configureStore({
     hotkeys: hotkeysReducer,
     dev: devReducer,
     supporter: supporterReducer,
+    notice: noticeReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

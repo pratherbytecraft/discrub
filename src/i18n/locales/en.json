@@ -75,7 +75,17 @@
     "endPreview": "End preview",
     "current": "Current",
     "previewBusy": "Finish the current run first",
-    "scrublings": "Scrublings"
+    "scrublings": "Scrublings",
+    "groups": {
+      "standard": "Standard",
+      "holiday": "Holiday",
+      "commissioned": "Commissioned"
+    },
+    "groupEmpty": "Nothing here yet.",
+    "holidayOpen": "{{name}} is open to everyone through {{date}}.",
+    "auto": "Auto",
+    "autoTooltip": "Match Discord or your system preference",
+    "supporterTheme": "Supporter theme"
   },
   "scrublings": {
     "show": "Show Scrublings",
@@ -92,7 +102,8 @@
       "adventurer": "Adventurer",
       "pker": "Pker",
       "alien": "Alien",
-      "ghost": "Ghost"
+      "ghost": "Ghost",
+      "spider": "Spider '26"
     },
     "blurbs": {
       "suds": "The scrubber. Bubbles, a sponge, and a bucket.",
@@ -102,7 +113,8 @@
       "adventurer": "Santa hat, full rune, an abyssal whip. Levels up when a run finishes.",
       "pker": "Wizard hat, leather body, black d'hide chaps, a dragon scimitar. Skulls up when a Purge starts.",
       "alien": "Rides a saucer. Beams up the 1s and 0s while a Purge runs.",
-      "ghost": "The spirit of deleted messages. Eats them during a Purge."
+      "ghost": "The spirit of deleted messages. Eats them during a Purge.",
+      "spider": "Hangs around for Halloween. Wraps what it catches."
     },
     "customFree": "Custom Scrublings are free for everyone once they're added.",
     "request": "Request a custom Scrubling",

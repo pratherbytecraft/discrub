@@ -31,6 +31,7 @@ export const LINES: Record<ScrublingId, Record<ScrublingEvent, string>> = {
   pker: { purge: '{n} kills in #{ch}', load: 'Running #{ch}, {n} so far', wait: 'Eating. {s}s.', done: 'ez. {n} gone.', failed: 'Died. {f} left.', paused: 'Paused. Logging out.' },
   alien: { purge: '{n} beamed up from #{ch}', load: 'Scanning #{ch}, {n} so far', wait: 'Landed. {s}s.', done: 'Beep. {n} gone.', failed: 'Sputter. {f} missed.', paused: 'Hatch closed.' },
   ghost: { purge: '{n} eaten in #{ch}', load: 'Trailing #{ch}, {n} so far', wait: 'Fading. {s}s.', done: 'Boo. {n} gone.', failed: 'Small now. {f} left.', paused: 'Still.' },
+  spider: { purge: '{n} wrapped in #{ch}', load: 'Spinning #{ch}, {n} so far', wait: 'Hanging. {s}s.', done: 'Caught {n}. Wrapped up.', failed: 'Tangled. {f} got away.', paused: 'Resting in the web.' },
 };
 
 /** Shared by everyone during a rest break. */
@@ -50,6 +51,7 @@ export const SHORT_LINES: Record<ScrublingId, Record<ScrublingEvent, string>> = 
   pker: { purge: '{n} kills', load: 'Running {n}', wait: 'Eating. {s}s', done: 'ez. {n}', failed: 'Died. {f}', paused: 'Logged out.' },
   alien: { purge: '{n} beamed', load: 'Scanning {n}', wait: 'Landed. {s}s', done: 'Beep. {n}', failed: '{f} missed.', paused: 'Hatch shut.' },
   ghost: { purge: '{n} eaten', load: 'Trailing {n}', wait: 'Fading. {s}s', done: 'Boo. {n}', failed: '{f} left.', paused: 'Still.' },
+  spider: { purge: '{n} wrapped', load: 'Spinning {n}', wait: 'Hanging. {s}s', done: 'Caught {n}.', failed: '{f} escaped.', paused: 'Resting.' },
 };
 
 /** The short rest break line (2.2.2). */

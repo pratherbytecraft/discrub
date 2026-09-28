@@ -67,13 +67,53 @@ const abstractMotion = {
 };
 const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
+/**
+ * Halloween '26 (2.2.3): three pixel bats glide across the upper part of the
+ * app and a cobweb sits still in the top right corner. Each bat is one
+ * element moving on `transform` only; the wings are a two frame sprite swap.
+ * The bats stop mid flight with animations off, reduced motion, or a heavy
+ * operation running. The web never moves.
+ */
+const BAT_FRAMES = [
+  ['K...K.....K...K', 'KK.KKK...KKK.KK', 'KKKKKKK.KKKKKKK', '.KKKKKKKKKKKKK.', '..KKKK.K.KKKK..', '....KK...KK....'],
+  ['...............', '.KK.........KK.', 'KKKKKK.K.KKKKKK', '.KKKKKKKKKKKKK.', '...KKKK.KKKK...', '....KK...KK....'],
+];
+const batSvg = (rows: string[]) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 6' shape-rendering='crispEdges'>${rows.flatMap((r, y) => [...r].map((c, x) => (c === 'K' ? `<rect x='${x}' y='${y}' width='1' height='1' fill='#6b4a8f'/>` : ''))).join('')}</svg>`)}`;
+const BAT_A = batSvg(BAT_FRAMES[0]);
+const BAT_B = batSvg(BAT_FRAMES[1]);
+const WEB = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' fill='none' stroke='%23e9e4f0' stroke-width='1'%3E%3Cpath d='M120 0L0 120M120 0L20 120M120 0L0 40M120 0L60 120M120 0L0 80M120 0L100 120'/%3E%3Cpath d='M92 0Q84 22 100 28M64 0Q60 46 78 60M36 0Q40 64 56 88M120 28Q98 36 92 0M120 56Q76 66 60 40M120 84Q64 96 28 60'/%3E%3C/svg%3E\")";
+const halloweenLook = {
+  '@keyframes halloween-glide-a': { from: { transform: 'translate(-10vw, 4vh)' }, to: { transform: 'translate(110vw, 16vh)' } },
+  '@keyframes halloween-glide-b': { from: { transform: 'translate(110vw, 12vh)' }, to: { transform: 'translate(-10vw, 2vh) scaleX(-1)' } },
+  '@keyframes halloween-glide-c': { from: { transform: 'translate(-10vw, 18vh)' }, to: { transform: 'translate(110vw, 8vh)' } },
+  '@keyframes halloween-flap': { '0%, 49%': { backgroundImage: `url("${BAT_A}")` }, '50%, 100%': { backgroundImage: `url("${BAT_B}")` } },
+};
+
+const HalloweenEffects = ({ moving }: { moving: boolean }) => {
+  const bat = (name: string, seconds: number, delay: number, size: number) => (
+    <Box sx={{ position: 'absolute', left: 0, top: 0, width: size, height: size * 0.4, backgroundImage: `url("${BAT_A}")`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', imageRendering: 'pixelated', opacity: 0.75, willChange: moving ? 'transform' : undefined, animation: moving ? `${name} ${seconds}s linear ${delay}s infinite, halloween-flap 0.5s steps(1) infinite` : 'none' }} />
+  );
+  return (
+    <>
+      <GlobalStyles styles={halloweenLook} />
+      <Box aria-hidden data-testid="theme-effects-halloween" data-moving={moving ? 'true' : 'false'} sx={{ position: 'fixed', inset: 0, zIndex: 1190, pointerEvents: 'none', overflow: 'hidden' }}>
+        <Box sx={{ position: 'absolute', top: 0, right: 0, width: 120, height: 120, backgroundImage: WEB, backgroundSize: '120px 120px', opacity: 0.16 }} />
+        {bat('halloween-glide-a', 38, -6, 30)}
+        {bat('halloween-glide-b', 47, -20, 22)}
+        {bat('halloween-glide-c', 55, -33, 26)}
+      </Box>
+    </>
+  );
+};
+
 const ThemeEffects = () => {
   const theme = useTheme();
   const animations = useAppSelector(selectSetting(DiscrubSetting.APP_THEME_ANIMATIONS));
   const busy = useAppSelector(selectIsHeavyOperationRunning);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
-  if (theme.themeEffects !== 'abstract') return null;
   const moving = animations !== 'false' && !busy && !reducedMotion;
+  if (theme.themeEffects === 'halloween') return <HalloweenEffects moving={moving} />;
+  if (theme.themeEffects !== 'abstract') return null;
   const cloud = (color: string, place: object, name: string, seconds: number) => (
     <Box sx={{ position: 'absolute', width: '55%', height: '55%', borderRadius: '50%', filter: 'blur(80px)', backgroundColor: color, willChange: moving ? 'transform' : undefined, animation: moving ? `${name} ${seconds}s ease-in-out infinite alternate` : 'none', ...place }} />
   );

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, renderWithProviders } from '@/test/test-utils';
 import ThemeGrid from './ThemePicker';
 import { THEME_DESCRIPTORS, type ThemeDescriptor } from '@/theme/theme';
@@ -22,6 +22,31 @@ describe('ThemeGrid', () => {
 
   const renderGrid = (props: Partial<React.ComponentProps<typeof ThemeGrid>> = {}) =>
     renderWithProviders(<ThemeGrid value="auto" onChange={onChange} {...props} />);
+
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('groups the cards, Standard then Holiday then an empty Commissioned, out of season (2.2.3)', () => {
+    vi.setSystemTime(new Date(2026, 8, 15));
+    renderGrid();
+    const sections = screen.getAllByTestId(/^theme-group-section-/).map((el) => el.getAttribute('data-testid'));
+    expect(sections).toEqual(['theme-group-section-standard', 'theme-group-section-holiday', 'theme-group-section-commissioned']);
+    expect(screen.getByTestId('theme-group-section-standard')).toContainElement(screen.getByTestId('theme-card-auto'));
+    expect(screen.getByTestId('theme-group-section-holiday')).toContainElement(screen.getByTestId('theme-card-halloween-26'));
+    expect(screen.getByTestId('theme-locked-halloween-26')).toBeInTheDocument();
+    expect(screen.getByTestId('theme-group-empty-commissioned')).toHaveTextContent('Nothing here yet.');
+    expect(screen.queryByTestId('theme-group-holiday-open')).toBeNull();
+  });
+
+  it('leads with Holiday and unlocks the holiday theme for everyone in season (2.2.3)', () => {
+    vi.setSystemTime(new Date(2026, 9, 10));
+    renderGrid();
+    const sections = screen.getAllByTestId(/^theme-group-section-/).map((el) => el.getAttribute('data-testid'));
+    expect(sections[0]).toBe('theme-group-section-holiday');
+    expect(screen.queryByTestId('theme-locked-halloween-26')).toBeNull();
+    expect(screen.getByTestId('theme-group-holiday-open')).toHaveTextContent("Halloween '26 is open to everyone through November 2.");
+    fireEvent.click(screen.getByTestId('theme-card-halloween-26'));
+    expect(onChange).toHaveBeenCalledWith('halloween-26');
+  });
 
   it('renders the Auto card plus one card per registry theme', () => {
     renderGrid();
