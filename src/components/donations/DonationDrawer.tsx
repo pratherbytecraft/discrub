@@ -3,6 +3,7 @@ import { Drawer, Box, Tabs, Tab, keyframes } from '@mui/material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
+import { glowLayerSx } from './glowLayer';
 import { selectSetting, selectKofiOverlayOpen, setKofiOverlayOpen } from '@features/app/appSlice';
 import { useDonations } from './useDonations';
 import { useWallOverlay } from './useWallOverlay';
@@ -24,10 +25,6 @@ const glowPulse = keyframes`
 /** The Sky's nova mint, breathing on the unvisited tab. */
 const NOVA = '#7ce8c4';
 
-const skyShimmer = keyframes`
-  0%, 100% { text-shadow: 0 0 6px rgba(124, 232, 196, 0.35); }
-  50% { text-shadow: 0 0 12px rgba(124, 232, 196, 0.75); }
-`;
 
 const DonationDrawer = () => {
   const { t } = useTranslation();
@@ -91,7 +88,7 @@ const DonationDrawer = () => {
           overflow: 'hidden',
           willChange: 'transform',
         },
-        '& .MuiDrawer-paper[data-running="true"] *': { animationPlayState: 'paused' },
+        '& .MuiDrawer-paper[data-running="true"] *, & .MuiDrawer-paper[data-running="true"] *::before, & .MuiDrawer-paper[data-running="true"] *::after': { animationPlayState: 'paused' },
       }}
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -124,10 +121,18 @@ const DonationDrawer = () => {
             data-testid="donation-tab-sky"
             sx={{
               color: `${NOVA} !important`,
-              animation: `${skyShimmer} 3s ease-in-out infinite`,
+              position: 'relative',
+              textShadow: '0 0 6px rgba(124, 232, 196, 0.35)',
+              // The shimmer: the same words again with the brighter shadow, fading in and out over the tab.
+              '&::after': {
+                ...glowLayerSx('3s'),
+                content: `${JSON.stringify(t('donations.sky'))}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'transparent',
+                textShadow: '0 0 12px rgba(124, 232, 196, 0.75)',
+              },
               '&.Mui-selected': { color: `${NOVA} !important` },
               '@media (prefers-reduced-motion: reduce)': {
-                animation: 'none',
                 textShadow: '0 0 8px rgba(124, 232, 196, 0.5)',
               },
             }}

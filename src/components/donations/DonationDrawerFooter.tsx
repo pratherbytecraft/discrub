@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { FavoriteBorder as HeartIcon } from '@mui/icons-material';
 import type { Donation } from 'discrub-core/types/discrub-types';
+import { glowLayerSx } from './glowLayer';
 
 interface DonationDrawerFooterProps {
   donations: Donation[];
@@ -51,7 +52,12 @@ const DonationDrawerFooter = ({ donations }: DonationDrawerFooterProps) => {
           fontSize: '0.8rem',
           py: 0.75,
           boxShadow: '0 4px 16px rgba(255, 94, 91, 0.3)',
-          animation: 'kofi-pulse 3s ease-in-out infinite',
+          position: 'relative',
+          '&::after': {
+            ...glowLayerSx('3s'),
+            content: '""',
+            boxShadow: '0 4px 24px rgba(255, 94, 91, 0.5), 0 0 8px rgba(255, 94, 91, 0.2)',
+          },
           '&:hover': {
             backgroundColor: '#e5524f',
             boxShadow: '0 6px 24px rgba(255, 94, 91, 0.45)',

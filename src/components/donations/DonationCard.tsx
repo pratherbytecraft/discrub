@@ -8,6 +8,7 @@ import {
 import type { Donation } from 'discrub-core/types/discrub-types';
 import { getTierInfo, getRelativeDate, getChipTextColor } from './donationUtils';
 import { getTierSx } from './tierStyles';
+import { glowLayerSx } from './glowLayer';
 
 const flameFlicker = keyframes`
   0%, 100% { opacity: 0.7; transform: scale(1); }
@@ -15,16 +16,11 @@ const flameFlicker = keyframes`
 `;
 
 // Flame tiers: orange → red → magenta → purple → blue → cyan (1-12+ months)
-const makeGlow = (r: number, g: number, b: number, intensity: number) => keyframes`
-  0%, 100% {
-    box-shadow: 0 0 ${4 + intensity * 3}px rgba(${r}, ${g}, ${b}, ${0.12 + intensity * 0.06}),
-                inset 0 0 ${4 + intensity * 2}px rgba(${r}, ${g}, ${b}, ${0.02 + intensity * 0.015});
-  }
-  50% {
-    box-shadow: 0 0 ${10 + intensity * 5}px rgba(${r}, ${g}, ${b}, ${0.25 + intensity * 0.08}),
-                inset 0 0 ${8 + intensity * 4}px rgba(${r}, ${g}, ${b}, ${0.04 + intensity * 0.02});
-  }
-`;
+// The glow at rest sits on the card; the peak sits on a layer that fades in and out (2.2.2, see glowLayer.ts).
+const makeGlow = (r: number, g: number, b: number, intensity: number) => ({
+  rest: `0 0 ${4 + intensity * 3}px rgba(${r}, ${g}, ${b}, ${0.12 + intensity * 0.06}), inset 0 0 ${4 + intensity * 2}px rgba(${r}, ${g}, ${b}, ${0.02 + intensity * 0.015})`,
+  peak: `0 0 ${10 + intensity * 5}px rgba(${r}, ${g}, ${b}, ${0.25 + intensity * 0.08}), inset 0 0 ${8 + intensity * 4}px rgba(${r}, ${g}, ${b}, ${0.04 + intensity * 0.02})`,
+});
 
 const FLAME_TIERS = [
   // 1-2mo: Ember (warm orange)
@@ -109,22 +105,17 @@ const DonationCard = ({ donation, donations, index, supporterRank, initialExpand
     return streak;
   }, [donations, donation.donorId, donation.timestamp, isSubscription]);
 
-  return (
+  const cardFlame = isSubscription && streakMonths > 0 ? getFlameIntensity(streakMonths) : null;
+
+  const card = (
     <Box
       sx={{
         ...tierSx as Record<string, unknown>,
         borderRadius: '8px',
         p: 1.5,
         position: 'relative',
-        ...(isSubscription && streakMonths > 0 ? (() => {
-          const flame = getFlameIntensity(streakMonths);
-          return {
-            borderColor: flame.border,
-            animation: `${flame.glow} ${flame.speed} ease-in-out infinite${index < 15 ? ', slide-in-bottom 0.3s ease forwards' : ''}`,
-          };
-        })() : {
-          animation: index < 15 ? 'slide-in-bottom 0.3s ease forwards' : 'none',
-        }),
+        ...(cardFlame ? { borderColor: cardFlame.border, boxShadow: cardFlame.glow.rest } : {}),
+        animation: index < 15 ? 'slide-in-bottom 0.3s ease forwards' : 'none',
         animationDelay: index < 15 ? `${index * 50}ms` : '0ms',
         opacity: index < 15 ? 0 : 1,
         cursor: donation.message ? 'pointer' : 'default',
@@ -232,6 +223,19 @@ const DonationCard = ({ donation, donations, index, supporterRank, initialExpand
           </Typography>
         </Collapse>
       )}
+    </Box>
+  );
+
+  if (!cardFlame) return card;
+  // The layer is a sibling, not a child: the tier styles clip the card's own overflow.
+  return (
+    <Box sx={{ position: 'relative', borderRadius: '8px' }}>
+      {card}
+      <Box
+        aria-hidden
+        data-testid="donation-card-glow"
+        sx={{ ...glowLayerSx(cardFlame.speed, index < 15 ? `${index * 50 + 300}ms` : '0ms'), boxShadow: cardFlame.glow.peak }}
+      />
     </Box>
   );
 };
