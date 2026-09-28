@@ -33,4 +33,10 @@ describe('Scrubling event lines', () => {
     expect(lineFor('suds', 'purge', { ...EMPTY_LINE_CONTEXT, n: 2500, ch: 'general' }, 0)).toBe('2,500 scrubbed in #general');
     expect(lineFor('cat', 'failed', { ...EMPTY_LINE_CONTEXT, f: 3 }, 0)).toBe("Wasn't me. 3 left.");
   });
+
+  it('cuts a long channel name so the line stays short', () => {
+    expect(fillLine('{ch}', { ch: '#a-very-long-channel-name-indeed' })).toBe('a-very-long-chann…');
+    expect(fillLine('{ch}', { ch: 'exactly-eighteen-c' })).toBe('exactly-eighteen-c');
+    expect(fillLine('{ch}', { ch: '📰┊server-news' })).toBe('📰┊server-news');
+  });
 });

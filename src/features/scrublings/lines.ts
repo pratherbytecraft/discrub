@@ -36,6 +36,10 @@ export const LINES: Record<ScrublingId, Record<ScrublingEvent, string>> = {
 /** Shared by everyone during a rest break. */
 export const REST_BREAK_LINE = 'Rest break. Back in {m} min.';
 
+/** A channel name longer than this is cut with an ellipsis so the line stays short enough for a narrow bar. */
+export const CHANNEL_MAX = 18;
+const shortChannel = (ch: string): string => { const chars = Array.from(ch.replace(/^#/, '')); return chars.length > CHANNEL_MAX ? `${chars.slice(0, CHANNEL_MAX - 1).join('')}…` : chars.join(''); };
+
 export const formatCount = (n: number): string => Math.max(0, Math.floor(n)).toLocaleString('en-US');
 
 /** Fills every placeholder; a missing value reads as 0 or the fallback channel. */
@@ -45,7 +49,7 @@ export const fillLine = (template: string, values: { n?: number; ch?: string; s?
     .replace(/\{f\}/g, formatCount(values.f ?? 0))
     .replace(/\{s\}/g, formatCount(values.s ?? 0))
     .replace(/\{m\}/g, formatCount(values.m ?? 0))
-    .replace(/\{ch\}/g, (values.ch ?? EMPTY_LINE_CONTEXT.ch).replace(/^#/, ''));
+    .replace(/\{ch\}/g, shortChannel(values.ch ?? EMPTY_LINE_CONTEXT.ch));
 
 /** The line a character says for an event right now; a rest break wait uses the shared line. */
 export const lineFor = (id: ScrublingId, event: ScrublingEvent, ctx: LineContext, now: number): string => {

@@ -142,3 +142,27 @@ describe('captionTop', () => {
   });
 });
 
+
+describe('captionLeft', () => {
+  const text = '#general, 1,204 gone. Mrow.'; // 27 characters, about 185 px
+  it('sits over the speaker when the text fits inside the stage there', async () => {
+    const { captionLeft } = await import('./ScrublingsStage');
+    expect(captionLeft(200, 460, 230, 'Zzz.', 1440)).toBe(430);
+  });
+  it('moves in so the text stays inside the stage near either end', async () => {
+    const { captionLeft } = await import('./ScrublingsStage');
+    const half = (text.length * 6.85) / 2;
+    expect(captionLeft(200, 460, 450, text, 1440)).toBe(Math.round(200 + 460 - half));
+    expect(captionLeft(200, 460, 5, text, 1440)).toBe(Math.round(200 + half));
+  });
+  it('centres a line wider than the stage on the stage', async () => {
+    const { captionLeft } = await import('./ScrublingsStage');
+    expect(captionLeft(180, 60, 50, text, 390)).toBe(210);
+  });
+  it('never lets the window cut the text off', async () => {
+    const { captionLeft } = await import('./ScrublingsStage');
+    const half = (text.length * 6.85) / 2;
+    expect(captionLeft(10, 60, 30, text, 390)).toBe(Math.round(half));
+    expect(captionLeft(340, 40, 20, text, 390)).toBe(Math.round(390 - half));
+  });
+});

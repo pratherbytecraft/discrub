@@ -19,8 +19,8 @@ import { perfCount } from '@/utils/perfCounters';
 const CHAR_H = SPRITE_H * STAGE_SCALE;
 /** The rows under the feet hang below the bar's edge so the feet stand on it. */
 const FEET_DROP = Math.round((SPRITE_H - SPRITE_FEET_ROW) * STAGE_SCALE);
-/** Half the widest caption, roughly. The caption stays this far inside the viewport so it is never cut off. */
-const CAPTION_HALF = 66;
+/** One caption character: 11px monospace plus the letter spacing. */
+const CAPTION_CHAR_W = 6.85;
 /** The caption's line box. */
 const CAPTION_H = 12;
 const TICK_MS = 80;
@@ -32,6 +32,20 @@ const HOLD_MS = 250;
 export const captionTop = (stageHeight: number, speaker: ScrublingId): number => {
   const head = stageHeight + FEET_DROP - CHAR_H + headRow(SCRUBLINGS[speaker].sheet) * STAGE_SCALE;
   return Math.max(1, Math.round((head - CAPTION_H) / 2));
+};
+
+/**
+ * Where the caption's centre goes (2.2.2). Over the speaker, moved in so the
+ * text stays inside the stage and off the controls beside it. A line wider
+ * than the stage is centred on it. Never cut off by the window.
+ */
+export const captionLeft = (stageLeft: number, stageWidth: number, x: number, text: string, viewportWidth: number): number => {
+  const half = (text.length * CAPTION_CHAR_W) / 2;
+  const min = stageLeft + half;
+  const max = stageLeft + stageWidth - half;
+  const centre = min > max ? stageLeft + stageWidth / 2 : Math.min(Math.max(stageLeft + x, min), max);
+  if (viewportWidth <= half * 2) return viewportWidth / 2;
+  return Math.round(Math.min(Math.max(centre, half), viewportWidth - half));
 };
 
 /** How long the arrive and leave teleport plays. */
@@ -127,7 +141,7 @@ const ScrublingsStage = () => {
   const lineRef = useRef(lineContext); lineRef.current = lineContext;
   const positionsRef = useRef(positions); positionsRef.current = positions;
   const [view, setView] = useState<StageView>(EMPTY);
-  const [rect, setRect] = useState<{ left: number; top: number; height: number } | null>(null);
+  const [rect, setRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const [teles, setTeles] = useState<Tele[]>([]);
   const lastChars = useRef<StageView['chars']>([]);
   const frozenRef = useRef(false); frozenRef.current = frozen;
@@ -159,8 +173,9 @@ const ScrublingsStage = () => {
       const next = viewScheduler(sched.current, now);
       noteChars(next.chars, now);
       setView(next);
-      const r = ref.current?.getBoundingClientRect();
-      if (r) setRect((prev) => (prev && prev.left === r.left && prev.top === r.top && prev.height === r.height ? prev : { left: r.left, top: r.top, height: r.height }));
+      // The rectangle only places the caption, so it is read when there is one (2.2.2: reading it on every tick forced a layout 12 times a second during a load).
+      const r = next.caption ? ref.current?.getBoundingClientRect() : null;
+      if (r) setRect((prev) => (prev && prev.left === r.left && prev.top === r.top && prev.width === r.width && prev.height === r.height ? prev : { left: r.left, top: r.top, width: r.width, height: r.height }));
     };
     tick();
     if (frozen) return;
@@ -268,7 +283,7 @@ const ScrublingsStage = () => {
             data-testid="scrublings-caption"
             aria-hidden
             sx={{
-              position: 'fixed', left: Math.min(Math.max(rect.left + view.caption.x, CAPTION_HALF), window.innerWidth - CAPTION_HALF), top: rect.top + captionTop(rect.height, view.caption.speaker), transform: 'translateX(-50%)',
+              position: 'fixed', left: captionLeft(rect.left, rect.width, view.caption.x, view.caption.text, window.innerWidth), top: rect.top + captionTop(rect.height, view.caption.speaker), transform: 'translateX(-50%)',
               zIndex: theme.zIndex.appBar + 1, pointerEvents: 'none', whiteSpace: 'nowrap',
               // OSRS overhead chat: yellow, no box, a black edge on every side so it reads on any theme.
               color: '#ffff00', font: '700 11px/12px ui-monospace, Menlo, monospace', letterSpacing: '0.02em',
