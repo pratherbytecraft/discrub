@@ -313,6 +313,24 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
     setVisibleCount(PAGE_SIZE);
   }, [filterText]);
 
+  // The list only ever drew its first page: nothing raised visibleCount, so a
+  // person with more than 50 open DMs could not scroll to the rest (Reddit chat,
+  // 2026-10-02). A sentinel under the last row adds a page each time it scrolls
+  // into view.
+  const hasMore = visibleCount < filteredDMs.length;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((count) => count + PAGE_SIZE);
+      }
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, visibleCount]);
+
   // #218: Shift+Click range anchor — id of the last plainly-clicked row in
   // multi-select mode (see ChannelList for the pattern rationale).
   const rangeAnchorIdRef = useRef<string | null>(null);
@@ -568,6 +586,7 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
           </ListItemButton>
         ))}
       </List>
+      {hasMore && <Box ref={sentinelRef} data-testid="dm-list-sentinel" sx={{ height: 1 }} />}
         </>
       )}
 

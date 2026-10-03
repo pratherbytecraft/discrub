@@ -781,4 +781,55 @@ describe('DMList', () => {
       expect(renderedNames()).toEqual(['Zoe']);
     });
   });
+
+  describe('paging past the first 50 rows', () => {
+    const manyDms = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `dm-${i}`,
+        type: 1,
+        last_message_id: null,
+        recipients: [createMockUser({ id: `u-${i}`, username: `person${i}`, avatar: null })],
+      })) as any[];
+
+    const stateWithDms = (dms: any[]) =>
+      createBaseState({
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        dm: { dms, selectedDm: null, selectedDms: [], isLoading: false, error: null },
+      });
+
+    let observe: ReturnType<typeof vi.fn>;
+    let intersect: () => void;
+
+    beforeEach(() => {
+      let callback: IntersectionObserverCallback = () => {};
+      observe = vi.fn();
+      intersect = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+      vi.stubGlobal('IntersectionObserver', class {
+        constructor(cb: IntersectionObserverCallback) { callback = cb; }
+        observe = observe;
+        disconnect = vi.fn();
+        unobserve = vi.fn();
+        takeRecords = () => [];
+      });
+    });
+
+    it('draws more rows each time the sentinel scrolls into view', async () => {
+      renderWithProviders(<DMList />, { preloadedState: stateWithDms(manyDms(120)) });
+      expect(screen.getAllByTestId('dm-row')).toHaveLength(50);
+      expect(observe).toHaveBeenCalledWith(screen.getByTestId('dm-list-sentinel'));
+
+      intersect();
+      await waitFor(() => expect(screen.getAllByTestId('dm-row')).toHaveLength(100));
+
+      intersect();
+      await waitFor(() => expect(screen.getAllByTestId('dm-row')).toHaveLength(120));
+      expect(screen.queryByTestId('dm-list-sentinel')).not.toBeInTheDocument();
+    });
+
+    it('needs no sentinel when the list fits in one page', () => {
+      renderWithProviders(<DMList />, { preloadedState: stateWithDms(manyDms(12)) });
+      expect(screen.getAllByTestId('dm-row')).toHaveLength(12);
+      expect(screen.queryByTestId('dm-list-sentinel')).not.toBeInTheDocument();
+    });
+  });
 });
