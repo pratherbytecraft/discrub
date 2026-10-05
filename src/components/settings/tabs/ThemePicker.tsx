@@ -5,6 +5,7 @@ import {
   CheckCircle as SelectedIcon,
   BrightnessAuto as AutoIcon,
   VisibilityOutlined as PreviewIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import {
@@ -12,8 +13,8 @@ import {
   findThemeDescriptor,
   type ThemeDescriptor,
 } from '@/theme/theme';
-import { groupItems, inSeason, isUnlocked, type ItemGroup } from '@features/appearance/groups';
-import { formatSeasonEnd } from '@features/appearance/seasonText';
+import { groupItems, isUnlocked, type ItemGroup } from '@features/appearance/groups';
+import { KOFI_COMMISSIONS_URL } from '@services/kofiLinks';
 
 const CARD_WIDTH = 132;
 
@@ -290,33 +291,46 @@ export const ThemeGrid = ({
   };
 
   const groups = groupItems(descriptors);
-  const heading = (group: ItemGroup, items: ThemeDescriptor[]) => {
-    const open = items.find((d) => inSeason(d.season));
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap', mb: 0.75 }}>
-        <Typography variant="overline" sx={{ lineHeight: 1.6, letterSpacing: '0.08em', color: 'text.secondary' }} data-testid={`theme-group-${group}`}>
-          {t(`appearance.groups.${group}`)}
-        </Typography>
-        {open?.season && (
-          <Typography variant="caption" sx={{ color: 'text.secondary' }} data-testid="theme-group-holiday-open">
-            {t('appearance.holidayOpen', { name: open.name, date: formatSeasonEnd(open.season) })}
-          </Typography>
-        )}
+  const heading = (group: ItemGroup) => (
+    <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.6, letterSpacing: '0.08em', color: 'text.secondary', mb: 0.75 }} data-testid={`theme-group-${group}`}>
+      {t(`appearance.groups.${group}`)}
+    </Typography>
+  );
+
+  // The last tile under Commissioned is the invite: a dashed card that opens the Ko-fi commissions page (2.2.4, owner 2026-10-04).
+  const commissionCard = (
+    <Box key="commission" sx={{ position: 'relative', width: cardWidth, flexShrink: 0 }}>
+      <Box
+        component="a"
+        href={KOFI_COMMISSIONS_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="theme-card-commission"
+        aria-label={t('appearance.commissionTheme')}
+        sx={{
+          display: 'block', boxSizing: 'border-box', width: '100%', textAlign: 'left', color: 'inherit', textDecoration: 'none',
+          p: 0.75, borderRadius: 1.5, border: '2px dashed', borderColor: alpha(theme.palette.text.primary, 0.3),
+          transition: 'border-color 150ms ease, background-color 150ms ease',
+          '&:hover': { color: 'inherit', textDecoration: 'none', borderColor: alpha(theme.palette.primary.main, 0.6), backgroundColor: alpha(theme.palette.text.primary, 0.04) },
+          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
+        }}
+      >
+        <Box sx={{ height: 64, borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary', background: `repeating-linear-gradient(135deg, ${alpha(theme.palette.text.primary, 0.07)} 0 6px, transparent 6px 12px)` }}>
+          <AddIcon sx={{ fontSize: 22 }} />
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.75, minHeight: 20 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, flex: 1, lineHeight: 1.2 }}>{t('appearance.commissionTheme')}</Typography>
+        </Box>
       </Box>
-    );
-  };
+    </Box>
+  );
 
   return (
     <Box data-testid={testId} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       {groups.map(({ group, items }) => (
         <Box key={group} data-testid={`theme-group-section-${group}`}>
-          {heading(group, items)}
-          {items.length === 0 && group !== 'standard' ? (
-            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }} data-testid={`theme-group-empty-${group}`}>
-              {t('appearance.groupEmpty')}
-            </Typography>
-          ) : (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, ...(centered && { justifyContent: 'center' }) }}>
+          {heading(group)}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, ...(centered && { justifyContent: 'center' }) }}>
               {group === 'standard' && renderCard({
                 id: 'auto',
                 label: t('appearance.auto'),
@@ -333,8 +347,8 @@ export const ThemeGrid = ({
                   swatch: <Swatch descriptor={d} />,
                 });
               })}
+              {group === 'commissioned' && commissionCard}
             </Box>
-          )}
         </Box>
       ))}
     </Box>

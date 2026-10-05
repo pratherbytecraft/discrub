@@ -29,9 +29,11 @@ describe('Appearance menu, Scrublings tab', () => {
     vi.setSystemTime(new Date(2026, 8, 15));
     await openTab();
     const sections = screen.getAllByTestId(/^scrublings-group-section-/).map((el) => el.getAttribute('data-testid'));
-    expect(sections).toEqual(['scrublings-group-section-standard', 'scrublings-group-section-holiday', 'scrublings-group-section-commissioned']);
+    expect(sections).toEqual(['scrublings-group-section-commissioned', 'scrublings-group-section-standard', 'scrublings-group-section-holiday']);
     expect(screen.getByTestId('scrublings-group-section-holiday')).toContainElement(screen.getByTestId('scrubling-card-spider'));
-    expect(screen.getByTestId('scrublings-group-empty-commissioned')).toHaveTextContent('Nothing here yet.');
+    // 2.2.4: an empty Commissioned group shows the invite card instead of a line of text.
+    expect(screen.queryByTestId('scrublings-group-empty-commissioned')).toBeNull();
+    expect(screen.getByTestId('scrublings-group-section-commissioned')).toContainElement(screen.getByTestId('scrubling-card-commission'));
     expect(screen.getByTestId('scrubling-locked-spider')).toBeInTheDocument();
     expect(screen.queryByTestId('scrublings-group-holiday-open')).toBeNull();
   });
@@ -40,9 +42,9 @@ describe('Appearance menu, Scrublings tab', () => {
     vi.setSystemTime(new Date(2026, 9, 10));
     await openTab();
     const sections = screen.getAllByTestId(/^scrublings-group-section-/).map((el) => el.getAttribute('data-testid'));
-    expect(sections[0]).toBe('scrublings-group-section-holiday');
+    expect(sections.slice(0, 2)).toEqual(['scrublings-group-section-commissioned', 'scrublings-group-section-holiday']);
     expect(screen.queryByTestId('scrubling-locked-spider')).toBeNull();
-    expect(screen.getByTestId('scrublings-group-holiday-open')).toHaveTextContent("Spider '26 is open to everyone through November 2.");
+    expect(screen.queryByTestId('scrublings-group-holiday-open')).toBeNull();
     fireEvent.click(screen.getByTestId('scrubling-card-spider'));
     expect(screen.getByTestId('scrubling-card-spider')).toHaveAttribute('aria-checked', 'true');
   });
@@ -50,7 +52,7 @@ describe('Appearance menu, Scrublings tab', () => {
   it('lists nine cards, three free, two picked, six locked without a key out of season, and no hint line', async () => {
     vi.setSystemTime(new Date(2026, 8, 15));
     await openTab();
-    expect(screen.getAllByTestId(/^scrubling-card-/)).toHaveLength(9);
+    expect(screen.getAllByTestId(/^scrubling-card-/).filter((el) => el.getAttribute('role') === 'checkbox')).toHaveLength(9);
     expect(screen.getByTestId('scrubling-card-suds')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-mage')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-cat')).toHaveAttribute('aria-checked', 'false');
@@ -62,12 +64,14 @@ describe('Appearance menu, Scrublings tab', () => {
     expect(screen.queryByTestId('appearance-hint')).toBeNull();
   });
 
-  it('links to the Ko-fi requests page for a custom Scrubling, and shows no designer on the first eight', async () => {
+  it('ends the Commissioned group with a New Scrubling card that opens the Ko-fi commissions page, and shows no designer on the roster', async () => {
     await openTab();
-    const link = screen.getByTestId('scrublings-request');
-    expect(link).toHaveAttribute('href', 'https://ko-fi.com/prathercc/commissions');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveTextContent('Request a custom Scrubling');
+    const card = screen.getByTestId('scrubling-card-commission');
+    expect(card).toHaveAttribute('href', 'https://ko-fi.com/prathercc/commissions');
+    expect(card).toHaveAttribute('target', '_blank');
+    expect(card).toHaveTextContent('New Scrubling');
+    expect(card).not.toHaveTextContent('Designed by');
+    expect(screen.queryByTestId('scrublings-request')).toBeNull();
     expect(screen.queryByTestId(/^scrubling-designer-/)).toBeNull();
   });
 

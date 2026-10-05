@@ -82,8 +82,7 @@
       "holiday": "Feiertage",
       "commissioned": "Auftragsarbeiten"
     },
-    "groupEmpty": "Hier ist noch nichts.",
-    "holidayOpen": "{{name}} ist bis {{date}} für alle offen.",
+    "commissionTheme": "Neues Theme",
     "auto": "Auto",
     "autoTooltip": "Discord oder der Systemeinstellung folgen",
     "supporterTheme": "Supporter-Theme"
@@ -117,9 +116,8 @@
       "ghost": "Der Geist gelöschter Nachrichten. Frisst sie während eines Purge.",
       "spider": "Treibt sich an Halloween herum. Wickelt ein, was sie fängt."
     },
-    "customFree": "Eigene Scrublings sind für alle kostenlos, sobald sie hinzugefügt wurden.",
-    "request": "Eigenen Scrubling anfragen",
-    "designedBy": "Entworfen von {{name}}"
+    "designedBy": "Entworfen von {{name}}",
+    "commission": "Neuer Scrubling"
   },
   "native": {
     "loaded": "{{count}} geladen",

@@ -28,14 +28,14 @@ describe('holiday seasons (2.2.3)', () => {
     expect(isUnlocked(holiday, true, d(2026, 11, 3))).toBe(true);
   });
 
-  it('lists Holiday first in season and after Standard otherwise, Commissioned always last', () => {
+  it('lists Commissioned first, then Holiday ahead of Standard in season and after it otherwise', () => {
     const items = [{ id: 'a' }, { id: 'h', group: 'holiday' as const, season: halloween(2026) }];
-    expect(groupOrder(items, d(2026, 10, 5))).toEqual(['holiday', 'standard', 'commissioned']);
-    expect(groupOrder(items, d(2026, 12, 5))).toEqual(['standard', 'holiday', 'commissioned']);
+    expect(groupOrder(items, d(2026, 10, 5))).toEqual(['commissioned', 'holiday', 'standard']);
+    expect(groupOrder(items, d(2026, 12, 5))).toEqual(['commissioned', 'standard', 'holiday']);
     expect(groupItems(items, d(2026, 12, 5)).map((g) => [g.group, g.items.map((i) => i.id)])).toEqual([
+      ['commissioned', []],
       ['standard', ['a']],
       ['holiday', ['h']],
-      ['commissioned', []],
     ]);
   });
 });

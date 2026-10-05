@@ -82,8 +82,7 @@
       "holiday": "Holiday",
       "commissioned": "Commissioned"
     },
-    "groupEmpty": "Nothing here yet.",
-    "holidayOpen": "{{name}} is open to everyone through {{date}}.",
+    "commissionTheme": "New theme",
     "auto": "Auto",
     "autoTooltip": "Match Discord or your system preference",
     "supporterTheme": "Supporter theme"
@@ -117,9 +116,8 @@
       "ghost": "The spirit of deleted messages. Eats them during a Purge.",
       "spider": "Hangs around for Halloween. Wraps what it catches."
     },
-    "customFree": "Custom Scrublings are free for everyone once they're added.",
-    "request": "Request a custom Scrubling",
-    "designedBy": "Designed by {{name}}"
+    "designedBy": "Designed by {{name}}",
+    "commission": "New Scrubling"
   },
   "native": {
     "loaded": "{{count}} loaded",

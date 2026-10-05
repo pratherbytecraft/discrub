@@ -29,11 +29,17 @@ describe('ThemeGrid', () => {
     vi.setSystemTime(new Date(2026, 8, 15));
     renderGrid();
     const sections = screen.getAllByTestId(/^theme-group-section-/).map((el) => el.getAttribute('data-testid'));
-    expect(sections).toEqual(['theme-group-section-standard', 'theme-group-section-holiday', 'theme-group-section-commissioned']);
+    expect(sections).toEqual(['theme-group-section-commissioned', 'theme-group-section-standard', 'theme-group-section-holiday']);
     expect(screen.getByTestId('theme-group-section-standard')).toContainElement(screen.getByTestId('theme-card-auto'));
     expect(screen.getByTestId('theme-group-section-holiday')).toContainElement(screen.getByTestId('theme-card-halloween-26'));
     expect(screen.getByTestId('theme-locked-halloween-26')).toBeInTheDocument();
-    expect(screen.getByTestId('theme-group-empty-commissioned')).toHaveTextContent('Nothing here yet.');
+    // 2.2.4: the Commissioned group ends with a New theme card that opens the Ko-fi commissions page.
+    expect(screen.queryByTestId('theme-group-empty-commissioned')).toBeNull();
+    const card = screen.getByTestId('theme-card-commission');
+    expect(screen.getByTestId('theme-group-section-commissioned')).toContainElement(card);
+    expect(card).toHaveAttribute('href', 'https://ko-fi.com/prathercc/commissions');
+    expect(card).toHaveTextContent('New theme');
+    expect(card).not.toHaveTextContent('Designed by');
     expect(screen.queryByTestId('theme-group-holiday-open')).toBeNull();
   });
 
@@ -41,9 +47,9 @@ describe('ThemeGrid', () => {
     vi.setSystemTime(new Date(2026, 9, 10));
     renderGrid();
     const sections = screen.getAllByTestId(/^theme-group-section-/).map((el) => el.getAttribute('data-testid'));
-    expect(sections[0]).toBe('theme-group-section-holiday');
+    expect(sections.slice(0, 2)).toEqual(['theme-group-section-commissioned', 'theme-group-section-holiday']);
     expect(screen.queryByTestId('theme-locked-halloween-26')).toBeNull();
-    expect(screen.getByTestId('theme-group-holiday-open')).toHaveTextContent("Halloween '26 is open to everyone through November 2.");
+    expect(screen.queryByTestId('theme-group-holiday-open')).toBeNull();
     fireEvent.click(screen.getByTestId('theme-card-halloween-26'));
     expect(onChange).toHaveBeenCalledWith('halloween-26');
   });

@@ -34,12 +34,15 @@ describe('Halloween drop (2.2.3)', () => {
       cy.get('[data-testid="seasonal-notice"]').should('not.exist');
     });
 
-    it('lists Holiday first with the theme unlocked, applies it, and Commissioned says nothing is there yet', () => {
+    // 2.2.4: Commissioned leads every list, and the "open to everyone" caption is gone.
+    it('lists Holiday right after Commissioned with the theme unlocked, applies it, and Commissioned ends with the New theme card', () => {
       openTab('theme');
-      cy.get('[data-testid^="theme-group-section-"]').first().should('have.attr', 'data-testid', 'theme-group-section-holiday');
-      cy.get('[data-testid="theme-group-holiday-open"]').should('contain.text', "Halloween '26 is open to everyone through November 2.");
+      cy.get('[data-testid^="theme-group-section-"]').then(($s) => {
+        expect([...$s].map((el) => el.getAttribute('data-testid'))).to.deep.equal(['theme-group-section-commissioned', 'theme-group-section-holiday', 'theme-group-section-standard']);
+      });
+      cy.get('[data-testid="theme-group-holiday-open"]').should('not.exist');
       cy.get('[data-testid="theme-locked-halloween-26"]').should('not.exist');
-      cy.get('[data-testid="theme-group-empty-commissioned"]').should('have.text', 'Nothing here yet.');
+      cy.get('[data-testid="theme-card-commission"]').should('contain.text', 'New theme').and('have.attr', 'href', 'https://ko-fi.com/prathercc/commissions');
       cy.get('[data-testid="theme-card-halloween-26"]').click();
       cy.get('[data-testid="theme-selected-halloween-26"]').should('exist');
       cy.get('[data-testid="gift-button"]').should('have.attr', 'data-theme-name', "Halloween '26");
@@ -48,9 +51,9 @@ describe('Halloween drop (2.2.3)', () => {
 
     it('lists the Spider under Holiday, unlocked, and it walks onto the bar when picked', () => {
       openTab('scrublings');
-      cy.get('[data-testid^="scrublings-group-section-"]').first().should('have.attr', 'data-testid', 'scrublings-group-section-holiday');
+      cy.get('[data-testid^="scrublings-group-section-"]').eq(1).should('have.attr', 'data-testid', 'scrublings-group-section-holiday');
       cy.get('[data-testid="scrubling-locked-spider"]').should('not.exist');
-      cy.get('[data-testid="scrublings-group-empty-commissioned"]').should('have.text', 'Nothing here yet.');
+      cy.get('[data-testid="scrubling-card-commission"]').should('contain.text', 'New Scrubling').and('have.attr', 'href', 'https://ko-fi.com/prathercc/commissions');
       cy.get('[data-testid="scrubling-card-spider"]').click();
       cy.get('[data-testid="scrubling-card-spider"]').should('have.attr', 'aria-checked', 'true');
       cy.get('body').type('{esc}');
@@ -71,7 +74,7 @@ describe('Halloween drop (2.2.3)', () => {
       cy.get('[data-testid="seasonal-notice"]').should('not.exist');
       openTab('theme');
       cy.get('[data-testid^="theme-group-section-"]').then(($s) => {
-        expect([...$s].map((el) => el.getAttribute('data-testid'))).to.deep.equal(['theme-group-section-standard', 'theme-group-section-holiday', 'theme-group-section-commissioned']);
+        expect([...$s].map((el) => el.getAttribute('data-testid'))).to.deep.equal(['theme-group-section-commissioned', 'theme-group-section-standard', 'theme-group-section-holiday']);
       });
       cy.get('[data-testid="theme-locked-halloween-26"]').should('exist');
       cy.get('[data-testid="theme-group-holiday-open"]').should('not.exist');

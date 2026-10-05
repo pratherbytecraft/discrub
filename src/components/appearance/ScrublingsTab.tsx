@@ -1,5 +1,5 @@
-import { Box, Checkbox, Link, Switch, Typography, alpha, useTheme } from '@mui/material';
-import { LockOutlined as LockIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
+import { Box, Checkbox, Switch, Typography, alpha, useTheme } from '@mui/material';
+import { LockOutlined as LockIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -11,8 +11,7 @@ import { frameDataUri } from '@features/scrublings/spriteRender';
 import { KOFI_COMMISSIONS_URL } from '@/services/kofiLinks';
 import { useStageSlots } from '@features/scrublings/stageSlots';
 import { SPRITE_H, SPRITE_W } from '@features/scrublings/spriteTypes';
-import { groupItems, inSeason, isUnlocked, type ItemGroup } from '@features/appearance/groups';
-import { formatSeasonEnd } from '@features/appearance/seasonText';
+import { groupItems, isUnlocked, type ItemGroup } from '@features/appearance/groups';
 
 interface ScrublingsTabProps {
   onLockedPick: () => void;
@@ -50,19 +49,9 @@ const ScrublingsTab = ({ onLockedPick }: ScrublingsTabProps) => {
     else if (!full) setPicked([...picked, id]);
   };
 
-  const heading = (group: ItemGroup, items: ScrublingDescriptor[]) => {
-    const open = items.find((d) => inSeason(d.season));
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
-        <Typography variant="overline" sx={{ lineHeight: 1.6, letterSpacing: '0.08em', color: 'text.secondary' }} data-testid={`scrublings-group-${group}`}>{t(`appearance.groups.${group}`)}</Typography>
-        {open?.season && (
-          <Typography variant="caption" sx={{ color: 'text.secondary' }} data-testid="scrublings-group-holiday-open">
-            {t('appearance.holidayOpen', { name: t(`scrublings.names.${open.id}`), date: formatSeasonEnd(open.season) })}
-          </Typography>
-        )}
-      </Box>
-    );
-  };
+  const heading = (group: ItemGroup) => (
+    <Typography variant="overline" sx={{ display: 'block', lineHeight: 1.6, letterSpacing: '0.08em', color: 'text.secondary', mb: 0.5 }} data-testid={`scrublings-group-${group}`}>{t(`appearance.groups.${group}`)}</Typography>
+  );
 
   const card = (d: ScrublingDescriptor) => {
     const id = d.id;
@@ -119,6 +108,34 @@ const ScrublingsTab = ({ onLockedPick }: ScrublingsTabProps) => {
     );
   };
 
+  // The last tile under Commissioned is the invite: a dashed card with a faded Suds that opens the Ko-fi commissions page (2.2.4, owner 2026-10-04).
+  const suds = SCRUBLINGS.suds;
+  const commissionCard = (
+    <Box
+      key="commission"
+      component="a"
+      href={KOFI_COMMISSIONS_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-testid="scrubling-card-commission"
+      aria-label={t('scrublings.commission')}
+      sx={{
+        display: 'block', textAlign: 'left', color: 'inherit', textDecoration: 'none',
+        p: '10px 10px 8px', borderRadius: 2, border: '1px dashed', borderColor: alpha(theme.palette.text.primary, 0.35),
+        '&:hover': { color: 'inherit', textDecoration: 'none', borderColor: alpha(theme.palette.primary.main, 0.6), backgroundColor: alpha(theme.palette.text.primary, 0.05) },
+        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
+      }}
+    >
+      <Box sx={{ display: 'grid', placeItems: 'center', height: 64, mb: 0.75, borderRadius: 1, background: `repeating-linear-gradient(135deg, ${alpha(theme.palette.text.primary, 0.07)} 0 6px, transparent 6px 12px)` }}>
+        <Box
+          aria-hidden
+          sx={{ width: SPRITE_W * 2, height: SPRITE_H * 2, backgroundImage: `url("${frameDataUri(suds.sheet, suds.sheet.activities[suds.idle]?.[0] ?? 'idle1')}")`, backgroundSize: '100% 100%', imageRendering: 'pixelated', filter: `brightness(0) ${theme.palette.mode === 'dark' ? 'invert(1)' : ''} opacity(0.28)` }}
+        />
+      </Box>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('scrublings.commission')}</Typography>
+    </Box>
+  );
+
   return (
     <Box sx={{ p: 1.75, pb: 1.25, maxHeight: 'min(520px, calc(100vh - 170px))', overflowY: 'auto' }} data-testid="scrublings-tab">
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.25 }}>
@@ -141,20 +158,13 @@ const ScrublingsTab = ({ onLockedPick }: ScrublingsTabProps) => {
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }} data-testid="scrublings-cards">
         {groupItems(SCRUBLING_IDS.map((id) => SCRUBLINGS[id])).map(({ group, items }) => (
           <Box key={group} data-testid={`scrublings-group-section-${group}`}>
-            {heading(group, items)}
-            {items.length === 0 ? (
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }} data-testid={`scrublings-group-empty-${group}`}>{t('appearance.groupEmpty')}</Typography>
-            ) : (
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1 }}>{items.map(card)}</Box>
-            )}
+            {heading(group)}
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1 }}>
+              {items.map(card)}
+              {group === 'commissioned' && commissionCard}
+            </Box>
           </Box>
         ))}
-      </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mt: 1.25, pt: 1.1, borderTop: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('scrublings.customFree')}</Typography>
-        <Link href={KOFI_COMMISSIONS_URL} target="_blank" rel="noopener noreferrer" underline="hover" data-testid="scrublings-request" sx={{ fontSize: '0.75rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-          {t('scrublings.request')} <OpenIcon sx={{ fontSize: 13 }} />
-        </Link>
       </Box>
     </Box>
   );

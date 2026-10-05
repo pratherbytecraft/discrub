@@ -21,7 +21,7 @@ export interface Season {
   until: [number, number];
 }
 
-export const GROUPS: ItemGroup[] = ['standard', 'holiday', 'commissioned'];
+export const GROUPS: ItemGroup[] = ['commissioned', 'standard', 'holiday'];
 
 /** Halloween runs October 1 to November 2 (owner, 2026-09-29). */
 export const halloween = (year: number): Season => ({ year, from: [10, 1], until: [11, 2] });
@@ -39,10 +39,10 @@ export const inSeason = (season: Season | undefined, now: Date = new Date()): bo
 export const isUnlocked = (item: { tier: ItemTier; season?: Season }, hasKey: boolean, now: Date = new Date()): boolean =>
   item.tier === 'free' || hasKey || inSeason(item.season, now);
 
-/** A group's slot in the menu: Holiday jumps to the top while any of its items is in season. */
+/** A group's slot in the menu: Commissioned leads (owner, 2026-10-04), then Holiday jumps ahead of Standard while any of its items is in season. */
 export const groupOrder = (items: { group?: ItemGroup; season?: Season }[], now: Date = new Date()): ItemGroup[] => {
   const holidayOn = items.some((i) => (i.group ?? 'standard') === 'holiday' && inSeason(i.season, now));
-  return holidayOn ? ['holiday', 'standard', 'commissioned'] : ['standard', 'holiday', 'commissioned'];
+  return holidayOn ? ['commissioned', 'holiday', 'standard'] : ['commissioned', 'standard', 'holiday'];
 };
 
 /** The items of each group in their registry order, every group present even when empty. */
