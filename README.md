@@ -246,7 +246,7 @@ Exports work like live exports (same dialog, all presets, all templates) and use
 Settings are split across tabs:
 
 - **Display**: language (English or German; a fresh install follows your browser, and the sign-in screen has a one-word Deutsch / English link), date and time format, DM list order (most recent first, alphabetical, or Discord's own order)
-- **User Data**: display name and nickname lookup toggles, reaction enrichment, user data refresh rate
+- **User Data**: display name and nickname lookup toggles, reaction enrichment, replied-to message lookup, user data refresh rate
 - **Operation Delays**: search and delete delays with a randomization modifier (with a `?` explainer on Discord rate limits), plus rest breaks: after 45 minutes of activity a long operation pauses for 10 minutes on its own (on by default), and a retry wait: how long to wait before the first retry when a request fails, doubling each retry (1 second by default, up to 30)
 - **Export Preferences**: default format, template, media types and all export options
 - **Purge Behavior**: default mode (Delete, Strip Attachments Only, Remove Reactions) and media retention
@@ -280,9 +280,9 @@ Everything about how Discrub looks is under **Appearance** in the top bar: Layou
 
 **Themes.** Six themes are free: Dark Original (the default), Light Original, Terminal, High Contrast, Overcast and Classic. The picker can also follow your system preference. Supporters unlock nine more (AMOLED Void, Synthwave, Bytecraft, Ember, Nekonoir, Circuit, Noir, Abyss, Abstract), a theme switcher in HTML exports, and a custom export footer.
 
-**Holiday themes and Scrublings.** The Theme and Scrublings tabs list their cards in groups: Standard, Holiday and Commissioned. A holiday item is open to everyone during its own holiday and joins the supporter set after. Halloween '26 (a theme with bats and a corner web) and the Spider '26 Scrubling are open from October 1 to November 2. While a holiday is on, the Spider hangs from the Appearance button to say so, and goes away the first time the button is clicked.
+**Holiday themes and Scrublings.** The Theme and Scrublings tabs list their cards in groups: Commissioned, Standard and Holiday. The Commissioned group ends with a New theme or New Scrubling card that opens Ko-fi Commissions. A holiday item is open to everyone during its own holiday and joins the supporter set after. Halloween '26 (a theme with bats and a corner web) and the Spider '26 Scrubling are open from October 1 to November 2. While a holiday is on, the Spider hangs from the Appearance button to say so, and goes away the first time the button is clicked.
 
-**Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. While something runs they say what it is, such as how far a Purge or Load All has got or how long a wait has left, and on a phone they say a shorter version. Suds, the Mage and the Cat are free, six more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all, and a link to request a custom one, which is added for everyone once it's drawn.
+**Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. While something runs they say what it is, such as how far a Purge or Load All has got or how long a wait has left, and on a phone they say a shorter version. Suds, the Mage and the Cat are free, six more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all. A commissioned Scrubling is added for everyone once it's drawn.
 
 To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free; supporter perks are cosmetic only.
 
@@ -322,7 +322,7 @@ Discrub runs in English or German. A fresh install follows the browser language.
 
 ### What differs by setup
 
-Purging, searching and bulk operations behave the same everywhere. Three things differ (the app shows this table under the **Compatibility** info button):
+Purging, searching and bulk operations behave the same everywhere. Three things differ (the app shows this table under **Compatibility** in the More menu):
 
 | | Chrome extension | Firefox extension | Bleeding Edge on Chrome | Bleeding Edge on Firefox | Bleeding Edge on mobile |
 |---|---|---|---|---|---|
@@ -545,7 +545,7 @@ Yes. Each user runs Discrub in their own browser with their own token. There is 
 
 ### How do I report bugs or request features?
 
-Use the Ideas & Contact button (the lightbulb in the top bar) to reach support@pratherbytecraft.com, GitHub issues, or Ko-fi commissions. On wide windows the Bots list, the Supporter Wall, r/discrub and the latest announcement also sit on the top bar; on narrow ones they fold into the More menu.
+Open the More menu on the top bar and pick Ideas & Contact to reach support@pratherbytecraft.com, GitHub issues, or Ko-fi commissions. The More menu also holds Compatibility, r/discrub and the latest announcement. Bots and the Supporter Wall sit on the top bar on wide windows and join the More menu on narrow ones.
 
 ### How do I update Discrub?
 
