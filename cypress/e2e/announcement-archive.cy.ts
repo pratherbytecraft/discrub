@@ -1,7 +1,7 @@
 /**
  * Past-announcements rail: the announcement dialog loads the archive gist
  * once per session and shows a version rail beside the live announcement,
- * both on auto-show (new rev) and from the top bar's View Announcement button.
+ * both on auto-show (new rev) and from View Announcement in the top bar's More menu.
  */
 describe('Announcement archive rail', () => {
   const openLiveAnnouncement = () => {
@@ -9,7 +9,8 @@ describe('Announcement archive rail', () => {
     // Let boot settle so the test exercises the rail, not the reopen race
     // (the slice guards that race separately; see announcementSlice tests).
     cy.wait('@getAnnouncementGist');
-    cy.get('[aria-label="View Announcement"]').click();
+    cy.get('[data-testid="topbar-more"]').click();
+    cy.get('[data-testid="more-menu-announcement"]').click();
     cy.contains('Announcement', { timeout: 10000 }).should('be.visible');
   };
 
@@ -60,7 +61,9 @@ describe('Announcement archive rail', () => {
     cy.wait('@getAnnouncementArchiveGist');
     cy.contains('button', 'Cancel').click();
 
-    cy.get('[aria-label="View Announcement"]').click();
+    cy.get('[data-testid="topbar-more"]').click();
+
+    cy.get('[data-testid="more-menu-announcement"]').click();
     cy.get('[data-testid="announcement-archive-rail"]').should('be.visible');
     cy.get('@getAnnouncementArchiveGist.all').should('have.length', 1);
   });
@@ -69,7 +72,8 @@ describe('Announcement archive rail', () => {
     cy.login();
     cy.wait('@getAnnouncementGist');
     cy.intercept('GET', '**/gists/d57525174377b474cb7c90210d3ab979', { statusCode: 500, body: {} }).as('archiveDown');
-    cy.get('[aria-label="View Announcement"]').click();
+    cy.get('[data-testid="topbar-more"]').click();
+    cy.get('[data-testid="more-menu-announcement"]').click();
     cy.get('[data-testid="announcement-body"]').should('contain', 'Test');
     cy.get('[data-testid="announcement-archive-error"]').should('contain', 'No previous announcements are available right now');
     cy.get('[data-testid="announcement-archive-rail"]').should('not.exist');

@@ -30,7 +30,8 @@ describe('Themes hub', () => {
   it('shows the full roster with supporter themes locked', () => {
     openHub();
     // Auto card + 16 registry themes (2.2.3 added Halloween '26)
-    cy.get('[data-testid^="theme-card-"]').should('have.length', 17);
+    cy.get('[data-testid^="theme-card-"]:not([data-testid="theme-card-commission"])').should('have.length', 17);
+    cy.get('[data-testid="theme-card-commission"]').should('exist');
     // All 10 supporter themes are locked for a free user, marked on the
     // swatch corner (the label row keeps its full width). Halloween '26
     // counts as locked here because this spec runs on the real clock only

@@ -178,8 +178,8 @@ describe('Export theming (slot E)', () => {
         expect(page).to.contain('class="export-theme-synthwave"');
         expect(page).to.contain('<option value="synthwave" selected>');
         expect(page).to.contain('.export-theme-abyss {');
-        // Full roster: 15 dropdown options.
-        expect(page.match(/<option value="/g)).to.have.length(15);
+        // Full roster: 16 dropdown options (Halloween '26 joined in 2.2.3).
+        expect(page.match(/<option value="/g)).to.have.length(16);
         expect(page).to.contain('.export-theme-abstract {');
       });
       cy.task<string>('zip:read', {

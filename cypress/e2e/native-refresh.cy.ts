@@ -9,6 +9,7 @@
 describe('Servers load on a fresh page in every layout', () => {
   beforeEach(() => {
     cy.login();
+    cy.seenSeasonalNotice();
   });
 
   it('Native: the rail shows the servers after a reload, with DMs, Package and Settings at full size', () => {
@@ -44,7 +45,8 @@ describe('Servers load on a fresh page in every layout', () => {
     cy.get('[data-testid="donation-drawer"]').should('be.visible');
     cy.get('body').type('{esc}');
     cy.get('[data-testid="donation-drawer"]').should('not.exist');
-    // Back to Classic so later specs start from the default.
+    // Back to Classic so later specs start from the default. The reload brought the seasonal notice back.
+    cy.seenSeasonalNotice();
     cy.get('[data-testid="gift-button"]').click();
     cy.get('[data-testid="layout-card-classic"]').click();
   });

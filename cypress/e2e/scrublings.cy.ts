@@ -52,7 +52,8 @@ describe('Scrublings (2.2.0)', () => {
 
   it('lists the nine in the Appearance tab, three free, the rest locked, and a locked pick goes to the Supporter segment', () => {
     openTab();
-    cy.get('[data-testid="scrublings-cards"] [data-testid^="scrubling-card-"]').should('have.length', 9);
+    cy.get('[data-testid="scrublings-cards"] [data-testid^="scrubling-card-"]:not([data-testid="scrubling-card-commission"])').should('have.length', 9);
+    cy.get('[data-testid="scrubling-card-commission"]').should('exist');
     cy.get('[data-testid="scrubling-card-suds"]').should('have.attr', 'aria-checked', 'true');
     cy.get('[data-testid="scrubling-card-mage"]').should('have.attr', 'aria-checked', 'true');
     // The Spider '26 is unlocked for everyone through Halloween on the real clock (holiday.cy.ts pins the dates).

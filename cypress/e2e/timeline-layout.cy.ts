@@ -15,6 +15,7 @@ const loaded = () => cy.window().then((win) => (win as any).__store__.getState()
 describe('Timeline layout (2.2.0)', () => {
   beforeEach(() => {
     cy.login();
+    cy.seenSeasonalNotice();
     cy.selectServer('Cypress Test Server');
     cy.selectChannel('general');
     cy.contains('[data-testid="message-feed-row"]', 'Hello everyone! Welcome to the server.').should('exist');
