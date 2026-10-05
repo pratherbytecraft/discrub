@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from 'react';
+import { useEffect, useMemo, useRef, useState, memo } from 'react';
 import {
   List,
   ListItemButton,
@@ -86,23 +86,23 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
     setVisibleCount(PAGE_SIZE);
   }, [filterText]);
 
-  // Scroll-to-load: listen on nearest scrollable ancestor
+  // The list only ever drew its first page: the scroll listener looked for a
+  // `data-server-scroll` ancestor that no layout renders, so a person in more
+  // than 50 servers could not reach the rest (Reddit, 2026-10-06). A sentinel
+  // under the last row adds a page each time it scrolls into view, as in DMList.
+  const hasMore = visibleCount < filteredGuilds.length;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (visibleCount >= filteredGuilds.length) return;
-
-    const handleScroll = () => {
-      const scrollEl = document.querySelector('[data-server-scroll]');
-      if (!scrollEl) return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollEl;
-      if (scrollHeight - scrollTop - clientHeight < 100) {
-        setVisibleCount((prev) => prev + PAGE_SIZE);
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisibleCount((count) => count + PAGE_SIZE);
       }
-    };
-
-    const scrollEl = document.querySelector('[data-server-scroll]');
-    scrollEl?.addEventListener('scroll', handleScroll);
-    return () => scrollEl?.removeEventListener('scroll', handleScroll);
-  }, [visibleCount, filteredGuilds.length]);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, visibleCount]);
 
   const handleGuildClick = async (guild: Guild) => {
     if (!token) return;
@@ -213,6 +213,7 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
         {visible.map((guild) => (
           <ListItemButton
             key={guild.id}
+            data-testid="server-row"
             selected={multiSelectMode ? isGuildSelected(guild) : selectedGuild?.id === guild.id}
             onClick={() => handleGuildClick(guild)}
             sx={{
@@ -264,6 +265,7 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
           </ListItemButton>
         ))}
       </List>
+      {hasMore && <Box ref={sentinelRef} data-testid="server-list-sentinel" sx={{ height: 1 }} />}
 
     </Box>
   );

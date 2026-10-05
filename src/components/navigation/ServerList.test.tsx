@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderWithProviders, screen, fireEvent } from '../../test/test-utils';
+import { renderWithProviders, screen, fireEvent, waitFor } from '../../test/test-utils';
 import ServerList from './ServerList';
 import { createBaseState } from '../../test/state-factories';
 import { createMockGuild } from '../../test/fixtures';
@@ -326,6 +326,55 @@ describe('ServerList', () => {
       });
       const betaButton = screen.getByText('Beta Server').closest('[role="button"]');
       expect(betaButton).toHaveClass('Mui-selected');
+    });
+  });
+
+  describe('paging past the first 50 rows', () => {
+    const manyGuilds = (count: number) =>
+      Array.from({ length: count }, (_, i) => createMockGuild({ id: `g-${i}`, name: `Server ${i}`, icon: null }));
+
+    const stateWithGuilds = (list: ReturnType<typeof manyGuilds>) =>
+      createBaseState({
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        guild: { guilds: list, selectedGuild: null, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
+      });
+
+    let observe: ReturnType<typeof vi.fn>;
+    let intersect: () => void;
+
+    beforeEach(() => {
+      let callback: IntersectionObserverCallback = () => {};
+      observe = vi.fn();
+      intersect = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+      vi.stubGlobal('IntersectionObserver', class {
+        constructor(cb: IntersectionObserverCallback) { callback = cb; }
+        observe = observe;
+        disconnect = vi.fn();
+        unobserve = vi.fn();
+        takeRecords = () => [];
+      });
+    });
+
+    it('draws more rows each time the sentinel scrolls into view', async () => {
+      renderWithProviders(<ServerList />, { preloadedState: stateWithGuilds(manyGuilds(90)) });
+      expect(screen.getAllByTestId('server-row')).toHaveLength(50);
+      expect(observe).toHaveBeenCalledWith(screen.getByTestId('server-list-sentinel'));
+
+      intersect();
+      await waitFor(() => expect(screen.getAllByTestId('server-row')).toHaveLength(90));
+      expect(screen.queryByTestId('server-list-sentinel')).not.toBeInTheDocument();
+    });
+
+    it('needs no sentinel when the list fits in one page', () => {
+      renderWithProviders(<ServerList />, { preloadedState: stateWithGuilds(manyGuilds(12)) });
+      expect(screen.getAllByTestId('server-row')).toHaveLength(12);
+      expect(screen.queryByTestId('server-list-sentinel')).not.toBeInTheDocument();
+    });
+
+    it('finds a server past the first page by name', () => {
+      renderWithProviders(<ServerList filterText="Server 77" />, { preloadedState: stateWithGuilds(manyGuilds(90)) });
+      expect(screen.getAllByTestId('server-row')).toHaveLength(1);
+      expect(screen.getByText('Server 77')).toBeInTheDocument();
     });
   });
 });
