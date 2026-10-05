@@ -32,7 +32,6 @@ const KNOWN_SAFE_SELECTORS: readonly string[] = [
   '[aria-label="Settings"]',
   '[data-testid="gift-button"]',
   '[data-tour="topbar-extras"]',
-  '[aria-label="Logout"]',
   '[data-tour="user-profile"]',
   // StatusPanel — always in MainLayout
   '[data-tour="status-panel"]',

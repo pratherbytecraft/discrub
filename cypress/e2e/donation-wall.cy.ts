@@ -39,7 +39,7 @@ describe('Donation Wall', () => {
     // Override the empty default AFTER interceptDiscordApi (LIFO — last wins)
     cy.intercept('GET', DONATION_GIST, mockDonations(sampleDonations)).as('getDonations');
     cy.visit('/');
-    cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+    cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
     openDonationDrawer();
   });
 
@@ -110,7 +110,7 @@ describe('Donation Wall', () => {
         'getExtremeDonations',
       );
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       openDonationDrawer();
 
       cy.contains('Grace').should('be.visible');

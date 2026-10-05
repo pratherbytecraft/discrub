@@ -49,8 +49,8 @@ export const tourCatalog: Record<string, TourCatalogEntry> = {
     content: 'Pick from the full theme roster, support Discrub, and apply a supporter key, all in one place.',
   },
   more: {
-    title: 'Supporter Wall, r/discrub, Announcements',
-    content: 'Toggle the Supporter Wall, open r/discrub, or re-read the latest announcement. On narrower windows these fold into a More menu.',
+    title: 'Bots, Supporter Wall and More',
+    content: 'See the Prather Bytecraft bots, toggle the Supporter Wall, and open the More menu for Ideas & Contact, Compatibility, r/discrub and the latest announcement.',
   },
   'status-panel': {
     title: 'Status Log',
@@ -58,11 +58,7 @@ export const tourCatalog: Record<string, TourCatalogEntry> = {
   },
   'user-profile': {
     title: 'Your Profile',
-    content: 'Click to view your account details and profile info.',
-  },
-  logout: {
-    title: 'Sign Out',
-    content: "Sign out when you're done. Your token is cleared, including any saved copy on this device.",
+    content: "Click to view your account details, or to sign out when you're done. Signing out clears your token, including any saved copy on this device.",
   },
 
   // ── Contextual (channel-view) ──────────────────────────────────────
@@ -187,7 +183,6 @@ export const buildShellTourSteps = (t: TFunction = defaultT): Step[] => [
   step('more', '[data-tour="topbar-extras"]', {}, t),
   step('status-panel', '[data-tour="status-panel"]', { placement: 'top' }, t),
   step('user-profile', '[data-tour="user-profile"]', {}, t),
-  step('logout', '[aria-label="Logout"]', {}, t),
 ];
 
 /** English snapshot; components build a localized copy via `buildShellTourSteps(t)`. */

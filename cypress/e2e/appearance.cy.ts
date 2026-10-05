@@ -2,6 +2,7 @@
 describe('Appearance menu (2.2.0)', () => {
   beforeEach(() => {
     cy.login();
+    cy.seenSeasonalNotice();
     cy.selectServer('Cypress Test Server');
     cy.selectChannel('general');
     cy.contains('[data-testid="message-feed-row"]', 'Hello everyone! Welcome to the server.').should('exist');
@@ -110,7 +111,7 @@ describe('Appearance menu (2.2.0)', () => {
     cy.get('body').should('not.have.css', 'background-color', 'rgb(0, 0, 0)');
     cy.window().its('__store__').invoke('getState').its('app.settings.appThemeMode').should('not.eq', 'amoled-void');
     cy.reload();
-    cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+    cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
     cy.get('[data-testid="preview-bar"]').should('not.exist');
   });
 });

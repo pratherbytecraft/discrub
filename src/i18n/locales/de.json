@@ -39,6 +39,7 @@
     "searchPackage": "Paket durchsuchen..."
   },
   "topbar": {
+    "profile": "Dein Profil, {{name}}",
     "openNavigation": "Navigation öffnen",
     "home": "Start",
     "homeAlt": "Discrub Start",
@@ -685,8 +686,8 @@
       "content": "Wähle aus allen Designs, unterstütze Discrub und aktiviere einen Unterstützerschlüssel, alles an einem Ort."
     },
     "more": {
-      "title": "Unterstützerwand, r/discrub, Ankündigungen",
-      "content": "Blende die Unterstützerwand ein, öffne r/discrub oder lies die letzte Ankündigung erneut. In schmalen Fenstern wandern diese in ein Menü „Mehr“."
+      "title": "Bots, Unterstützerwand und Mehr",
+      "content": "Sieh dir die Prather-Bytecraft-Bots an, blende die Unterstützerwand ein und öffne das Menü „Mehr“ für Ideen & Kontakt, Kompatibilität, r/discrub und die letzte Ankündigung."
     },
     "status-panel": {
       "title": "Statusprotokoll",
@@ -694,11 +695,7 @@
     },
     "user-profile": {
       "title": "Dein Profil",
-      "content": "Klicke hier, um deine Kontodaten und Profilinfos zu sehen."
-    },
-    "logout": {
-      "title": "Abmelden",
-      "content": "Melde dich ab, wenn du fertig bist. Dein Token wird gelöscht, auch eine gespeicherte Kopie auf diesem Gerät."
+      "content": "Klicke hier, um deine Kontodaten zu sehen oder dich abzumelden, wenn du fertig bist. Beim Abmelden wird dein Token gelöscht, auch eine gespeicherte Kopie auf diesem Gerät."
     },
     "multi-select-toggle": {
       "title": "Mehrfachauswahl",

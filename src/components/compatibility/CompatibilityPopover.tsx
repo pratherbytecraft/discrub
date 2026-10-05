@@ -217,6 +217,35 @@ export const CompatibilitySheet = ({ open, onClose }: { open: boolean; onClose: 
   </Drawer>
 );
 
+/** Desktop popover, anchored to whichever button opened it (the TopBar's More menu since 2.2.4). */
+export const CompatibilityPopup = ({ anchor, onClose, setup }: { anchor: HTMLElement | null; onClose: () => void; setup?: CompatSetup }) => {
+  const theme = useTheme();
+  return (
+    <Popover
+      open={Boolean(anchor)}
+      anchorEl={anchor}
+      onClose={onClose}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      transformOrigin={{ vertical: -8, horizontal: 'center' }}
+      marginThreshold={24}
+      slotProps={{
+        paper: {
+          sx: {
+            maxWidth: 'calc(100vw - 48px)',
+            backgroundColor: 'backgroundElevated',
+            backgroundImage: 'none',
+            border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+            boxShadow: `0 12px 32px rgba(0, 0, 0, 0.5), 0 0 16px ${alpha(theme.palette.primary.main, 0.15)}`,
+          },
+        },
+      }}
+      data-testid="compat-popover"
+    >
+      {anchor && <CompatibilityContent setup={setup ?? detectCompatSetup()} />}
+    </Popover>
+  );
+};
+
 interface CompatibilityPopoverProps {
   /** Where the button lives; only affects test ids and icon sizing. */
   placement: 'gate' | 'topbar';
@@ -254,28 +283,7 @@ const CompatibilityPopover = ({ placement }: CompatibilityPopoverProps) => {
           <InfoIcon fontSize={placement === 'gate' ? 'small' : 'medium'} />
         </IconButton>
       </Tooltip>
-      <Popover
-        open={Boolean(anchor)}
-        anchorEl={anchor}
-        onClose={() => setAnchor(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        transformOrigin={{ vertical: -8, horizontal: 'center' }}
-        marginThreshold={24}
-        slotProps={{
-          paper: {
-            sx: {
-              maxWidth: 'calc(100vw - 48px)',
-              backgroundColor: 'backgroundElevated',
-              backgroundImage: 'none',
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-              boxShadow: `0 12px 32px rgba(0, 0, 0, 0.5), 0 0 16px ${alpha(theme.palette.primary.main, 0.15)}`,
-            },
-          },
-        }}
-        data-testid="compat-popover"
-      >
-        <CompatibilityContent setup={setup} />
-      </Popover>
+      <CompatibilityPopup anchor={anchor} onClose={() => setAnchor(null)} setup={setup} />
       <CompatibilitySheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </>
   );

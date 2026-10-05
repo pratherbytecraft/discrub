@@ -131,7 +131,7 @@ describe('Error Logging & Status Log', () => {
       // re-seeded). cy.visit on the same origin keeps the existing DB.
       cy.interceptDiscordApi();
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 
       // Status log should still have entries from previous session
       cy.contains('STATUS LOG').click();
@@ -204,7 +204,7 @@ describe('Error Logging & Status Log', () => {
       // Reload
       cy.interceptDiscordApi();
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 
       cy.contains('STATUS LOG').click();
       cy.wait(300);
@@ -221,7 +221,7 @@ describe('Error Logging & Status Log', () => {
     it('app loads without showing error boundary', () => {
       cy.login();
       cy.contains('Something went wrong').should('not.exist');
-      cy.contains('Discrub Tester').should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]').should('be.visible');
     });
   });
 });

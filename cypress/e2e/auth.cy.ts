@@ -46,7 +46,7 @@ describe('Authentication', () => {
       cy.interceptDiscordApi();
       cy.visit('/');
       // The env token triggers auto-auth; intercept responds with valid user
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
     });
   });
 
@@ -88,14 +88,14 @@ describe('Authentication', () => {
       cy.get('[data-testid="landing-remember-token"]').check().should('be.checked');
       cy.get('input[type="password"]').clear().type(REMEMBERED, { log: false });
       cy.get('[data-testid="landing-sign-in"]').click();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.readIdbStore<string>('state').should('include', REMEMBERED);
 
       // Reload: the env token is refused, the remembered one signs in.
       cy.interceptDiscordApi();
       acceptOnlyRememberedToken();
       cy.reload();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 
       // Settings › Reset Discrub › "Forget saved token" drops the stored
       // copy but keeps this session signed in.
@@ -105,19 +105,21 @@ describe('Authentication', () => {
       cy.readIdbStore<string>('state').should('not.include', REMEMBERED);
       cy.get('[data-testid="settings-saved-token"]').should('not.exist');
       cy.get('[role="dialog"]').contains('button', 'Cancel').click();
-      cy.contains('Discrub Tester').should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]').should('be.visible');
 
       // Re-remember it so Logout has something to forget.
-      cy.get('[aria-label="Logout"]').click({ force: true });
+      cy.get('[aria-label="Your profile, Discrub Tester"]').click({ force: true });
+      cy.get('[data-testid="profile-logout"]').click();
       cy.get('[data-testid="landing-sign-in"]', { timeout: 10000 }).should('be.visible');
       cy.get('[data-testid="landing-remember-token"]').check();
       cy.get('input[type="password"]').clear().type(REMEMBERED, { log: false });
       cy.get('[data-testid="landing-sign-in"]').click();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.readIdbStore<string>('state').should('include', REMEMBERED);
 
       // Logout drops the stored token and lands on the gate again.
-      cy.get('[aria-label="Logout"]').click({ force: true });
+      cy.get('[aria-label="Your profile, Discrub Tester"]').click({ force: true });
+      cy.get('[data-testid="profile-logout"]').click();
       cy.get('[data-testid="landing-sign-in"]', { timeout: 10000 }).should('be.visible');
       cy.readIdbStore<string>('state').should('not.include', REMEMBERED);
 
@@ -126,7 +128,7 @@ describe('Authentication', () => {
       acceptOnlyRememberedToken();
       cy.reload();
       cy.get('[data-testid="landing-sign-in"]', { timeout: 10000 }).should('be.visible');
-      cy.contains('Discrub Tester').should('not.exist');
+      cy.get('[aria-label="Your profile, Discrub Tester"]').should('not.exist');
     });
 
     it('drops a remembered token Discord no longer accepts and says so', () => {
@@ -137,7 +139,7 @@ describe('Authentication', () => {
       cy.get('[data-testid="landing-remember-token"]').check();
       cy.get('input[type="password"]').clear().type(REMEMBERED, { log: false });
       cy.get('[data-testid="landing-sign-in"]').click();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 
       // Now every token is refused: the restore fails, the token is removed.
       cy.interceptDiscordApi();

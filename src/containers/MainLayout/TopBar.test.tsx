@@ -113,13 +113,15 @@ describe('TopBar', () => {
   });
 
   describe('User Info', () => {
-    it('should display username when user is logged in', () => {
+    // 2.2.4: the bar shows the avatar alone; the name is the tooltip and the aria-label.
+    it('should keep the username off the bar and in the avatar label', () => {
       renderWithProviders(<TopBar />, {
         preloadedState: createBaseState({
           user: { currentUser, isLoading: false, error: null },
         }),
       });
-      expect(screen.getByText('TestUser')).toBeInTheDocument();
+      expect(screen.queryByText('TestUser')).toBeNull();
+      expect(screen.getByLabelText('Your profile, TestUser')).toBeInTheDocument();
     });
 
     it('should display avatar with CDN URL', () => {
@@ -140,7 +142,7 @@ describe('TopBar', () => {
           user: { currentUser: null, isLoading: false, error: null },
         }),
       });
-      expect(screen.queryByText('TestUser')).toBeNull();
+      expect(screen.queryByLabelText(/Your profile/)).toBeNull();
     });
   });
 
@@ -203,14 +205,22 @@ describe('TopBar', () => {
     });
   });
 
+  // 2.2.4: Logout left the bar for the profile dialog the avatar opens.
   describe('Logout', () => {
-    it('should show logout button when user is logged in', () => {
+    const logoutFromProfile = () => {
+      fireEvent.click(screen.getByLabelText('Your profile, TestUser'));
+      fireEvent.click(screen.getByTestId('profile-logout'));
+    };
+
+    it('should keep Logout off the bar and in the profile dialog', () => {
       renderWithProviders(<TopBar />, {
         preloadedState: createBaseState({
           user: { currentUser, isLoading: false, error: null },
         }),
       });
-      expect(screen.getByLabelText('Logout')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Logout')).toBeNull();
+      fireEvent.click(screen.getByLabelText('Your profile, TestUser'));
+      expect(screen.getByTestId('profile-logout')).toBeInTheDocument();
     });
 
     it('should clear all state on logout', () => {
@@ -221,7 +231,7 @@ describe('TopBar', () => {
           guild: { guilds: [], selectedGuild: null, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
         }),
       });
-      fireEvent.click(screen.getByLabelText('Logout'));
+      logoutFromProfile();
       const state = store.getState();
       expect(state.auth.token).toBeNull();
       expect(state.auth.isAuthenticated).toBe(false);
@@ -236,7 +246,7 @@ describe('TopBar', () => {
           user: { currentUser, isLoading: false, error: null },
         }),
       });
-      fireEvent.click(screen.getByLabelText('Logout'));
+      logoutFromProfile();
       await vi.waitFor(() => {
         expect(storage.state.remove).toHaveBeenCalledWith('auth:rememberedToken');
       });
@@ -435,14 +445,16 @@ describe('TopBar', () => {
     });
 
     const openIdeasFromMenu = () => {
-      fireEvent.click(screen.getByLabelText('Ideas & Contact'));
+      fireEvent.click(screen.getByLabelText('More options'));
+      fireEvent.click(screen.getByTestId('more-menu-ideas'));
     };
 
-    it('should show an Ideas & Contact icon in the top bar when logged in', () => {
+    // 2.2.4: Ideas & Contact left the bar for the More menu at every width.
+    it('should list Ideas & Contact in the More menu and not on the bar', () => {
       renderLoggedIn();
-      expect(screen.getByTestId('topbar-ideas')).toBeInTheDocument();
+      expect(screen.queryByTestId('topbar-ideas')).toBeNull();
       fireEvent.click(screen.getByLabelText('More options'));
-      expect(screen.queryByTestId('more-menu-ideas')).toBeNull();
+      expect(screen.getByTestId('more-menu-ideas')).toBeInTheDocument();
     });
 
     it('should open Ideas dialog on click', () => {
@@ -572,23 +584,43 @@ describe('TopBar wide layout (md and up)', () => {
       preloadedState: createBaseState({ user: { currentUser, isLoading: false, error: null } }),
     });
 
-  it('shows Supporter Wall, r/discrub and View Announcement inline and drops the More menu', () => {
+  // 2.2.4: the wide bar keeps Appearance, Settings, Bots and the Supporter Wall inline; Ideas, Compatibility,
+  // r/discrub and View Announcement sit in the More menu, and the wall is not repeated there.
+  it('keeps Bots and the Supporter Wall inline and puts the rest in the More menu', () => {
     render();
     expect(screen.getByLabelText('Supporter Wall')).toBeInTheDocument();
-    const reddit = screen.getByLabelText('r/discrub');
+    expect(screen.getByTestId('bots-button')).toHaveTextContent('Bots');
+    expect(screen.getByLabelText('Settings')).toBeInTheDocument();
+    expect(screen.queryByTestId('topbar-ideas')).toBeNull();
+    expect(screen.queryByTestId('topbar-reddit')).toBeNull();
+    expect(screen.queryByTestId('topbar-announcement')).toBeNull();
+    expect(screen.queryByLabelText('Logout')).toBeNull();
+    fireEvent.click(screen.getByLabelText('More options'));
+    expect(screen.queryByTestId('more-menu-supporter-wall')).toBeNull();
+    expect(screen.queryByTestId('more-menu-bots')).toBeNull();
+    expect(screen.queryByTestId('more-menu-settings')).toBeNull();
+    expect(screen.queryByTestId('more-menu-logout')).toBeNull();
+    expect(screen.getByTestId('more-menu-ideas')).toBeInTheDocument();
+    expect(screen.getByTestId('more-menu-compatibility')).toBeInTheDocument();
+    const reddit = screen.getByTestId('more-menu-reddit');
     expect(reddit).toHaveAttribute('href', 'https://www.reddit.com/r/discrub');
     expect(reddit).toHaveAttribute('target', '_blank');
-    expect(screen.getByLabelText('View Announcement')).toBeInTheDocument();
-    expect(screen.queryByLabelText('More options')).not.toBeInTheDocument();
-    expect(screen.getByTestId('topbar-ideas')).toBeInTheDocument();
-    expect(screen.getByLabelText('Settings')).toBeInTheDocument();
-    expect(screen.getByLabelText('Logout')).toBeInTheDocument();
+    expect(screen.getByTestId('more-menu-announcement')).toBeInTheDocument();
   });
 
-  it('View Announcement reopens the dialog from the inline button', () => {
+  it('View Announcement reopens the dialog from the More menu', () => {
     const { store } = render();
-    fireEvent.click(screen.getByLabelText('View Announcement'));
+    fireEvent.click(screen.getByLabelText('More options'));
+    fireEvent.click(screen.getByTestId('more-menu-announcement'));
     expect(store.getState().announcement.hasNew).toBe(true);
+  });
+
+  it('Compatibility opens as a popover anchored to the More button on desktop', () => {
+    render();
+    fireEvent.click(screen.getByLabelText('More options'));
+    fireEvent.click(screen.getByTestId('more-menu-compatibility'));
+    expect(screen.getByTestId('compat-popover')).toBeInTheDocument();
+    expect(screen.queryByTestId('compat-sheet')).toBeNull();
   });
 
   it('keeps one tour target for the extras regardless of layout', () => {

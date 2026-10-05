@@ -21,7 +21,8 @@ describe('Settings', () => {
   it('returns to LandingPage after clicking Logout', () => {
     // Block auto-auth BEFORE clicking logout so the app stays on LandingPage
     cy.blockAutoAuth();
-    cy.get('[aria-label="Logout"]').click();
+    cy.get('[aria-label="Your profile, Discrub Tester"]').click();
+    cy.get('[data-testid="profile-logout"]').click();
     cy.get('[data-testid="landing-sign-in"]', { timeout: 10000 }).should('be.visible');
   });
 
@@ -197,20 +198,27 @@ describe('Settings', () => {
     });
   });
 
+  // 2.2.4: Ideas & Contact lives in the More menu at every width.
   describe('Ideas & Contact', () => {
-    it('should open Ideas dialog when clicking lightbulb icon', () => {
-      cy.get('[data-testid="topbar-ideas"]').click();
+    const openIdeas = () => {
+      cy.get('[data-testid="topbar-ideas"]').should('not.exist');
+      cy.get('[aria-label="More options"]').click();
+      cy.get('[data-testid="more-menu-ideas"]').click();
+    };
+
+    it('should open Ideas dialog from the More menu', () => {
+      openIdeas();
       cy.get('[role="dialog"]').should('be.visible');
       cy.contains('Feature ideas, bug reports').should('be.visible');
     });
 
     it('should show email link', () => {
-      cy.get('[data-testid="topbar-ideas"]').click();
+      openIdeas();
       cy.contains('support@pratherbytecraft.com').should('be.visible');
     });
 
     it('should close dialog on Escape', () => {
-      cy.get('[data-testid="topbar-ideas"]').click();
+      openIdeas();
       cy.contains('Feature ideas, bug reports').should('be.visible');
       cy.get('body').type('{esc}');
       cy.get('[role="dialog"]').should('not.exist');

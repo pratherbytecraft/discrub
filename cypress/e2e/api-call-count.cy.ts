@@ -22,35 +22,35 @@ describe('API Call Counts', () => {
   describe('Page Load', () => {
     it('should make exactly 1 auth call', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.wait(1000);
       cy.get('@getUser.all').should('have.length', 1);
     });
 
     it('should make exactly 1 guild fetch call', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.wait(1000);
       cy.get('@getGuilds.all').should('have.length', 1);
     });
 
     it('should make exactly 1 announcement data call', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.wait(1000);
       cy.get('@getAnnouncementGist.all').should('have.length', 1);
     });
 
     it('should not fetch announcement markdown when rev matches cached', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.wait(1000);
       cy.get('@getAnnouncementMarkdownGist.all').should('have.length', 0);
     });
 
     it('should fetch donation gist when drawer defaults to open', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.wait(1000);
       cy.get('@getDonationGist.all').its('length').should('be.gte', 1);
     });
@@ -125,7 +125,7 @@ describe('API Call Counts', () => {
   describe('Announcement', () => {
     it('should fetch markdown exactly once when clicking View Announcement', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 
       cy.get('[aria-label="View Announcement"]').click();
       cy.wait('@getAnnouncementMarkdownGist');
@@ -135,7 +135,7 @@ describe('API Call Counts', () => {
 
     it('should not re-fetch markdown on subsequent announcement opens', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 
       // First open
       cy.get('[aria-label="View Announcement"]').click();
@@ -159,7 +159,7 @@ describe('API Call Counts', () => {
   describe('Full User Journey', () => {
     it('should track cumulative API calls for: login → server → channel', () => {
       cy.login();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.wait(1000);
 
       // After page load: @me (1) + guilds (1) = 2 Discord calls

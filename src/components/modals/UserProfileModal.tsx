@@ -18,6 +18,7 @@ import {
   Verified as VerifiedIcon,
   Person as PersonIcon,
   AlternateEmail as MentionIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 import type { User } from 'discrub-core/types/discord-types';
 import type { ExportUserMap } from 'discrub-core/types/discrub-types';
@@ -46,6 +47,8 @@ interface UserProfileModalProps {
    * mentioning [name]" button when provided.
    */
   onFilterByMentions?: (user: User) => void;
+  /** Signs the current user out. Only TopBar passes it, so the button shows for your own profile only (2.2.4). */
+  onLogout?: () => void;
 }
 
 /**
@@ -61,6 +64,7 @@ const UserProfileModal = ({
   guildRoles = [],
   onFilterByAuthor,
   onFilterByMentions,
+  onLogout,
 }: UserProfileModalProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -731,6 +735,18 @@ const UserProfileModal = ({
           flexShrink: 0,
         }}
       >
+        {onLogout && (
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={onLogout}
+            startIcon={<LogoutIcon />}
+            data-testid="profile-logout"
+            sx={{ mr: 'auto' }}
+          >
+            {t('topbar.logout')}
+          </Button>
+        )}
         <Button
           variant="outlined"
           onClick={onClose}

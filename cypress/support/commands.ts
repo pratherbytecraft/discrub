@@ -107,6 +107,15 @@ Cypress.Commands.add('interceptDiscordApi', () => {
 });
 
 /**
+ * Put the seasonal notice away. While a holiday is in season the first click on Appearance
+ * opens on the Theme tab, which specs that want the Layout tab do not expect (2.2.3).
+ */
+Cypress.Commands.add('seenSeasonalNotice', () => {
+  cy.window().its('__store__').invoke('getState').its('notice.loaded').should('be.true');
+  cy.window().its('__store__').invoke('dispatch', { type: 'notice/seen/pending', meta: { arg: 'halloween-26', requestId: 'cy', requestStatus: 'pending' } });
+});
+
+/**
  * Block auto-authentication from VITE_DISCORD_TOKEN env variable.
  * Intercepts /users/@me with 401 so the app stays on LandingPage.
  * Must be called BEFORE cy.visit('/').
@@ -155,7 +164,7 @@ Cypress.Commands.add('login', () => {
     },
   });
   // The env token triggers auto-auth; wait for the main layout
-  cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+  cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 });
 
 /**

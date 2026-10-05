@@ -60,7 +60,7 @@ describe('Localization (#124)', () => {
       cy.get('html').should('have.attr', 'lang', 'de');
 
       cy.reload();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[data-tour="user-profile"]', { timeout: 15000 }).should('be.visible');
       cy.contains('[role="tab"]', 'Paket').should('be.visible');
       cy.readIdbStore('settings').then((values) => {
         expect(values).to.include('de');
@@ -140,7 +140,7 @@ describe('Localization (#124)', () => {
       // Pinned now: a further German-browser boot neither re-suggests nor flips back.
       cy.interceptDiscordApi();
       cy.visit('/', { onBeforeLoad: (win) => setBrowserLanguage(win, ['de-DE']) });
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[data-tour="user-profile"]', { timeout: 15000 }).should('be.visible');
       cy.contains('[role="tab"]', 'Paket').should('be.visible');
       cy.contains('Discrub ist auch auf Deutsch verfügbar.').should('not.exist');
     });
@@ -154,7 +154,7 @@ describe('Localization (#124)', () => {
       forgetStoredLanguage();
       cy.interceptDiscordApi();
       cy.visit('/', { onBeforeLoad: (win) => setBrowserLanguage(win, ['en-GB']) });
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[data-tour="user-profile"]', { timeout: 15000 }).should('be.visible');
       cy.contains('Discrub ist auch auf Deutsch verfügbar.').should('not.exist');
       cy.contains('[role="tab"]', 'Package').should('be.visible');
     });

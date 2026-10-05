@@ -21,7 +21,7 @@ describe('Announcements', () => {
       }).as('getAnnouncementMarkdownNew');
 
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.contains('Announcement', { timeout: 10000 }).should('be.visible');
       cy.contains('Welcome to the latest version!').should('be.visible');
     });
@@ -36,7 +36,7 @@ describe('Announcements', () => {
       }).as('getAnnouncementFail');
 
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.contains('Announcement').should('not.exist');
     });
 
@@ -66,7 +66,7 @@ describe('Announcements', () => {
       }).as('getAnnouncementMarkdownDismiss');
 
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.contains('Announcement', { timeout: 10000 }).should('be.visible');
       cy.contains('button', 'Cancel').click();
       cy.contains('Announcement').should('not.exist');
@@ -90,7 +90,7 @@ describe('Announcements', () => {
       }).as('getAnnouncementMarkdownState');
 
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.contains('Announcement', { timeout: 10000 }).should('be.visible');
       cy.contains('button', 'Cancel').click();
 
@@ -131,7 +131,7 @@ describe('Announcements', () => {
       }).as('getAnnouncementMarkdownContent');
 
       cy.visit('/');
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.contains('Announcement', { timeout: 10000 }).should('be.visible');
     });
 

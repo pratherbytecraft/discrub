@@ -182,7 +182,8 @@ describe('Visual Audit', () => {
     });
 
     it('ideas & contact modal', () => {
-      cy.get('[data-testid="topbar-ideas"]').click();
+      cy.get('[aria-label="More options"]').click();
+      cy.get('[data-testid="more-menu-ideas"]').click();
       cy.get('[role="dialog"]').should('be.visible');
       snap('modals/ideas-contact');
     });

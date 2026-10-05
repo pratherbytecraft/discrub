@@ -18,7 +18,7 @@ describe('Channel Messages', () => {
   it('displays message author, content, and timestamp', () => {
     cy.selectChannel('general');
     cy.contains('[data-testid="message-feed-row"]', 'Hello everyone! Welcome to the server.').should('exist');
-    cy.contains('Discrub Tester').should('exist');
+    cy.get('[aria-label="Your profile, Discrub Tester"]').should('exist');
   });
 
   // Backlog #204/#213: a sticker-only message (empty content) carries real

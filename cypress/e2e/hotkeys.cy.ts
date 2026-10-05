@@ -146,7 +146,7 @@ describe('Hotkeys (#144)', () => {
       });
       cy.wait(300); // let the IDB write flush before reload
       cy.reload();
-      cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
       cy.window({ timeout: 10000 }).should((win) => {
         const enabled = (win as any).__store__.getState().hotkeys.enabled;
         expect(enabled).to.equal(false);

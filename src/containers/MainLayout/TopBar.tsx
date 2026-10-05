@@ -43,7 +43,7 @@ import {
   selectIsSupporter,
 } from '@features/supporter/supporterSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
-import CompatibilityPopover, { CompatibilitySheet } from '@components/compatibility/CompatibilityPopover';
+import { CompatibilityPopup, CompatibilitySheet } from '@components/compatibility/CompatibilityPopover';
 import { InfoOutlined as CompatibilityIcon } from '@mui/icons-material';
 import { BleedingStack } from '@components/supporter/BleedingTitle';
 import { isBleedingEdgeBuild } from '@services/hostedGate';
@@ -93,6 +93,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const operationSummary = useAppSelector(selectOperationSummary);
   const isSupporter = useAppSelector(selectIsSupporter);
   const [compatOpen, setCompatOpen] = useState(false);
+  const [compatAnchor, setCompatAnchor] = useState<null | HTMLElement>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [ideasOpen, setIdeasOpen] = useState(false);
@@ -177,13 +178,13 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
         boxShadow: (theme) => theme.customShadows?.elevation1 || '0 2px 8px rgba(0, 0, 0, 0.2)',
       }}
     >
-      {/* The Scrublings keep their room (selectStageRoom) before the bar keeps its words. Beside the supporter
-          wall at 1280 px the bar is 960 px, and the stage used to get 60 px there, one character. In order:
-          the version goes and the gaps tighten, a long name shortens with an ellipsis (it never pushes Log out
-          off the bar), then the name goes, then the Appearance button drops its word. */}
+      {/* The Scrublings keep their room (selectStageRoom) before the bar keeps its words. In order: the version
+          goes and the gaps tighten, then the Bots button drops its word, then the Appearance button drops its word.
+          2.2.4: the bar shows the avatar alone (the name sits in its tooltip and the profile), and Ideas, Compatibility,
+          r/discrub and View Announcement live in the More menu at every width, so the words hold on longer. */}
       <Toolbar sx={{ gap: { xs: 1, sm: 2 }, minWidth: 0, overflow: 'hidden', ...(stageRoom > 0 ? {
-        '@container (max-width: 1100px)': { gap: 1, '& .topbar-version': { display: 'none' }, '& .topbar-right': { gap: 0.75 }, '& .bots-label': { display: 'none' }, '& [data-testid="bots-button"]': { minWidth: 0, px: 1 }, '& [data-testid="bots-button"] .MuiButton-startIcon': { mx: 0 } },
-        '@container (max-width: 880px)': { '& .topbar-username': { display: 'none' } },
+        '@container (max-width: 1100px)': { gap: 1, '& .topbar-version': { display: 'none' }, '& .topbar-right': { gap: 0.75 } },
+        '@container (max-width: 900px)': { '& .bots-label': { display: 'none' }, '& [data-testid="bots-button"]': { minWidth: 0, px: 1 }, '& [data-testid="bots-button"] .MuiButton-startIcon': { mx: 0 } },
         '@container (max-width: 800px)': { '& .appearance-label': { display: 'none' } },
       } : {}) }}>
         {isMobile && onMenuClick && (
@@ -261,18 +262,18 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
 
         {currentUser && (
           <Box className="topbar-right" sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 }, flexShrink: 1, minWidth: 0, '& > *': { flexShrink: 0 } }}>
+            {/* The avatar alone opens the profile; the name is its tooltip (2.2.4). */}
+            <Tooltip title={currentUser.global_name || currentUser.username} enterDelay={0} arrow>
             <Box
               onClick={handleProfileClick}
               data-tour="user-profile"
+              role="button"
+              aria-label={t('topbar.profile', { name: currentUser.global_name || currentUser.username })}
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                minWidth: 0,
-                // On a phone the box holds only the picture, so it keeps its width. A narrower box let the picture cover the Appearance button at 320 px (2.2.2).
-                '&&': { flexShrink: isCompact ? 0 : 1 },
-                gap: 1,
                 cursor: 'pointer',
-                padding: { xs: '4px', sm: '4px 12px' },
+                padding: '4px',
                 borderRadius: '4px',
                 transition: 'background-color 200ms ease',
                 '&:hover': {
@@ -321,39 +322,16 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                   </Box>
                 )}
               </Box>
-              <Typography
-                variant="body2"
-                noWrap
-                className="topbar-username"
-                sx={{
-                  minWidth: 0,
-                  display: isCompact ? 'none' : undefined,
-                  transition: 'color 200ms ease',
-                }}
-              >
-                {currentUser.global_name || currentUser.username}
-              </Typography>
             </Box>
+            </Tooltip>
 
             {/* Layouts and themes in one menu (2.2.0). Replaces the palette icon; supporter access is its fourth segment. */}
             <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
 
-            {/* App group: Ideas, Compatibility, Settings. Groups are separated
-                by thin dividers with a tight gap inside each one. */}
+            {/* App group: Settings. Groups are separated by thin dividers with a tight gap inside each one. */}
             {!isCompact && <SectionDivider />}
             {!isCompact && (
               <Box data-testid="topbar-group-app" sx={GROUP_SX}>
-              <Tooltip title={t('topbar.ideasAndContact')} enterDelay={0} arrow>
-                <IconButton
-                  color="inherit"
-                  onClick={() => setIdeasOpen(true)}
-                  aria-label={t('topbar.ideasAndContact')}
-                  data-testid="topbar-ideas"
-                >
-                  <IdeasIcon />
-                </IconButton>
-              </Tooltip>
-              <CompatibilityPopover placement="topbar" />
               <HotkeyTooltip actionId="openSettings" label={t('topbar.settings')} enterDelay={0} arrow>
                 <IconButton
                   color="inherit"
@@ -366,14 +344,15 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
               </Box>
             )}
 
-            {/* Everything below folds into the More menu when the bar gets
-                narrow; the wrapper keeps one tour target either way. */}
+            {/* Bots and the Supporter Wall sit on the bar; Ideas, Compatibility, r/discrub and View Announcement
+                live in the More menu at every width (2.2.4). Below `md` the wall joins them, on a phone so do
+                Bots, Settings and Logout. The wrapper keeps one tour target either way. */}
             <SectionDivider />
             <Box data-tour="topbar-extras" data-testid="topbar-group-community" sx={GROUP_SX}>
+              {/* The word is the first text the bar gives up as it narrows (see the container rules on the toolbar). */}
+              {isWide ? <BotsButton size="medium" /> : <BotsButton label={false} hideOnPhone />}
               {isWide && (
                 <>
-                  {/* The word is the first text the bar gives up as it narrows (see the container rules on the toolbar). */}
-                  <BotsButton size="medium" />
                   <Tooltip title={t('topbar.supporterWall')} enterDelay={0} arrow>
                     <IconButton
                       color="inherit"
@@ -395,44 +374,18 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                       />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="r/discrub" enterDelay={0} arrow>
-                    <IconButton
-                      color="inherit"
-                      component="a"
-                      href="https://www.reddit.com/r/discrub"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="r/discrub"
-                      data-testid="topbar-reddit"
-                    >
-                      <RedditIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('topbar.viewAnnouncement')} enterDelay={0} arrow>
-                    <IconButton
-                      color="inherit"
-                      onClick={handleViewAnnouncement}
-                      aria-label={t('topbar.viewAnnouncement')}
-                      data-testid="topbar-announcement"
-                    >
-                      <AnnouncementIcon />
-                    </IconButton>
-                  </Tooltip>
                 </>
               )}
-
-              {!isWide && <BotsButton label={false} hideOnPhone />}
-              {!isWide && (
-                <Tooltip title={t('topbar.more')} enterDelay={0} arrow>
-                  <IconButton
-                    color="inherit"
-                    onClick={(e) => setMoreMenuAnchor(e.currentTarget)}
-                    aria-label={t('topbar.moreOptions')}
-                  >
-                    <MoreIcon />
-                  </IconButton>
-                </Tooltip>
-              )}
+              <Tooltip title={t('topbar.more')} enterDelay={0} arrow>
+                <IconButton
+                  color="inherit"
+                  onClick={(e) => setMoreMenuAnchor(e.currentTarget)}
+                  aria-label={t('topbar.moreOptions')}
+                  data-testid="topbar-more"
+                >
+                  <MoreIcon />
+                </IconButton>
+              </Tooltip>
             </Box>
 
             <Menu
@@ -441,38 +394,29 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
               onClose={() => setMoreMenuAnchor(null)}
               PaperProps={{ sx: { bgcolor: 'background.paper', minWidth: 200 } }}
             >
-              <MenuItem
-                onClick={() => {
-                  handleToggleKofi();
-                  setMoreMenuAnchor(null);
-                }}
-              >
-                <ListItemIcon>
-                  <Box
-                    component="img"
-                    src="/kofi.svg"
-                    alt="Ko-Fi"
-                    sx={{
-                      width: 20,
-                      height: 20,
-                      filter: showKofiFeed === 'true' ? 'none' : 'grayscale(1)',
-                    }}
-                  />
-                </ListItemIcon>
-                <ListItemText>{t('topbar.supporterWall')}</ListItemText>
-              </MenuItem>
-              <MenuItem
-                component="a"
-                href="https://www.reddit.com/r/discrub"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setMoreMenuAnchor(null)}
-              >
-                <ListItemIcon>
-                  <RedditIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>r/discrub</ListItemText>
-              </MenuItem>
+              {!isWide && (
+                <MenuItem
+                  onClick={() => {
+                    handleToggleKofi();
+                    setMoreMenuAnchor(null);
+                  }}
+                  data-testid="more-menu-supporter-wall"
+                >
+                  <ListItemIcon>
+                    <Box
+                      component="img"
+                      src="/kofi.svg"
+                      alt="Ko-Fi"
+                      sx={{
+                        width: 20,
+                        height: 20,
+                        filter: showKofiFeed === 'true' ? 'none' : 'grayscale(1)',
+                      }}
+                    />
+                  </ListItemIcon>
+                  <ListItemText>{t('topbar.supporterWall')}</ListItemText>
+                </MenuItem>
+              )}
               {isCompact && (
                 <MenuItem onClick={() => { setBotsAnchor(moreMenuAnchor); setMoreMenuAnchor(null); }} data-testid="more-menu-bots">
                   <ListItemIcon>
@@ -481,25 +425,49 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                   <ListItemText>{t('bots.button')}</ListItemText>
                 </MenuItem>
               )}
-              {isCompact && (
-                <MenuItem
-                  onClick={() => {
-                    setIdeasOpen(true);
-                    setMoreMenuAnchor(null);
-                  }}
-                  data-testid="more-menu-ideas"
-                >
-                  <ListItemIcon>
-                    <IdeasIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>{t('topbar.ideasAndContact')}</ListItemText>
-                </MenuItem>
-              )}
+              <MenuItem
+                onClick={() => {
+                  setIdeasOpen(true);
+                  setMoreMenuAnchor(null);
+                }}
+                data-testid="more-menu-ideas"
+              >
+                <ListItemIcon>
+                  <IdeasIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>{t('topbar.ideasAndContact')}</ListItemText>
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  if (isCompact) setCompatOpen(true); else setCompatAnchor(moreMenuAnchor);
+                  setMoreMenuAnchor(null);
+                }}
+                data-testid="more-menu-compatibility"
+              >
+                <ListItemIcon>
+                  <CompatibilityIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>{t('topbar.compatibility')}</ListItemText>
+              </MenuItem>
+              <MenuItem
+                component="a"
+                href="https://www.reddit.com/r/discrub"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMoreMenuAnchor(null)}
+                data-testid="more-menu-reddit"
+              >
+                <ListItemIcon>
+                  <RedditIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>r/discrub</ListItemText>
+              </MenuItem>
               <MenuItem
                 onClick={() => {
                   handleViewAnnouncement();
                   setMoreMenuAnchor(null);
                 }}
+                data-testid="more-menu-announcement"
               >
                 <ListItemIcon>
                   <AnnouncementIcon fontSize="small" />
@@ -507,20 +475,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                 <ListItemText>{t('topbar.viewAnnouncement')}</ListItemText>
               </MenuItem>
               {isCompact && <Divider />}
-              {isCompact && (
-                <MenuItem
-                  onClick={() => {
-                    setMoreMenuAnchor(null);
-                    setCompatOpen(true);
-                  }}
-                  data-testid="more-menu-compatibility"
-                >
-                  <ListItemIcon>
-                    <CompatibilityIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>{t('topbar.compatibility')}</ListItemText>
-                </MenuItem>
-              )}
               {isCompact && (
                 <MenuItem
                   onClick={() => {
@@ -552,24 +506,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
             </Menu>
             <BotsPopover anchor={botsAnchor} onClose={() => setBotsAnchor(null)} />
 
-            {!isCompact && <SectionDivider />}
-            {!isCompact && (
-            <Tooltip title={t('topbar.logout')} enterDelay={0} arrow>
-              <IconButton
-                color="inherit"
-                onClick={handleLogout}
-                aria-label={t('topbar.logout')}
-                sx={{
-                  transition: 'background-color 200ms ease',
-                  '&:hover': {
-                    backgroundColor: 'rgba(240, 71, 71, 0.15)',
-                  },
-                }}
-              >
-                <LogoutIcon />
-              </IconButton>
-            </Tooltip>
-            )}
+            {/* Logout lives in the profile dialog the avatar opens (2.2.4); on a phone it also sits in the More menu. */}
+            {isOverlayMode() && <SectionDivider />}
 
             {isOverlayMode() && (
               <HotkeyTooltip actionId="minimize" label={t('topbar.minimizeToDiscord')} enterDelay={0} arrow>
@@ -605,9 +543,11 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
       </Toolbar>
 
       <CompatibilitySheet open={compatOpen} onClose={() => setCompatOpen(false)} />
+      <CompatibilityPopup anchor={compatAnchor} onClose={() => setCompatAnchor(null)} />
       <UserProfileModal
         open={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
+        onLogout={() => { setProfileModalOpen(false); handleLogout(); }}
         user={currentUser}
         cachedUserMap={cachedUserMap}
         guildId={null}

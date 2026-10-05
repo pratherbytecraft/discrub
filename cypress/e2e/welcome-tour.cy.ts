@@ -55,7 +55,7 @@ describe('Welcome Panel & Guided Tour', () => {
     it('should start tour when Take a Tour is clicked', () => {
       cy.contains('Take a Tour').click();
       cy.contains('Your Discord servers appear here', { timeout: 5000 }).should('be.visible');
-      cy.contains('1 of 9').should('be.visible');
+      cy.contains('1 of 8').should('be.visible');
     });
 
     it('should navigate through tour steps with Next', () => {
@@ -64,11 +64,11 @@ describe('Welcome Panel & Guided Tour', () => {
       cy.contains('button', 'Next').click();
 
       cy.contains('Switch here to browse your direct messages').should('be.visible');
-      cy.contains('2 of 9').should('be.visible');
+      cy.contains('2 of 8').should('be.visible');
       cy.contains('button', 'Next').click();
 
       cy.contains('Filter servers, channels, or DMs by name').should('be.visible');
-      cy.contains('3 of 9').should('be.visible');
+      cy.contains('3 of 8').should('be.visible');
     });
 
     it('should navigate back with Back button', () => {
@@ -100,12 +100,12 @@ describe('Welcome Panel & Guided Tour', () => {
       cy.contains('Take a Tour').click();
       cy.contains('Your Discord servers appear here', { timeout: 5000 }).should('be.visible');
 
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 7; i++) {
         cy.contains('button', 'Next').click();
       }
 
       cy.contains('button', 'Finish').should('be.visible');
-      cy.contains('9 of 9').should('be.visible');
+      cy.contains('8 of 8').should('be.visible');
       cy.contains('button', 'Finish').click();
 
       // Tour tooltip content should be gone

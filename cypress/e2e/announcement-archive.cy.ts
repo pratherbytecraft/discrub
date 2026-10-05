@@ -46,7 +46,7 @@ describe('Announcement archive rail', () => {
     }).as('getAnnouncementMarkdownNew');
 
     cy.visit('/');
-    cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+    cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
     cy.contains('Discrub 2.1.0', { timeout: 10000 }).should('be.visible');
     cy.wait('@getAnnouncementArchiveGist');
     cy.get('[data-testid="announcement-archive-rail"]').should('not.contain', 'Latest');

@@ -72,7 +72,7 @@ function visitApp() {
         .__supporterPublicKeysOverride__ = { '2026-2': publicKeyPem };
     },
   });
-  cy.contains('Discrub Tester', { timeout: 15000 }).should('be.visible');
+  cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
 }
 
 function pasteSupporterKey() {

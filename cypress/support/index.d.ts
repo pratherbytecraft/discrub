@@ -13,6 +13,9 @@ declare namespace Cypress {
      */
     blockAutoAuth(): Chainable<void>;
 
+    /** Marks the seasonal notice seen so the first Appearance click opens on Layout (2.2.3). */
+    seenSeasonalNotice(): Chainable<void>;
+
     /**
      * Log in (auto-auth via env token with mocked API)
      */

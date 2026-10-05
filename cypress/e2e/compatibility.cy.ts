@@ -21,9 +21,12 @@ const expectTable = () => {
 };
 
 describe('Compatibility popover', () => {
-  it('opens from the TopBar on desktop with the detected column marked', () => {
+  // 2.2.4: Compatibility moved from its own bar button into the More menu; on desktop it still opens as a popover.
+  it('opens from the More menu on desktop with the detected column marked', () => {
     cy.login();
-    cy.get('[data-testid="compat-button-topbar"]').click();
+    cy.get('[data-testid="compat-button-topbar"]').should('not.exist');
+    cy.get('[aria-label="More options"]').click();
+    cy.get('[data-testid="more-menu-compatibility"]').click();
     cy.get('[data-testid="compat-popover"]').should('be.visible');
     expectTable();
     cy.get('[data-testid="compat-col-be-chrome"]').should('contain.text', 'You');

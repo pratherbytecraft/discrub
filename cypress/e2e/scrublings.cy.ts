@@ -15,6 +15,7 @@ describe('Scrublings (2.2.0)', () => {
   beforeEach(() => {
     cy.viewport(1440, 900);
     cy.login();
+    cy.seenSeasonalNotice();
     cy.selectServer('Cypress Test Server');
     cy.selectChannel('general');
     cy.contains('[data-testid="message-feed-row"]', 'Hello everyone! Welcome to the server.').should('exist');
