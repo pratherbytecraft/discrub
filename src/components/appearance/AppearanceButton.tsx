@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box, ButtonBase, Tooltip, Typography, alpha, useMediaQuery, useTheme, type Theme } from '@mui/material';
-import { ArrowDropDown as ChevronIcon } from '@mui/icons-material';
+import { ArrowDropDown as ChevronIcon, Checkroom as AppearanceIcon } from '@mui/icons-material';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -50,10 +50,11 @@ const AppearanceButton = ({ onOpenSettings }: { onOpenSettings: () => void }) =>
   };
   useHotkey('openAppearance', toggle, true);
 
+  // 2.2.4: a wardrobe icon in the theme's accent replaces the half-filled swatch.
   const dot = (
-    <Box
+    <AppearanceIcon
       data-testid={isSupporter ? 'supporter-badge' : undefined}
-      sx={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0, border: '1px solid', borderColor: 'divider', background: `conic-gradient(${theme.palette.primary.main} 0 50%, ${theme.palette.background.paper} 50% 100%)` }}
+      sx={{ fontSize: 16, mx: '-1px', flexShrink: 0, color: 'primary.main' }}
     />
   );
 

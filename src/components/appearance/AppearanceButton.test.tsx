@@ -9,6 +9,8 @@ import PreviewBar from './PreviewBar';
 const withSettings = () => {
   const state = createBaseState();
   state.app = { ...state.app, settings: { ...defaultSettings } };
+  // The seasonal notice is live every October, and its first click opens on Theme. These tests want the Layout tab.
+  state.notice = { loaded: true, seenId: 'halloween-26' };
   return state;
 };
 
@@ -17,7 +19,9 @@ describe('<AppearanceButton />', () => {
 
   it('hangs the seasonal notice from the button during Halloween and puts it away on the first click, opening on Theme', async () => {
     vi.setSystemTime(new Date(2026, 9, 10));
-    renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });
+    const unseen = withSettings();
+    unseen.notice = { loaded: true, seenId: null };
+    renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: unseen });
     expect(screen.getByTestId('seasonal-notice')).toHaveAttribute('data-theme-id', 'halloween-26');
     expect(screen.getByTestId('seasonal-notice-line')).toHaveTextContent("Halloween '26 is in.");
     fireEvent.click(screen.getByLabelText('Appearance'));
