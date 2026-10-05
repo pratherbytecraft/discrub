@@ -422,6 +422,7 @@
   "userData": {
     "intro": "Lege fest, wie Benutzerdaten von Discord geladen und zwischengespeichert werden.",
     "enableReactions": "Reaktionen aktivieren",
+    "lookupReplies": "Beantwortete Nachrichten nachschlagen",
     "lookupNicknames": "Server-Nicknames nachschlagen",
     "lookupDisplayNames": "Anzeigenamen nachschlagen",
     "refreshRate": "Aktualisierung der Benutzerdaten",

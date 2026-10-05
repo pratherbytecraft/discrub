@@ -31,6 +31,18 @@ export const UserDataTab = ({ formValues, onChange }: UserDataTabProps) => {
       <FormControlLabel
         control={
           <Checkbox
+            checked={formValues[DiscrubSetting.REPLIES_ENABLED] === 'true'}
+            onChange={(e) =>
+              onChange(DiscrubSetting.REPLIES_ENABLED, e.target.checked ? 'true' : 'false')
+            }
+          />
+        }
+        label={t('userData.lookupReplies')}
+      />
+
+      <FormControlLabel
+        control={
+          <Checkbox
             checked={formValues[DiscrubSetting.SERVER_NICKNAME_LOOKUP] === 'true'}
             onChange={(e) =>
               onChange(DiscrubSetting.SERVER_NICKNAME_LOOKUP, e.target.checked ? 'true' : 'false')

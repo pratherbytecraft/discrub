@@ -422,6 +422,7 @@
   "userData": {
     "intro": "Control how user data is fetched and cached from Discord.",
     "enableReactions": "Enable reactions",
+    "lookupReplies": "Look up replied-to messages",
     "lookupNicknames": "Look up server nicknames",
     "lookupDisplayNames": "Look up display names",
     "refreshRate": "User Data Refresh Rate",

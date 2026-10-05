@@ -311,6 +311,7 @@ describe('UserDataTab', () => {
   it('should render checkbox controls', () => {
     render(<UserDataTab formValues={defaultSettings} onChange={vi.fn()} />);
     expect(screen.getByLabelText('Enable reactions')).toBeInTheDocument();
+    expect(screen.getByLabelText('Look up replied-to messages')).toBeInTheDocument();
     expect(screen.getByLabelText('Look up server nicknames')).toBeInTheDocument();
     expect(screen.getByLabelText('Look up display names')).toBeInTheDocument();
   });
@@ -331,6 +332,13 @@ describe('UserDataTab', () => {
     render(<UserDataTab formValues={defaultSettings} onChange={onChange} />);
     fireEvent.click(screen.getByLabelText('Enable reactions'));
     expect(onChange).toHaveBeenCalledWith(DiscrubSetting.REACTIONS_ENABLED, 'false');
+  });
+
+  it('should turn reply lookups off from its checkbox', () => {
+    const onChange = vi.fn();
+    render(<UserDataTab formValues={defaultSettings} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText('Look up replied-to messages'));
+    expect(onChange).toHaveBeenCalledWith(DiscrubSetting.REPLIES_ENABLED, 'false');
   });
 });
 
