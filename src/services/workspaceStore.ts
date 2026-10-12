@@ -203,7 +203,33 @@ async function withTx<T>(
   } catch (error) {
     throw mapError(error, context);
   }
+  if (mode === 'readwrite') notifyStoreChange();
   return result;
+}
+
+/* ─────────────────── Change listeners ─────────────────── */
+
+const storeListeners = new Set<() => void>();
+
+/**
+ * Called after every committed write, so the Workspaces popover and the
+ * disk bar can refresh their figures. Returns the unsubscribe.
+ */
+export function onWorkspaceStoreChange(listener: () => void): () => void {
+  storeListeners.add(listener);
+  return () => {
+    storeListeners.delete(listener);
+  };
+}
+
+function notifyStoreChange(): void {
+  for (const listener of storeListeners) {
+    try {
+      listener();
+    } catch (error) {
+      console.error('[workspace] store listener failed', error);
+    }
+  }
 }
 
 function mapError(error: unknown, context: { wid: string; cid: string | null }): unknown {
@@ -290,6 +316,7 @@ export async function deleteWorkspaceDatabase(): Promise<void> {
     request.onerror = () => reject(request.error ?? new WorkspaceStoreError('Could not delete the workspace database'));
     request.onblocked = () => resolve();
   });
+  notifyStoreChange();
 }
 
 /* ─────────────────── Records ─────────────────── */
@@ -548,12 +575,23 @@ export function duplicateWorkspace(wid: string, name: string, now = Date.now()):
 
 /* ─────────────────── Conversations ─────────────────── */
 
+/**
+ * Empties a conversation's row figures. The cursor, selection, scroll
+ * anchor, enrichment and any unfinished action pointed at those rows, so
+ * they start over too; filters, sort and thread tabs stay.
+ */
 function resetConversationRows(conversation: Conversation): void {
+  const fresh = newConversation(conversation.cid, conversation);
   conversation.count = 0;
   conversation.bytes = 0;
   conversation.oldestId = null;
   conversation.newestId = null;
   conversation.complete = false;
+  conversation.pagination = fresh.pagination;
+  conversation.selectedIds = [];
+  conversation.scrollAnchorId = null;
+  conversation.action = null;
+  conversation.enrichment = fresh.enrichment;
 }
 
 export function getConversation(wid: string, cid: string): Promise<Conversation | null> {
@@ -938,9 +976,13 @@ export function holdsWorkspaceLock(wid: string): boolean {
 export function isWorkspaceHeldElsewhere(wid: string): Promise<boolean> {
   if (heldLocks.has(wid)) return Promise.resolve(false);
   const locks = locksApi();
-  if (!locks) return Promise.resolve(false);
+  if (!locks || typeof locks.query !== 'function') return Promise.resolve(false);
+  // query() only reads; taking the lock to test it would make a switch in
+  // this window, landing at the same moment, look refused (WP5 Cypress).
+  const name = `${WORKSPACE_LOCK_PREFIX}${wid}`;
   return locks
-    .request(`${WORKSPACE_LOCK_PREFIX}${wid}`, { mode: 'exclusive', ifAvailable: true }, (lock) => lock === null)
+    .query()
+    .then((snapshot) => (snapshot.held ?? []).some((lock) => lock.name === name))
     .catch(() => false);
 }
 

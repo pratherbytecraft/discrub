@@ -6,20 +6,35 @@ import { setDiscrubCancelled, setDiscrubPaused, setFeedScrollAnchor } from '@fea
 import { setSelectedChannel } from '@features/channel/channelSlice';
 import { fetchDmById, setSelectedDm } from '@features/dm/dmSlice';
 import { setSelectedGuild } from '@features/guild/guildSlice';
-import { clearMessages, openThreadTab, setActiveTab } from '@features/message/messageSlice';
+import { clearMessages, openThreadTab, removeThreadTab, setActiveTab } from '@features/message/messageSlice';
+import { t } from '@/i18n';
 import { openChannel, openDm, openGuild } from '@features/navigation/openConversation';
 import { isMessageChannel } from '@utils/channelTypeUtils';
 import {
   acquireWorkspaceLock,
+  clearConversation,
+  clearWorkspaceMessages,
+  createWorkspace,
+  deleteWorkspace,
+  deleteWorkspaceDatabase,
+  duplicateWorkspace,
   getWorkspace,
   isWorkspaceOpenable,
   releaseWorkspaceLock,
+  renameWorkspace,
   setLastWorkspace,
   touchWorkspace,
+  updateWorkspace,
 } from '@services/workspaceStore';
+import { DEFAULT_WORKSPACE_ID } from './workspaceTypes';
+import { copyName, nextWorkspaceColor, nextWorkspaceName } from './workspaceSummary';
 import {
+  actionRecorded,
   actionsOf,
   bulkOf,
+  currentWorkspaceRenamed,
+  initializeWorkspaces,
+  refreshWorkspaces,
   scopeRestoreFinished,
   selectCurrentWid,
   workspaceSwitchFailed,
@@ -221,3 +236,120 @@ async function openScope(wid: string, dispatchAny: Dispatch, getState: () => Roo
 
 const selectMainCid = (state: RootState): string | null =>
   state.channel?.selectedChannel?.id ?? state.dm?.selectedDm?.id ?? null;
+
+/* ─────────────────── Popover actions (WP5) ─────────────────── */
+
+/** A new empty workspace, named "Workspace 2" and on, in the next free colour. It does not open. */
+export const createNewWorkspace = createAsyncThunk<string, void, { state: RootState }>(
+  'workspace/create',
+  async (_, { dispatch, getState }) => {
+    const list = getState().workspace.list;
+    const record = await createWorkspace({
+      name: nextWorkspaceName(t('workspace.newName'), list.map((w) => w.name)),
+      color: nextWorkspaceColor(list.map((w) => w.color)),
+    });
+    await dispatch(refreshWorkspaces());
+    return record.wid;
+  },
+);
+
+export const renameWorkspaceThunk = createAsyncThunk<void, { wid: string; name: string }, { state: RootState }>(
+  'workspace/rename',
+  async ({ wid, name }, { dispatch, getState }) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    await renameWorkspace(wid, trimmed);
+    if (getState().workspace.currentWid === wid) dispatch(currentWorkspaceRenamed(trimmed));
+    await dispatch(refreshWorkspaces());
+  },
+);
+
+export const duplicateWorkspaceThunk = createAsyncThunk<string, { wid: string }, { state: RootState }>(
+  'workspace/duplicate',
+  async ({ wid }, { dispatch, getState }) => {
+    const list = getState().workspace.list;
+    const source = list.find((w) => w.wid === wid);
+    const names = list.map((w) => w.name);
+    const copy = await duplicateWorkspace(wid, copyName(source?.name ?? wid, t('workspace.copySuffix'), names));
+    // The copy gets its own colour so the bar can tell them apart.
+    await updateWorkspace(copy.wid, (record) => {
+      record.color = nextWorkspaceColor(list.map((w) => w.color));
+    });
+    await dispatch(refreshWorkspaces());
+    return copy.wid;
+  },
+);
+
+/**
+ * When the open conversation (or one of its thread tabs) loses its rows,
+ * the screen starts over too: the conversation opens again on a fresh
+ * first page, a thread tab closes.
+ */
+async function resetOpenConversations(cids: string[] | 'all', dispatchAny: Dispatch, getState: () => RootState): Promise<void> {
+  const dispatch = dispatchAny as (action: unknown) => Promise<unknown>;
+  const hit = (cid: string) => cids === 'all' || cids.includes(cid);
+  for (const threadId of Object.keys(getState().message.threadTabs ?? {})) {
+    if (hit(threadId)) dispatch(removeThreadTab(threadId));
+  }
+  const main = selectMainCid(getState());
+  if (!main || !hit(main)) return;
+  const channel = getState().channel?.selectedChannel;
+  const dm = getState().dm?.selectedDm;
+  if (channel) await dispatch(openChannel({ channel }));
+  else if (dm) await dispatch(openDm({ dm }));
+}
+
+/** Clears one conversation's messages; its filters and settings stay (plan section 8). */
+export const clearConversationThunk = createAsyncThunk<void, { wid: string; cid: string }, { state: RootState }>(
+  'workspace/clearConversation',
+  async ({ wid, cid }, { dispatch, getState }) => {
+    await clearConversation(wid, cid);
+    if (getState().workspace.currentWid === wid) {
+      dispatch(actionRecorded({ cid, action: null }));
+      await resetOpenConversations([cid], dispatch, getState);
+    }
+    await dispatch(refreshWorkspaces());
+  },
+);
+
+/** Clears every conversation's messages; the workspace and its settings stay. */
+export const clearWorkspaceThunk = createAsyncThunk<void, { wid: string }, { state: RootState }>(
+  'workspace/clearMessages',
+  async ({ wid }, { dispatch, getState }) => {
+    await clearWorkspaceMessages(wid);
+    if (getState().workspace.currentWid === wid) {
+      for (const cid of Object.keys(getState().workspace.actions)) dispatch(actionRecorded({ cid, action: null }));
+      await resetOpenConversations('all', dispatch, getState);
+    }
+    await dispatch(refreshWorkspaces());
+  },
+);
+
+/** Deletes a workspace. The open one switches to Default first. Default itself is only cleared. */
+export const deleteWorkspaceThunk = createAsyncThunk<void, { wid: string }, { state: RootState }>(
+  'workspace/delete',
+  async ({ wid }, { dispatch, getState }) => {
+    if (wid === DEFAULT_WORKSPACE_ID) return;
+    if (getState().workspace.currentWid === wid) {
+      await (dispatch(switchWorkspace({ wid: DEFAULT_WORKSPACE_ID })) as unknown as { unwrap: () => Promise<unknown> }).unwrap();
+    }
+    await deleteWorkspace(wid);
+    await dispatch(refreshWorkspaces());
+  },
+);
+
+/**
+ * Sign out leaves no messages on disk (plan section 8): every workspace
+ * goes, then Default is made again empty for the next sign in.
+ */
+export const clearAllWorkspaces = createAsyncThunk<void, void, { state: RootState }>(
+  'workspace/clearAll',
+  async (_, { dispatch, getState }) => {
+    await flushPendingRecords({ dispatch, getState });
+    const current = getState().workspace?.currentWid;
+    if (current) releaseWorkspaceLock(current);
+    await deleteWorkspaceDatabase();
+    await dispatch(initializeWorkspaces());
+    await dispatch(refreshWorkspaces());
+  },
+);

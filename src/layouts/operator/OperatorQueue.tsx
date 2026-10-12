@@ -17,6 +17,7 @@ import DMList from '@components/navigation/DMList';
 import PackageChannelList from '@components/package/PackageChannelList';
 import GuildAvatar from '@components/ui/GuildAvatar';
 import { useLoadGuilds } from '@/hooks/useLoadGuilds';
+import WorkspacePill from '@components/workspace/WorkspacePill';
 
 export const QUEUE_WIDTH = 280;
 
@@ -95,7 +96,10 @@ const OperatorQueue = ({ marks, runProgress }: { marks: QueueMarks; runProgress?
         )}
       </Box>
       {segment !== 'package' && (
-        <Typography variant="caption" data-testid="operator-queue-count" sx={{ color: 'text.secondary', px: 1.5, py: 1, borderTop: '1px solid', borderColor: 'divider' }}>{countLine}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.75, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="caption" data-testid="operator-queue-count" noWrap sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }}>{countLine}</Typography>
+          <WorkspacePill variant="bar" />
+        </Box>
       )}
     </Box>
   );

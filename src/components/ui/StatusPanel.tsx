@@ -19,6 +19,7 @@ import PauseResumeControls from './PauseResumeControls';
 import OperationTip from './OperationTip';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
+import WorkspacePill from '@components/workspace/WorkspacePill';
 
 const PAGE_SIZE = 50;
 const PANEL_HEIGHT = 150;
@@ -366,6 +367,7 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
           >
             {t('statusPanel.title')}
           </Typography>
+          <WorkspacePill variant="log" />
           {operationSummary.isRunning && (
             <CircularProgress
               size={12}

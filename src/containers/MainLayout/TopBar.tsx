@@ -54,6 +54,7 @@ import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { selectIsMinimized } from '@features/app/appSlice';
 import { useTranslation } from 'react-i18next';
+import { clearAllWorkspaces } from '@features/workspace/workspaceThunks';
 
 interface TopBarProps {
   /** Opens the navigation drawer; the hamburger only renders below `md`. */
@@ -136,6 +137,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
     dispatch(clearChannels());
     dispatch(clearDMs());
     dispatch(clearMessages());
+    // Messages never stay on disk after signing out (2.2.5 workspaces).
+    void dispatch(clearAllWorkspaces());
   };
 
   const handleProfileClick = () => {

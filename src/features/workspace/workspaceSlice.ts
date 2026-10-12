@@ -7,10 +7,15 @@ import {
   ensureDefaultWorkspace,
   getMeta,
   getWorkspace,
+  isWorkspaceHeldElsewhere,
   isWorkspaceOpenable,
+  listWorkspaces,
+  readStorageEstimate,
   setLastWorkspace,
   touchWorkspace,
+  type StorageFigures,
 } from '@services/workspaceStore';
+import { summarizeWorkspace, type WorkspaceSummary } from './workspaceSummary';
 import { DEFAULT_WORKSPACE_ID, type ActionKind, type BulkKind, type BulkMode, type WorkspaceRecord } from './workspaceTypes';
 
 /** An unfinished long action recorded in a conversation of the open workspace (plan section 6). */
@@ -59,6 +64,10 @@ export interface WorkspaceState {
   actions: Record<string, UnfinishedAction>;
   /** The open workspace's unfinished bulk run (WP4b). */
   bulk: UnfinishedBulk | null;
+  /** Every workspace with its figures, for the popover, the pill and the disk bar (WP5). */
+  list: WorkspaceSummary[];
+  /** The browser's own usage and quota, null where `estimate()` is missing. */
+  storage: StorageFigures | null;
 }
 
 export const initialWorkspaceState: WorkspaceState = {
@@ -74,6 +83,8 @@ export const initialWorkspaceState: WorkspaceState = {
   scopeInterrupted: false,
   actions: {},
   bulk: null,
+  list: [],
+  storage: null,
 };
 
 /** The unfinished actions a workspace record carries. */
@@ -152,6 +163,25 @@ export const initializeWorkspaces = createAsyncThunk<BootResult, void, { rejectV
   },
 );
 
+export interface WorkspaceListResult {
+  list: WorkspaceSummary[];
+  storage: StorageFigures | null;
+}
+
+/**
+ * Reads every workspace record and the browser's estimate (WP5). Rows held
+ * by another window are asked about one by one through the Web Lock.
+ */
+export const refreshWorkspaces = createAsyncThunk<WorkspaceListResult, void, { state: RootState }>(
+  'workspace/refresh',
+  async (_, { getState }) => {
+    const [records, storage] = await Promise.all([listWorkspaces(), readStorageEstimate()]);
+    const current = getState().workspace?.currentWid ?? null;
+    const held = await Promise.all(records.map((r) => (r.wid === current ? Promise.resolve(false) : isWorkspaceHeldElsewhere(r.wid))));
+    return { list: records.map((r, i) => summarizeWorkspace(r, held[i])), storage };
+  },
+);
+
 /* Switch lifecycle, dispatched by `switchWorkspace` in workspaceThunks.ts. */
 export const workspaceSwitchStarted = createAction<{ wid: string }>('workspace/switchStarted');
 export const workspaceSwitched = createAction<OpenedWorkspace>('workspace/switched');
@@ -180,6 +210,10 @@ const workspaceSlice = createSlice({
     bulkRecorded: (state, action: PayloadAction<UnfinishedBulk | null>) => {
       state.bulk = action.payload;
     },
+    /** The open workspace was renamed from the popover. */
+    currentWorkspaceRenamed: (state, action: PayloadAction<string>) => {
+      state.currentName = action.payload;
+    },
     /** Mirrors a conversation's action record; null clears it. */
     actionRecorded: (state, action: PayloadAction<{ cid: string; action: UnfinishedAction | null }>) => {
       if (action.payload.action) state.actions[action.payload.cid] = action.payload.action;
@@ -207,6 +241,10 @@ const workspaceSlice = createSlice({
         state.ready = false;
         state.booting = false;
         state.error = action.payload ?? 'Could not open workspaces';
+      })
+      .addCase(refreshWorkspaces.fulfilled, (state, action) => {
+        state.list = action.payload.list;
+        state.storage = action.payload.storage;
       })
       .addCase(workspaceSwitchStarted, (state) => {
         state.switching = true;
@@ -248,7 +286,7 @@ const workspaceSlice = createSlice({
   },
 });
 
-export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded } = workspaceSlice.actions;
+export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed } = workspaceSlice.actions;
 
 /** The open workspace id, or null while workspaces are not ready (writes are skipped). */
 export const selectCurrentWid = (state: RootState): string | null => {
@@ -264,9 +302,15 @@ export const selectScopeRestoredWid = (state: RootState): string | null => state
 const noActions: Record<string, UnfinishedAction> = {};
 export const selectUnfinishedActions = (state: RootState): Record<string, UnfinishedAction> => state.workspace?.actions ?? noActions;
 export const selectUnfinishedBulk = (state: RootState): UnfinishedBulk | null => state.workspace?.bulk ?? null;
-/** The pill's dot: true when the open workspace has unfinished work. */
+/** True when the open workspace has unfinished work. */
 export const selectHasUnfinishedWork = (state: RootState): boolean =>
   Object.keys(selectUnfinishedActions(state)).length > 0 || selectUnfinishedBulk(state) !== null;
+const noList: WorkspaceSummary[] = [];
+export const selectWorkspaceList = (state: RootState): WorkspaceSummary[] => state.workspace?.list ?? noList;
+export const selectStorageFigures = (state: RootState): StorageFigures | null => state.workspace?.storage ?? null;
+/** The pill's dot: true when any workspace has unfinished work (plan 5.1). */
+export const selectAnyUnfinishedWork = (state: RootState): boolean =>
+  selectHasUnfinishedWork(state) || selectWorkspaceList(state).some((w) => w.work !== null);
 /** The unfinished action recorded for a conversation, if any. */
 export const selectConversationAction = (cid: string | null | undefined) => (state: RootState): UnfinishedAction | null =>
   cid ? selectUnfinishedActions(state)[cid] ?? null : null;

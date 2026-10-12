@@ -402,7 +402,7 @@ describe('workspace lock', () => {
     releaseWorkspaceLock('w2');
   });
 
-  /** A tiny Locks API: exclusive only, honours ifAvailable, one origin. */
+  /** A tiny Locks API: exclusive only, honours ifAvailable, one origin, query() lists what is held. */
   function fakeLocks() {
     const held = new Set<string>();
     return {
@@ -418,6 +418,7 @@ describe('workspace lock', () => {
           held.delete(name);
         }
       }),
+      query: vi.fn(async () => ({ held: [...held].map((name) => ({ name, mode: 'exclusive' })), pending: [] })),
       held,
     };
   }
@@ -445,6 +446,14 @@ describe('workspace lock', () => {
     expect(await acquireWorkspaceLock('w1')).toBe(false);
     expect(holdsWorkspaceLock('w1')).toBe(false);
     expect(await isWorkspaceHeldElsewhere('w1')).toBe(true);
+  });
+
+  it('asks about another window without taking the lock', async () => {
+    const locks = fakeLocks();
+    vi.stubGlobal('navigator', { ...navigator, locks });
+    expect(await isWorkspaceHeldElsewhere('w2')).toBe(false);
+    expect(locks.request).not.toHaveBeenCalled();
+    expect(await acquireWorkspaceLock('w2')).toBe(true);
   });
 });
 

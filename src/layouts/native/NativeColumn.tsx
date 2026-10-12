@@ -10,6 +10,7 @@ import ChannelList from '@components/navigation/ChannelList';
 import DMList from '@components/navigation/DMList';
 import PackageChannelList from '@components/package/PackageChannelList';
 import DevToolsFlask from '@components/ui/DevToolsFlask';
+import WorkspacePill from '@components/workspace/WorkspacePill';
 
 export const COLUMN_WIDTH = 248;
 /** Height of Native's head and of the column header beside it, so their bottom edges line up. 56 leaves the Scrublings' overhead text the same room above and below as Simple and Operator (owner, 2026-09-21; was 48). */
@@ -64,6 +65,7 @@ const NativeColumn = () => {
           <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{currentUser?.global_name || currentUser?.username || ''}</Typography>
           <Typography variant="caption" noWrap sx={{ color: 'text.secondary', display: 'block' }}>Discrub {__APP_VERSION__}</Typography>
         </Box>
+        <WorkspacePill variant="bar" />
         <DevToolsFlask />
       </Box>
     </Box>
