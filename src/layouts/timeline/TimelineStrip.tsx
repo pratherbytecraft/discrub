@@ -108,7 +108,7 @@ const TimelineStrip = () => {
           <>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('timeline.jumpTo')}</Typography>
             <Chip size="small" variant="outlined" label={t('timeline.newest')} data-testid="timeline-jump-newest" onClick={() => jumpTo([...model.bars].reverse().find((b) => b.count > 0)?.newestId ?? null)} />
-            <Chip size="small" variant="outlined" label={t('timeline.oldest')} data-testid="timeline-jump-oldest" onClick={() => jumpTo(model.bars.find((b) => b.count > 0)?.newestId ?? null)} />
+            <Chip size="small" variant="outlined" label={t('timeline.oldest')} data-testid="timeline-jump-oldest" onClick={() => jumpTo(model.oldestId)} />
             <Chip size="small" variant="outlined" icon={<CalendarIcon sx={{ fontSize: 15 }} />} label={t('timeline.pickDate')} data-testid="timeline-pick-date" onClick={() => { const el = dateInput.current; if (!el) return; if (typeof el.showPicker === 'function') el.showPicker(); else el.focus(); }} />
             <Box component="input" type="date" ref={dateInput} min={model.firstDay} max={model.lastDay} aria-label={t('timeline.pickDate')} data-testid="timeline-date-input" onChange={(e: React.ChangeEvent<HTMLInputElement>) => jumpToDate(e.target.value)} sx={{ position: 'absolute', opacity: 0, width: '1px', height: '1px', pointerEvents: 'none' }} />
           </>

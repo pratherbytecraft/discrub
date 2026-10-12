@@ -1236,8 +1236,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
       )}
 
       {/* A rest break says so above the messages, with the time left and Skip. Operator's run card
-          already carries the countdown, and its feed column is too narrow for the banner (pass 2, row 77). */}
-      {variant !== 'operator' && <RestBreakBanner />}
+          already carries the countdown, and its feed column is too narrow for the banner (pass 2, row 77).
+          Simple and Timeline's run card carries the break itself (row 78). */}
+      {variant !== 'operator' && variant !== 'simple' && variant !== 'timeline' && <RestBreakBanner />}
 
       {/* Row 49: a failed Load All keeps the loaded rows on screen and says why here. */}
       {loadAllFailed && !error && (

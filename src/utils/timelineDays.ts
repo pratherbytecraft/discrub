@@ -36,6 +36,8 @@ export interface TimelineModel {
   total: number;
   firstDay: string;
   lastDay: string;
+  /** Id of the oldest message in the list, the Oldest jump target (pass 2, row 66). Null when empty. */
+  oldestId: string | null;
 }
 
 const startOfDay = (key: string): Date => { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); };
@@ -49,7 +51,7 @@ export const addDays = (key: string, n: number): string => { const d = startOfDa
  * Messages without a readable timestamp are left out of all of them.
  */
 type Newest = { id: string; ts: number };
-interface DayFold { messages: TimelineMessage[]; dayCounts: Map<string, number>; newestByDay: Map<string, Newest>; total: number }
+interface DayFold { messages: TimelineMessage[]; dayCounts: Map<string, number>; newestByDay: Map<string, Newest>; oldest: Newest | null; total: number }
 
 const foldMessages = (fold: DayFold, messages: TimelineMessage[], from: number, to: number): void => {
   for (let i = from; i < to; i++) {
@@ -61,6 +63,7 @@ const foldMessages = (fold: DayFold, messages: TimelineMessage[], from: number, 
     const ts = new Date(m.timestamp).getTime();
     const cur = fold.newestByDay.get(key);
     if (!cur || ts > cur.ts) fold.newestByDay.set(key, { id: m.id, ts });
+    if (!fold.oldest || ts < fold.oldest.ts) fold.oldest = { id: m.id, ts };
   }
 };
 
@@ -75,7 +78,7 @@ const foldFor = (messages: TimelineMessage[]): DayFold => {
   const prev = lastFold;
   const ext = prev ? extendedRange(prev.messages, messages) : null;
   if (prev && ext) {
-    const fold: DayFold = { messages, dayCounts: new Map(prev.dayCounts), newestByDay: new Map(prev.newestByDay), total: prev.total };
+    const fold: DayFold = { messages, dayCounts: new Map(prev.dayCounts), newestByDay: new Map(prev.newestByDay), oldest: prev.oldest, total: prev.total };
     foldMessages(fold, messages, ext.from, ext.to);
     lastFold = fold;
     return fold;
@@ -83,10 +86,10 @@ const foldFor = (messages: TimelineMessage[]): DayFold => {
   if (prev && prev.messages === messages) return prev;
   // A delete flush: the new list is the old one with a few messages taken
   // out. Take them out of the day maps too, unless one was a day's newest
-  // message, which needs the full walk to find the next newest.
+  // message or the list's oldest, which needs the full walk to find the next one.
   const removed = prev ? removedFrom(prev.messages, messages) : null;
-  if (prev && removed && removed.every((m) => prev.newestByDay.get(messageDayKey(m))?.id !== m.id)) {
-    const fold: DayFold = { messages, dayCounts: new Map(prev.dayCounts), newestByDay: prev.newestByDay, total: prev.total };
+  if (prev && removed && removed.every((m) => prev.newestByDay.get(messageDayKey(m))?.id !== m.id && prev.oldest?.id !== m.id)) {
+    const fold: DayFold = { messages, dayCounts: new Map(prev.dayCounts), newestByDay: prev.newestByDay, oldest: prev.oldest, total: prev.total };
     for (const m of removed) {
       const key = messageDayKey(m);
       if (!key) continue;
@@ -98,20 +101,20 @@ const foldFor = (messages: TimelineMessage[]): DayFold => {
     lastFold = fold;
     return fold;
   }
-  const fold: DayFold = { messages, dayCounts: new Map(), newestByDay: new Map(), total: 0 };
+  const fold: DayFold = { messages, dayCounts: new Map(), newestByDay: new Map(), oldest: null, total: 0 };
   foldMessages(fold, messages, 0, messages.length);
   lastFold = fold;
   return fold;
 };
 
 export const buildTimeline = (messages: TimelineMessage[]): TimelineModel => {
-  const { dayCounts, newestByDay, total } = foldFor(messages);
+  const { dayCounts, newestByDay, oldest, total } = foldFor(messages);
   let firstDay = ''; let lastDay = '';
   for (const key of dayCounts.keys()) {
     if (!firstDay || key < firstDay) firstDay = key;
     if (!lastDay || key > lastDay) lastDay = key;
   }
-  if (total === 0) return { unit: 'day', bars: [], months: [], dayCounts, total, firstDay, lastDay };
+  if (total === 0) return { unit: 'day', bars: [], months: [], dayCounts, total, firstDay, lastDay, oldestId: null };
 
   const span = Math.round((startOfDay(lastDay).getTime() - startOfDay(firstDay).getTime()) / DAY_MS) + 1;
   const unit: BarUnit = span <= DAY_BAR_LIMIT ? 'day' : span <= WEEK_BAR_LIMIT ? 'week' : 'month';
@@ -142,7 +145,7 @@ export const buildTimeline = (messages: TimelineMessage[]): TimelineModel => {
     else { cur.count += count; if (n.ts > cur.ts) { cur.ts = n.ts; cur.newestId = n.id; } }
   }
   const months = Array.from(monthMap.values()).sort((a, b) => (a.key < b.key ? 1 : -1)).map(({ key, count, newestId }) => ({ key, count, newestId }));
-  return { unit, bars, months, dayCounts, total, firstDay, lastDay };
+  return { unit, bars, months, dayCounts, total, firstDay, lastDay, oldestId: oldest?.id ?? null };
 };
 
 /** Start of the first day and end of the last day of a range, as the Date pair the filter criteria hold. */

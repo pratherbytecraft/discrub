@@ -40,6 +40,15 @@ describe('buildTimeline', () => {
     expect(m.bars.find((b) => b.count === 0)?.newestId).toBeNull();
   });
 
+  it('names the oldest message of the whole list, not the newest of the oldest bar', () => {
+    // Pass 2, row 66: Oldest landed on the newest message of the oldest week.
+    const m = buildTimeline([at('new', 2026, 7, 17), at('first', 2026, 3, 2, 8), at('second', 2026, 3, 5)]);
+    expect(m.unit).toBe('week');
+    expect(m.oldestId).toBe('first');
+    expect(m.bars[0].newestId).toBe('second');
+    expect(buildTimeline([]).oldestId).toBeNull();
+  });
+
   it('leaves out messages without a readable timestamp', () => {
     const m = buildTimeline([at('1', 2026, 7, 17), { id: 'x', timestamp: '' } as Message, { id: 'y', timestamp: 'nope' } as Message]);
     expect(m.total).toBe(1);
