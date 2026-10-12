@@ -598,9 +598,10 @@ const MessageFeed = ({
         >
           <Box
             data-testid="message-feed-items"
+            // The total height changes with every page; inline it adds no CSS rule each time.
+            style={{ height: rowVirtualizer.getTotalSize() }}
             sx={{
               position: 'relative',
-              height: rowVirtualizer.getTotalSize(),
               width: '100%',
             }}
           >

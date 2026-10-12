@@ -86,9 +86,10 @@ const DiskBar = () => {
                 <Box
                   key={w.wid}
                   data-testid={`disk-bar-segment-${w.wid}`}
+                  // The width follows every write, inline so it adds no CSS rule each time.
+                  style={{ width: `${widths[i]}%` }}
                   sx={{
                     height: '100%',
-                    width: `${widths[i]}%`,
                     backgroundColor: color,
                     opacity: current ? 1 : 0.7,
                     boxShadow: current ? `0 0 ${glow ? 12 : 6}px ${color}` : 'none',

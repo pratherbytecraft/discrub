@@ -104,7 +104,7 @@ const MessageTable = () => {
         </Box>
       </Box>
       <Box ref={parentRef} sx={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-testid="message-table-scroll">
-        <Box sx={{ height: virtualizer.getTotalSize(), position: 'relative', minWidth: 640 }}>
+        <Box style={{ height: virtualizer.getTotalSize() }} sx={{ position: 'relative', minWidth: 640 }}>
           {virtualItems.map((row) => {
             const r = messages[row.index];
             const m = hydrated.get(r.id);
@@ -158,8 +158,10 @@ const MessageTableRow = memo(function MessageTableRow({
       data-testid="table-row"
       data-message-id={m.id}
       onClick={() => onToggle(m.id)}
+      // The row's place changes with every scroll; inline it adds no CSS rule each time.
+      style={{ transform: `translateY(${top}px)` }}
       sx={{
-        position: 'absolute', top: 0, left: 0, width: '100%', height, transform: `translateY(${top}px)`,
+        position: 'absolute', top: 0, left: 0, width: '100%', height,
         display: 'grid', gridTemplateColumns: grid, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider',
         backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.14) : 'transparent',
         '&:hover': { backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.18) : alpha(theme.palette.text.primary, 0.04) },

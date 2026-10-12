@@ -249,10 +249,12 @@ const ScrublingsStage = () => {
                 onPointerMove={onMove}
                 onPointerUp={onUp}
                 onPointerCancel={onUp}
+                // The position changes every step, so it goes inline: through sx each new
+                // value became a CSS rule that was never removed (about 500 a minute).
+                style={{ left, transform: `translateY(${-c.lift}px) scaleX(${c.facing})` }}
                 sx={{
-                  position: 'absolute', left, bottom: -FEET_DROP, width: CHAR_W, height: CHAR_H,
+                  position: 'absolute', bottom: -FEET_DROP, width: CHAR_W, height: CHAR_H,
                   imageRendering: 'pixelated',
-                  transform: `translateY(${-c.lift}px) scaleX(${c.facing})`,
                   pointerEvents: 'auto', cursor: 'grab', touchAction: 'none',
                   '&:active': { cursor: 'grabbing' },
                 }}
@@ -265,7 +267,7 @@ const ScrublingsStage = () => {
         {teles.map((tele) => {
           const feet = FEET_DROP + Math.round((SPRITE_H - SPRITE_FEET_ROW) * STAGE_SCALE);
           return (
-            <Box key={tele.key} data-testid={`scrubling-tele-${tele.kind}-${tele.id}`} sx={{ position: 'absolute', left: tele.x, bottom: -FEET_DROP, width: CHAR_W, height: CHAR_H, pointerEvents: 'none' }}>
+            <Box key={tele.key} data-testid={`scrubling-tele-${tele.kind}-${tele.id}`} style={{ left: tele.x }} sx={{ position: 'absolute', bottom: -FEET_DROP, width: CHAR_W, height: CHAR_H, pointerEvents: 'none' }}>
               {tele.kind === 'out' && (
                 <Box sx={{ width: '100%', height: '100%', transform: `scaleX(${tele.facing})` }}>
                   <Box sx={{ width: '100%', height: '100%', backgroundImage: `url("${frameDataUri(SCRUBLINGS[tele.id].sheet, tele.frame)}")`, backgroundSize: '100% 100%', backgroundRepeat: 'no-repeat', imageRendering: 'pixelated', transformOrigin: '50% 90%', animation: `${teleOut} ${TELE_MS}ms ease-in both` }} />

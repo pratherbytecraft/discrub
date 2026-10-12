@@ -30,6 +30,23 @@ describe('Scrublings (2.2.0)', () => {
     cy.get('[data-testid="scrubling-suds"]').should('have.css', 'image-rendering', 'pixelated');
   });
 
+  it('walking adds no CSS rules to the page (each step once left a rule behind)', () => {
+    const ruleCount = () => cy.document().then((doc) => {
+      let rules = 0;
+      for (const sheet of Array.from(doc.styleSheets)) {
+        try { rules += sheet.cssRules.length; } catch { /* cross origin sheet */ }
+      }
+      return rules;
+    });
+    cy.get('[data-testid="scrublings-stage"]').should('have.attr', 'data-frozen', 'false');
+    cy.wait(1500);
+    ruleCount().then((before) => {
+      cy.wait(6000);
+      // A walking Scrubling moves several times a second; before the fix each step was a new rule.
+      ruleCount().should('be.lessThan', before + 10);
+    });
+  });
+
   it('looks on hover and plays a trick on a click', () => {
     // Alone on the bar, so no pair scene can start mid test.
     cy.window().then((win) => (win as any).__store__.dispatch({ type: 'app/updateAllSettings/fulfilled', payload: { ...(win as any).__store__.getState().app.settings, appScrublingsPicked: '["mage"]' } }));

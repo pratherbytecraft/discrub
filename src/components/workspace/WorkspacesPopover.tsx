@@ -327,7 +327,7 @@ const WorkspacesPopover = ({
           </Box>
           <Box sx={{ display: 'flex', height: 4, borderRadius: 0.5, overflow: 'hidden', backgroundColor: 'rgba(128,128,128,.2)' }}>
             {list.map((w, i) => (
-              <Box key={w.wid} sx={{ height: '100%', width: `${widths[i]}%`, backgroundColor: w.color }} />
+              <Box key={w.wid} style={{ width: `${widths[i]}%` }} sx={{ height: '100%', backgroundColor: w.color }} />
             ))}
           </Box>
         </Box>

@@ -684,8 +684,8 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
         }}
       >
         <Box
+          style={{ height: rowVirtualizer.getTotalSize() }}
           sx={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
             position: 'relative',
             width: '100%',
           }}
@@ -697,12 +697,12 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
                 key={msg.id}
                 data-index={virtualRow.index}
                 ref={rowVirtualizer.measureElement}
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
                 sx={{
                   position: 'absolute',
                   top: 0,
                   left: 0,
                   width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
                 <MessageRow
