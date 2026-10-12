@@ -20,6 +20,11 @@ interface EditMessageModalProps {
   onSave: (newContent: string) => void;
   message: Message | null;
   messages?: Message[];
+  /**
+   * 2.2.5 W4: bulk mode, true when a selected message has no attachment
+   * or embed. Read from the rows, so the messages need not be read.
+   */
+  hasBareMessages?: boolean;
   messageCount: number;
 }
 
@@ -38,6 +43,7 @@ const EditMessageModal = ({
   onSave,
   message,
   messages = [],
+  hasBareMessages,
   messageCount,
 }: EditMessageModalProps) => {
   const { t } = useTranslation();
@@ -47,7 +53,7 @@ const EditMessageModal = ({
 
   // In single mode, check the one message; in bulk mode, check if any lack attachments/embeds
   const hasBareBareMessages = isBulkMode
-    ? messages.some((m) => !hasAttachmentsOrEmbeds(m))
+    ? hasBareMessages ?? messages.some((m) => !hasAttachmentsOrEmbeds(m))
     : message != null && !hasAttachmentsOrEmbeds(message);
   const wouldFailEmpty = isEmpty && hasBareBareMessages;
 

@@ -20,9 +20,10 @@ import { useTranslation } from 'react-i18next';
 interface AddReactionsModalProps {
   open: boolean;
   onClose: () => void;
-  selectedMessages: Message[];
+  /** Only the ids are used (2.2.5 W4). */
+  selectedMessages: Array<Pick<Message, 'id'>>;
   guildEmojis?: Emoji[];
-  onConfirm: (params: { messages: Message[]; emojis: SelectableEmoji[] }) => void;
+  onConfirm: (params: { messages: Array<Pick<Message, 'id'>>; emojis: SelectableEmoji[] }) => void;
 }
 
 /**

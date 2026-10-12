@@ -5,6 +5,7 @@ import {
   REPORT_IDS,
   REPORT_LIST,
   BESTOF_MIN_REACTIONS,
+  BESTOF_LIMIT,
   domainOf,
   emojiLabel,
   exportReportCSV,
@@ -258,3 +259,42 @@ describe('exportReportCSV', () => {
     expect(emojiLabel({ id: '1', name: 'pepe', animated: true })).toBe(':pepe:');
   });
 });
+
+// 2.2.5 W4: the store walk hands messages over in key order, not feed order.
+describe('folds', () => {
+  const fixture = (): Message[] => [
+    msg({ id: '10', content: '<@1> see https://a.com', reactions: [{ emoji: { name: '🔥' }, count: 2 }] as Message['reactions'] }),
+    msg({ id: '11', author: { id: '2', username: 'two' } as Message['author'], content: 'crash', reactions: [{ emoji: { name: '🔥' }, count: 2 }] as Message['reactions'] }),
+    msg({ id: '12', author: { id: '1', username: 'renamed' } as Message['author'], type: 19, content: '<@2>', attachments: [{ filename: 'a.png' }] as Message['attachments'] }),
+    msg({ id: '13', channel_id: 'thread', content: 'in a thread' }),
+  ];
+
+  it('give the same result in any order', () => {
+    const context = { userMap: {}, terms: ['crash'], containerId: 'chan', timeZone: 'UTC' };
+    for (const report of REPORT_LIST) {
+      const forward = report.compute(fixture(), context);
+      const backward = report.compute(fixture().reverse(), context);
+      expect(backward).toEqual(forward);
+    }
+  });
+
+  it('can finish again with new names', () => {
+    const fold = ANALYTICS_REPORTS.members.fold({});
+    for (const m of fixture()) fold.step(m);
+    const first = fold.finish({ userMap: {} });
+    const named = fold.finish({ userMap: { '2': { nick: 'Two' } } });
+    expect(first.rows.map((r) => r.label)).toContain('two');
+    expect(named.rows.map((r) => r.label)).toContain('Two');
+  });
+
+  it('Best Of keeps the top messages and says so', () => {
+    const many = Array.from({ length: BESTOF_LIMIT + 5 }, (_, i) =>
+      msg({ id: String(1000 + i), reactions: [{ emoji: { name: '👍' }, count: 2 + (i % 7) }] as Message['reactions'] }),
+    );
+    const result = ANALYTICS_REPORTS.bestof.compute(many, { userMap: {} });
+    expect(result.rows).toHaveLength(BESTOF_LIMIT);
+    expect(result.rows[0].count).toBe(8);
+    expect(result.mode).toMatch(/top 1,000/);
+  });
+});
+

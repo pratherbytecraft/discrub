@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderWithProviders, screen, fireEvent, within } from '../../test/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { renderWithProviders, screen, fireEvent, within, waitFor } from '../../test/test-utils';
+import { cacheMessages, evictContainer } from '@features/message/messageCache';
 import AnalyticsModal from './AnalyticsModal';
 import { ANALYTICS_REPORTS } from '@/utils/analyticsReports';
 import { createBaseState } from '../../test/state-factories';
@@ -76,15 +77,44 @@ describe('AnalyticsModal', () => {
     spy.mockRestore();
   });
 
-  // 2.2.5 W1: until the reports walk the store, a large list is held to its newest part.
-  it('says when it covers only the newest messages', () => {
-    render([createMessage('hi')], { coveredOf: 250_000 });
-    expect(screen.getByTestId('analytics-covered')).toHaveTextContent('Analytics covers the newest 20,000 messages.');
-  });
+  // 2.2.5 W4: with `walk` the reports count the listed messages read from
+  // the store, here the message cache (no workspace open).
+  describe('walking the store', () => {
+    const walkOf = (messages: Message[]) => {
+      cacheMessages('walk-test', messages);
+      return { container: 'walk-test', source: { wid: null, cid: null }, ids: messages.map((m) => m.id) };
+    };
+    afterEach(() => evictContainer('walk-test'));
 
-  it('says nothing about coverage when every message is there', () => {
-    render([createMessage('hi')]);
-    expect(screen.queryByTestId('analytics-covered')).toBeNull();
+    it('counts the listed messages and nothing else', async () => {
+      const listed = [createMessage('<@111> hello', 0), createMessage('<@111> <@222> reply', 19)];
+      const walk = walkOf([...listed, createMessage('<@222> not listed')]);
+      render([], { walk: { ...walk, ids: listed.map((m) => m.id) } });
+      expect(await screen.findByText(/3 mentions across 2 messages/)).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Skip replies'));
+      expect(screen.getByText(/1 mention across 1 message/)).toBeInTheDocument();
+      expect(screen.getByText(/1 replies excluded/)).toBeInTheDocument();
+    });
+
+    it('has every report from one walk', async () => {
+      render([], { walk: walkOf([createMessage('one'), createMessage('two')]) });
+      await screen.findByText(/across 2 messages/);
+      openTab('Members');
+      expect(screen.getByTestId('analytics-row')).toHaveTextContent('2');
+      openTab('Overview');
+      expect(screen.getByTestId('analytics-overview')).toBeInTheDocument();
+    });
+
+    it('walks again for Keywords when the terms change', async () => {
+      render([], { walk: walkOf([createMessage('the app crashed'), createMessage('CRASH again'), createMessage('login is fine')]) });
+      openTab('Keywords');
+      expect(screen.getByTestId('analytics-empty')).toHaveTextContent(/terms/i);
+      fireEvent.change(screen.getByTestId('analytics-terms'), { target: { value: 'crash' } });
+      expect(await screen.findByTestId('analytics-row')).toHaveTextContent('2');
+      fireEvent.change(screen.getByTestId('analytics-terms'), { target: { value: 'login' } });
+      await waitFor(() => expect(screen.getByTestId('analytics-row')).toHaveTextContent('login'));
+      expect(screen.getByTestId('analytics-row')).toHaveTextContent('1');
+    });
   });
 
   it('opens on the Mentions report with the report title', () => {

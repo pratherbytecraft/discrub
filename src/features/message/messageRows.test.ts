@@ -19,7 +19,6 @@ import {
   findRowByTime,
   locateRow,
   mergeAuthorMap,
-  newestIds,
   removeRowsById,
   snowflakeTime,
   updateRowsById,
@@ -244,13 +243,6 @@ describe('row finders (2.2.5 W1)', () => {
     expect(removeRowsById(rows, many)).toEqual([]);
   });
 
-  it('newestIds takes the newest rows of a list sorted either way', () => {
-    const desc = rowsAt([9, 8, 7, 6]);
-    expect(newestIds(desc, 2)).toEqual(['r0', 'r1']);
-    const asc = rowsAt([6, 7, 8, 9]);
-    expect(newestIds(asc, 2)).toEqual(['r2', 'r3']);
-    expect(newestIds(asc, 10)).toEqual(['r0', 'r1', 'r2', 'r3']);
-  });
 
   it('mergeAuthorMap keeps the map when nothing changed', () => {
     const a = createMockUser({ id: 'a', username: 'one' });

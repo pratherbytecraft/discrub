@@ -75,6 +75,49 @@ describe('MessageActions', () => {
       expect(screen.getByRole('button', { name: 'Remove Reactions' })).toBeDisabled();
     });
 
+    // 2.2.5 W4: bulk actions take ids; only Remove Reactions reads messages.
+    describe('bulk actions on the stored selection', () => {
+      const { selectedMessages: _omit, ...rest } = defaultProps;
+      const me = { id: 'me', username: 'me' } as any;
+      const messages = [
+        createMockMessage({ id: 'a', author: me, content: 'one', reactions: [{ count: 1, me: true, emoji: { name: 'x' } }] as any }),
+        createMockMessage({ id: 'b', author: me, content: 'two', attachments: [{ id: 'f', filename: 'f.png' }] as any }),
+      ];
+      const stored = () => ({ preloadedState: { message: { ...initialMessageState, ...messageStateWith(initialMessageState, messages), selectedIds: ['a', 'b'] } } as any });
+
+      it('Delete passes the ids', async () => {
+        const onDelete = vi.fn().mockResolvedValue(undefined);
+        render(<MessageActions {...rest} onDelete={onDelete} currentUserId="me" />, stored());
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+        await act(async () => {
+          const buttons = screen.getAllByRole('button', { name: 'Delete' });
+          fireEvent.click(buttons[buttons.length - 1]);
+        });
+        expect(onDelete).toHaveBeenCalledWith([{ id: 'a' }, { id: 'b' }]);
+      });
+
+      it('bulk Edit passes the ids and warns about a bare message from the rows', async () => {
+        const onBulkEdit = vi.fn().mockResolvedValue(undefined);
+        render(<MessageActions {...rest} onBulkEdit={onBulkEdit} currentUserId="me" />, stored());
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+        expect(await screen.findByText(/Some selected messages have no attachments or embeds/)).toBeInTheDocument();
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'gone' } });
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        });
+        expect(onBulkEdit).toHaveBeenCalledWith([{ id: 'a' }, { id: 'b' }], 'gone');
+      });
+
+      it('Remove Reactions reads only the reacted messages, ids and reactions', async () => {
+        const onBatchRemoveReactions = vi.fn();
+        render(<MessageActions {...rest} currentUserId="me" onBatchRemoveReactions={onBatchRemoveReactions} />, stored());
+        fireEvent.click(screen.getByRole('button', { name: 'Remove Reactions' }));
+        expect(await screen.findByText('1 message with reactions will be processed.')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+        expect(onBatchRemoveReactions.mock.calls[0][0].messages).toEqual([{ id: 'a', reactions: messages[0].reactions }]);
+      });
+    });
+
     it('reads the active thread tab selection when a thread tab is open', () => {
       const { selectedMessages: _omit, ...rest } = defaultProps;
       render(<MessageActions {...rest} />, {

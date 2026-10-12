@@ -50,7 +50,7 @@ import {
 import { selectCurrentWid } from '@features/workspace/workspaceSlice';
 import { readBulkRecord } from '@features/workspace/resumeRecords';
 import { conversationSeedFromState, threadSeedFromState } from '@features/message/messagePersistence';
-import { hydrateMessages } from '@features/message/messageCache';
+import { cachedMessagesOf, hydrateMessages } from '@features/message/messageCache';
 import type { ConversationKind, ConversationSeed } from '@features/workspace/workspaceTypes';
 
 // #207 Arm B: a blank criteria so applyPreset can merge a restored date range
@@ -1203,19 +1203,26 @@ async function threadsOnDisk(wid: string, main: MessageSource): Promise<ThreadSo
  * page is not written until something happens in the conversation (plan
  * section 4.2), so the export writes it first from the message cache.
  * If the store cannot serve the export, the messages are read into memory.
+ *
+ * 2.2.5 W4: what the store is missing can only be in the cache, so the
+ * backfill writes the cached messages and never reads the conversation
+ * into memory. With no refine on, the export takes every saved message
+ * and no id set is built.
  */
 async function openExportSource(ref: ExportStoreRef, getState: () => RootState): Promise<{ source: MessageSource; messages: Message[] | null }> {
   const state = getState();
   const container = ref.container === 'main' ? state.message : state.message.threadTabs?.[ref.container];
-  const allIds = container?.rows.map((row) => row.id) ?? ref.ids;
+  const total = container?.rows.length ?? ref.ids.length;
   try {
     const onDisk = await countRows(ref.wid, ref.cid);
-    if (onDisk < allIds.length) {
-      const objects = await hydrateMessages(ref.container, { wid: ref.wid, cid: ref.cid }, allIds);
+    if (onDisk < total) {
+      const listed = new Set(container?.rows.map((row) => row.id) ?? ref.ids);
+      const objects = cachedMessagesOf(ref.container).filter((message) => listed.has(message.id));
       const seed = ref.container === 'main' ? conversationSeedFromState(state, ref.cid) : threadSeedFromState(state, ref.cid);
-      await writePage(ref.wid, ref.cid, objects, seed ?? undefined);
+      if (objects.length > 0) await writePage(ref.wid, ref.cid, objects, seed ?? undefined);
     }
-    return { source: await storeSourceOf(ref.wid, ref.cid, new Set(ref.ids)), messages: null };
+    const refined = ref.ids.length < Math.max(total, onDisk);
+    return { source: await storeSourceOf(ref.wid, ref.cid, refined ? new Set(ref.ids) : undefined), messages: null };
   } catch (error) {
     console.error('[workspace] export reads from memory, the store could not serve it', error);
     const objects = await hydrateMessages(ref.container, { wid: ref.wid, cid: ref.cid }, ref.ids);

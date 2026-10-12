@@ -1170,7 +1170,8 @@
     "willProcess_one": "{{count}} Nachricht mit Reaktionen wird verarbeitet.",
     "willProcess_other": "{{count}} Nachrichten mit Reaktionen werden verarbeitet.",
     "cancel": "Abbrechen",
-    "remove": "Entfernen"
+    "remove": "Entfernen",
+    "reactorsCapped": "Die Liste zeigt Benutzer aus den ersten {{count}} Reaktionen."
   },
   "addReactions": {
     "title": "Reaktionen hinzufügen",
@@ -1390,7 +1391,7 @@
     "people_one": "{{count}} Person",
     "people_other": "{{count}} Personen",
     "threadFallback": "Thread {{id}}",
-    "coversNewest": "Die Analyse umfasst die neuesten {{count, number}} Nachrichten."
+    "reading": "{{seen, number}} von {{total, number}} gespeicherten Nachrichten gelesen."
   },
   "ideas": {
     "hintEmail": "Support, Funktionswünsche und Fehlerberichte",

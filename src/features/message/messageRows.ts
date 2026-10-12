@@ -175,17 +175,6 @@ export const appendSortedRows = (existing: MessageRow[], fresh: MessageRow[], or
   return sortRows(existing.concat(page), order);
 };
 
-/** Analytics reads at most this many messages until the reports walk the store (2.2.5 W1). */
-export const ANALYTICS_LIMIT = 20_000;
-
-/** The ids of the newest `limit` rows of a list sorted either way. */
-export function newestIds(rows: readonly MessageRow[], limit: number): string[] {
-  if (rows.length <= limit) return rows.map((r) => r.id);
-  const newestFirst = rows[0].t >= rows[rows.length - 1].t;
-  const slice = newestFirst ? rows.slice(0, limit) : rows.slice(rows.length - limit);
-  return slice.map((r) => r.id);
-}
-
 /* ─────────────────── Finding a row (2.2.5 W1) ─────────────────── */
 
 const DISCORD_EPOCH = 1420070400000;

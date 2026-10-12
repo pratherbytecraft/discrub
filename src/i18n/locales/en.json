@@ -1170,7 +1170,8 @@
     "willProcess_one": "{{count}} message with reactions will be processed.",
     "willProcess_other": "{{count}} messages with reactions will be processed.",
     "cancel": "Cancel",
-    "remove": "Remove"
+    "remove": "Remove",
+    "reactorsCapped": "Users are listed from the first {{count}} reactions."
   },
   "addReactions": {
     "title": "Add Reactions",
@@ -1390,7 +1391,7 @@
     "people_one": "{{count}} person",
     "people_other": "{{count}} people",
     "threadFallback": "Thread {{id}}",
-    "coversNewest": "Analytics covers the newest {{count, number}} messages."
+    "reading": "Reading {{seen, number}} of {{total, number}} saved messages."
   },
   "ideas": {
     "hintEmail": "Support, feature ideas, and bug reports",

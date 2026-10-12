@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react';
+import { useState, useMemo, useCallback, type ReactNode } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -35,6 +35,7 @@ import {
   parseTerms,
   type OverviewStats,
   type ReportId,
+  type ReportFold,
   type ReportResult,
   type ReportRow,
   type UserMap,
@@ -43,14 +44,20 @@ import {
 import { useAppDispatch } from '@/app/hooks';
 import { addStatusEntry } from '@features/status/statusSlice';
 import { useTranslation } from 'react-i18next';
-import { ANALYTICS_LIMIT } from '@features/message/messageRows';
+import { useStoreWalk, type WalkInput } from '@features/message/storeWalk';
 
 const REPLY_MESSAGE_TYPE = 19;
 
 interface AnalyticsModalProps {
   open: boolean;
   onClose: () => void;
-  messages: Message[];
+  /** The messages to count, when they are in hand (tests, stories). */
+  messages?: Message[];
+  /**
+   * 2.2.5 W4: the list to count from the workspace store instead, a
+   * message at a time. Takes the place of `messages`.
+   */
+  walk?: WalkInput | null;
   userMap: UserMap;
   /** The channel the feed is showing; messages elsewhere are thread messages (Threads / Overview). */
   containerId?: string | null;
@@ -58,13 +65,6 @@ interface AnalyticsModalProps {
   threadNames?: Record<string, string>;
   /** Report shown first; defaults to Mentions. */
   initialReport?: ReportId;
-  /** True while the message objects are still being read (2.2.5 WP2b). */
-  loading?: boolean;
-  /**
-   * 2.2.5 W1: the size of the list when `messages` holds only its newest
-   * part, for the line that says so. Null when every message is here.
-   */
-  coveredOf?: number | null;
 }
 
 type SortField = 'label' | 'count';
@@ -74,12 +74,26 @@ type SortDir = 'asc' | 'desc';
  * Analytics over the messages already loaded in the feed. One tab per report,
  * mirroring Retrostat's report set (the modal is the hand-driven version of
  * what the bot runs on a schedule, which is why the nudge sits under the
- * results). Everything is computed synchronously from the `messages` prop, so
- * a Refine or a Load All changes the numbers live.
+ * results). With `messages` everything is computed synchronously, so a Refine
+ * or a Load All changes the numbers live. With `walk` every report but
+ * Keywords is counted in one walk over the store while the dialog is open,
+ * and Keywords walks again when its terms change.
  */
 const CLOSED_RESULT: ReportResult = { rows: [], empty: '' };
+const NO_MESSAGES: Message[] = [];
+const NO_WALK: WalkInput = { container: '', source: { wid: null, cid: null }, ids: [] };
+const WALKED_REPORTS = REPORT_LIST.filter((r) => r.id !== 'keywords');
+const KEYWORDS_DELAY_MS = 300;
 
-const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadNames, initialReport = 'mentions', loading = false, coveredOf = null }: AnalyticsModalProps) => {
+interface WalkedReports {
+  folds: Partial<Record<ReportId, ReportFold>>;
+  /** Mentions with replies left out, for the Skip replies chip. */
+  mentionsNoReplies: ReportFold;
+  visited: number;
+  replies: number;
+}
+
+const AnalyticsModal = ({ open, onClose, messages = NO_MESSAGES, walk = null, userMap, containerId, threadNames, initialReport = 'mentions' }: AnalyticsModalProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [reportId, setReportId] = useState<ReportId>(initialReport);
@@ -94,19 +108,59 @@ const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadN
   const isOverview = reportId === 'overview';
 
   const scopedMessages = useMemo(
-    () => (isMentions && skipReplies ? messages.filter((m) => m.type !== REPLY_MESSAGE_TYPE) : messages),
-    [messages, isMentions, skipReplies],
+    () => (!walk && isMentions && skipReplies ? messages.filter((m) => m.type !== REPLY_MESSAGE_TYPE) : messages),
+    [walk, messages, isMentions, skipReplies],
   );
 
   const terms = useMemo(() => parseTerms(termsText), [termsText]);
 
+  // 2.2.5 W4: the store walks. Nothing runs while the dialog is closed.
+  const walkInput = walk ?? NO_WALK;
+  const walkOn = open && walk !== null;
+  const walkKey = `${walkInput.container}|${walkInput.source.wid}|${walkInput.source.cid}|${containerId ?? ''}`;
+  const startReports = useCallback(() => {
+    const folds: Partial<Record<ReportId, ReportFold>> = {};
+    for (const r of WALKED_REPORTS) folds[r.id] = r.fold({ containerId });
+    const mentionsNoReplies = ANALYTICS_REPORTS.mentions.fold({ containerId, skipReplies: true });
+    const steps = Object.values(folds) as ReportFold[];
+    let replies = 0;
+    return {
+      visit(message: Message) {
+        for (const fold of steps) fold.step(message);
+        mentionsNoReplies.step(message);
+        if (message.type === REPLY_MESSAGE_TYPE) replies += 1;
+      },
+      done: (visited: number): WalkedReports => ({ folds, mentionsNoReplies, visited, replies }),
+    };
+  }, [containerId]);
+  const reportsWalk = useStoreWalk(walkOn, walkInput, walkKey, startReports);
+  const startKeywords = useCallback(() => {
+    const fold = ANALYTICS_REPORTS.keywords.fold({ terms });
+    return { visit: (message: Message) => fold.step(message), done: () => fold };
+  }, [terms]);
+  const keywordsWalk = useStoreWalk(walkOn && terms.length > 0, walkInput, `${walkKey}|${terms.join('\u0000')}`, startKeywords, KEYWORDS_DELAY_MS);
+
   // #263: the modal stays mounted while closed, and a closed modal used to
   // recompute the report every time the feed's messages array changed (every
   // bulk-delete flush at 30K messages). Only compute while open.
-  const result = useMemo<ReportResult>(
-    () => (open ? report.compute(scopedMessages, { userMap, terms, threadNames, containerId }) : CLOSED_RESULT),
-    [open, report, scopedMessages, userMap, terms, threadNames, containerId],
-  );
+  const result = useMemo<ReportResult>(() => {
+    if (!open) return CLOSED_RESULT;
+    if (!walk) return report.compute(scopedMessages, { userMap, terms, threadNames, containerId });
+    const names = { userMap, threadNames };
+    if (report.id === 'keywords') {
+      if (terms.length === 0) return report.compute(NO_MESSAGES, { userMap, terms });
+      return keywordsWalk.value?.finish(names) ?? CLOSED_RESULT;
+    }
+    const walked = reportsWalk.value;
+    if (!walked) return CLOSED_RESULT;
+    const fold = report.id === 'mentions' && skipReplies ? walked.mentionsNoReplies : walked.folds[report.id];
+    return fold ? fold.finish(names) : CLOSED_RESULT;
+  }, [open, walk, report, scopedMessages, userMap, terms, threadNames, containerId, keywordsWalk.value, reportsWalk.value, skipReplies]);
+  const activeWalk = isKeywords ? keywordsWalk : reportsWalk;
+  const loading = walk !== null && activeWalk.loading;
+  const progress = walk !== null ? activeWalk.progress : null;
+  const messageCount = walk ? (reportsWalk.value?.visited ?? walk.ids.length) : messages.length;
+  const scopedCount = walk ? (skipReplies ? messageCount - (reportsWalk.value?.replies ?? 0) : messageCount) : scopedMessages.length;
 
   const sorted = useMemo(() => {
     const copy = [...result.rows];
@@ -145,11 +199,11 @@ const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadN
   const subtitle = isMentions
     ? t('analytics.mentionsSubtitle', {
         mentions: t('analytics.mentions', { count: total }),
-        messages: t('analytics.messages', { count: scopedMessages.length }),
-        excluded: skipReplies && scopedMessages.length < messages.length ? t('analytics.repliesExcluded', { count: messages.length - scopedMessages.length }) : '',
+        messages: t('analytics.messages', { count: scopedCount }),
+        excluded: skipReplies && scopedCount < messageCount ? t('analytics.repliesExcluded', { count: messageCount - scopedCount }) : '',
       })
     : t('analytics.subtitle', {
-        messages: t('analytics.loadedMessages', { count: messages.length }),
+        messages: t('analytics.loadedMessages', { count: messageCount }),
         description: t(`analytics.report.${report.id}.description`, { defaultValue: report.description, min: BESTOF_MIN_REACTIONS }),
       });
 
@@ -164,11 +218,6 @@ const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadN
           <Typography variant="body2" color="text.secondary">
             {subtitle}
           </Typography>
-          {coveredOf !== null && (
-            <Typography variant="caption" color="text.secondary" data-testid="analytics-covered">
-              {t('analytics.coversNewest', { count: ANALYTICS_LIMIT })}
-            </Typography>
-          )}
         </Box>
         {isMentions && (
           <Chip
@@ -198,7 +247,20 @@ const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadN
         ))}
       </Tabs>
       <DialogContent sx={{ px: 3, py: 2 }}>
-        {loading && <LinearProgress data-testid="analytics-loading" sx={{ mb: 1 }} />}
+        {loading && (
+          <Box sx={{ mb: 1 }}>
+            <LinearProgress
+              data-testid="analytics-loading"
+              variant={progress && progress.total > 0 ? 'determinate' : 'indeterminate'}
+              value={progress && progress.total > 0 ? (progress.seen / progress.total) * 100 : undefined}
+            />
+            {progress && progress.total > 0 && (
+              <Typography variant="caption" color="text.secondary" data-testid="analytics-progress">
+                {t('analytics.reading', { seen: progress.seen, total: progress.total })}
+              </Typography>
+            )}
+          </Box>
+        )}
         {isKeywords && (
           <TextField
             size="small"

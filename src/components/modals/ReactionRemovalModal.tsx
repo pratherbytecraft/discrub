@@ -31,17 +31,22 @@ const ALL_USERS_KEY = '__all__';
 const EMOJI_SIZE = 32;
 const EMOJI_GRID_MAX_HEIGHT = 120;
 const REACTOR_UPDATE_THROTTLE = 5;
+/** 2.2.5 W4: reactor lookups on open stop after this many, one call per reaction. */
+export const REACTOR_FETCH_LIMIT = 100;
+
+/** The fields the modal reads: the id and the reactions (2.2.5 W4). */
+export type ReactedMessage = Pick<Message, 'id' | 'reactions'>;
 
 interface ReactionRemovalModalProps {
   open: boolean;
   onClose: () => void;
-  selectedMessages: Message[];
+  selectedMessages: ReactedMessage[];
   canManageMessages: boolean;
   currentUserId?: string;
   currentUsername?: string;
   fetchDelayMs?: number;
   onConfirm: (params: {
-    messages: Message[];
+    messages: ReactedMessage[];
     mode: 'all' | 'emoji' | 'user';
     emojis?: string[];
     userId?: string;
@@ -72,6 +77,7 @@ const ReactionRemovalModal = ({
   const [selectedUser, setSelectedUser] = useState(canManageMessages ? ALL_USERS_KEY : currentUserId || '');
   const [reactorUsers, setReactorUsers] = useState<Map<string, User>>(new Map());
   const [loadingReactors, setLoadingReactors] = useState(false);
+  const [reactorsCapped, setReactorsCapped] = useState(false);
   const abortRef = useRef(false);
 
   // Messages with reactions
@@ -104,15 +110,20 @@ const ReactionRemovalModal = ({
     abortRef.current = false;
     setLoadingReactors(true);
     setReactorUsers(new Map());
+    setReactorsCapped(false);
 
     const fetchAll = async () => {
       const users = new Map<string, User>();
       let callCount = 0;
 
-      for (const msg of messagesWithReactions) {
+      outer: for (const msg of messagesWithReactions) {
         if (abortRef.current) break;
         for (const reaction of msg.reactions || []) {
           if (abortRef.current) break;
+          if (callCount >= REACTOR_FETCH_LIMIT) {
+            setReactorsCapped(true);
+            break outer;
+          }
           const emojiKey = getEmojiKey(reaction.emoji);
 
           // Respect delay between API calls
@@ -159,6 +170,7 @@ const ReactionRemovalModal = ({
       setSelectedUser(canManageMessages ? ALL_USERS_KEY : currentUserId || '');
       setReactorUsers(new Map());
       setLoadingReactors(false);
+      setReactorsCapped(false);
       abortRef.current = true;
     }
   }, [open, canManageMessages, currentUserId]);
@@ -351,6 +363,11 @@ const ReactionRemovalModal = ({
               ))}
             </Select>
           </FormControl>
+          {reactorsCapped && (
+            <Typography variant="caption" color="text.secondary" data-testid="reactors-capped">
+              {t('reactionRemoval.reactorsCapped', { count: REACTOR_FETCH_LIMIT })}
+            </Typography>
+          )}
 
           {/* Summary */}
           <Typography variant="body2" color="text.secondary">

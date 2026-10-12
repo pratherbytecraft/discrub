@@ -14,13 +14,13 @@ import type { SelectableEmoji } from '@/utils/emojiDataset';
 import DeleteConfirmModal from '@components/modals/DeleteConfirmModal';
 import EditMessageModal from '@components/modals/EditMessageModal';
 import EmbedModal from '@components/modals/EmbedModal';
-import ReactionRemovalModal from '@components/modals/ReactionRemovalModal';
+import ReactionRemovalModal, { type ReactedMessage } from '@components/modals/ReactionRemovalModal';
 import AddReactionsModal from '@components/modals/AddReactionsModal';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
 import { selectActiveContainerKey, selectActiveHydrationSource, selectActiveRows, selectActiveSelectedIds } from '@features/message/messageSlice';
 import { hydrateMessages, useHydratedAll } from '@features/message/messageCache';
-import { RowFlag, type MessageRow } from '@features/message/messageRows';
+import { RowFlag, messageFlags, type MessageRow } from '@features/message/messageRows';
 import { perfCount } from '@/utils/perfCounters';
 
 interface MessageActionsProps {
@@ -28,9 +28,9 @@ interface MessageActionsProps {
    *  re-render its whole tree on every selection change. Tests and stories
    *  may still pass it. */
   selectedMessages?: Message[];
-  onDelete: (messages: Message[]) => Promise<void>;
+  onDelete: (messages: MessageRef[]) => Promise<void>;
   onEdit: (message: Message, newContent: string) => Promise<void>;
-  onBulkEdit?: (messages: Message[], newContent: string) => Promise<void>;
+  onBulkEdit?: (messages: MessageRef[], newContent: string) => Promise<void>;
   formattingContext: HtmlFormattingContext;
   isOperationRunning?: boolean;
   canManageMessages?: boolean;
@@ -39,12 +39,12 @@ interface MessageActionsProps {
   fetchDelayMs?: number;
   isDm?: boolean;
   onBatchRemoveReactions?: (params: {
-    messages: Message[];
+    messages: ReactedMessage[];
     mode: 'all' | 'emoji' | 'user';
     emojis?: string[];
     userId?: string;
   }) => void;
-  onBatchAddReactions?: (params: { messages: Message[]; emojis: SelectableEmoji[] }) => void;
+  onBatchAddReactions?: (params: { messages: MessageRef[]; emojis: SelectableEmoji[] }) => void;
   guildEmojis?: Emoji[];
   onFetchReactingUsers?: (messageId: string, emoji: string) => Promise<User[]>;
 }
@@ -75,7 +75,8 @@ const MessageActions = ({
   // type, reactions), so a selection of any size is ready at once. The
   // message objects are read when an action needs them, not on every
   // selection change; the single message the Edit and Embed modals show is
-  // read ahead.
+  // read ahead. 2.2.5 W4: Delete, bulk Edit and Add Reactions need only the
+  // ids, and Remove Reactions reads only the reacted messages' reactions.
   const selectedIds = useAppSelector(selectActiveSelectedIds);
   const rows = useAppSelector(selectActiveRows);
   const containerKey = useAppSelector(selectActiveContainerKey);
@@ -89,8 +90,8 @@ const MessageActions = ({
   const [embedModalOpen, setEmbedModalOpen] = useState(false);
   const [reactionRemovalOpen, setReactionRemovalOpen] = useState(false);
   const [addReactionsOpen, setAddReactionsOpen] = useState(false);
-  /** The objects an open modal works on, read when it opened. */
-  const [hydrated, setHydrated] = useState<Message[]>(NO_MESSAGES);
+  /** The reacted messages the Remove Reactions modal works on, read when it opened. */
+  const [reacted, setReacted] = useState<ReactedMessage[]>(NO_REACTED);
   const [reading, setReading] = useState(false);
 
   const selectedRows = useMemo<SelectionRow[]>(() => {
@@ -122,6 +123,8 @@ const MessageActions = ({
   // available — removing system messages is the whole point of #196.
   const hasSystemSelection = selectedRows.some((r) => isSystemMessageType(r.type));
   const editBlocked = hasNonSelfSelection || hasSystemSelection;
+  // Clearing the text only works on a message that keeps an attachment or embed.
+  const hasBareSelection = selectedRows.some((r) => (r.flags & (RowFlag.FILE | RowFlag.EMBED)) === 0);
   // A user without Manage Messages can only take off their own reactions.
   const canRemoveReactions = selectedRows.some((r) => r.hasReactions && (canManageMessages || (r.flags & RowFlag.MY_REACTION) !== 0));
   const deleteLockReason = isDm
@@ -131,44 +134,55 @@ const MessageActions = ({
     ? t('messageActions.editLockSystem')
     : t('messageActions.editLockOthers');
 
-  /** The selected objects: the prop, or a read of the cache and the workspace store. */
-  const readSelected = useCallback(async (): Promise<Message[]> => {
-    if (fromProp) return selectedMessagesProp;
+  /** The selection as ids: the prop, or the selected ids. */
+  const selectedRefs = useCallback(
+    (): MessageRef[] => (fromProp ? selectedMessagesProp : selectedIds.map((id) => ({ id }))),
+    [fromProp, selectedMessagesProp, selectedIds],
+  );
+
+  /**
+   * The id and reactions of each selected message that has reactions, read
+   * in batches so a large selection never holds every message at once.
+   */
+  const readReacted = useCallback(async (): Promise<ReactedMessage[]> => {
+    if (fromProp) return selectedMessagesProp.filter((m) => m.reactions && m.reactions.length > 0);
     setReading(true);
     try {
-      return await hydrateMessages(containerKey, hydrationSource, selectedIds);
+      const wanted = new Set(selectedIds);
+      const ids: string[] = [];
+      for (const row of rows) if (row.hasReactions && wanted.has(row.id)) ids.push(row.id);
+      const out: ReactedMessage[] = [];
+      for (let at = 0; at < ids.length; at += REACTED_BATCH) {
+        for (const message of await hydrateMessages(containerKey, hydrationSource, ids.slice(at, at + REACTED_BATCH))) {
+          if (message.reactions && message.reactions.length > 0) out.push({ id: message.id, reactions: message.reactions });
+        }
+      }
+      return out;
     } finally {
       setReading(false);
     }
-  }, [fromProp, selectedMessagesProp, containerKey, hydrationSource, selectedIds]);
+  }, [fromProp, selectedMessagesProp, selectedIds, rows, containerKey, hydrationSource]);
 
-  const openWithSelection = async (open: (value: boolean) => void) => {
-    if (fromProp) {
-      setHydrated(selectedMessagesProp);
-      open(true);
-      return;
-    }
-    setHydrated(await readSelected());
-    open(true);
+  const openReactionRemoval = async () => {
+    setReacted(await readReacted());
+    setReactionRemovalOpen(true);
   };
-  const closeModal = (open: (value: boolean) => void) => {
-    open(false);
-    setHydrated(NO_MESSAGES);
+  const closeReactionRemoval = () => {
+    setReactionRemovalOpen(false);
+    setReacted(NO_REACTED);
   };
 
   const handleDelete = async () => {
     setDeleteModalOpen(false);
-    await onDelete(await readSelected());
+    await onDelete(selectedRefs());
   };
 
   const handleEdit = async (newContent: string) => {
     setEditModalOpen(false);
-    const bulk = hydrated;
-    setHydrated(NO_MESSAGES);
     if (selectedCount === 1 && singleMessage) {
       await onEdit(singleMessage, newContent);
     } else if (selectedCount > 1 && onBulkEdit) {
-      await onBulkEdit(bulk, newContent);
+      await onBulkEdit(selectedRefs(), newContent);
     }
   };
 
@@ -203,7 +217,7 @@ const MessageActions = ({
                 size="small"
                 startIcon={<EditIcon />}
                 disabled={selectedCount === 0 || !selectionReady || (selectedCount > 1 && isOperationRunning) || editBlocked}
-                onClick={() => (selectedCount > 1 ? void openWithSelection(setEditModalOpen) : setEditModalOpen(true))}
+                onClick={() => setEditModalOpen(true)}
               >
                 {t('messageActions.edit')}
               </Button>
@@ -230,7 +244,7 @@ const MessageActions = ({
               // Adding your own reaction only needs Add Reactions perm, which
               // Discord enforces per message — no manage-messages gate here.
               disabled={selectedCount === 0 || !selectionReady || isOperationRunning}
-              onClick={() => void openWithSelection(setAddReactionsOpen)}
+              onClick={() => setAddReactionsOpen(true)}
             >
               {t('messageActions.addReactions')}
             </Button>
@@ -243,7 +257,7 @@ const MessageActions = ({
               color="warning"
               startIcon={<ReactionRemoveIcon />}
               disabled={selectedCount === 0 || !selectionReady || isOperationRunning || !canRemoveReactions}
-              onClick={() => void openWithSelection(setReactionRemovalOpen)}
+              onClick={() => void openReactionRemoval()}
             >
               {t('messageActions.removeReactions')}
             </Button>
@@ -260,10 +274,10 @@ const MessageActions = ({
 
       <EditMessageModal
         open={editModalOpen}
-        onClose={() => closeModal(setEditModalOpen)}
+        onClose={() => setEditModalOpen(false)}
         onSave={handleEdit}
         message={singleMessage}
-        messages={hydrated}
+        hasBareMessages={hasBareSelection}
         messageCount={selectedCount}
       />
 
@@ -277,8 +291,8 @@ const MessageActions = ({
       {onBatchRemoveReactions && (
         <ReactionRemovalModal
           open={reactionRemovalOpen}
-          onClose={() => closeModal(setReactionRemovalOpen)}
-          selectedMessages={hydrated}
+          onClose={closeReactionRemoval}
+          selectedMessages={reacted}
           canManageMessages={canManageMessages}
           currentUserId={currentUserId}
           currentUsername={currentUsername}
@@ -291,8 +305,8 @@ const MessageActions = ({
       {onBatchAddReactions && (
         <AddReactionsModal
           open={addReactionsOpen}
-          onClose={() => closeModal(setAddReactionsOpen)}
-          selectedMessages={hydrated}
+          onClose={() => setAddReactionsOpen(false)}
+          selectedMessages={addReactionsOpen ? selectedRefs() : NO_REFS}
           guildEmojis={guildEmojis}
           onConfirm={onBatchAddReactions}
         />
@@ -301,6 +315,9 @@ const MessageActions = ({
   );
 };
 
+/** A message by id, all a bulk action needs (2.2.5 W4). */
+type MessageRef = Pick<Message, 'id'>;
+
 /** The row fields the buttons are gated on. */
 type SelectionRow = Pick<MessageRow, 'authorId' | 'type' | 'hasReactions' | 'flags'>;
 
@@ -308,11 +325,14 @@ const rowOfMessage = (m: Message): SelectionRow => ({
   authorId: m.author?.id ?? '',
   type: m.type,
   hasReactions: !!m.reactions && m.reactions.length > 0,
-  flags: m.reactions?.some((r) => r.me) ? RowFlag.MY_REACTION : 0,
+  flags: messageFlags(m),
 });
 
 const NO_IDS: string[] = [];
-const NO_MESSAGES: Message[] = [];
+const NO_REFS: MessageRef[] = [];
+const NO_REACTED: ReactedMessage[] = [];
+/** Reacted messages read per batch when Remove Reactions opens. */
+const REACTED_BATCH = 500;
 
 // 2.2.1 perf: rendered again only when its own store reads or props change,
 // not whenever the shell above it renders (three times per Load All page).

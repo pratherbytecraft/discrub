@@ -210,7 +210,8 @@ export const deleteMessages = createAsyncThunk(
       channelId,
       token,
     }: {
-      messages: Message[];
+      /** Only the ids are used (2.2.5 W4). */
+      messages: Array<Pick<Message, 'id'>>;
       channelId: string;
       token: string;
     },
@@ -359,7 +360,8 @@ export const editMessages = createAsyncThunk(
       content,
       token,
     }: {
-      messages: Message[];
+      /** Only the ids are used (2.2.5 W4). */
+      messages: Array<Pick<Message, 'id'>>;
       channelId: string;
       content: string;
       token: string;

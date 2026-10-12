@@ -5,6 +5,9 @@
  * way a reload opens it. The restore builds rows window by window, Select
  * all leaves every action ready at once, and Analytics reads the newest
  * 20,000 messages and says so, without reading for ever.
+ *
+ * 2.2.5 W4: Analytics walks every saved message instead, and Add Reactions
+ * opens on the whole selection without reading the messages first.
  */
 
 const CHANNEL_ID = '801000000000000001';
@@ -131,13 +134,20 @@ describe('Large conversation from the workspace (2.2.5 W1)', () => {
     // Still ready a moment later: nothing keeps reading in the background.
     cy.wait(1500);
     cy.contains('button', 'Add Reactions').should('be.enabled');
+    cy.contains('button', 'Add Reactions').click();
+    // It opens on the ids alone; nothing is read first.
+    cy.get('[role="dialog"]').contains('Add Reactions').should('be.visible');
   });
 
-  it('Analytics reads the newest 20,000 messages and says so', () => {
+  it('Analytics counts every saved message', () => {
     cy.contains('button', 'Analytics').click();
     cy.get('[role="dialog"]').should('be.visible');
-    cy.get('[data-testid="analytics-covered"]').should('have.text', 'Analytics covers the newest 20,000 messages.');
-    cy.get('[role="dialog"]').contains(/across 20,000 messages/, { timeout: 30000 }).should('be.visible');
-    cy.get('[role="dialog"]').find('[data-testid="analytics-row"]').should('have.length.at.least', 1);
+    // Every 50th message mentions the tester.
+    cy.get('[role="dialog"]').contains('500 mentions across 25,000 messages', { timeout: 60000 }).should('be.visible');
+    cy.get('[role="dialog"]').contains('[role="tab"]', 'Members').click();
+    cy.get('[role="dialog"]').find('[data-testid="analytics-row"]').should('have.length', 2).each((row) => {
+      cy.wrap(row).should('contain.text', '12,500');
+    });
+    cy.get('[data-testid="analytics-loading"]').should('not.exist');
   });
 });

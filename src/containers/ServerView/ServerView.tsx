@@ -47,8 +47,7 @@ import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors'
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import type { Channel } from 'discrub-core/types/discord-types';
 import { overlayAuthors, sameAuthorEntries, type AuthorOverlayEntry } from '@/utils/messageAuthorOverlay';
-import { getCachedMessage, useHydratedAll } from '@features/message/messageCache';
-import { ANALYTICS_LIMIT, newestIds } from '@features/message/messageRows';
+import { getCachedMessage } from '@features/message/messageCache';
 import {
   selectActiveFilteredRows,
   selectActiveContainerKey,
@@ -247,12 +246,13 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const loadAllDialogOpen = dialogs.loadAll;
   const threadLoadOpen = dialogs.threadLoad;
   const analyticsOpen = dialogs.analytics;
-  // 2.2.5 WP2b: analytics runs over the message objects, read from the
-  // cache and the workspace store while the dialog is open. 2.2.5 W1: held
-  // to the newest ANALYTICS_LIMIT messages until the reports walk the store
-  // (W4), so a large conversation is not read into memory whole.
-  const analyticsIds = useMemo(() => newestIds(messages, ANALYTICS_LIMIT), [messages]);
-  const { messages: analyticsMessages, loading: analyticsLoading } = useHydratedAll(containerKey, hydrationSource, analyticsIds, analyticsOpen);
+  // 2.2.5 W4: analytics walks the workspace store over the listed messages
+  // while the dialog is open, so a large conversation is never read into
+  // memory whole. The ids are taken only while it is open.
+  const analyticsWalk = useMemo(
+    () => (analyticsOpen ? { container: containerKey, source: hydrationSource, ids: messages.map((r) => r.id) } : null),
+    [analyticsOpen, containerKey, hydrationSource, messages],
+  );
   const openDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: true })), [dispatch]);
   const closeDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: false })), [dispatch]);
   // Close filter modal when switching tabs so it re-opens with correct tab criteria
@@ -613,7 +613,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const currentSearchCriteria = savedSearchCriteria ?? defaultCriteria;
   const activeFilterCount = countTotalFilters(currentSearchCriteria, currentRefineCriteria);
 
-  const handleDelete = async (messagesToDelete: Message[]) => {
+  const handleDelete = async (messagesToDelete: Array<Pick<Message, 'id'>>) => {
     if (!token || isOperationRunning) return;
     const channelId = activeTab || currentContext?.id;
     if (!channelId) return;
@@ -642,7 +642,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     );
   };
 
-  const handleBulkEdit = async (messagesToEdit: Message[], newContent: string) => {
+  const handleBulkEdit = async (messagesToEdit: Array<Pick<Message, 'id'>>, newContent: string) => {
     if (!token || isOperationRunning) return;
     const channelId = activeTab || currentContext?.id;
     if (!channelId) return;
@@ -723,7 +723,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   }, [token, activeTab, currentContext?.id, dispatch]);
 
   const handleBatchRemoveReactions = (params: {
-    messages: Message[];
+    messages: Array<Pick<Message, 'id' | 'reactions'>>;
     mode: 'all' | 'emoji' | 'user';
     emojis?: string[];
     userId?: string;
@@ -755,7 +755,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     );
   };
 
-  const handleBatchAddReactions = (params: { messages: Message[]; emojis: SelectableEmoji[] }) => {
+  const handleBatchAddReactions = (params: { messages: Array<Pick<Message, 'id'>>; emojis: SelectableEmoji[] }) => {
     if (!token) return;
     const channelId = activeTab || currentContext?.id;
     if (!channelId) return;
@@ -1345,9 +1345,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
       <AnalyticsModal
         open={analyticsOpen}
         onClose={() => closeDialog('analytics')}
-        messages={analyticsMessages}
-        loading={analyticsLoading}
-        coveredOf={messages.length > analyticsIds.length ? messages.length : null}
+        walk={analyticsWalk}
         userMap={userMap}
         containerId={activeTab ?? selectedChannel?.id ?? null}
         threadNames={analyticsThreadNames}

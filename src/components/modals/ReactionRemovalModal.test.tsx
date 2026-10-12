@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import ReactionRemovalModal from './ReactionRemovalModal';
+import ReactionRemovalModal, { REACTOR_FETCH_LIMIT } from './ReactionRemovalModal';
 import { createMockMessage, createMockReaction } from '../../test/fixtures';
 import type { Message, User } from 'discrub-core/types/discord-types';
 
@@ -211,5 +211,16 @@ describe('ReactionRemovalModal', () => {
       // Should still call for other emojis despite first failure
       expect(failingFetch.mock.calls.length).toBeGreaterThan(1);
     }, { timeout: 3000 });
+  });
+
+  // 2.2.5 W4: one call per reaction, so a large selection stops at the cap and says so.
+  it('stops reactor lookups at the cap and says so', async () => {
+    const many = Array.from({ length: REACTOR_FETCH_LIMIT + 5 }, (_, i) =>
+      createMockMessage({ id: `m${i}`, reactions: [createMockReaction({ emoji: { id: null, name: '👍' }, count: 1 })] }),
+    );
+    const fetch = vi.fn().mockResolvedValue([]);
+    render(<ReactionRemovalModal {...defaultProps} selectedMessages={many} fetchDelayMs={0} onFetchReactingUsers={fetch} />);
+    expect(await screen.findByTestId('reactors-capped')).toHaveTextContent(`first ${REACTOR_FETCH_LIMIT} reactions`);
+    expect(fetch).toHaveBeenCalledTimes(REACTOR_FETCH_LIMIT);
   });
 });

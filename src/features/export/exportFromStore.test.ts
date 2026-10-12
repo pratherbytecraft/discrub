@@ -276,6 +276,25 @@ describe('single Export through the workspace', () => {
     expect(await idsOf(input.main)).toEqual(['msg-1', 'msg-3']);
   });
 
+  // 2.2.5 W4: a store a page behind takes the rest from the cache, not a read of the whole conversation.
+  it('fills a store that is behind from the cache and exports every message with no refine', async () => {
+    const messages = createMockMessages(3);
+    const store = await openDefault(messages);
+    store.dispatch(setSelectedChannel(chan('c1', 'general')));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', messages.slice(0, 2), seed);
+    cacheMessages('main', [messages[2]]);
+    const { seen } = captureExports(store);
+
+    await store.dispatch(exportMessages({
+      store: { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'c1', container: 'main', ids: messages.map((m) => m.id) },
+      channelName: 'general', format: 'json', messagesPerPage: 100, separateThreads: false, includeMedia: false, guildId: '42',
+    }));
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, 'c1')).toBe(3);
+    const input = seen[0].input as ExportSourceSet;
+    expect(input.main.count).toBe(3);
+    expect(await idsOf(input.main)).toEqual(messages.map((m) => m.id));
+  });
+
   it('writes a first page that was never saved before reading it back', async () => {
     const messages = createMockMessages(3);
     const store = await openDefault(messages);
