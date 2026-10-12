@@ -5060,8 +5060,15 @@ describe('messageSlice', () => {
 
         testStore.dispatch(setDiscrubCancelled(true));
         const result = await pending;
-        expect(result.type).toBe('message/fetchAllThreadMessages/fulfilled');
-        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(100);
+        // 2.2.5 WP4a: a stop keeps the pages it fetched and stays resumable.
+        expect(result.type).toBe('message/fetchAllThreadMessages/rejected');
+        expect(result.payload).toBe('Load cancelled');
+        const tab = testStore.getState().message.threadTabs['thread-100'];
+        expect(tab.rows).toHaveLength(100);
+        expect(tab.pagination.hasMore).toBe(true);
+        expect(tab.pagination.lastMessageId).toBe(batch[99].id);
+        expect(tab.pagination.loadAllCancelled).toBe(true);
+        expect(tab.pagination.isLoadingAll).toBe(false);
 
         const pauseEntries = vi.mocked(addStatusEntry).mock.calls.filter(
           ([p]) => p.level === 'warning' && /paused after 5 failed retries/.test(p.message),
@@ -6764,10 +6771,14 @@ describe('messageSlice', () => {
         store.dispatch(setDiscrubCancelled(true));
         const result = await pendingDispatch;
 
-        // After cancel, fetchAllMessages breaks the loop and fulfills with
-        // whatever partial allMessages it had — that's the trust signal.
-        expect(result.type).toBe('message/fetchAllMessages/fulfilled');
-        expect((result.payload as any).messages).toHaveLength(100);
+        // 2.2.5 WP4a: a stop keeps what was loaded (appended live) and the
+        // walk stays resumable from the last page instead of reading as complete.
+        expect(result.type).toBe('message/fetchAllMessages/rejected');
+        expect(result.payload).toBe('Load cancelled');
+        expect(store.getState().message.rows).toHaveLength(100);
+        expect(store.getState().message.pagination.hasMore).toBe(true);
+        expect(store.getState().message.pagination.lastMessageId).toBe(batch[99].id);
+        expect(store.getState().message.pagination.loadAllCancelled).toBe(true);
 
         const pauseEntries = vi.mocked(addStatusEntry).mock.calls.filter(
           ([p]) => p.level === 'warning' && /paused after 5 failed retries/.test(p.message),

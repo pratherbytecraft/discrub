@@ -23,6 +23,7 @@ import {
   restoreConversation,
   threadSeedFromState,
 } from './messagePersistence';
+import { initialWorkspaceState } from '@features/workspace/workspaceSlice';
 
 vi.mock('@/utils/operationLoopUtils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/utils/operationLoopUtils')>();
@@ -34,7 +35,7 @@ const seed = { kind: 'channel' as const, guildId: '42', name: 'general' };
 const msg = (id: string, overrides: Partial<Message> = {}): Message => createMockMessage({ id, channel_id: CID, ...overrides });
 
 const readyState = (overrides: Partial<RootState> = {}): RootState =>
-  createBaseState({ workspace: { currentWid: DEFAULT_WORKSPACE_ID, ready: true, booting: false, error: null }, ...overrides });
+  createBaseState({ workspace: { ...initialWorkspaceState, currentWid: DEFAULT_WORKSPACE_ID, ready: true }, ...overrides });
 
 const apiFor = (state: RootState) => {
   const dispatch = vi.fn();

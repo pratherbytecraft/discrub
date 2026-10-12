@@ -21,6 +21,7 @@ import {
 import { countActiveFilters } from 'discrub-core/filtering';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { Trans } from 'react-i18next';
+import { useLoadAllUnfinished } from '@/hooks/useLoadAllLabel';
 import { useTranslation } from 'react-i18next';
 
 interface LoadAllDialogProps {
@@ -45,6 +46,8 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
   const searchCriteria = useAppSelector(selectActiveSearchCriteria);
   const pagination = useAppSelector(selectActivePagination);
   const resumable = !activeTab && restored !== null && !!onStartOver;
+  // An unfinished Load All recorded in the workspace (a thread tab too) also reads Resume.
+  const unfinished = useLoadAllUnfinished();
   // Nothing left to resume once the saved walk reached the end: Start over
   // is the only action, and it is what refreshes a complete conversation.
   const completeOnDisk = resumable && !pagination.hasMore;
@@ -124,7 +127,7 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
           </Button>
         ) : (
           <Button onClick={onConfirm} variant="contained" color="primary" data-testid="load-all-confirm">
-            {resumable ? t('loadAll.resume') : t('loadAll.confirm')}
+            {resumable || unfinished ? t('loadAll.resume') : t('loadAll.confirm')}
           </Button>
         )}
       </DialogActions>

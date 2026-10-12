@@ -36,6 +36,7 @@ import { selectAuthToken } from '@features/auth/authSlice';
 import { selectSelectedGuild, selectRoles } from '@features/guild/guildSlice';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectSettings, setFeedScrollAnchor, selectFeedScrollAnchor } from '@features/app/appSlice';
+import { feedAnchorMoved } from '@features/workspace/workspaceSlice';
 import UserProfileModal from '@/components/modals/UserProfileModal';
 import AttachmentModal from '@/components/modals/AttachmentModal';
 import ReactionModal from '@/components/modals/ReactionModal';
@@ -48,6 +49,19 @@ import MessageFeedToolbar from './MessageFeedToolbar';
 import MessageDayHeading from './MessageDayHeading';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
+
+/**
+ * The first chunk on screen. The virtual items include the overscan above
+ * the viewport (20 chunks), so the first item is usually not what the
+ * user sees; the first one that ends below the scroll offset is.
+ */
+function firstVisibleItem(virtualizer: { scrollOffset: number | null; getVirtualItems: () => Array<{ index: number; end: number }> }) {
+  const offset = virtualizer.scrollOffset ?? 0;
+  return virtualizer.getVirtualItems().find((item) => item.end > offset);
+}
+
+/** How long scrolling rests before the first visible message is saved. */
+const FEED_ANCHOR_REST_MS = 2000;
 
 interface MessageFeedProps {
   formattingContext: HtmlFormattingContext;
@@ -223,7 +237,7 @@ const MessageFeed = ({
   virtualizerRef.current = rowVirtualizer;
   useEffect(
     () => () => {
-      const first = virtualizerRef.current.getVirtualItems()[0];
+      const first = firstVisibleItem(virtualizerRef.current);
       const chunk = first ? chunksRef.current[first.index] : undefined;
       const messageId = chunk?.messages[0]?.id;
       if (messageId) dispatch(setFeedScrollAnchor({ key: anchorKeyRef.current, messageId }));
@@ -237,6 +251,19 @@ const MessageFeed = ({
     if (idx >= 0) rowVirtualizer.scrollToIndex(idx, { align: 'start' });
     dispatch(setFeedScrollAnchor(null));
   }, [scrollAnchor, anchorKey, chunks, rowVirtualizer, dispatch]);
+
+  // 2.2.5 WP4a: the first visible message, written to the conversation
+  // record once scrolling rests for 2 s (plan section 7), so a reopened
+  // workspace lands where the user was reading.
+  const firstVisibleIndex = firstVisibleItem(rowVirtualizer)?.index;
+  const firstVisibleId = firstVisibleIndex !== undefined ? chunks[firstVisibleIndex]?.messages[0]?.id : undefined;
+  useEffect(() => {
+    if (!firstVisibleId) return;
+    const timer = setTimeout(() => {
+      dispatch(feedAnchorMoved({ containerId: activeTab ?? null, messageId: firstVisibleId }));
+    }, FEED_ANCHOR_REST_MS);
+    return () => clearTimeout(timer);
+  }, [firstVisibleId, activeTab, dispatch]);
 
   // Record each measured height into the estimator, then delegate to the
   // virtualizer's own measureElement. Kept ref-stable so rows don't re-attach.

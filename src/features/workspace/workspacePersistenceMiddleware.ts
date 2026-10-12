@@ -22,6 +22,10 @@ import {
   messagesEdited,
   messagesRemoved,
   removeThreadTab,
+  fetchAllMessages,
+  fetchAllThreadMessages,
+  loadAllSearchResults,
+  setActiveTab,
   selectAllMessages,
   selectAllThreadMessages,
   setOrder,
@@ -44,7 +48,12 @@ import {
   threadSeedFromState,
   type PersistApi,
 } from '@features/message/messagePersistence';
-import type { RowPatch } from '@services/workspaceStore';
+import { updateWorkspace, type RowPatch } from '@services/workspaceStore';
+import { setSelectedGuild } from '@features/guild/guildSlice';
+import { setSelectedChannel } from '@features/channel/channelSlice';
+import { setSelectedDm } from '@features/dm/dmSlice';
+import type { ActionKind, ConversationSeed, WorkspaceScope } from './workspaceTypes';
+import { actionRecorded, feedAnchorMoved, scopeRestoreFinished, selectCurrentWid } from './workspaceSlice';
 
 /**
  * Keeps the workspace store in step with what the reducers did to the
@@ -151,7 +160,7 @@ async function flushRecord(api: PersistApi, cid: string, containerId: string | n
   await persistConversation(api, cid, record, seed);
 }
 
-/** Tests and unload: write every pending record now. */
+/** Tests, a switch and unload: write every pending record now. */
 export async function flushPendingRecords(api: PersistApi): Promise<void> {
   const jobs = [...pending.entries()];
   pending.clear();
@@ -159,6 +168,80 @@ export async function flushPendingRecords(api: PersistApi): Promise<void> {
     clearTimeout(job.timer);
     await flushRecord(api, cid, job.containerId, job.fields);
   }
+  await recordChain;
+}
+
+/* ─────────────────── Switch flag (2.2.5 WP4a) ─────────────────── */
+
+/**
+ * True while a workspace switch is stopping the running action. A run
+ * stopped by a switch keeps its action record, so its button reads Resume
+ * when the user comes back (plan section 5.4).
+ */
+let suspendingForSwitch = false;
+export const isSuspendingForSwitch = (): boolean => suspendingForSwitch;
+export const setSuspendingForSwitch = (value: boolean): void => {
+  suspendingForSwitch = value;
+};
+
+/* ─────────────────── Action records (2.2.5 WP4a) ─────────────────── */
+
+/**
+ * Record writes run one after another, so a run that ends quickly cannot
+ * have its clear land before its start.
+ */
+let recordChain: Promise<unknown> = Promise.resolve();
+const chained = (job: () => Promise<unknown>): Promise<unknown> => {
+  recordChain = recordChain.then(job, job);
+  return recordChain;
+};
+
+function recordActionStart(api: PersistApi, cid: string, kind: ActionKind, seed: ConversationSeed | null, settings: unknown): void {
+  if (!selectCurrentWid(api.getState())) return;
+  const name = seed?.name ?? api.getState().workspace?.actions?.[cid]?.name ?? cid;
+  api.dispatch(actionRecorded({ cid, action: { cid, name, kind } }));
+  void chained(() => persistConversation(api, cid, { action: { kind, settings } }, seed));
+}
+
+function recordActionEnd(api: PersistApi, cid: string): void {
+  if (!selectCurrentWid(api.getState())) return;
+  api.dispatch(actionRecorded({ cid, action: null }));
+  void chained(() => persistConversation(api, cid, { action: null }, null));
+}
+
+/** The action's end: finished or stopped clears the record, a switch keeps it. */
+function actionEnded(api: PersistApi, cid: string | null): void {
+  if (!cid || isSuspendingForSwitch()) return;
+  recordActionEnd(api, cid);
+}
+
+/* ─────────────────── Scope (2.2.5 WP4a) ─────────────────── */
+
+/** Where the user is, as the workspace row keeps it. */
+export function scopeFromState(state: RootState): WorkspaceScope {
+  return {
+    tab: null,
+    guildId: state.guild?.selectedGuild?.id ?? null,
+    channelId: state.channel?.selectedChannel?.id ?? null,
+    dmId: state.dm?.selectedDm?.id ?? null,
+  };
+}
+
+function writeScope(api: PersistApi): void {
+  const state = api.getState();
+  const wid = selectCurrentWid(state);
+  const ws = state.workspace;
+  if (!wid || !ws || ws.switching || ws.restoringScope) return;
+  const scope = scopeFromState(state);
+  void chained(async () => {
+    try {
+      await updateWorkspace(wid, (workspace) => {
+        workspace.scope = scope;
+      });
+    } catch (error) {
+      console.error('[workspace] could not write the scope', error);
+    }
+  });
 }
 
 /* ─────────────────── Listeners ─────────────────── */
@@ -293,5 +376,91 @@ listen({
     const parent = mainCid(state);
     await forgetConversation(api(listenerApi), threadId);
     if (parent) await persistThreadTabs(api(listenerApi), parent, state);
+  },
+});
+
+/* ─────────────────── WP4a listeners ─────────────────── */
+
+const argOf = <T,>(action: unknown): T => (action as { meta: { arg: T } }).meta.arg;
+
+listen({
+  matcher: isAnyOf(setSelectedGuild, setSelectedChannel, setSelectedDm, scopeRestoreFinished),
+  effect: (_action, listenerApi) => {
+    writeScope(api(listenerApi));
+  },
+});
+
+listen({
+  actionCreator: setActiveTab,
+  effect: async (_action, listenerApi) => {
+    const state = listenerApi.getState();
+    if (state.workspace?.restoringScope) return;
+    const parent = mainCid(state);
+    const persistApi = api(listenerApi);
+    if (parent) await chained(() => persistThreadTabs(persistApi, parent, persistApi.getState()));
+  },
+});
+
+listen({
+  actionCreator: feedAnchorMoved,
+  effect: (action, listenerApi) => {
+    const state = listenerApi.getState();
+    if (state.workspace?.restoringScope) return;
+    const cid = cidFor(state, action.payload.containerId);
+    if (!cid) return;
+    // The feed already waited for scrolling to rest (2 s). Only an existing
+    // record takes the anchor; opening and scrolling one page writes nothing.
+    const persistApi = api(listenerApi);
+    void chained(() => persistConversation(persistApi, cid, { scrollAnchorId: action.payload.messageId }, null));
+  },
+});
+
+listen({
+  actionCreator: fetchAllMessages.pending,
+  effect: (action, listenerApi) => {
+    const cid = action.meta.arg.channelId;
+    const state = listenerApi.getState();
+    recordActionStart(api(listenerApi), cid, 'loadAll', conversationSeedFromState(state, cid), { mode: 'plain' });
+  },
+});
+
+listen({
+  actionCreator: loadAllSearchResults.pending,
+  effect: (action, listenerApi) => {
+    const state = listenerApi.getState();
+    const cid = action.meta.arg.channelId ?? mainCid(state);
+    if (!cid) return;
+    recordActionStart(api(listenerApi), cid, 'loadAll', conversationSeedFromState(state, cid), { mode: 'search' });
+  },
+});
+
+listen({
+  actionCreator: fetchAllThreadMessages.pending,
+  effect: (action, listenerApi) => {
+    const cid = action.meta.arg.threadId;
+    const state = listenerApi.getState();
+    recordActionStart(api(listenerApi), cid, 'loadAll', threadSeedFromState(state, cid), { mode: 'thread' });
+  },
+});
+
+listen({
+  matcher: isAnyOf(fetchAllMessages.fulfilled, fetchAllMessages.rejected),
+  effect: (action, listenerApi) => {
+    actionEnded(api(listenerApi), argOf<{ channelId: string }>(action).channelId);
+  },
+});
+
+listen({
+  matcher: isAnyOf(loadAllSearchResults.fulfilled, loadAllSearchResults.rejected),
+  effect: (action, listenerApi) => {
+    const arg = argOf<{ channelId?: string }>(action);
+    actionEnded(api(listenerApi), arg.channelId ?? mainCid(listenerApi.getState()));
+  },
+});
+
+listen({
+  matcher: isAnyOf(fetchAllThreadMessages.fulfilled, fetchAllThreadMessages.rejected),
+  effect: (action, listenerApi) => {
+    actionEnded(api(listenerApi), argOf<{ threadId: string }>(action).threadId);
   },
 });

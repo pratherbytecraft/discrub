@@ -1,3 +1,4 @@
+import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
 import { Box, Typography, Paper, Button, Alert, AlertTitle, Chip } from '@mui/material';
 import { Joyride } from 'react-joyride';
@@ -148,6 +149,7 @@ interface ServerViewProps {
 const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) => {
   perfCount('ServerView');
   const { t } = useTranslation();
+  const loadAllLabel = useLoadAllLabel();
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
@@ -1023,7 +1025,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
                   onClick={() => openDialog('loadAll')}
                   disabled={isLoading || pagination.isLoadingAll || isOperationRunning}
                 >
-                  {t('serverView.loadAll')}
+                  {loadAllLabel}
                 </Button>
               </HotkeyTooltip>
             )}

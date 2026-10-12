@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useWorkspaceScopeRestore } from '@/hooks/useWorkspaceScopeRestore';
 import { Box } from '@mui/material';
 import { Joyride } from 'react-joyride';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
@@ -210,6 +211,7 @@ const MainLayout = () => {
   useWakeLock();
   useOperationThrottleOptOut();
   useRestBreaks();
+  useWorkspaceScopeRestore();
 
   // Wait for settings to load before checking the announcement gist —
   // otherwise the cached-rev comparison races against the IDB-backed

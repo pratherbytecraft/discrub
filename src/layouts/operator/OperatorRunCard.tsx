@@ -1,3 +1,4 @@
+import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { Box, Button, LinearProgress, Typography, alpha } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +28,7 @@ const STATE_HEX: Record<string, string> = { neutral: '#8b949e', success: '#3fb95
  */
 const OperatorRunCard = () => {
   const { t } = useTranslation();
+  const loadAllLabel = useLoadAllLabel();
   const dispatch = useAppDispatch();
   // The counters move with every delete; drawing each one kept the card repainting for a whole purge.
   const liveSummary = useAppSelector(selectOperationSummary);
@@ -92,7 +94,7 @@ const OperatorRunCard = () => {
       ) : (
         <>
           <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap' }}>
-            {tile(<LoadAllIcon fontSize="small" />, t('serverView.loadAll'), openName ? t('operator.loadAllIn', { name: openName }) : t('operator.loadAllNone'), () => open('loadAll'), { disabled: !openName || isForum || !pagination.hasMore, testId: 'op-load-all' })}
+            {tile(<LoadAllIcon fontSize="small" />, loadAllLabel, openName ? t('operator.loadAllIn', { name: openName }) : t('operator.loadAllNone'), () => open('loadAll'), { disabled: !openName || isForum || !pagination.hasMore, testId: 'op-load-all' })}
             {tile(<ExportIcon fontSize="small" />, t('serverView.export'), queued > 0 ? t('operator.queueCount', { count: queued }) : t('operator.queueNone'), () => open('bulkExport'), { disabled: queued === 0, testId: 'op-export' })}
             {tile(<PurgeIcon fontSize="small" />, t('native.purge'), queued > 0 ? t('operator.queueCount', { count: queued }) : t('operator.queueNone'), () => open('purge'), { disabled: queued === 0, color: 'error', testId: 'op-purge' })}
           </Box>

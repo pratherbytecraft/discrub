@@ -2042,5 +2042,14 @@
   },
   "longRun": {
     "note": "Lange Läufe senden viele Anfragen von deinem Konto. Lass die Verzögerungen auf den Standardwerten oder höher und lass einen Vorgang enden, bevor du den nächsten startest."
+  },
+  "workspace": {
+    "openedToast": "Arbeitsbereich {{name}} geöffnet",
+    "heldElsewhere": "Dieser Arbeitsbereich ist in einem anderen Fenster geöffnet. Hier geladene Nachrichten werden nicht gespeichert.",
+    "switchRunningTitle": "{{name}} läuft",
+    "switchLoadAllLine": "Alle laden steht bei {{messages}} Nachrichten in {{conversation}}.",
+    "switchNote": "Beim Wechseln wird es pausiert. Fortsetzen macht dort weiter, wenn du zurückkommst.",
+    "stay": "Bleiben",
+    "switch": "Wechseln"
   }
 }

@@ -2042,5 +2042,14 @@
   },
   "longRun": {
     "note": "Long runs send many requests from your account. Keep the delays at their defaults or higher, and let one operation finish before starting another."
+  },
+  "workspace": {
+    "openedToast": "Opened workspace {{name}}",
+    "heldElsewhere": "This workspace is open in another window. Messages loaded here are not saved.",
+    "switchRunningTitle": "{{name}} is running",
+    "switchLoadAllLine": "Load All is at {{messages}} messages in {{conversation}}.",
+    "switchNote": "Switching pauses it. Resume picks it up when you come back.",
+    "stay": "Stay",
+    "switch": "Switch"
   }
 }

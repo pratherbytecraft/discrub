@@ -1,3 +1,4 @@
+import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { Box, Button, Chip, Typography, alpha, useTheme } from '@mui/material';
 import { Search as SearchIcon, CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, Forum as ThreadIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ import { getDmName } from '@/utils/dmListUtils';
  */
 const SimpleSearchCard = () => {
   const { t } = useTranslation();
+  const loadAllLabel = useLoadAllLabel();
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const channel = useAppSelector(selectSelectedChannel);
@@ -55,7 +57,7 @@ const SimpleSearchCard = () => {
             <Box component="b" sx={{ fontWeight: 600 }}>{messages.length.toLocaleString()}</Box> {t('simple.messagesLoaded')}{pagination.hasMore && !running ? ` · ${t('workbench.moreAvailable')}` : !pagination.hasMore && messages.length > 0 ? ` · ${t('workbench.allLoaded')}` : ''}
           </Typography>
         )}
-        {!isForum && !running && <Button size="small" variant="contained" startIcon={<LoadAllIcon />} disabled={!pagination.hasMore} onClick={() => open('loadAll')} data-testid="simple-load-all" sx={{ textTransform: 'none' }}>{t('serverView.loadAll')}</Button>}
+        {!isForum && !running && <Button size="small" variant="contained" startIcon={<LoadAllIcon />} disabled={!pagination.hasMore} onClick={() => open('loadAll')} data-testid="simple-load-all" sx={{ textTransform: 'none' }}>{loadAllLabel}</Button>}
         <Button size="small" variant="outlined" color="inherit" startIcon={<ExportIcon />} disabled={running || (!isForum && messages.length === 0)} onClick={() => open(isForum ? 'forumExport' : 'export')} data-testid="simple-export" data-tour="export-button" sx={{ textTransform: 'none', borderColor: 'divider' }}>{t('serverView.export')}</Button>
         {!isForum && <Button size="small" variant="outlined" color="error" startIcon={<PurgeIcon />} disabled={running} onClick={() => open('purge')} data-testid="simple-purge" sx={{ textTransform: 'none' }}>{t('native.purge')}</Button>}
         {channel && <Button size="small" variant="outlined" color="inherit" startIcon={<ThreadIcon />} disabled={running} onClick={() => open('threadLoad')} data-testid="simple-load-thread" sx={{ textTransform: 'none', borderColor: 'divider' }}>{t('serverView.loadThread')}</Button>}

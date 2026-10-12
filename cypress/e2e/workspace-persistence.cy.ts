@@ -8,14 +8,14 @@
 const CHANNEL = 'general';
 
 /** 100 messages per page, ids descending so `before` cursors walk down. */
-function makePage(template: Record<string, unknown>, start: number): Record<string, unknown>[] {
+function makePage(template: Record<string, unknown>, start: number, minutesApart = 1): Record<string, unknown>[] {
   return Array.from({ length: 100 }, (_, i) => {
     const n = start - i;
     return {
       ...template,
       id: `71000000000000${String(n).padStart(4, '0')}`,
       content: `page message ${n}`,
-      timestamp: new Date(Date.UTC(2026, 1, 1, 0, 0, 0) + n * 60_000).toISOString(),
+      timestamp: new Date(Date.UTC(2026, 1, 1, 0, 0, 0) + n * minutesApart * 60_000).toISOString(),
       reactions: [],
       attachments: [],
       embeds: [],
@@ -28,9 +28,9 @@ function makePage(template: Record<string, unknown>, start: number): Record<stri
  * anything later answers nothing. With `freshFirstPageOnCall`, that call
  * answers page A again: the fresh first page Start over asks for.
  */
-function interceptPagedChannel(template: Record<string, unknown>, options: { freshFirstPageOnCall?: number } = {}) {
-  const pageA = makePage(template, 9000);
-  const pageB = makePage(template, 8900);
+function interceptPagedChannel(template: Record<string, unknown>, options: { freshFirstPageOnCall?: number; minutesApart?: number } = {}) {
+  const pageA = makePage(template, 9000, options.minutesApart);
+  const pageB = makePage(template, 8900, options.minutesApart);
   let calls = 0;
   cy.intercept('GET', '**/api/v10/channels/*/messages?*', (req) => {
     calls += 1;
@@ -135,6 +135,114 @@ describe('Workspace persistence (2.2.5)', () => {
       cy.get('@pagedMessages.all').should('have.length', 4);
       cy.contains('100 messages').should('be.visible');
       countWorkspaceRows().should('eq', 100);
+    });
+  });
+
+  /* ─────────────── 2.2.5 WP4a: scope, action records, switching ─────────────── */
+
+  type WorkspaceHooks = {
+    switchTo: (wid: string) => Promise<unknown>;
+    create: (name: string) => Promise<{ wid: string }>;
+    get: (wid: string) => Promise<{ conversations: Record<string, { name: string; action: { kind: string } | null; scrollAnchorId: string | null }> } | null>;
+  };
+  const hooks = () => cy.window({ log: false }).its('__workspace__') as unknown as Cypress.Chainable<WorkspaceHooks>;
+
+  function loadTwoPages() {
+    cy.contains(CHANNEL).click();
+    cy.wait('@pagedMessages');
+    cy.get('[data-testid="message-feed-load-more"]').then(($btn) => { $btn[0].click(); });
+    cy.wait('@pagedMessages');
+    cy.contains('200 messages').should('be.visible');
+    countWorkspaceRows().should('eq', 200);
+  }
+
+  it('reopens the server and channel you were in after a reload, from disk', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      interceptPagedChannel(messages[0]);
+      loadTwoPages();
+      cy.reload();
+      // No click: the saved scope opens #general and its rows come back from disk.
+      cy.contains('[data-testid="message-feed-row"]', 'page message 9000', { timeout: 15000 }).should('exist');
+      cy.contains('200 messages').should('be.visible');
+      cy.get('@pagedMessages.all').should('have.length', 2);
+    });
+  });
+
+  it('saves where the feed was resting and scrolls back there after a reload', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      // Ten minutes apart so every message is its own group in the feed; the anchor is a group's first message.
+      interceptPagedChannel(messages[0], { minutesApart: 10 });
+      loadTwoPages();
+      cy.get('[data-testid="message-feed-items"]').parent().scrollTo(0, 6000);
+      cy.get('[data-testid="message-feed-items"]').parent().its('0.scrollTop').should('be.greaterThan', 1000);
+      // The feed waits for scrolling to rest for 2 s before it saves the anchor.
+      cy.wait(2600);
+      hooks().then((h) => h.get('default')).should((record) => {
+        const general = Object.values(record?.conversations ?? {}).find((c) => c.name === CHANNEL);
+        expect(String(general?.scrollAnchorId), 'anchor saved below the top').to.match(/^7100/);
+        expect(String(general?.scrollAnchorId), 'anchor saved below the top').not.to.eq('710000000000009000');
+      });
+      hooks().then((h) => h.get('default')).then((record) => {
+        const anchorId = Object.values(record?.conversations ?? {}).find((c) => c.name === CHANNEL)?.scrollAnchorId as string;
+        const n = Number(anchorId.slice(-4));
+        cy.reload();
+        cy.contains('[data-testid="message-feed-row"]', `page message ${n}`, { timeout: 15000 }).should('be.visible');
+        cy.get('[data-testid="message-feed-items"]').parent().its('0.scrollTop').should('be.greaterThan', 1000);
+      });
+    });
+  });
+
+  it('a Load All cut short by a reload reads Resume and continues from the cursor', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      const pageA = makePage(messages[0], 9000);
+      const pageB = makePage(messages[0], 8900);
+      let calls = 0;
+      cy.intercept('GET', '**/api/v10/channels/*/messages?*', (req) => {
+        calls += 1;
+        // Call 3 is the Load All page that never answers before the reload.
+        if (calls === 3) req.reply({ statusCode: 200, body: [], delay: 30000 });
+        else req.reply({ statusCode: 200, body: calls === 1 ? pageA : calls === 2 ? pageB : [] });
+      }).as('pagedMessages');
+      loadTwoPages();
+
+      cy.contains('button', 'Load All').click();
+      cy.get('[data-testid="load-all-confirm"]').click();
+      hooks().then((h) => h.get('default')).should((record) => {
+        const general = Object.values(record?.conversations ?? {}).find((c) => c.name === CHANNEL);
+        expect(general?.action?.kind).to.eq('loadAll');
+      });
+
+      cy.reload();
+      cy.contains('[data-testid="message-feed-row"]', 'page message 9000', { timeout: 15000 }).should('exist');
+      cy.contains('button', 'Resume').should('be.visible').click();
+      cy.get('[data-testid="load-all-confirm"]').should('have.text', 'Resume').click();
+      cy.wait('@pagedMessages').its('request.url').should('include', 'before=710000000000008801');
+      cy.contains('All loaded', { timeout: 15000 }).should('be.visible');
+      // Finished, so the record is cleared and the button reads Load All again.
+      hooks().then((h) => h.get('default')).should((record) => {
+        const general = Object.values(record?.conversations ?? {}).find((c) => c.name === CHANNEL);
+        expect(general?.action ?? null).to.eq(null);
+      });
+    });
+  });
+
+  it('switching to another workspace clears the screen and switching back reopens the conversation from disk', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      interceptPagedChannel(messages[0]);
+      loadTwoPages();
+
+      hooks().then((h) => h.create('Raid archive')).then((created) => {
+        hooks().then((h) => h.switchTo(created.wid));
+        cy.window().its('__store__').invoke('getState').its('workspace.currentName').should('eq', 'Raid archive');
+        cy.contains('[data-testid="message-feed-row"]', 'page message 9000').should('not.exist');
+        cy.window().its('__store__').invoke('getState').its('channel.selectedChannel').should('eq', null);
+
+        hooks().then((h) => h.switchTo('default'));
+        cy.window().its('__store__').invoke('getState').its('workspace.currentName').should('eq', 'Default');
+        cy.contains('[data-testid="message-feed-row"]', 'page message 9000', { timeout: 15000 }).should('exist');
+        cy.contains('200 messages').should('be.visible');
+        cy.get('@pagedMessages.all').should('have.length', 2);
+      });
     });
   });
 });

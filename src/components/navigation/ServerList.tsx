@@ -19,21 +19,17 @@ import {
 } from '@mui/icons-material';
 import type { Guild } from 'discrub-core/types/discord-types';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { openGuild } from '@features/navigation/openConversation';
 import {
   selectGuilds,
   selectSelectedGuild,
   selectGuildLoading,
   selectSelectedGuilds,
-  fetchCurrentMember,
-  fetchRoles,
-  setSelectedGuild,
   toggleGuildSelection,
   selectAllGuilds,
   deselectAllGuilds,
 } from '@features/guild/guildSlice';
-import { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
-import { clearMessages } from '@features/message/messageSlice';
-import { addStatusEntry, showToast } from '@features/status/statusSlice';
+import { showToast } from '@features/status/statusSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
 import ListSkeleton from '@components/ui/ListSkeleton';
 import EmptyState from '@components/ui/EmptyState';
@@ -111,15 +107,7 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
       return;
     }
 
-    // Clear previous server's state before loading new server
-    dispatch(setSelectedChannel(null));
-    dispatch(clearMessages());
-    dispatch(setSelectedGuild(guild));
-    dispatch(addStatusEntry({ level: 'info', message: t('nav.loadingServer', { name: guild.name }) }));
-    // Fetch channels, current member roles, and guild roles in parallel
-    dispatch(fetchCurrentMember({ guildId: guild.id, token }));
-    dispatch(fetchRoles({ guildId: guild.id, token }));
-    await dispatch(fetchChannels({ guildId: guild.id, token }));
+    await dispatch(openGuild({ guild }));
   };
 
   const handleCopySelectedNames = () => {

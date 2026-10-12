@@ -36,6 +36,14 @@ if (import.meta.env.DEV) {
   import('./features/message/messageCache').then((cache) => {
     (window as any).__messageCache__ = { get: cache.getCachedMessage };
   });
+  // 2.2.5 WP4a: switching has no screen until the WP5 popover; specs drive it here.
+  Promise.all([import('./features/workspace/workspaceThunks'), import('./services/workspaceStore')]).then(([thunks, workspaceStore]) => {
+    (window as any).__workspace__ = {
+      switchTo: (wid: string) => store.dispatch(thunks.switchWorkspace({ wid })),
+      create: (name: string) => workspaceStore.createWorkspace({ name }),
+      get: (wid: string) => workspaceStore.getWorkspace(wid),
+    };
+  });
 }
 
 // #263: measurement hooks for tooling/perf. Only a build made with

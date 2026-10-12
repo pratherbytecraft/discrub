@@ -1,3 +1,4 @@
+import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { useState, memo } from 'react';
 import { Box, Button, ListItemIcon, ListItemText, Menu, MenuItem, Typography } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, FilterList as FilterIcon, Forum as ThreadIcon, CalendarViewMonth as MonthsIcon, MoreHoriz as MoreIcon } from '@mui/icons-material';
@@ -22,6 +23,7 @@ type DialogKey = 'loadAll' | 'export' | 'forumExport' | 'purge' | 'filters' | 't
 const TimelineToolbar = ({ phone, showMonths, onOpenMonths }: { phone: boolean; showMonths: boolean; onOpenMonths: () => void }) => {
   perfCount('TimelineToolbar');
   const { t } = useTranslation();
+  const loadAllLabel = useLoadAllLabel();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -35,7 +37,7 @@ const TimelineToolbar = ({ phone, showMonths, onOpenMonths }: { phone: boolean; 
   const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
   const open = (dialog: DialogKey) => { setAnchor(null); dispatch(setDialogOpen({ dialog, open: true })); };
   const items: Array<{ key: string; label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean; color?: 'primary' | 'error'; contained?: boolean; tour?: string; note?: string }> = [];
-  if (!isForum) items.push({ key: 'load-all', label: t('serverView.loadAll'), icon: <LoadAllIcon fontSize="small" />, onClick: () => open('loadAll'), disabled: running || !pagination.hasMore, color: 'primary', contained: true, note: !pagination.hasMore ? t('timeline.allLoaded') : undefined });
+  if (!isForum) items.push({ key: 'load-all', label: loadAllLabel, icon: <LoadAllIcon fontSize="small" />, onClick: () => open('loadAll'), disabled: running || !pagination.hasMore, color: 'primary', contained: true, note: !pagination.hasMore ? t('timeline.allLoaded') : undefined });
   items.push({ key: 'export', label: t('serverView.export'), icon: <ExportIcon fontSize="small" />, onClick: () => open(isForum ? 'forumExport' : 'export'), disabled: running || (!isForum && messages.length === 0), tour: 'export-button' });
   if (!isForum) items.push({ key: 'purge', label: t('native.purge'), icon: <PurgeIcon fontSize="small" />, onClick: () => open('purge'), disabled: running, color: 'error' });
   if (!isForum) items.push({ key: 'filters', label: t('serverView.filters'), icon: <FilterIcon fontSize="small" />, onClick: () => open('filters'), tour: 'search-filters' });

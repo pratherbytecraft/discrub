@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderWithProviders, screen, fireEvent } from '../../test/test-utils';
 import LoadAllDialog from './LoadAllDialog';
 import { createBaseState, messageStateWith, rowsOf } from '../../test/state-factories';
-import { createMockMessage } from '../../test/fixtures';
+import { createMockChannel, createMockMessage } from '../../test/fixtures';
+import { initialWorkspaceState } from '@features/workspace/workspaceSlice';
 
 vi.mock('@services/discordService', () => ({
   getDiscordService: vi.fn(() => ({})),
@@ -96,6 +97,18 @@ describe('LoadAllDialog', () => {
       });
       expect(screen.queryByTestId('load-all-restored-line')).not.toBeInTheDocument();
     });
+  });
+
+  // 2.2.5 WP4a: an unfinished Load All recorded in the workspace reads Resume.
+  it('reads Resume when the open conversation has an unfinished Load All', () => {
+    const base = createBaseState();
+    renderWithProviders(<LoadAllDialog {...defaultProps} />, {
+      preloadedState: createBaseState({
+        channel: { ...base.channel, selectedChannel: createMockChannel({ id: 'c1', name: 'general' }) },
+        workspace: { ...initialWorkspaceState, actions: { c1: { cid: 'c1', name: 'general', kind: 'loadAll' } } },
+      }),
+    });
+    expect(screen.getByTestId('load-all-confirm')).toHaveTextContent('Resume');
   });
 
   describe('Confirmation State', () => {

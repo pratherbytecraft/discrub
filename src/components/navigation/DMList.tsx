@@ -31,6 +31,7 @@ import MultiSelectControls from './MultiSelectControls';
 import type { Channel } from 'discrub-core/types/discord-types';
 import TourButton from '@components/welcome/TourButton';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { openDm } from '@features/navigation/openConversation';
 import {
   selectDMs,
   selectSelectedDm,
@@ -42,7 +43,6 @@ import {
   parseDmChannelInput,
   parseDmUserInput,
   detectDmInputKind,
-  setSelectedDm,
   toggleDmSelection,
   selectAllDms,
   deselectAllDms,
@@ -59,9 +59,7 @@ import {
   getDmLastMessageTime,
   sortDms,
 } from '@/utils/dmListUtils';
-import { fetchMessages, clearMessages } from '@features/message/messageSlice';
 import { addStatusEntry, showToast } from '@features/status/statusSlice';
-import { setSelectedChannel } from '@features/channel/channelSlice';
 import ListSkeleton from '@components/ui/ListSkeleton';
 import EmptyState from '@components/ui/EmptyState';
 import { timeAgo } from '@/utils/timeAgo';
@@ -339,17 +337,7 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
   // whole DM workflow exactly like a clicked row.
   const selectDmAndLoad = async (dm: Channel) => {
     if (!token) return;
-    dispatch(setSelectedChannel(null));
-    dispatch(clearMessages());
-    dispatch(setSelectedDm(dm));
-    dispatch(addStatusEntry({ level: 'info', message: t('dm.loadingConversationWith', { name: getDmName(dm) }) }));
-
-    await dispatch(
-      fetchMessages({
-        channelId: dm.id,
-        token,
-      })
-    );
+    await dispatch(openDm({ dm }));
   };
 
   const handleDmClick = async (dm: Channel, event?: React.MouseEvent) => {

@@ -1,3 +1,4 @@
+import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { memo } from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, FilterList as FilterIcon, Forum as ThreadIcon, BarChart as AnalyticsIcon, Fullscreen as FocusIcon, FullscreenExit as ExitFocusIcon } from '@mui/icons-material';
@@ -25,6 +26,7 @@ const COMPACT = '@container (max-width: 700px)';
 
 const WorkbenchToolbar = () => {
   const { t } = useTranslation();
+  const loadAllLabel = useLoadAllLabel();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -45,7 +47,7 @@ const WorkbenchToolbar = () => {
     <Box data-testid="workbench-toolbar" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, height: 44, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', flexShrink: 0, overflowX: 'auto', containerType: 'inline-size' }}>
       {hasContext ? (
         <>
-          {!isForum && btn(t('serverView.loadAll'), <LoadAllIcon />, () => open('loadAll'), 'wb-load-all', { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained' })}
+          {!isForum && btn(loadAllLabel, <LoadAllIcon />, () => open('loadAll'), 'wb-load-all', { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained' })}
           {btn(t('serverView.export'), <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), 'wb-export', { disabled: running || (!isForum && messages.length === 0), tour: 'export-button' })}
           {!isForum && btn(t('native.purge'), <PurgeIcon />, () => open('purge'), 'wb-purge', { disabled: running, color: 'error' })}
           {!isForum && btn(t('serverView.filters'), <FilterIcon />, () => open('filters'), 'wb-filters', { tour: 'search-filters' })}

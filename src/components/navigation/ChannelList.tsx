@@ -27,26 +27,23 @@ import { ChannelType } from 'discrub-core/discord-enum';
 import { isMessageChannel } from '@utils/channelTypeUtils';
 import TourButton from '@components/welcome/TourButton';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { openChannel } from '@features/navigation/openConversation';
 import { selectDialogOpen, setDialogOpen } from '@features/app/appSlice';
 import {
   selectChannels,
   selectSelectedChannel,
   selectChannelLoading,
   selectSelectedChannels,
-  setSelectedChannel,
   toggleChannelSelection,
   selectAllChannels,
   deselectAllChannels,
   selectChannelsInRange,
-  fetchForumThreads,
 } from '@features/channel/channelSlice';
 import { selectSelectedGuild, selectCurrentMemberRoles } from '@features/guild/guildSlice';
 import { canAccessChannel, canManageMessages } from '@/utils/permissionUtils';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
-import { fetchMessages, clearMessages } from '@features/message/messageSlice';
-import { addStatusEntry, showToast } from '@features/status/statusSlice';
-import { setSelectedDm } from '@features/dm/dmSlice';
+import { showToast } from '@features/status/statusSlice';
 import ListSkeleton from '@components/ui/ListSkeleton';
 import EmptyState from '@components/ui/EmptyState';
 import BulkExportDialog from '@containers/ExportView/BulkExportDialog';
@@ -135,29 +132,7 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
     }
 
     // Normal single-select navigation
-    dispatch(setSelectedDm(null));
-    dispatch(clearMessages());
-    dispatch(setSelectedChannel(channel));
-    const isForumType = channel.type === ChannelType.GUILD_FORUM || channel.type === ChannelType.GUILD_MEDIA;
-    dispatch(addStatusEntry({ level: 'info', message: isForumType ? t('nav.loadingForumPostsFor', { name: channel.name }) : t('nav.loadingMessagesFor', { name: channel.name }) }));
-
-    // Forum/media channels: fetch threads instead of messages
-    if (isForumType) {
-      await dispatch(
-        fetchForumThreads({
-          channelId: channel.id,
-          token,
-        })
-      );
-    } else {
-      await dispatch(
-        fetchMessages({
-          guildId: selectedGuild.id,
-          channelId: channel.id,
-          token,
-        })
-      );
-    }
+    await dispatch(openChannel({ channel }));
   };
 
   const handleCopySelectedNames = () => {

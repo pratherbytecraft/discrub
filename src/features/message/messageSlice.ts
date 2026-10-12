@@ -1986,7 +1986,9 @@ export const loadAllSearchResults = createAsyncThunk(
         }
       }
 
-      if (signal.aborted) {
+      // 2.2.5 WP4a: a stop ends the iterator quietly; it is not the end of
+      // the results, so the record must not be marked complete.
+      if (signal.aborted || checkCancelled(getState as () => RootState)) {
         return rejectWithValue('Load all cancelled');
       }
 
@@ -2072,10 +2074,20 @@ export const fetchAllMessages = createAsyncThunk(
       // a finer cadence would flood the status log.
       let nextLogBoundary = 500;
 
+      // 2.2.5 WP4a: a stop keeps what was loaded and leaves the walk
+      // resumable. Before this a stop between pages fell through to the
+      // success path and the conversation was recorded as complete.
+      const stopped = () => {
+        if (allMessages.length > 0) {
+          dispatch(messageSlice.actions.setLoadAllCursor({ lastMessageId: allMessages[allMessages.length - 1].id, hasMore: true }));
+        }
+        return rejectWithValue('Load cancelled');
+      };
+
       while (hasMore && !signal.aborted) {
         // Check pause/cancel
         await waitWhilePaused(getState as () => RootState);
-        if (checkCancelled(getState as () => RootState)) break;
+        if (checkCancelled(getState as () => RootState)) return stopped();
 
         // Fetch next batch — retry transient failures (#185 Bug A).
         // On exhaustion, pause the operation so the user can fix
@@ -2122,7 +2134,7 @@ export const fetchAllMessages = createAsyncThunk(
           loaded: existingRows.length + allMessages.length,
           record: { pagination: paginationRecord({ mode: 'all', lastMessageId: pageCursor, hasMore: pageHasMore }) },
         });
-        if (outcome === 'cancelled') return rejectWithValue('Load cancelled');
+        if (outcome === 'cancelled') return stopped();
 
         // #181: live append so the table grows during the operation.
         dispatch(messageSlice.actions.appendLoadAllPage({ messages }));
@@ -2151,13 +2163,13 @@ export const fetchAllMessages = createAsyncThunk(
           const delayCalc = calculateRandomDelay(searchDelay, delayModifier);
 
           const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState as () => RootState);
-          if (wasCancelled) return rejectWithValue('Load cancelled');
+          if (wasCancelled) return stopped();
         }
       }
 
       // Check if cancelled
       if (signal.aborted) {
-        return rejectWithValue('Load cancelled');
+        return stopped();
       }
 
       dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: allMessages.length }) }));
@@ -2566,9 +2578,28 @@ export const fetchAllThreadMessages = createAsyncThunk(
       // on multi-thousand-message threads.
       let nextLogBoundary = 500;
 
+      // 2.2.5 WP4a: a stop keeps the pages already fetched (they are on
+      // disk) and leaves the walk resumable instead of marking it complete.
+      const stopped = () => {
+        if (allMessages.length > 0 && (getState() as RootState).message.threadTabs[threadId]) {
+          if (continuing) dispatch(messageSlice.actions.appendThreadMessages({ threadId, messages: allMessages }));
+          else dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: allMessages }));
+        }
+        dispatch(messageSlice.actions.updateThreadPagination({
+          threadId,
+          pagination: {
+            isLoadingAll: false,
+            loadAllProgress: null,
+            loadAllCancelled: true,
+            ...(allMessages.length > 0 ? { lastMessageId: allMessages[allMessages.length - 1].id, hasMore: true } : {}),
+          },
+        }));
+        return rejectWithValue('Load cancelled');
+      };
+
       while (hasMore && !signal.aborted) {
         await waitWhilePaused(getState as () => RootState);
-        if (checkCancelled(getState as () => RootState)) break;
+        if (checkCancelled(getState as () => RootState)) return stopped();
 
         // Retry transient failures (#245, same contract as the channel
         // Load All above). On exhaustion, pause so the user can fix their
@@ -2614,10 +2645,7 @@ export const fetchAllThreadMessages = createAsyncThunk(
           loaded: existingRows.length + allMessages.length,
           record: { pagination: paginationRecord({ mode: 'all', hasMore: messages.length >= 100, lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : lastMsgId }) },
         });
-        if (outcome === 'cancelled') {
-          dispatch(messageSlice.actions.updateThreadPagination({ threadId, pagination: { isLoadingAll: false, loadAllProgress: null } }));
-          return rejectWithValue('Load cancelled');
-        }
+        if (outcome === 'cancelled') return stopped();
 
         dispatch(messageSlice.actions.updateThreadPagination({
           threadId,
@@ -2642,17 +2670,11 @@ export const fetchAllThreadMessages = createAsyncThunk(
 
           const delayCalc = calculateRandomDelay(searchDelay, delayModifier);
           const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState as () => RootState);
-          if (wasCancelled) break;
+          if (wasCancelled) return stopped();
         }
       }
 
-      if (signal.aborted) {
-        dispatch(messageSlice.actions.updateThreadPagination({
-          threadId,
-          pagination: { isLoadingAll: false, loadAllProgress: null },
-        }));
-        return rejectWithValue('Load cancelled');
-      }
+      if (signal.aborted) return stopped();
 
       const tab = (getState() as RootState).message.threadTabs[threadId];
       if (!tab) return rejectWithValue('Thread tab no longer exists');
@@ -3328,6 +3350,11 @@ const messageSlice = createSlice({
       if (pageMessages.length > 0) ingestPage(state, state, MAIN_CONTAINER, pageMessages, 'append');
       if (totalCount !== undefined) state.pagination.totalCount = totalCount;
       if (searchOffset !== undefined) state.pagination.searchOffset = searchOffset;
+    },
+    /** 2.2.5 WP4a: a stopped Load All leaves the cursor at the last page it kept. */
+    setLoadAllCursor: (state, action: PayloadAction<{ lastMessageId: string; hasMore: boolean }>) => {
+      state.pagination.lastMessageId = action.payload.lastMessageId;
+      state.pagination.hasMore = action.payload.hasMore;
     },
     cancelLoadAll: (state) => {
       state.pagination.isLoadingAll = false;
