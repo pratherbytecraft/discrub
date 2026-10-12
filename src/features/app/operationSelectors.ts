@@ -12,7 +12,7 @@ export type OperationTier = 'heavy' | 'light' | 'idle';
  * restBreak, retrying, retryPaused and discordWait (2.2.2) only apply to heavy operations; a
  * light operation is running and nothing is idle.
  */
-export type OperationState = 'idle' | 'running' | 'paused' | 'restBreak' | 'retrying' | 'retryPaused' | 'discordWait';
+export type OperationState = 'idle' | 'running' | 'paused' | 'restBreak' | 'retrying' | 'retryPaused' | 'discordWait' | 'storageFull';
 export type OperationStateColor = 'neutral' | 'success' | 'warning' | 'info' | 'error';
 export interface OperationHoldView {
   /** Wall-clock ms the hold ends (rest break, retry wait). */
@@ -312,7 +312,7 @@ const selectBaseSummary = createSelector(
 );
 
 const STATE_COLORS: Record<OperationState, OperationStateColor> = {
-  idle: 'neutral', running: 'success', paused: 'warning', restBreak: 'warning', retrying: 'info', retryPaused: 'error', discordWait: 'warning',
+  idle: 'neutral', running: 'success', paused: 'warning', restBreak: 'warning', retrying: 'info', retryPaused: 'error', discordWait: 'warning', storageFull: 'error',
 };
 
 const operationName = (exportState: RootState['export'], purgeState: RootState['purge'], packageState: RootState['package'], messageState: RootState['message']): string => {
@@ -353,6 +353,13 @@ export const selectOperationSummary = createSelector(
         ...base, name, state: 'retryPaused', stateColor: STATE_COLORS.retryPaused,
         hold: { max: TRANSIENT_RETRIES, answer: hold.answer, loaded: hold.loaded },
         sentence: t('operation.state.retryPausedSentence', { answer: hold.answer, count: hold.loaded.toLocaleString() }),
+      };
+    }
+    if (hold?.kind === 'storageFull' && base.isPaused) {
+      return {
+        ...base, name, state: 'storageFull', stateColor: STATE_COLORS.storageFull,
+        hold: { loaded: hold.loaded },
+        sentence: t('operation.state.storageFullSentence', { name, count: hold.loaded.toLocaleString() }),
       };
     }
     if (hold?.kind === 'discordWait' && !base.isPaused) {

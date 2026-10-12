@@ -316,7 +316,9 @@
       "retryPaused": "Nach {{max}} fehlgeschlagenen Versuchen pausiert",
       "retryPausedSentence": "{{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen.",
       "discordWait": "Discord bittet um eine Pause, geht weiter in {{time}}",
-      "discordWaitSentence": "Discord bittet ab und zu um eine Pause. {{name}} macht danach von selbst weiter."
+      "discordWaitSentence": "Discord bittet ab und zu um eine Pause. {{name}} macht danach von selbst weiter.",
+      "storageFull": "Pausiert, der Browserspeicher ist voll",
+      "storageFullSentence": "Der Browserspeicher ist voll. {{name}} ist bei {{count}} pausiert. Platz schaffen, dann Fortsetzen."
     }
   },
   "landing": {
@@ -832,7 +834,11 @@
     "bulletMinutes_dm": "Bei Unterhaltungen mit tausenden Nachrichten mehrere Minuten dauern",
     "bulletScroll": "Das endlose Scrollen deaktivieren",
     "confirmQuestion": "Möchtest du wirklich fortfahren?",
-    "confirm": "Alle laden"
+    "confirm": "Alle laden",
+    "restoredLine": "{{count}} bisher in diesem Arbeitsbereich geladen. Fortsetzen macht ab {{date}} weiter.",
+    "restoredLineNoDate": "{{count}} bisher in diesem Arbeitsbereich geladen.",
+    "resume": "Fortsetzen",
+    "startOver": "Neu beginnen"
   },
   "threadLoad": {
     "title": "Thread laden",
@@ -1685,7 +1691,11 @@
       "searchRetry": "Suche: Verbindung fehlgeschlagen, neuer Versuch in {{seconds}} s (Versuch {{attempt}}/5)",
       "searchCancelled": "Suche abgebrochen",
       "searchComplete": "Suche abgeschlossen: {{count}} Ergebnisse gefunden",
-      "loadingAllSearchResults": "Alle Suchergebnisse werden geladen..."
+      "loadingAllSearchResults": "Alle Suchergebnisse werden geladen...",
+      "restoredFromWorkspace": "{{count}} Nachrichten aus diesem Arbeitsbereich wiederhergestellt",
+      "storageFull": "Der Browserspeicher ist voll, pausiert bei {{count}}",
+      "workspaceWriteFailed": "Nachrichten konnten nicht in diesem Arbeitsbereich gespeichert werden, es geht im Speicher weiter",
+      "workspaceStartOver": "Gespeicherte Nachrichten dieser Unterhaltung gelöscht"
     },
     "channel": {
       "loadingForumPosts": "Forenbeiträge werden geladen...",

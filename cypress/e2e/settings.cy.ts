@@ -37,9 +37,34 @@ describe('Settings', () => {
   });
 
   // ─── Reset Discrub drops the workspaces database (2.2.5 WP1) ──────
+  function countWorkspaceRows() {
+    return cy.window({ log: false }).then((win) =>
+      new Cypress.Promise<number>((resolve) => {
+        const req = win.indexedDB.open('Discrub-workspaces');
+        req.onsuccess = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('rows')) {
+            db.close();
+            resolve(0);
+            return;
+          }
+          const count = db.transaction('rows', 'readonly').objectStore('rows').count();
+          count.onsuccess = () => {
+            db.close();
+            resolve(count.result);
+          };
+          count.onerror = () => {
+            db.close();
+            resolve(-1);
+          };
+        };
+        req.onerror = () => resolve(-1);
+      }),
+    );
+  }
+
   it('Reset Discrub deletes the Discrub-workspaces database', () => {
-    // Seed the database with the same schema the app creates, so a later
-    // open by the app finds every store in place.
+    // Seed a row in the database boot already created.
     cy.window({ log: false }).then((win) => {
       return new Cypress.Promise<void>((resolve, reject) => {
         const req = win.indexedDB.open('Discrub-workspaces', 1);
@@ -52,8 +77,8 @@ describe('Settings', () => {
         };
         req.onsuccess = () => {
           const db = req.result;
-          const tx = db.transaction('workspaces', 'readwrite');
-          tx.objectStore('workspaces').put({ wid: 'default', name: 'Default' });
+          const tx = db.transaction('rows', 'readwrite');
+          tx.objectStore('rows').put({ wid: 'default', cid: '1', id: '00000000000000000001', authorId: 'a', message: { id: '1' } });
           tx.oncomplete = () => {
             db.close();
             resolve();
@@ -63,20 +88,17 @@ describe('Settings', () => {
         req.onerror = () => reject(req.error);
       });
     });
-    cy.window({ log: false })
-      .then((win) => win.indexedDB.databases())
-      .then((dbs) => expect(dbs.map((d) => d.name)).to.include('Discrub-workspaces'));
+    countWorkspaceRows().should('eq', 1);
 
     cy.get('[aria-label="Settings"]').click();
     cy.get('[role="dialog"]').contains('button', 'Reset Discrub').click();
     cy.get('[data-testid="reset-discrub-button"]').click();
     cy.get('[data-testid="reset-discrub-confirm"]').click();
 
-    // resetDiscrubData reloads the page; the env token signs back in.
+    // resetDiscrubData reloads the page; the env token signs back in and
+    // boot recreates an empty workspaces database, so the saved row is gone.
     cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
-    cy.window({ log: false })
-      .then((win) => win.indexedDB.databases())
-      .then((dbs) => expect(dbs.map((d) => d.name)).not.to.include('Discrub-workspaces'));
+    countWorkspaceRows().should('eq', 0);
   });
 
   // ─── Safest zone (2.1.3): delay sliders reach 30s ─────────────────

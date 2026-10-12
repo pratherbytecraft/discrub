@@ -7,6 +7,13 @@ const API = '**/api/v10';
  * Intercept order matters in Cypress (LIFO — last registered wins).
  * More specific patterns are registered last so they take priority.
  */
+/**
+ * 2.2.5: a stubbed response with no cache header can be reused by the
+ * browser in the next test of a spec, so the alias never sees the request
+ * while the app still gets the data. Every fixture stub says no-store.
+ */
+const NO_STORE = { 'cache-control': 'no-store' };
+
 Cypress.Commands.add('interceptDiscordApi', () => {
   // Mock GitHub gist API calls to prevent AnnouncementModal/DonationDrawer crashes.
   // Donation gist (new contributions format)
@@ -72,6 +79,7 @@ Cypress.Commands.add('interceptDiscordApi', () => {
   cy.fixture('channels.json').then((channels) => {
     cy.intercept('GET', `${API}/guilds/*/channels`, {
       statusCode: 200,
+      headers: NO_STORE,
       body: channels,
     }).as('getChannels');
   });
@@ -87,6 +95,7 @@ Cypress.Commands.add('interceptDiscordApi', () => {
   cy.fixture('messages.json').then((messages) => {
     cy.intercept('GET', `${API}/channels/*/messages?*`, {
       statusCode: 200,
+      headers: NO_STORE,
       body: messages,
     }).as('getMessages');
   });
@@ -94,6 +103,7 @@ Cypress.Commands.add('interceptDiscordApi', () => {
   cy.fixture('dms.json').then((dms) => {
     cy.intercept('GET', `${API}/users/@me/channels`, {
       statusCode: 200,
+      headers: NO_STORE,
       body: dms,
     }).as('getDMs');
   });
@@ -101,6 +111,7 @@ Cypress.Commands.add('interceptDiscordApi', () => {
   cy.fixture('guilds.json').then((guilds) => {
     cy.intercept('GET', `${API}/users/@me/guilds`, {
       statusCode: 200,
+      headers: NO_STORE,
       body: guilds,
     }).as('getGuilds');
   });
@@ -109,6 +120,7 @@ Cypress.Commands.add('interceptDiscordApi', () => {
   cy.fixture('user.json').then((user) => {
     cy.intercept('GET', `${API}/users/@me`, {
       statusCode: 200,
+      headers: NO_STORE,
       body: user,
     }).as('getUser');
   });
@@ -149,6 +161,9 @@ Cypress.Commands.add('login', () => {
   cy.interceptDiscordApi();
   cy.visit('/', {
     onBeforeLoad(win) {
+      // 2.2.5: a service worker registered by an earlier test keeps
+      // controlling later pages; drop it so every request reaches the proxy.
+      void win.navigator.serviceWorker?.getRegistrations().then((regs) => regs.forEach((r) => { void r.unregister(); }));
       // Wipe any stale per-purpose databases on the AUT origin before
       // app boot. Mirrors the global beforeEach in support/e2e.ts —
       // see that file for the full rationale.

@@ -606,6 +606,10 @@ describe('Search & Filters', () => {
         expect(failure.message).to.equal('message/fetchNextSearchPage: Failed to search messages (HTTP 403)');
         expect(store.getState().message.messages.length).to.equal(25);
         expect(store.getState().message.pagination.hasMore).to.be.true;
+      });
+      // A second attempt can follow the first refusal within a frame; wait
+      // for the flag to settle rather than reading it at one instant.
+      cy.window().its('__store__').should((store: any) => {
         expect(store.getState().message.pagination.isLoadingMore).to.be.false;
       });
       cy.contains('button', 'Load more messages').should('be.visible');
@@ -846,7 +850,11 @@ describe('Search & Filters', () => {
   // ── SEARCH → CLEAR → RESTORE FLOW ──────────────────────────────
 
   describe('Search Restore Flow', () => {
-    it('restores original messages when re-selecting the channel after search', () => {
+    // 2.2.5: a search is written to the workspace, so re-selecting the
+    // channel brings the search back from disk with its criteria instead of
+    // fetching the plain first page. Clearing the search drops the saved
+    // rows, and the next re-select fetches fresh (plan section 11).
+    it('re-selecting the channel after a search restores the search, and clearing it brings the plain view back', () => {
       cy.login();
       cy.selectServer('Cypress Test Server');
       cy.selectChannel('general');
@@ -865,11 +873,46 @@ describe('Search & Filters', () => {
       // Search result visible, original gone
       cy.contains('The project docs have been updated').should('be.visible');
 
-      // Re-select the channel to reload original messages
-      cy.selectChannel('general');
+      // Re-select the channel: the saved search comes back, no request.
+      // (The reaction enrichment's around fetch during the search also
+      // matches the messages route, so compare counts rather than assume one.)
+      cy.get('@getMessages.all').its('length').then((before) => {
+        cy.contains('general').click();
+        cy.window().its('__store__').should((store: any) => {
+          const lines = (store.getState().status.entries ?? []).map((e: any) => e.message);
+          expect(lines.some((m: string) => /Restored 3 messages from this workspace/.test(m)), 'restored status line').to.be.true;
+        });
+        cy.contains('The project docs have been updated').should('be.visible');
+        cy.get('@getMessages.all').should('have.length', before);
+        cy.get('@guildSearch.all').should('have.length', 1);
+      });
 
-      // Original messages should be restored
-      cy.contains('[data-testid="message-feed-row"]', 'Hello everyone').should('exist');
+      // Clear the search, then re-select: the plain first page is fetched again.
+      cy.get('[aria-label="Clear all filters"]').click();
+      // The saved rows are dropped by a thunk after the dispatch; wait for it.
+      const rowsGone = (tries = 40): Cypress.Chainable<void> =>
+        cy.window({ log: false }).then((win) =>
+          new Cypress.Promise<number>((resolve) => {
+            const req = win.indexedDB.open('Discrub-workspaces');
+            req.onsuccess = () => {
+              const db = req.result;
+              const count = db.transaction('rows', 'readonly').objectStore('rows').count();
+              count.onsuccess = () => { db.close(); resolve(count.result); };
+              count.onerror = () => { db.close(); resolve(-1); };
+            };
+            req.onerror = () => resolve(-1);
+          }),
+        ).then((count) => {
+          if (count === 0 || tries === 0) return;
+          return cy.wait(100, { log: false }).then(() => rowsGone(tries - 1));
+        });
+      rowsGone();
+      cy.get('@getMessages.all').its('length').then((before) => {
+        cy.contains('general').click();
+        cy.wait('@getMessages');
+        cy.contains('[data-testid="message-feed-row"]', 'Hello everyone').should('exist');
+        cy.get('@getMessages.all').should('have.length', before + 1);
+      });
     });
 
     it('shows updated match count after search completes', () => {

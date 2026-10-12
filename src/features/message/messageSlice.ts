@@ -24,6 +24,17 @@ import { countActiveFilters } from 'discrub-core/filtering';
 import { t } from '@/i18n';
 import { fetchSearchPageWithRetry, describeSearchFailure } from './searchPageRetry';
 import { notePackageDeletions } from '@features/package/packageDeletedCache';
+import {
+  clearSavedConversation,
+  conversationSeedFromState,
+  paginationRecord,
+  persistConversation,
+  persistPage,
+  persistThreadTabs,
+  restoreConversation,
+  threadSeedFromState,
+} from './messagePersistence';
+import type { Conversation } from '@features/workspace/workspaceTypes';
 
 /**
  * Status-log hooks for a single-page search request (#262): one warning
@@ -1184,9 +1195,24 @@ export const fetchMessages = createAsyncThunk(
       token: string;
       searchCriteria?: SearchCriteria;
     },
-    { rejectWithValue, dispatch }
+    { rejectWithValue, dispatch, getState }
   ) => {
     try {
+      // 2.2.5: a conversation with saved rows in the open workspace comes
+      // back from disk instead of a fetch (plan section 5.4). Newer
+      // messages arrive through Start over in the Load All dialog.
+      const restored = await restoreConversation({ dispatch, getState: getState as () => RootState }, channelId);
+      if (restored) {
+        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.messages.length }) }));
+        const oldest = restored.messages[0];
+        return {
+          messages: restored.messages,
+          hasMore: restored.conversation.pagination.hasMore,
+          lastMessageId: restored.conversation.pagination.lastMessageId ?? oldest?.id ?? null,
+          restored: restored.conversation,
+        };
+      }
+
       const discordService = getDiscordService();
 
       // Fetch first page (most recent 100)
@@ -1208,6 +1234,7 @@ export const fetchMessages = createAsyncThunk(
         messages,
         hasMore: messages.length === 100, // If we got 100, there might be more
         lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : null,
+        restored: null as Conversation | null,
       };
     } catch (error) {
       return rejectWithValue(
@@ -1252,16 +1279,27 @@ export const fetchMoreMessages = createAsyncThunk(
       const messages = response.data as Message[];
 
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loadedMore', { count: messages.length }) }));
+      const stateNow = getState() as RootState;
       maybeEmitPhantomLoadStatus(
         dispatch,
-        (getState() as RootState).message.refineCriteria,
+        stateNow.message.refineCriteria,
         messages,
       );
 
+      const hasMore = messages.length === 100;
+      const nextLastMessageId = messages.length > 0 ? messages[messages.length - 1].id : lastMessageId;
+      // 2.2.5: the second page is what makes a conversation worth keeping
+      // (plan section 4.2); the first page rides along as the backfill.
+      await persistPage({ dispatch, getState: getState as () => RootState }, channelId, messages, {
+        seed: conversationSeedFromState(stateNow, channelId),
+        backfill: stateNow.message.messages,
+        record: { pagination: paginationRecord({ mode: 'paginated', lastMessageId: nextLastMessageId, hasMore }) },
+      });
+
       return {
         messages,
-        hasMore: messages.length === 100,
-        lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : lastMessageId,
+        hasMore,
+        lastMessageId: nextLastMessageId,
       };
     } catch (error) {
       return rejectWithValue(
@@ -1388,6 +1426,26 @@ export const searchMessages = createAsyncThunk(
         })
       );
 
+      // 2.2.5: a search replaces the conversation's saved rows with its
+      // results, and the record keeps the criteria and cursor so the next
+      // open shows the same results and Load All continues from them.
+      if (channelId) {
+        const api = { dispatch, getState: getState as () => RootState };
+        await clearSavedConversation(api, channelId);
+        await persistPage(api, channelId, messages, {
+          seed: conversationSeedFromState(getState() as RootState, channelId),
+          record: {
+            searchCriteria,
+            pagination: paginationRecord({
+              mode: 'search',
+              totalCount: totalResults,
+              searchOffset: messages.length,
+              hasMore: messages.length > 0 && messages.length < totalResults,
+            }),
+          },
+        });
+      }
+
       return {
         messages,
         totalResults,
@@ -1506,6 +1564,21 @@ export const fetchNextSearchPage = createAsyncThunk(
       const newOffset = pagination.searchOffset + messages.length;
 
       maybeEmitPhantomLoadStatus(dispatch, refineCriteria, messages);
+
+      if (channelId) {
+        await persistPage({ dispatch, getState: getState as () => RootState }, channelId, messages, {
+          seed: conversationSeedFromState(getState() as RootState, channelId),
+          record: {
+            searchCriteria,
+            pagination: paginationRecord({
+              mode: 'search',
+              totalCount: totalResults,
+              searchOffset: newOffset,
+              hasMore: messages.length > 0 && newOffset < totalResults,
+            }),
+          },
+        });
+      }
 
       return {
         messages,
@@ -1824,6 +1897,25 @@ export const loadAllSearchResults = createAsyncThunk(
           // if Discord under-reported total_results for the first window.
           grandTotal = Math.max(grandTotal, aggregated.length);
 
+          // 2.2.5: on disk before it reaches Redux (plan section 7). A full
+          // quota pauses the walk here; a cancel while paused ends it.
+          if (channelId) {
+            const outcome = await persistPage({ dispatch, getState: getState as () => RootState }, channelId, page, {
+              seed: conversationSeedFromState(getState() as RootState, channelId),
+              loaded: aggregated.length,
+              record: {
+                searchCriteria: initialCriteria,
+                pagination: paginationRecord({
+                  mode: 'search',
+                  totalCount: grandTotal,
+                  searchOffset: aggregated.length,
+                  searchBeforeDate: resumeBeforeDate ? resumeBeforeDate.toISOString() : null,
+                }),
+              },
+            });
+            if (outcome === 'cancelled') return rejectWithValue('Load all cancelled');
+          }
+
           // #181: append live so the table grows as Load All walks pages.
           // The reducer dedupes + re-sorts under the active order.
           dispatch(
@@ -1876,6 +1968,13 @@ export const loadAllSearchResults = createAsyncThunk(
         })
       );
 
+      if (channelId) {
+        await persistConversation({ dispatch, getState: getState as () => RootState }, channelId, {
+          complete: true,
+          pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: aggregated.length, searchOffset: aggregated.length }),
+        });
+      }
+
       return {
         messages: aggregated,
         totalResults: aggregated.length,
@@ -1915,9 +2014,19 @@ export const fetchAllMessages = createAsyncThunk(
       const searchDelay = selectSearchDelay(state);
       const delayModifier = selectDelayModifier(state);
 
+      // 2.2.5: continue from the pages already loaded on the plain path
+      // instead of walking from the top again. The cursor is the oldest
+      // loaded id, which a restored conversation carries from its record.
+      const existing = state.message.messages;
+      // The pending reducer already set mode 'all', so the plain path is
+      // anything that is not a search.
+      const continuing = state.message.pagination.mode !== 'search' && existing.length > 0 && !!state.message.pagination.lastMessageId;
+      const seed = conversationSeedFromState(state, channelId);
+      const api = { dispatch, getState: getState as () => RootState };
+
       let allMessages: Message[] = [];
-      let lastMessageId = '';
-      let hasMore = true;
+      let lastMessageId = continuing ? (state.message.pagination.lastMessageId as string) : '';
+      let hasMore = continuing ? state.message.pagination.hasMore : true;
       // 500-step cadence (not the shared adaptive helper) — direct-history
       // walks of busy channels can fetch tens of thousands of messages, and
       // a finer cadence would flood the status log.
@@ -1962,6 +2071,18 @@ export const fetchAllMessages = createAsyncThunk(
 
         const messages = response.data as Message[];
         allMessages = [...allMessages, ...messages];
+        const pageHasMore = messages.length >= 100;
+        const pageCursor = messages.length > 0 ? messages[messages.length - 1].id : lastMessageId;
+
+        // 2.2.5: on disk before it reaches Redux (plan section 7). The
+        // first page a user only scrolled rides along as the backfill.
+        const outcome = await persistPage(api, channelId, messages, {
+          seed,
+          backfill: existing,
+          loaded: existing.length + allMessages.length,
+          record: { pagination: paginationRecord({ mode: 'all', lastMessageId: pageCursor, hasMore: pageHasMore }) },
+        });
+        if (outcome === 'cancelled') return rejectWithValue('Load cancelled');
 
         // #181: live append so the table grows during the operation.
         dispatch(messageSlice.actions.appendLoadAllPage({ messages }));
@@ -2000,10 +2121,15 @@ export const fetchAllMessages = createAsyncThunk(
       }
 
       dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: allMessages.length }) }));
+      const finalCursor = allMessages.length > 0 ? allMessages[allMessages.length - 1].id : (continuing ? lastMessageId : null);
+      await persistConversation(api, channelId, {
+        complete: true,
+        pagination: paginationRecord({ mode: 'all', hasMore: false, lastMessageId: finalCursor }),
+      });
       return {
         messages: allMessages,
         hasMore: false,
-        lastMessageId: allMessages.length > 0 ? allMessages[allMessages.length - 1].id : null,
+        lastMessageId: finalCursor,
       };
     } catch (error) {
       return rejectWithValue(
@@ -2101,6 +2227,32 @@ export const openThreadTab = createAsyncThunk(
 
       // Create the tab (sets loading=true, switches activeTab)
       dispatch(messageSlice.actions.addThreadTab({ threadId, threadName }));
+      const api = { dispatch, getState: getState as () => RootState };
+      const parentCid = state.channel?.selectedChannel?.id ?? state.dm?.selectedDm?.id ?? null;
+
+      // 2.2.5: a thread with saved rows comes back from disk.
+      const restored = await restoreConversation(api, threadId);
+      if (restored) {
+        const tabOrder = (getState() as RootState).message.threadTabs[threadId]?.order.order ?? restored.conversation.order.order;
+        dispatch(messageSlice.actions.setThreadSearchCriteria({ threadId, criteria: restored.conversation.searchCriteria }));
+        dispatch(messageSlice.actions.setThreadRefineCriteria({ threadId, criteria: restored.conversation.refineCriteria }));
+        dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: getSortedMessages(restored.messages, tabOrder) }));
+        const p = restored.conversation.pagination;
+        dispatch(messageSlice.actions.updateThreadPagination({
+          threadId,
+          pagination: {
+            mode: p.mode,
+            hasMore: p.hasMore,
+            lastMessageId: p.lastMessageId ?? restored.messages[0]?.id ?? null,
+            totalCount: p.totalCount,
+            searchOffset: p.searchOffset,
+          },
+        }));
+        dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
+        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.messages.length }) }));
+        if (parentCid) await persistThreadTabs(api, parentCid, getState() as RootState);
+        return { threadId, alreadyOpen: false };
+      }
 
       // Fetch first page — threads are channels in Discord's API
       const discordService = getDiscordService();
@@ -2130,6 +2282,13 @@ export const openThreadTab = createAsyncThunk(
       dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
 
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.threadLoaded', { count: messages.length }) }));
+
+      // 2.2.5: opening a thread is a write trigger (plan section 4.2).
+      await persistPage(api, threadId, messages, {
+        seed: threadSeedFromState(getState() as RootState, threadId),
+        record: { pagination: paginationRecord({ mode: 'paginated', hasMore: messages.length === 100, lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : null }) },
+      });
+      if (parentCid) await persistThreadTabs(api, parentCid, getState() as RootState);
 
       return { threadId, alreadyOpen: false };
     } catch (error) {
@@ -2291,14 +2450,22 @@ export const fetchMoreThreadMessages = createAsyncThunk(
 
       // #263: same end-merge as appendLoadAllPage, no full re-sort per page.
       const sorted = appendSortedPage(tab.messages, newMessages, tab.order.order);
+      const threadHasMore = newMessages.length === 100;
+      const threadCursor = newMessages.length > 0 ? newMessages[newMessages.length - 1].id : lastMessageId;
+
+      await persistPage({ dispatch, getState: getState as () => RootState }, threadId, newMessages, {
+        seed: threadSeedFromState(state, threadId),
+        backfill: tab.messages,
+        record: { pagination: paginationRecord({ mode: 'paginated', hasMore: threadHasMore, lastMessageId: threadCursor }) },
+      });
 
       dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: sorted }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
         pagination: {
           isLoadingMore: false,
-          hasMore: newMessages.length === 100,
-          lastMessageId: newMessages.length > 0 ? newMessages[newMessages.length - 1].id : lastMessageId,
+          hasMore: threadHasMore,
+          lastMessageId: threadCursor,
         },
       }));
 
@@ -2349,9 +2516,16 @@ export const fetchAllThreadMessages = createAsyncThunk(
       const searchDelay = selectSearchDelay(state);
       const delayModifier = selectDelayModifier(state);
 
+      // 2.2.5: continue from the thread's loaded pages (see fetchAllMessages).
+      const startTab = state.message.threadTabs[threadId];
+      const existing = startTab?.messages ?? [];
+      const continuing = !!startTab && startTab.pagination.mode !== 'search' && existing.length > 0 && !!startTab.pagination.lastMessageId;
+      const api = { dispatch, getState: getState as () => RootState };
+      const seed = threadSeedFromState(state, threadId);
+
       let allMessages: Message[] = [];
-      let lastMsgId = '';
-      let hasMore = true;
+      let lastMsgId = continuing ? (startTab.pagination.lastMessageId as string) : '';
+      let hasMore = continuing ? startTab.pagination.hasMore : true;
       // 500-step cadence (not the shared adaptive helper) — same rationale
       // as the channel direct-history walk: avoid spamming the status log
       // on multi-thousand-message threads.
@@ -2399,6 +2573,17 @@ export const fetchAllThreadMessages = createAsyncThunk(
         const messages = response.data as Message[];
         allMessages = [...allMessages, ...messages];
 
+        const outcome = await persistPage(api, threadId, messages, {
+          seed,
+          backfill: existing,
+          loaded: existing.length + allMessages.length,
+          record: { pagination: paginationRecord({ mode: 'all', hasMore: messages.length >= 100, lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : lastMsgId }) },
+        });
+        if (outcome === 'cancelled') {
+          dispatch(messageSlice.actions.updateThreadPagination({ threadId, pagination: { isLoadingAll: false, loadAllProgress: null } }));
+          return rejectWithValue('Load cancelled');
+        }
+
         dispatch(messageSlice.actions.updateThreadPagination({
           threadId,
           pagination: {
@@ -2437,19 +2622,25 @@ export const fetchAllThreadMessages = createAsyncThunk(
       const tab = (getState() as RootState).message.threadTabs[threadId];
       if (!tab) return rejectWithValue('Thread tab no longer exists');
 
-      const sorted = getSortedMessages(allMessages, tab.order.order);
-      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: sorted }));
+      // When continuing, the pages already in the tab stay and the new ones
+      // merge in behind them.
+      const merged = continuing ? appendSortedPage(tab.messages, allMessages.filter((m) => !existing.some((e) => e.id === m.id)), tab.order.order) : getSortedMessages(allMessages, tab.order.order);
+      const threadFinalCursor = allMessages.length > 0 ? allMessages[allMessages.length - 1].id : (continuing ? lastMsgId : null);
+      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: merged }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
         pagination: {
           isLoadingAll: false,
           loadAllProgress: null,
           hasMore: false,
-          lastMessageId: allMessages.length > 0 ? allMessages[allMessages.length - 1].id : null,
+          lastMessageId: threadFinalCursor,
         },
       }));
-
       dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: allMessages.length }) }));
+      await persistConversation(api, threadId, {
+        complete: true,
+        pagination: paginationRecord({ mode: 'all', hasMore: false, lastMessageId: threadFinalCursor }),
+      });
       return { threadId, count: allMessages.length };
     } catch (error) {
       dispatch(messageSlice.actions.updateThreadPagination({
@@ -2496,6 +2687,11 @@ export const searchThreadMessages = createAsyncThunk(
       const state = getState() as RootState;
       const searchDelay = selectSearchDelay(state);
       const delayModifier = selectDelayModifier(state);
+
+      // 2.2.5: a thread search replaces the thread's saved rows.
+      const api = { dispatch, getState: getState as () => RootState };
+      const threadSeed = threadSeedFromState(state, threadId);
+      await clearSavedConversation(api, threadId);
 
       let allMessages: Message[] = [];
       let currentCriteria = { ...searchCriteria };
@@ -2637,6 +2833,17 @@ export const searchThreadMessages = createAsyncThunk(
           const fetched = allMessages.length + batchMessages.length;
           const total = searchResult.total_results;
 
+          const outcome = await persistPage(api, threadId, messages, {
+            seed: threadSeed,
+            loaded: fetched,
+            record: { searchCriteria, pagination: paginationRecord({ mode: 'search', totalCount: total, searchOffset: fetched }) },
+          });
+          if (outcome === 'cancelled') {
+            dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
+            dispatch(messageSlice.actions.updateThreadPagination({ threadId, pagination: { loadAllProgress: null } }));
+            return rejectWithValue('Search cancelled');
+          }
+
           dispatch(messageSlice.actions.updateThreadPagination({
             threadId,
             pagination: {
@@ -2721,6 +2928,12 @@ export const searchThreadMessages = createAsyncThunk(
         }));
       }
       dispatch(addStatusEntry({ level: 'success', message: t('status.msg.searchComplete', { count: allMessages.length }) }));
+      // The record write follows the status line so the log never waits on disk.
+      await persistConversation(api, threadId, {
+        complete: true,
+        searchCriteria,
+        pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: allMessages.length, searchOffset: allMessages.length }),
+      });
       return { threadId, count: allMessages.length };
     } catch (error) {
       dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
@@ -2733,6 +2946,38 @@ export const searchThreadMessages = createAsyncThunk(
       );
     }
   }
+);
+
+/**
+ * Start over (2.2.5): drop the rows the workspace keeps for a conversation
+ * so the next open and Load All fetch fresh. Redux is cleared by the
+ * caller, which then runs the normal open.
+ */
+export const clearSavedMessages = createAsyncThunk(
+  'message/clearSavedMessages',
+  async ({ cid }: { cid: string }, { dispatch, getState }) => {
+    const outcome = await clearSavedConversation({ dispatch, getState: getState as () => RootState }, cid);
+    if (outcome === 'written') {
+      dispatch(addStatusEntry({ level: 'info', message: t('status.msg.workspaceStartOver') }));
+    }
+    return { cid, outcome };
+  },
+);
+
+/**
+ * Clearing a search (2.2.5): the saved search rows go and the record returns
+ * to the plain path, so the next open fetches fresh instead of restoring
+ * old results (plan section 11). Called by the explicit clear controls,
+ * never by the per switch criteria reset in ServerView (#226).
+ */
+export const clearSavedSearch = createAsyncThunk(
+  'message/clearSavedSearch',
+  async ({ cid }: { cid: string }, { dispatch, getState }) => {
+    const api = { dispatch, getState: getState as () => RootState };
+    await clearSavedConversation(api, cid);
+    await persistConversation(api, cid, { pagination: paginationRecord({ mode: 'paginated' }) });
+    return { cid };
+  },
 );
 
 /**
@@ -2907,6 +3152,7 @@ const messageSlice = createSlice({
       state.error = null;
       state.activeTab = null;
       state.threadTabs = {};
+      state.restored = null;
     },
     resetPagination: (state) => {
       state.pagination = initialMessageState.pagination;
@@ -3120,12 +3366,39 @@ const messageSlice = createSlice({
       })
       .addCase(fetchMessages.fulfilled, (state, action) => {
         state.isLoading = false;
+        state.error = null;
+        const restored = action.payload.restored;
+        if (restored) {
+          // 2.2.5: the conversation came back from the workspace store with
+          // its criteria, sort, selection and cursor (plan section 5.4).
+          state.order = restored.order;
+          state.searchCriteria = restored.searchCriteria;
+          state.refineCriteria = restored.refineCriteria;
+          const sorted = sealed(getSortedMessages(action.payload.messages, restored.order.order));
+          state.messages = sorted;
+          const filtered = applyRefineCriteria(sorted, restored.refineCriteria);
+          state.filteredMessages = filtered === sorted ? sorted : sealed(filtered);
+          const selected = new Set(restored.selectedIds);
+          state.selectedMessages = selected.size > 0 ? sorted.filter((m) => selected.has(m.id)) : [];
+          state.pagination.mode = restored.pagination.mode;
+          state.pagination.lastMessageId = action.payload.lastMessageId;
+          state.pagination.hasMore = action.payload.hasMore;
+          state.pagination.totalCount = restored.pagination.totalCount;
+          state.pagination.searchOffset = restored.pagination.searchOffset;
+          state.pagination.isLoadingMore = false;
+          let oldestTimestamp: string | null = null;
+          for (const m of sorted) {
+            if (m.timestamp && (oldestTimestamp === null || m.timestamp < oldestTimestamp)) oldestTimestamp = m.timestamp;
+          }
+          state.restored = { count: sorted.length, oldestTimestamp };
+          return;
+        }
         // Sort messages by order
         const sorted = getSortedMessages(action.payload.messages, state.order.order);
         state.messages = sorted;
         state.filteredMessages = sorted;
         state.selectedMessages = [];
-        state.error = null;
+        state.restored = null;
 
         // Update pagination state
         state.pagination.lastMessageId = action.payload.lastMessageId;
@@ -3606,6 +3879,8 @@ export const {
 export const selectMessage = (state: RootState) => state.message;
 export const selectMessages = (state: RootState) => state.message.messages;
 export const selectClearSeq = (state: RootState) => state.message.clearSeq;
+/** 2.2.5: non-null when the open conversation was restored from the workspace store. */
+export const selectRestored = (state: RootState) => state.message.restored ?? null;
 export const selectHighlightedMessageId = (state: RootState) =>
   state.message.highlightedMessageId;
 export const selectFilteredMessages = (state: RootState) => state.message.filteredMessages;

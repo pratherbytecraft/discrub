@@ -30,7 +30,9 @@ export type OperationHold =
   | { kind: 'retryWait'; until: number; attempt: number; max: number; answer: string }
   | { kind: 'retryExhausted'; answer: string; loaded: number }
   /** 2.2.2: Discord answered 429 and the request waits until `until` before it goes again. */
-  | { kind: 'discordWait'; until: number };
+  | { kind: 'discordWait'; until: number }
+  /** 2.2.5: a workspace page write hit the browser's storage quota; the run is paused at `loaded`. */
+  | { kind: 'storageFull'; loaded: number };
 
 export interface FeedScrollAnchor {
   /** `<conversation id>:<thread tab id or main>`. */

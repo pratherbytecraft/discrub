@@ -316,7 +316,9 @@
       "retryPaused": "Paused after {{max}} failed retries",
       "retryPausedSentence": "{{answer}}. Wait a bit, then Resume to continue from {{count}} loaded.",
       "discordWait": "Discord asked for a wait, resumes in {{time}}",
-      "discordWaitSentence": "Discord asks for a wait every so often. {{name}} carries on by itself."
+      "discordWaitSentence": "Discord asks for a wait every so often. {{name}} carries on by itself.",
+      "storageFull": "Paused, browser storage is full",
+      "storageFullSentence": "Browser storage is full. {{name}} is paused at {{count}}. Clear room, then Resume."
     }
   },
   "landing": {
@@ -832,7 +834,11 @@
     "bulletMinutes_dm": "May take several minutes for conversations with thousands of messages",
     "bulletScroll": "Disable infinite scroll",
     "confirmQuestion": "Are you sure you want to continue?",
-    "confirm": "Load All"
+    "confirm": "Load All",
+    "restoredLine": "{{count}} loaded so far in this workspace. Resume continues from {{date}}.",
+    "restoredLineNoDate": "{{count}} loaded so far in this workspace.",
+    "resume": "Resume",
+    "startOver": "Start over"
   },
   "threadLoad": {
     "title": "Load Thread",
@@ -1685,7 +1691,11 @@
       "searchRetry": "Search: connection failed, retrying in {{seconds}}s (attempt {{attempt}}/5)",
       "searchCancelled": "Search cancelled",
       "searchComplete": "Search complete: {{count}} results found",
-      "loadingAllSearchResults": "Loading all search results..."
+      "loadingAllSearchResults": "Loading all search results...",
+      "restoredFromWorkspace": "Restored {{count}} messages from this workspace",
+      "storageFull": "Browser storage is full, paused at {{count}}",
+      "workspaceWriteFailed": "Could not save messages to this workspace, continuing in memory",
+      "workspaceStartOver": "Cleared the saved messages for this conversation"
     },
     "channel": {
       "loadingForumPosts": "Loading forum posts...",

@@ -12,6 +12,7 @@ import { loadHotkeys } from '@features/hotkeys/hotkeysSlice';
 import { initializeSupporter } from '@features/supporter/supporterSlice';
 import { loadSeasonalNotice } from '@features/appearance/noticeSlice';
 import { requestPersistentStorage } from '@/utils/persistentStorage';
+import { initializeWorkspaces } from '@features/workspace/workspaceSlice';
 import { sweepStagedDownloads } from 'drip-fs';
 import { isOverlayMode } from '@/extension/messaging';
 import { useLanguageSync } from '@/i18n/useLanguageSync';
@@ -45,6 +46,8 @@ function App() {
     void requestPersistentStorage();
     // Staged download parts left by an earlier session (iOS OPFS path); no-op elsewhere.
     void sweepStagedDownloads();
+    // 2.2.5: open Default (or the last workspace) so message pages can be written to disk.
+    dispatch(initializeWorkspaces());
     dispatch(loadSettings()).then(() => {
       dispatch(loadCacheFromLocalStorage());
       dispatch(loadPresets());

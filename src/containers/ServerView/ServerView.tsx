@@ -53,6 +53,7 @@ import {
   selectActiveLoading,
   selectActiveError,
   selectActiveLoadAllCancelled,
+  selectRestored,
   selectActivePagination,
   selectActiveTab,
   selectMessages,
@@ -78,6 +79,10 @@ import {
   searchMessages,
   searchThreadMessages,
   loadAllSearchResults,
+  clearMessages,
+  clearSavedMessages,
+  clearSavedSearch,
+  fetchMessages,
   enrichMessageUsers,
   openThreadTab,
   selectThreadTabs,
@@ -154,6 +159,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const isLoading = useAppSelector(selectActiveLoading);
   const error = useAppSelector(selectActiveError);
   const loadAllCancelled = useAppSelector(selectActiveLoadAllCancelled);
+  const restored = useAppSelector(selectRestored);
   const token = useAppSelector(selectAuthToken);
   const pagination = useAppSelector(selectActivePagination);
   const activeTab = useAppSelector(selectActiveTab);
@@ -556,6 +562,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   // --- Clear handlers ---
   const handleClearServerSearch = () => {
     saveSearchCriteria(null);
+    // 2.2.5: the saved search rows go with the criteria (plan section 11).
+    if (pagination.mode === 'search') dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
     // Restore all messages. The setFilteredMessages dispatch is then
     // shadowed by setRefineCriteria's derive logic if refine is active —
     // but since we only call setFilteredMessages here, we manually
@@ -578,6 +586,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   const handleClearAll = () => {
     saveSearchCriteria(null);
+    if (pagination.mode === 'search') dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
     dispatchClearRefine();
     if (activeTab) {
       dispatch(setThreadFilteredMessages({ threadId: activeTab, messages: allMessages }));
@@ -869,8 +878,23 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   const handleLoadAll = async () => {
     if (!token || isOperationRunning) return;
-
     closeDialog('loadAll');
+    await runLoadAll();
+  };
+
+  // 2.2.5: Start over drops the messages the workspace saved for this
+  // conversation, opens it fresh and then runs Load All from the top.
+  const handleStartOver = async () => {
+    if (!token || isOperationRunning || !currentContext || activeTab) return;
+    closeDialog('loadAll');
+    await dispatch(clearSavedMessages({ cid: currentContext.id }));
+    dispatch(clearMessages());
+    await dispatch(fetchMessages({ guildId: selectedGuild?.id, channelId: currentContext.id, token }));
+    await runLoadAll();
+  };
+
+  const runLoadAll = async () => {
+    if (!token) return;
 
     let dispatchResult;
     if (activeTab) {
@@ -1027,8 +1051,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
           </Box>
           {/* Capped at the card's width at every size: the column can be 580 px wide in a 900 px window, and uncapped the row pushed Export off the edge. */}
           <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap', maxWidth: '100%', whiteSpace: 'nowrap' }}>
-            {!isForumChannel && pagination.hasMore &&
-              (pagination.mode === 'paginated' || pagination.mode === 'search') && (
+            {/* 2.2.5: a restored conversation keeps the button even when complete, so Start over can refresh it. */}
+            {!isForumChannel && (pagination.hasMore || restored !== null) &&
+              (pagination.mode === 'paginated' || pagination.mode === 'search' || restored !== null) && (
               <HotkeyTooltip actionId="loadAll" label={t('serverView.loadAllMessages')} arrow>
                 <Button
                   variant="outlined"
@@ -1322,6 +1347,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
         open={loadAllDialogOpen}
         onClose={() => closeDialog('loadAll')}
         onConfirm={handleLoadAll}
+        onStartOver={handleStartOver}
         contextLabel={contextLabel}
       />
 

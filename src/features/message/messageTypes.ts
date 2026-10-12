@@ -93,6 +93,12 @@ export interface MessageState {
    * chips behind (#226).
    */
   clearSeq: number;
+  /**
+   * 2.2.5: set when the open conversation came back from the workspace
+   * store instead of a fetch. The Load All dialog turns this into its
+   * Resume and Start over state. Cleared by clearMessages.
+   */
+  restored: { count: number; oldestTimestamp: string | null } | null;
 }
 
 export const initialPaginationState: PaginationState = {
@@ -129,4 +135,5 @@ export const initialMessageState: MessageState = {
   threadTabs: {},
   highlightedMessageId: null,
   clearSeq: 0,
+  restored: null,
 };

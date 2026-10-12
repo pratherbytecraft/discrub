@@ -20,6 +20,8 @@ import hotkeysReducer from '@features/hotkeys/hotkeysSlice';
 import devReducer from '@features/dev/devSlice';
 import supporterReducer from '@features/supporter/supporterSlice';
 import noticeReducer from '@features/appearance/noticeSlice';
+import workspaceReducer from '@features/workspace/workspaceSlice';
+import { workspacePersistenceMiddleware } from '@features/workspace/workspacePersistenceMiddleware';
 
 /**
  * Redux store configuration
@@ -46,6 +48,7 @@ export const store = configureStore({
     dev: devReducer,
     supporter: supporterReducer,
     notice: noticeReducer,
+    workspace: workspaceReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -67,7 +70,7 @@ export const store = configureStore({
             ignoredActions: ['auth/setToken', 'export/setExportCriteria', 'export/applyPreset'],
             ignoredPaths: ['auth.token', 'export.exportCriteria'],
           },
-    }).prepend(previewGuardMiddleware).concat(settingsChangeMiddleware, errorLoggingMiddleware),
+    }).prepend(previewGuardMiddleware).concat(settingsChangeMiddleware, errorLoggingMiddleware, workspacePersistenceMiddleware.middleware),
 });
 
 export type AppStore = typeof store;

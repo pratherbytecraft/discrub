@@ -48,6 +48,57 @@ describe('LoadAllDialog', () => {
     vi.clearAllMocks();
   });
 
+  // 2.2.5: a conversation restored from the workspace continues from its cursor.
+  describe('Restored conversation (2.2.5)', () => {
+    const restoredState = () => {
+      const base = createBaseState();
+      return createBaseState({
+        message: {
+          ...base.message,
+          messages: [createMockMessage({ id: '1', timestamp: '2026-03-03T12:00:00.000Z' })],
+          filteredMessages: [createMockMessage({ id: '1', timestamp: '2026-03-03T12:00:00.000Z' })],
+          restored: { count: 12480, oldestTimestamp: '2026-03-03T12:00:00.000Z' },
+        },
+      });
+    };
+
+    it('shows the saved count line, Resume and Start over', () => {
+      const onStartOver = vi.fn();
+      renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={onStartOver} />, { preloadedState: restoredState() });
+      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent(/12,480 loaded so far in this workspace\. Resume continues from Mar 3, 2026\./);
+      expect(screen.getByTestId('load-all-confirm')).toHaveTextContent('Resume');
+      fireEvent.click(screen.getByTestId('load-all-start-over'));
+      expect(onStartOver).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByTestId('load-all-confirm'));
+      expect(defaultProps.onConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers only Start over when the saved walk is complete', () => {
+      const onStartOver = vi.fn();
+      const base = restoredState();
+      renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={onStartOver} />, {
+        preloadedState: createBaseState({ message: { ...base.message, pagination: { ...base.message.pagination, hasMore: false } } }),
+      });
+      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('12,480 loaded so far in this workspace.');
+      expect(screen.getByTestId('load-all-restored-line')).not.toHaveTextContent('Resume continues');
+      expect(screen.queryByTestId('load-all-confirm')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('load-all-start-over'));
+      expect(onStartOver).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the plain dialog without a Start over handler, on a thread tab, or when nothing was restored', () => {
+      renderWithProviders(<LoadAllDialog {...defaultProps} />, { preloadedState: restoredState() });
+      expect(screen.queryByTestId('load-all-start-over')).not.toBeInTheDocument();
+      expect(screen.getByTestId('load-all-confirm')).toHaveTextContent('Load All');
+
+      const base = createBaseState();
+      renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={vi.fn()} />, {
+        preloadedState: createBaseState({ message: { ...base.message, restored: null } }),
+      });
+      expect(screen.queryByTestId('load-all-restored-line')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Confirmation State', () => {
     it('should render dialog title', () => {
       renderWithProviders(<LoadAllDialog {...defaultProps} />, {

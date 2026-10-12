@@ -260,6 +260,14 @@ export function openWorkspaceDatabase(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+// A page that goes away must not keep the connection open: the next page's
+// boot (and a Cypress wipe) would otherwise queue behind a blocked delete.
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('pagehide', () => {
+    void closeWorkspaceDatabase();
+  });
+}
+
 export async function closeWorkspaceDatabase(): Promise<void> {
   if (!dbPromise) return;
   const pending = dbPromise;

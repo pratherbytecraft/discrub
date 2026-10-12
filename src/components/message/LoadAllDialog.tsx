@@ -16,6 +16,7 @@ import {
   selectActiveTab,
   selectActiveSearchCriteria,
   selectActivePagination,
+  selectRestored,
 } from '@features/message/messageSlice';
 import { countActiveFilters } from 'discrub-core/filtering';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
@@ -26,18 +27,30 @@ interface LoadAllDialogProps {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** 2.2.5: drop the saved messages for this conversation and load from the top. Shown when the conversation was restored from the workspace. */
+  onStartOver?: () => void;
   contextLabel: string;
 }
 
 /**
  * LoadAllDialog component - confirmation dialog before loading all messages
  */
-const LoadAllDialog = ({ open, onClose, onConfirm, contextLabel }: LoadAllDialogProps) => {
+const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: LoadAllDialogProps) => {
   const messages = useAppSelector(selectActiveMessages);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const activeTab = useAppSelector(selectActiveTab);
+  const restored = useAppSelector(selectRestored);
+  // 2.2.5: a conversation restored from the workspace continues from its
+  // saved cursor (plan section 6). Thread tabs keep the plain dialog.
   const searchCriteria = useAppSelector(selectActiveSearchCriteria);
   const pagination = useAppSelector(selectActivePagination);
+  const resumable = !activeTab && restored !== null && !!onStartOver;
+  // Nothing left to resume once the saved walk reached the end: Start over
+  // is the only action, and it is what refreshes a complete conversation.
+  const completeOnDisk = resumable && !pagination.hasMore;
+  const resumeDate = resumable && restored.oldestTimestamp
+    ? new Date(restored.oldestTimestamp).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' })
+    : null;
   const scope = activeTab ? 'thread' : contextLabel === 'conversation' ? 'dm' : 'channel';
 
   const isFilteredSearch =
@@ -67,6 +80,13 @@ const LoadAllDialog = ({ open, onClose, onConfirm, contextLabel }: LoadAllDialog
         <DialogContentText>
           <Trans i18nKey="loadAll.currentlyLoaded" values={{ count: messages.length }} components={{ strong: <strong /> }} />
         </DialogContentText>
+        {resumable && (
+          <DialogContentText sx={{ mt: 1 }} data-testid="load-all-restored-line">
+            {resumeDate && !completeOnDisk
+              ? t('loadAll.restoredLine', { count: restored.count.toLocaleString(i18n.language), date: resumeDate })
+              : t('loadAll.restoredLineNoDate', { count: restored.count.toLocaleString(i18n.language) })}
+          </DialogContentText>
+        )}
         <DialogContentText sx={{ mt: 1 }}>
           {isFilteredSearch ? t('loadAll.willFiltered') : t('loadAll.will')}
         </DialogContentText>
@@ -90,12 +110,23 @@ const LoadAllDialog = ({ open, onClose, onConfirm, contextLabel }: LoadAllDialog
         </DialogContentText>
       </DialogContent>
       <DialogActions>
+        {resumable && !completeOnDisk && (
+          <Button onClick={onStartOver} color="inherit" sx={{ mr: 'auto' }} data-testid="load-all-start-over">
+            {t('loadAll.startOver')}
+          </Button>
+        )}
         <Button onClick={onClose} color="inherit">
           {t('common.cancel')}
         </Button>
-        <Button onClick={onConfirm} variant="contained" color="primary">
-          {t('loadAll.confirm')}
-        </Button>
+        {completeOnDisk ? (
+          <Button onClick={onStartOver} variant="contained" color="primary" data-testid="load-all-start-over">
+            {t('loadAll.startOver')}
+          </Button>
+        ) : (
+          <Button onClick={onConfirm} variant="contained" color="primary" data-testid="load-all-confirm">
+            {resumable ? t('loadAll.resume') : t('loadAll.confirm')}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

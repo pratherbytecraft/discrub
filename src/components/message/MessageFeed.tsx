@@ -425,14 +425,23 @@ const MessageFeed = ({
   const paginationMode = useAppSelector((s) => s.message.pagination.mode);
   const paginationHasMore = useAppSelector((s) => s.message.pagination.hasMore);
 
+  // 2.2.5: a scroll into view and a click can both reach this in the same
+  // frame, before Redux has set isLoadingMore, so one page was asked for
+  // twice. The ref closes that window.
+  const loadMoreInFlight = useRef(false);
   const handleLoadMore = useCallback(() => {
     if (!token || isLoadingMore || isLoadingAll || !paginationHasMore) return;
+    if (loadMoreInFlight.current) return;
+    const track = (result: { finally: (cb: () => void) => unknown }) => {
+      loadMoreInFlight.current = true;
+      result.finally(() => { loadMoreInFlight.current = false; });
+    };
 
     // In search mode the cursor is an offset in Redux state, not a
     // last-message-id, so branch on mode instead of on lastMessageId.
     if (paginationMode === 'search') {
       if (activeTab) return; // thread search pagination not yet wired — thread tabs fetch eagerly
-      dispatch(
+      track(dispatch(
         fetchNextSearchPage({
           // #277: a DM clears selectedChannel, so the next page has to come
           // from the current context (channel or DM), the way Load All does.
@@ -440,19 +449,19 @@ const MessageFeed = ({
           guildId: selectedGuild?.id,
           token,
         }),
-      );
+      ));
       return;
     }
 
     if (!lastMessageId) return;
     if (activeTab) {
-      dispatch(
+      track(dispatch(
         fetchMoreThreadMessages({ threadId: activeTab, token, lastMessageId }),
-      );
+      ));
     } else if (currentContext) {
-      dispatch(
+      track(dispatch(
         fetchMoreMessages({ channelId: currentContext.id, token, lastMessageId }),
-      );
+      ));
     }
   }, [
     activeTab,
