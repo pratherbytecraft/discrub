@@ -552,6 +552,22 @@ export const exportMessages = createAsyncThunk<
       return { success: true };
     } catch (error) {
       if (error instanceof CancelledError) {
+        // #276: the messages are already in hand, so a Stop during the
+        // thread, reaction or media phase still writes them to a zip.
+        let selectedGuild: any = null;
+        let guildRoles: any[] = [];
+        try {
+          const { selectSelectedGuild, selectRoles } = await import('@features/guild/guildSlice');
+          selectedGuild = selectSelectedGuild(getState()) || null;
+          guildRoles = selectRoles(getState()) || [];
+        } catch { /* guild slice may not be available in tests */ }
+        const kept = await keepStoppedMessages({
+          messages, folderName: channelName, label: channelName, format, messagesPerPage,
+          selectedGuild, cachedUserMap: selectCachedUserMap(getState()), guildId: guildId || null,
+          mediaConfig, exportConfig, guildRoles, textOptions: getState().export.textOptions,
+          zipOptions: buildZipOptions(getState, dispatch), dispatch: dispatch as ExportDispatch,
+        });
+        if (kept) return { success: true };
         dispatch(addStatusEntry({
           level: 'warning',
           message: t('status.export.cancelled', { name: channelName }),
@@ -989,6 +1005,68 @@ async function fetchAllForumThreads(
   return collected;
 }
 
+/**
+ * #276: Stop keeps what was pulled. Writes the messages fetched so far for
+ * one channel into the zip with no further network: no media, no thread
+ * or reaction lookups. A media only export has nothing to keep, a media
+ * file is only in the zip once it finished downloading.
+ * Returns true when a page was written.
+ */
+async function keepStoppedMessages(opts: {
+  messages: Message[];
+  folderName: string;
+  label: string;
+  format: ExportFormat;
+  messagesPerPage: number;
+  selectedGuild: any;
+  cachedUserMap: any;
+  guildId: string | null;
+  mediaConfig?: MediaConfig;
+  exportConfig?: ExportConfig;
+  guildRoles: any[];
+  textOptions: any;
+  zipService?: StreamingZipService;
+  zipOptions?: StreamingZipOptions;
+  dispatch: ExportDispatch;
+}): Promise<boolean> {
+  const { messages, format, label, dispatch } = opts;
+  if (messages.length === 0) return false;
+  if (format === 'media') {
+    dispatch(addStatusEntry({
+      level: 'warning',
+      message: t('status.export.stoppedNothingKept', { name: label }),
+    }));
+    return false;
+  }
+  try {
+    await getExportService().exportToZip(
+      messages, opts.folderName, format, opts.messagesPerPage, false,
+      opts.selectedGuild ?? null, opts.cachedUserMap, opts.guildId, undefined, opts.mediaConfig, opts.exportConfig,
+      undefined, opts.zipService, false, [], undefined, opts.guildRoles, opts.textOptions, opts.zipOptions, undefined,
+    );
+  } catch (error) {
+    dispatch(addStatusEntry({
+      level: 'error',
+      message: t('status.export.stoppedKeepFailed', { name: label, error: error instanceof Error ? error.message : String(error) }),
+    }));
+    return false;
+  }
+  let oldest = Number.POSITIVE_INFINITY;
+  for (const m of messages) {
+    const ts = new Date(m.timestamp || 0).getTime();
+    if (ts > 0 && ts < oldest) oldest = ts;
+  }
+  dispatch(addStatusEntry({
+    level: 'warning',
+    message: t('status.export.stoppedKept', {
+      name: label,
+      count: messages.length.toLocaleString(),
+      oldest: Number.isFinite(oldest) ? new Date(oldest).toLocaleDateString() : 'unknown',
+    }),
+  }));
+  return true;
+}
+
 interface BulkExportParams {
   channels: Channel[];
   token: string;
@@ -1132,6 +1210,18 @@ export const bulkExportChannels = createAsyncThunk<
           message: t('status.export.bulkStartingChannel', { index: i + 1, total: expandedChannels.length, name: channelName }),
         }));
 
+        // #276: whatever was pulled for this channel before Stop gets
+        // written, so a stopped run still downloads a zip with its messages.
+        let fetched: Message[] = [];
+        const keepStopped = async () => {
+          const kept = await keepStoppedMessages({
+            messages: fetched, folderName, label: `#${channelName}`, format, messagesPerPage,
+            selectedGuild, cachedUserMap, guildId: guildId || null, mediaConfig, exportConfig,
+            guildRoles, textOptions: initialState.export.textOptions, zipService, dispatch: dispatch as ExportDispatch,
+          });
+          if (kept) exportedChannels.push({ id: channel.id, name: channelName, filename: `${folderName}/${folderName}-page-1.html` });
+        };
+
         try {
           // Fetch all messages for this channel
           const messages = await fetchAllChannelMessages(
@@ -1145,8 +1235,12 @@ export const bulkExportChannels = createAsyncThunk<
             searchCriteria,
             { channelLabel: `#${channelName}` },
           );
+          fetched = messages;
 
-          if (checkCancelled(getState)) break;
+          if (checkCancelled(getState)) {
+            await keepStopped();
+            break;
+          }
 
           if (messages.length === 0) {
             dispatch(addStatusEntry({
@@ -1210,7 +1304,10 @@ export const bulkExportChannels = createAsyncThunk<
             message: t('status.export.bulkCompleted', { name: channelName, count: allMessages.length }),
           }));
         } catch (error) {
-          if (error instanceof CancelledError) break;
+          if (error instanceof CancelledError) {
+            await keepStopped();
+            break;
+          }
           const errorMsg = error instanceof Error ? error.message : t('status.export.unknownError');
           errors.push(`${channelName}: ${errorMsg}`);
           dispatch(addStatusEntry({
@@ -1397,6 +1494,17 @@ export const bulkExportDMs = createAsyncThunk<
           message: t('status.export.bulkStartingDm', { index: i + 1, total: channels.length, name: dmName }),
         }));
 
+        // #276: whatever was pulled for this DM before Stop gets written.
+        let fetched: Message[] = [];
+        const keepStopped = async () => {
+          const kept = await keepStoppedMessages({
+            messages: fetched, folderName, label: `DM with ${dmName}`, format, messagesPerPage,
+            selectedGuild: null, cachedUserMap, guildId: null, mediaConfig, exportConfig,
+            guildRoles: [], textOptions: initialState.export.textOptions, zipService, dispatch: dispatch as ExportDispatch,
+          });
+          if (kept) exportedDMs.push({ id: dm.id, name: dmName, filename: `${folderName}/${folderName}-page-1.html` });
+        };
+
         try {
           const messages = await fetchAllChannelMessages(
             dm.id,
@@ -1409,8 +1517,12 @@ export const bulkExportDMs = createAsyncThunk<
             searchCriteria,
             { channelLabel: `DM with ${dmName}` },
           );
+          fetched = messages;
 
-          if (checkCancelled(getState)) break;
+          if (checkCancelled(getState)) {
+            await keepStopped();
+            break;
+          }
 
           if (messages.length === 0) {
             dispatch(addStatusEntry({
@@ -1473,7 +1585,10 @@ export const bulkExportDMs = createAsyncThunk<
             filename: `${sanitized}/${sanitized}-page-1.html`,
           });
         } catch (error) {
-          if (error instanceof CancelledError) break;
+          if (error instanceof CancelledError) {
+            await keepStopped();
+            break;
+          }
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           errors.push(`${dmName}: ${errorMsg}`);
           dispatch(addStatusEntry({

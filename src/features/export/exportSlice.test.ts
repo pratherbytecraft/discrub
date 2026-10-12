@@ -2508,3 +2508,164 @@ describe('exportSlice', () => {
     });
   });
 });
+
+// #276: Stop keeps what was pulled. A stopped export still writes the
+// messages it has in hand, with no further network, and says so.
+describe('Stop keeps the messages pulled so far (#276)', () => {
+  const makeMessage = (id: number, channelId: string) => ({
+    id: `${id}`,
+    channel_id: channelId,
+    timestamp: `2026-01-${String(1 + (id % 28)).padStart(2, '0')}T00:00:00.000Z`,
+    author: { id: 'u', username: 'u', discriminator: '0', global_name: null, avatar: null },
+    content: 'msg',
+    mentions: [],
+    attachments: [],
+    embeds: [],
+    pinned: false,
+    type: 0,
+    mention_everyone: false,
+    edited_timestamp: null,
+    tts: false,
+    reactions: [],
+  });
+
+  const buildStore = async () => {
+    const { configureStore } = await import('@reduxjs/toolkit');
+    const { default: exportReducer } = await import('./exportSlice');
+    const appReducer = (await import('@features/app/appSlice')).default;
+    const { defaultSettings } = await import('@features/app/appSlice');
+    const authReducer = (await import('@features/auth/authSlice')).default;
+    const statusReducer = (await import('@features/status/statusSlice')).default;
+    const historyReducer = (await import('@features/history/historySlice')).default;
+    return configureStore({
+      reducer: {
+        export: exportReducer,
+        app: appReducer,
+        auth: authReducer,
+        status: statusReducer,
+        history: historyReducer,
+        cache: cacheReducer,
+      } as any,
+      preloadedState: {
+        app: {
+          discrubPaused: false,
+          discrubCancelled: false,
+          isMinimized: false,
+          focusedView: false,
+          kofiOverlayOpen: false,
+          sidebarView: 'server' as const,
+          task: { status: 'idle' as const, message: '' },
+          settings: defaultSettings,
+        },
+      } as any,
+    });
+  };
+
+  it('bulk export writes the pages pulled before Stop and finishes the zip', async () => {
+    const { bulkExportChannels } = await import('./exportSlice');
+    const { getDiscordService } = await import('@services/discordService');
+    const exportServiceModule = await import('@services/exportService');
+    const { setDiscrubCancelled } = await import('@features/app/appSlice');
+
+    const testStore = await buildStore();
+    let page = 0;
+    vi.mocked(getDiscordService).mockReturnValue({
+      fetchMessageData: vi.fn().mockImplementation(async () => {
+        page += 1;
+        // The person hits Stop while page 2 is on its way back.
+        if (page === 2) testStore.dispatch(setDiscrubCancelled(true));
+        return { success: true, data: Array.from({ length: 100 }, (_, i) => makeMessage((page - 1) * 100 + i + 1, 'ch-stop')) };
+      }),
+      fetchSearchMessageData: vi.fn(),
+      iterateSearchResults: async function* () {},
+    } as any);
+    const exportToZip = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(exportServiceModule.getExportService).mockReturnValue({ exportToZip } as any);
+
+    const result = await testStore.dispatch(
+      bulkExportChannels({
+        channels: [
+          { id: 'ch-stop', name: 'stopped-channel' } as any,
+          { id: 'ch-never', name: 'never-reached' } as any,
+        ],
+        token: 'token',
+        format: 'html',
+        messagesPerPage: 100,
+        separateThreads: false,
+        includeMedia: true,
+        guildId: 'g-1',
+      }) as any,
+    );
+
+    expect(result.type).toBe('export/bulkExportChannels/fulfilled');
+    // Page 2 came back after Stop, so only page 1 is kept.
+    expect(exportToZip).toHaveBeenCalledTimes(1);
+    const [messages, folder, , , includeMedia] = exportToZip.mock.calls[0];
+    expect(messages).toHaveLength(100);
+    expect(folder).toBe('stopped_channel');
+    expect(includeMedia).toBe(false);
+    const entries = testStore.getState().status.entries.map((e: any) => e.message);
+    expect(entries.some((m: string) => m.startsWith('Export: Stopped · kept 100 messages from #stopped-channel, oldest from '))).toBe(true);
+    expect(entries.some((m: string) => m.includes('never-reached'))).toBe(false);
+  });
+
+  it('single export writes the messages without media when Stop lands during the media phase', async () => {
+    const { exportMessages } = await import('./exportSlice');
+    const exportServiceModule = await import('@services/exportService');
+    const { CancelledError } = await import('@/utils/operationLoopUtils');
+
+    const testStore = await buildStore();
+    const exportToZip = vi.fn()
+      .mockRejectedValueOnce(new CancelledError())
+      .mockResolvedValueOnce(undefined);
+    vi.mocked(exportServiceModule.getExportService).mockReturnValue({ exportToZip } as any);
+
+    const result = await testStore.dispatch(
+      exportMessages({
+        messages: [makeMessage(1, 'c1'), makeMessage(2, 'c1')] as any,
+        channelName: 'test-channel',
+        format: 'html',
+        messagesPerPage: 100,
+        separateThreads: false,
+        includeMedia: true,
+      }) as any,
+    );
+
+    expect(result.type).toBe('export/exportMessages/fulfilled');
+    expect(exportToZip).toHaveBeenCalledTimes(2);
+    expect(exportToZip.mock.calls[0][4]).toBe(true);
+    expect(exportToZip.mock.calls[1][4]).toBe(false);
+    expect(exportToZip.mock.calls[1][0]).toHaveLength(2);
+    const entries = testStore.getState().status.entries.map((e: any) => e.message);
+    expect(entries.some((m: string) => m.startsWith('Export: Stopped · kept 2 messages from test-channel, oldest from '))).toBe(true);
+    expect(entries.some((m: string) => m === 'Export: Cancelled · test-channel')).toBe(false);
+  });
+
+  it('media only export has nothing to keep and still reports the stop', async () => {
+    const { exportMessages } = await import('./exportSlice');
+    const exportServiceModule = await import('@services/exportService');
+    const { CancelledError } = await import('@/utils/operationLoopUtils');
+
+    const testStore = await buildStore();
+    const exportToZip = vi.fn();
+    const exportMediaOnly = vi.fn().mockRejectedValue(new CancelledError());
+    vi.mocked(exportServiceModule.getExportService).mockReturnValue({ exportToZip, exportMediaOnly } as any);
+
+    const result = await testStore.dispatch(
+      exportMessages({
+        messages: [makeMessage(1, 'c1')] as any,
+        channelName: 'test-channel',
+        format: 'media',
+        messagesPerPage: 100,
+        separateThreads: false,
+        includeMedia: true,
+      }) as any,
+    );
+
+    expect(result.type).toBe('export/exportMessages/rejected');
+    expect(exportToZip).not.toHaveBeenCalled();
+    const entries = testStore.getState().status.entries.map((e: any) => e.message);
+    expect(entries).toContain('Export: Stopped · nothing kept from test-channel, a media file is only saved once it finished downloading');
+    expect(entries).toContain('Export: Cancelled · test-channel');
+  });
+});

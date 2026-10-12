@@ -635,6 +635,73 @@ describe('Bulk Export', () => {
     });
   });
 
+  // #276: Stop keeps what was pulled. A stopped bulk export used to finish
+  // with a zip holding only README.html; now the pages fetched before Stop
+  // are written for the channel in progress and the zip downloads.
+  describe('Stop keeps what was pulled (#276)', () => {
+    const API = '**/api/v10';
+    const page = (start: number) =>
+      Array.from({ length: 100 }, (_, i) => ({
+        id: `${900000000000000000 - start - i}`,
+        channel_id: '801000000000000001',
+        author: { id: '222333444555666777', username: 'alice_dev', discriminator: '0', avatar: null, global_name: 'Alice' },
+        content: `Bulk message ${start + i + 1}`,
+        timestamp: `2026-02-${String(1 + ((start + i) % 27)).padStart(2, '0')}T12:00:00.000Z`,
+        edited_timestamp: null, tts: false, mention_everyone: false, mentions: [], attachments: [], embeds: [], reactions: [], pinned: false, type: 0,
+      }));
+
+    it('a stopped bulk export still downloads a zip with the pages pulled so far', () => {
+      cy.task('downloads:clean');
+      cy.window().then((win) => {
+        const store = (win as any).__store__;
+        store.dispatch({
+          type: 'app/updateAllSettings/fulfilled',
+          payload: { ...store.getState().app.settings, searchDelay2: '0', deleteDelay2: '0', delayModifier2: '0', reactionsEnabled: 'false' },
+        });
+      });
+      let calls = 0;
+      cy.intercept('GET', `${API}/channels/*/messages?*`, (req) => {
+        calls += 1;
+        if (calls === 1) req.reply({ statusCode: 200, body: page(0) });
+        else req.reply({ statusCode: 200, body: page(100), delay: 6000 });
+      }).as('walk');
+
+      cy.get('[aria-label="Toggle multi-select"]').first().click();
+      cy.contains('general').click();
+      cy.get('[aria-label="Export selected channels"]').click();
+      cy.get('[role="dialog"]').should('be.visible');
+      cy.get('[role="dialog"]').find('.MuiAccordionSummary-content').contains('Files & Media').scrollIntoView().click();
+      cy.get('[role="dialog"]').contains('label', 'Download files for offline viewing').find('input[type="checkbox"]').then(($input) => {
+        if ($input.prop('checked')) cy.wrap($input).click({ force: true });
+      });
+      cy.get('[role="dialog"]').contains('button', /Export 1 Channel/).click();
+
+      // Page 1 is in hand and page 2 is on its way back when Stop is hit.
+      cy.wait('@walk');
+      cy.window({ timeout: 15000 }).should(() => {
+        expect(calls, 'second page requested').to.be.greaterThan(1);
+      });
+      cy.get('[aria-label="Stop"]').click({ force: true });
+
+      cy.waitForDownload(/^bulk-export\.zip$/i, 60000).then((fileName) => {
+        cy.task<{ name: string }[]>('zip:list', fileName).then((entries) => {
+          const names = entries.map((e) => e.name);
+          expect(names).to.include('general/general-page-1.html');
+          expect(names).to.include('README.html');
+        });
+        cy.task<string>('zip:read', { fileName, entry: 'general/general-page-1.html' }).then((html) => {
+          expect(html).to.include('Bulk message 1');
+          expect(html).to.include('Bulk message 100');
+          expect(html).not.to.include('Bulk message 101');
+        });
+      });
+      cy.window().then((win) => {
+        const entries = ((win as any).__store__.getState().status.entries as { message: string }[]).map((e) => e.message);
+        expect(entries.some((m) => m.startsWith('Export: Stopped · kept 100 messages from #general, oldest from '))).to.eq(true);
+      });
+    });
+  });
+
   describe('DM Multi-Select Mode', () => {
     beforeEach(() => {
       // Switch to DMs tab
