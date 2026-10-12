@@ -20,6 +20,8 @@ import {
   readWindow,
   updateWorkspace,
   writePage,
+  readAuthors,
+  readRows,
 } from './workspaceStore';
 import {
   WorkspaceFileError,
@@ -124,6 +126,10 @@ describe('workspace files', () => {
     const original = await getWorkspace(wid);
     expect(record).toMatchObject({ name: 'Raid: archive (2)', color: '#faa61a', bytes: original!.bytes, authors: original!.authors });
     expect(record!.conversations['100']).toMatchObject({ count: 7, oldestId: '1', newestId: '7', searchCriteria: { content: 'runite' } });
+    // 2.2.5 W2: the import writes the slim rows and authors through writePage too.
+    expect((await readRows('imported', '100', { limit: 10 })).map((r) => r.id)).toEqual(['1', '2', '3', '4', '5', '6', '7']);
+    expect(Object.keys(await readAuthors('imported')).sort()).toEqual(Object.keys(await readAuthors(wid)).sort());
+    expect(Object.keys(await readAuthors('imported')).length).toBeGreaterThan(0);
     expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID, wid, 'imported']);
   });
 

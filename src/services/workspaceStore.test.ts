@@ -33,6 +33,13 @@ import {
   getMeta,
   getSelection,
   getWorkspace,
+  closeWorkspaceDatabase,
+  dayCounts,
+  rankOf,
+  readAuthors,
+  readRows,
+  resetDayCountCache,
+  setBlockedWaitMs,
   setSelection,
   updateRows,
   deleteConversationsWithPrefix,
@@ -105,10 +112,11 @@ describe('ids and estimates', () => {
 });
 
 describe('database', () => {
-  it('creates the three stores and the author index', async () => {
+  it('creates the five stores and the author index', async () => {
     const db = await openWorkspaceDatabase();
     expect(db.name).toBe(WORKSPACE_DB_NAME);
-    expect(Array.from(db.objectStoreNames).sort()).toEqual(['meta', 'rows', 'workspaces']);
+    expect(db.version).toBe(2);
+    expect(Array.from(db.objectStoreNames).sort()).toEqual(['authors', 'meta', 'rows', 'slimRows', 'workspaces']);
     const tx = db.transaction('rows', 'readonly');
     expect(Array.from(tx.objectStore('rows').indexNames)).toEqual(['byAuthor']);
   });
@@ -494,6 +502,136 @@ describe('updateRows and selections (2.2.5 W1)', () => {
   it('new records carry no selection field', async () => {
     await writePage(WID, CID, [msg('1')], seed);
     expect((await getConversation(WID, CID))?.selectedIds).toBeUndefined();
+  });
+});
+
+describe('slim rows and authors (2.2.5 W2)', () => {
+  const slimIds = async (cid = CID) => (await readRows(WID, cid, { limit: 1000 })).map((r) => r.id);
+
+  it('writePage puts a row and the author of every message', async () => {
+    const alice = createMockUser({ id: 'alice', username: 'alice' });
+    await writePage(WID, CID, [msg('1', { author: alice, pinned: true }), msg('2')], seed);
+    const rows = await readRows(WID, CID);
+    expect(rows.map((r) => r.id)).toEqual(['1', '2']);
+    expect(rows[0].authorId).toBe('alice');
+    expect(rows[0].flags).toBeGreaterThan(0);
+    expect((await readAuthors(WID)).alice.username).toBe('alice');
+  });
+
+  it('patchRows and updateRows keep the row in step with the message', async () => {
+    await writePage(WID, CID, [msg('1', { reactions: [{ count: 1, me: true, emoji: { name: 'x' } }] as never })], seed);
+    expect((await readRows(WID, CID))[0].hasReactions).toBe(true);
+    await updateRows(WID, CID, ['1'], (m) => ({ ...m, reactions: [] }));
+    expect((await readRows(WID, CID))[0].hasReactions).toBe(false);
+    await patchRows(WID, CID, [{ id: '1', patch: { pinned: true } }]);
+    expect((await readRows(WID, CID))[0].flags).toBeGreaterThan(0);
+  });
+
+  it('deletes, clears, conversation and workspace removals take the slim rows with them', async () => {
+    await writePage(WID, CID, [msg('1'), msg('2'), msg('3')], seed);
+    await writePage(WID, '2000', [msg('5')], seed);
+    await deleteRows(WID, CID, ['2']);
+    expect(await slimIds()).toEqual(['1', '3']);
+    await clearConversation(WID, CID);
+    expect(await slimIds()).toEqual([]);
+    await deleteConversation(WID, '2000');
+    expect(await slimIds('2000')).toEqual([]);
+    await writePage(WID, 'run:9', [msg('7')], seed);
+    await deleteConversationsWithPrefix(WID, 'run:');
+    expect(await slimIds('run:9')).toEqual([]);
+    await writePage(WID, CID, [msg('1')], seed);
+    await clearWorkspaceMessages(WID);
+    expect(await slimIds()).toEqual([]);
+    expect(await readAuthors(WID)).toEqual({});
+  });
+
+  it('a duplicate copies the slim rows and authors, a delete drops them', async () => {
+    await writePage(WID, CID, [msg('1', { author: createMockUser({ id: 'bob' }) })], seed);
+    const copy = await duplicateWorkspace(WID, 'copy', 1);
+    expect((await readRows(copy.wid, CID)).map((r) => r.id)).toEqual(['1']);
+    expect(Object.keys(await readAuthors(copy.wid))).toEqual(['bob']);
+    await deleteWorkspace(copy.wid);
+    expect(await readRows(copy.wid, CID)).toEqual([]);
+    expect(await readAuthors(copy.wid)).toEqual({});
+  });
+
+  it('readRows and readWindow take inclusive bounds and both directions', async () => {
+    await writePage(WID, CID, ['1', '2', '3', '4', '5'].map((id) => msg(id)), seed);
+    expect((await readRows(WID, CID, { afterId: '2', beforeId: '4' })).map((r) => r.id)).toEqual(['3']);
+    expect((await readRows(WID, CID, { afterId: '2', beforeId: '4', inclusive: true })).map((r) => r.id)).toEqual(['2', '3', '4']);
+    expect((await readRows(WID, CID, { beforeId: '5', limit: 2, direction: 'desc' })).map((r) => r.id)).toEqual(['4', '3']);
+    expect((await readWindow(WID, CID, { afterId: '4', inclusive: true })).map((m) => m.id)).toEqual(['4', '5']);
+  });
+
+  it('rankOf counts the rows older than an id', async () => {
+    await writePage(WID, CID, ['10', '20', '30'].map((id) => msg(id)), seed);
+    expect(await rankOf(WID, CID, '10')).toBe(0);
+    expect(await rankOf(WID, CID, '30')).toBe(2);
+    expect(await rankOf(WID, CID, '25')).toBe(2);
+  });
+
+  it('dayCounts buckets by the local day of the snowflake and follows later pages', async () => {
+    resetDayCountCache();
+    const snow = (iso: string, n: number) => String((BigInt(Date.parse(iso) - 1420070400000) << 22n) + BigInt(n));
+    // 23:30 UTC on the 1st is the 2nd at UTC+1 (offset -60) and the 1st in UTC.
+    const late = snow('2026-03-01T23:30:00Z', 0);
+    const noon = snow('2026-03-01T12:00:00Z', 1);
+    await writePage(WID, CID, [msg(late), msg(noon)], seed);
+    expect(Object.fromEntries(await dayCounts(WID, CID, 0))).toEqual({ '2026-03-01': 2 });
+    expect(Object.fromEntries(await dayCounts(WID, CID, -60))).toEqual({ '2026-03-01': 1, '2026-03-02': 1 });
+    await writePage(WID, CID, [msg(snow('2026-03-03T08:00:00Z', 2))], seed);
+    expect(Object.fromEntries(await dayCounts(WID, CID, 0))).toEqual({ '2026-03-01': 2, '2026-03-03': 1 });
+    await deleteRows(WID, CID, [late]);
+    expect(Object.fromEntries(await dayCounts(WID, CID, 0))).toEqual({ '2026-03-01': 1, '2026-03-03': 1 });
+  });
+
+  it('an open blocked by a connection that never lets go gives up instead of hanging', async () => {
+    await deleteWorkspaceDatabase();
+    const old = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open(WORKSPACE_DB_NAME, 1);
+      open.onupgradeneeded = () => { open.result.createObjectStore('rows', { keyPath: ['wid', 'cid', 'id'] }); };
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    // No onversionchange handler: this connection stays open.
+    setBlockedWaitMs(50);
+    try {
+      await expect(openWorkspaceDatabase()).rejects.toThrow(/blocked/);
+    } finally {
+      setBlockedWaitMs(5000);
+      old.close();
+    }
+    // Once the old connection is gone the next open upgrades.
+    expect((await openWorkspaceDatabase()).version).toBe(2);
+  });
+
+  it('upgrades a version 1 database, backfilling slim rows and authors', async () => {
+    await deleteWorkspaceDatabase();
+    // A version 1 database as 2.2.5 builds before W2 wrote it.
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open(WORKSPACE_DB_NAME, 1);
+      open.onupgradeneeded = () => {
+        const db = open.result;
+        const rows = db.createObjectStore('rows', { keyPath: ['wid', 'cid', 'id'] });
+        rows.createIndex('byAuthor', ['wid', 'cid', 'authorId', 'id'], { unique: false });
+        db.createObjectStore('workspaces', { keyPath: 'wid' });
+        db.createObjectStore('meta');
+      };
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction('rows', 'readwrite');
+        for (const id of ['1', '2']) {
+          const message = msg(id, { author: createMockUser({ id: `a${id}`, username: `user${id}` }) });
+          tx.objectStore('rows').put({ wid: WID, cid: CID, id: padSnowflake(id), authorId: `a${id}`, message });
+        }
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+    await closeWorkspaceDatabase();
+    expect((await readRows(WID, CID)).map((r) => [r.id, r.authorId])).toEqual([['1', 'a1'], ['2', 'a2']]);
+    expect(Object.keys(await readAuthors(WID)).sort()).toEqual(['a1', 'a2']);
   });
 });
 

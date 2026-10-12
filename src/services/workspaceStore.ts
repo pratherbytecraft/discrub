@@ -3,14 +3,20 @@
  *
  * One raw IndexedDB database, `Discrub-workspaces`, opened with
  * `indexedDB.open` rather than idb-keyval because the message rows need
- * a compound key and one index. Three object stores:
+ * a compound key and one index. Five object stores:
  *
  *   rows        key [wid, cid, id]   one message per row, the id zero padded
  *                                    to 20 digits so key order is time order;
  *                                    index `byAuthor` on [wid, cid, authorId, id]
+ *   slimRows    key [wid, cid, id]   (version 2, 2.2.5 W2) the MessageRow of
+ *                                    each message, about 250 bytes, so an
+ *                                    open reads rows without full messages
+ *   authors     key [wid, id]        (version 2) each author's user object,
+ *                                    written with every page
  *   workspaces  key wid              one WorkspaceRecord per workspace, with
  *                                    its conversation records inside
- *   meta        key 'meta'           { lastWid, order }
+ *   meta        key 'meta'           { lastWid, order }, and the selections
+ *                                    under ['sel', wid, cid]
  *
  * Every write that changes a conversation's rows also updates its count
  * and byte estimate in the workspace record, inside the same transaction,
@@ -22,7 +28,8 @@
  * The public surface works in plain snowflake ids. Padding is internal.
  */
 
-import type { Message } from 'discrub-core/types/discord-types';
+import type { Message, User } from 'discrub-core/types/discord-types';
+import { snowflakeTime, toMessageRow, type MessageRow } from '@features/message/messageRows';
 import { SortDirection } from 'discrub-core/common-enum';
 import {
   DEFAULT_WORKSPACE_COLOR,
@@ -38,9 +45,13 @@ import {
 } from '@features/workspace/workspaceTypes';
 
 export const WORKSPACE_DB_NAME = 'Discrub-workspaces';
-export const WORKSPACE_DB_VERSION = 1;
+export const WORKSPACE_DB_VERSION = 2;
 
 const STORE_ROWS = 'rows';
+const STORE_SLIM = 'slimRows';
+const STORE_AUTHORS = 'authors';
+/** Every store that holds part of a message: a row write or delete touches all three. */
+const ROW_STORES = [STORE_ROWS, STORE_SLIM, STORE_AUTHORS];
 const STORE_WORKSPACES = 'workspaces';
 const STORE_META = 'meta';
 const INDEX_BY_AUTHOR = 'byAuthor';
@@ -133,6 +144,43 @@ function toRow(wid: string, cid: string, message: Message): StoredRow {
     authorId: message.author?.id ?? '',
     message,
   };
+}
+
+/** What sits in the `slimRows` store (2.2.5 W2). */
+export interface StoredSlimRow {
+  wid: string;
+  cid: string;
+  id: string;
+  row: MessageRow;
+}
+
+/** What sits in the `authors` store (2.2.5 W2). */
+interface StoredAuthor {
+  wid: string;
+  id: string;
+  user: User;
+}
+
+/**
+ * Puts one message into the three stores: the full message, its row and
+ * its author. Every write of a message goes through here, so the stores
+ * cannot drift.
+ */
+function putMessage(tx: IDBTransaction, wid: string, cid: string, message: Message): void {
+  const row = toRow(wid, cid, message);
+  tx.objectStore(STORE_ROWS).put(row);
+  tx.objectStore(STORE_SLIM).put({ wid, cid, id: row.id, row: toMessageRow(message) } satisfies StoredSlimRow);
+  if (message.author?.id) tx.objectStore(STORE_AUTHORS).put({ wid, id: message.author.id, user: message.author } satisfies StoredAuthor);
+}
+
+/** Deletes a key or range from the rows and the slim rows. */
+function deleteRowRange(tx: IDBTransaction, range: IDBKeyRange | IDBValidKey): void {
+  tx.objectStore(STORE_ROWS).delete(range);
+  tx.objectStore(STORE_SLIM).delete(range);
+}
+
+function authorsRange(wid: string): IDBKeyRange {
+  return IDBKeyRange.bound([wid], [wid, []]);
 }
 
 /* ─────────────────── Key ranges ─────────────────── */
@@ -243,7 +291,15 @@ function mapError(error: unknown, context: { wid: string; cid: string | null }):
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
-function upgrade(db: IDBDatabase): void {
+/** How long an open waits for other windows before it gives up (2.2.5 W2). */
+let BLOCKED_WAIT_MS = 5000;
+
+/** Tests shorten the blocked wait. */
+export function setBlockedWaitMs(ms: number): void {
+  BLOCKED_WAIT_MS = ms;
+}
+
+function upgrade(db: IDBDatabase, tx: IDBTransaction | null, oldVersion: number): void {
   if (!db.objectStoreNames.contains(STORE_ROWS)) {
     const rows = db.createObjectStore(STORE_ROWS, { keyPath: ['wid', 'cid', 'id'] });
     rows.createIndex(INDEX_BY_AUTHOR, ['wid', 'cid', 'authorId', 'id'], { unique: false });
@@ -254,6 +310,35 @@ function upgrade(db: IDBDatabase): void {
   if (!db.objectStoreNames.contains(STORE_META)) {
     db.createObjectStore(STORE_META);
   }
+  if (!db.objectStoreNames.contains(STORE_SLIM)) {
+    db.createObjectStore(STORE_SLIM, { keyPath: ['wid', 'cid', 'id'] });
+  }
+  if (!db.objectStoreNames.contains(STORE_AUTHORS)) {
+    db.createObjectStore(STORE_AUTHORS, { keyPath: ['wid', 'id'] });
+  }
+  // 2.2.5 W2: rows written by version 1 get their slim rows and authors in
+  // the upgrade itself, one pass (about 5 s per 250K rows).
+  if (oldVersion >= 1 && oldVersion < 2 && tx) backfillSlimRows(tx);
+}
+
+function backfillSlimRows(tx: IDBTransaction): void {
+  const rows = tx.objectStore(STORE_ROWS);
+  const slim = tx.objectStore(STORE_SLIM);
+  const authors = tx.objectStore(STORE_AUTHORS);
+  const seen = new Set<string>();
+  const request = rows.openCursor();
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    const stored = cursor.value as StoredRow;
+    slim.put({ wid: stored.wid, cid: stored.cid, id: stored.id, row: toMessageRow(stored.message) } satisfies StoredSlimRow);
+    const author = stored.message.author;
+    if (author?.id && !seen.has(`${stored.wid}\u0000${author.id}`)) {
+      seen.add(`${stored.wid}\u0000${author.id}`);
+      authors.put({ wid: stored.wid, id: author.id, user: author } satisfies StoredAuthor);
+    }
+    cursor.continue();
+  };
 }
 
 /**
@@ -269,17 +354,41 @@ export function openWorkspaceDatabase(): Promise<IDBDatabase> {
       return;
     }
     const request = indexedDB.open(WORKSPACE_DB_NAME, WORKSPACE_DB_VERSION);
-    request.onupgradeneeded = () => upgrade(request.result);
+    let settled = false;
+    let blockedTimer: ReturnType<typeof setTimeout> | null = null;
+    request.onupgradeneeded = (event) => upgrade(request.result, request.transaction, event.oldVersion);
     request.onsuccess = () => {
       const db = request.result;
+      if (blockedTimer) clearTimeout(blockedTimer);
+      if (settled) {
+        // The open gave up while blocked; this late connection is not used.
+        db.close();
+        return;
+      }
+      settled = true;
       db.onversionchange = () => {
         db.close();
         dbPromise = null;
       };
       resolve(db);
     };
-    request.onerror = () => reject(request.error ?? new WorkspaceStoreError('Could not open the workspace database'));
-    request.onblocked = () => reject(new WorkspaceStoreError('The workspace database is blocked by another window'));
+    request.onerror = () => {
+      if (blockedTimer) clearTimeout(blockedTimer);
+      if (settled) return;
+      settled = true;
+      reject(request.error ?? new WorkspaceStoreError('Could not open the workspace database'));
+    };
+    // 2.2.5 W2: an upgrade waits a moment for other windows to close their
+    // connection (they do on versionchange), then gives up as before, so
+    // a connection that never lets go cannot hang the app.
+    request.onblocked = () => {
+      if (blockedTimer || settled) return;
+      blockedTimer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new WorkspaceStoreError('The workspace database is blocked by another window'));
+      }, BLOCKED_WAIT_MS);
+    };
   });
   dbPromise.catch(() => {
     dbPromise = null;
@@ -310,6 +419,7 @@ export async function closeWorkspaceDatabase(): Promise<void> {
 /** Closes the connection and drops the whole database. Used by Reset Discrub and tests. */
 export async function deleteWorkspaceDatabase(): Promise<void> {
   await closeWorkspaceDatabase();
+  dayCountCache.clear();
   if (typeof indexedDB === 'undefined') return;
   await new Promise<void>((resolve, reject) => {
     const request = indexedDB.deleteDatabase(WORKSPACE_DB_NAME);
@@ -593,10 +703,12 @@ export function renameWorkspace(wid: string, name: string): Promise<WorkspaceRec
 
 /** Removes every row of the workspace and the record itself. Default cannot be deleted. */
 export function deleteWorkspace(wid: string): Promise<void> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
     const meta = await readMeta(tx);
     if (wid === meta.defaultWid) throw new WorkspaceStoreError('The Default workspace cannot be deleted');
-    tx.objectStore(STORE_ROWS).delete(workspaceRange(wid));
+    forgetWorkspaceDayCounts(wid);
+    deleteRowRange(tx, workspaceRange(wid));
+    tx.objectStore(STORE_AUTHORS).delete(authorsRange(wid));
     tx.objectStore(STORE_WORKSPACES).delete(wid);
     dropWorkspaceSelections(tx, wid);
     tx.objectStore(STORE_META).put(
@@ -612,8 +724,10 @@ export function deleteWorkspace(wid: string): Promise<void> {
 
 /** Drops every row in the workspace and zeroes each conversation's count and bytes. The records stay. */
 export function clearWorkspaceMessages(wid: string): Promise<WorkspaceRecord> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
-    tx.objectStore(STORE_ROWS).delete(workspaceRange(wid));
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
+    forgetWorkspaceDayCounts(wid);
+    deleteRowRange(tx, workspaceRange(wid));
+    tx.objectStore(STORE_AUTHORS).delete(authorsRange(wid));
     dropWorkspaceSelections(tx, wid);
     const record = await readWorkspace(tx, wid);
     for (const conversation of Object.values(record.conversations)) {
@@ -630,7 +744,7 @@ export function clearWorkspaceMessages(wid: string): Promise<WorkspaceRecord> {
  * crash midway leaves nothing behind.
  */
 export function duplicateWorkspace(wid: string, name: string, now = Date.now()): Promise<WorkspaceRecord> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
     const source = await readWorkspace(tx, wid);
     const copy: WorkspaceRecord = {
       ...structuredClone(source),
@@ -662,6 +776,27 @@ export function duplicateWorkspace(wid: string, name: string, now = Date.now()):
         cursor.continue();
       };
     });
+    // The slim rows and authors come along the same way (2.2.5 W2).
+    for (const [name, range, keep] of [
+      [STORE_SLIM, workspaceRange(wid), (v: StoredSlimRow) => !isRunCid(v.cid)],
+      [STORE_AUTHORS, authorsRange(wid), () => true],
+    ] as const) {
+      const store = tx.objectStore(name);
+      await new Promise<void>((resolve, reject) => {
+        const cursorRequest = store.openCursor(range);
+        cursorRequest.onerror = () => reject(cursorRequest.error);
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          const value = cursor.value as StoredSlimRow;
+          if ((keep as (v: StoredSlimRow) => boolean)(value)) store.put({ ...value, wid: copy.wid });
+          cursor.continue();
+        };
+      });
+    }
     const metaStore = tx.objectStore(STORE_META);
     await new Promise<void>((resolve, reject) => {
       const cursorRequest = metaStore.openCursor(workspaceSelectionRange(wid));
@@ -700,11 +835,13 @@ export function installImportedWorkspace(record: WorkspaceRecord, replace: boole
     conversation.oldestId = null;
     conversation.newestId = null;
   }
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid: installed.wid, cid: null }, async (tx) => {
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid: installed.wid, cid: null }, async (tx) => {
     const existing = await req<WorkspaceRecord | undefined>(tx.objectStore(STORE_WORKSPACES).get(installed.wid));
     if (existing && !replace) throw new WorkspaceStoreError(`Workspace ${installed.wid} already exists`);
     if (existing) {
-      tx.objectStore(STORE_ROWS).delete(workspaceRange(installed.wid));
+      forgetWorkspaceDayCounts(installed.wid);
+      deleteRowRange(tx, workspaceRange(installed.wid));
+      tx.objectStore(STORE_AUTHORS).delete(authorsRange(installed.wid));
       dropWorkspaceSelections(tx, installed.wid);
     }
     tx.objectStore(STORE_WORKSPACES).put(installed);
@@ -775,8 +912,9 @@ export function updateConversation(
 
 /** Drops a conversation's rows; its filters and settings stay. */
 export function clearConversation(wid: string, cid: string): Promise<Conversation | null> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid }, async (tx) => {
-    tx.objectStore(STORE_ROWS).delete(conversationRange(wid, cid));
+  forgetDayCounts(wid, cid);
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid }, async (tx) => {
+    deleteRowRange(tx, conversationRange(wid, cid));
     dropSelection(tx, wid, cid);
     const record = await readWorkspace(tx, wid);
     const conversation = record.conversations[cid];
@@ -827,8 +965,9 @@ export function refreshConversationNames(wid: string, names: NameRefresh): Promi
 
 /** Drops a conversation's rows and its record, the thread tab close case. */
 export function deleteConversation(wid: string, cid: string): Promise<void> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid }, async (tx) => {
-    tx.objectStore(STORE_ROWS).delete(conversationRange(wid, cid));
+  forgetDayCounts(wid, cid);
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid }, async (tx) => {
+    deleteRowRange(tx, conversationRange(wid, cid));
     dropSelection(tx, wid, cid);
     const record = await readWorkspace(tx, wid);
     const conversation = record.conversations[cid];
@@ -875,11 +1014,12 @@ export function isRunCid(cid: string): boolean {
 
 /** Drops every conversation whose id starts with `prefix`, rows and records, in one transaction. */
 export function deleteConversationsWithPrefix(wid: string, prefix: string): Promise<number> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
     const record = await readWorkspace(tx, wid);
     const cids = Object.keys(record.conversations).filter((cid) => cid.startsWith(prefix));
     for (const cid of cids) {
-      tx.objectStore(STORE_ROWS).delete(conversationRange(wid, cid));
+      forgetDayCounts(wid, cid);
+      deleteRowRange(tx, conversationRange(wid, cid));
       dropSelection(tx, wid, cid);
       record.bytes = Math.max(0, record.bytes - record.conversations[cid].bytes);
       delete record.conversations[cid];
@@ -912,22 +1052,24 @@ export function writePage(
   messages: Message[],
   seed?: ConversationSeed,
 ): Promise<WritePageResult> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid }, async (tx) => {
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES], { wid, cid }, async (tx) => {
     const record = await readWorkspace(tx, wid);
     let conversation = record.conversations[cid];
     if (seed) conversation = conversationFromSeed(record, cid, seed);
     if (!conversation) throw new WorkspaceStoreError(`Conversation ${cid} not found in workspace ${wid}`);
     const rows = tx.objectStore(STORE_ROWS);
     let added = 0;
+    const addedIds: string[] = [];
     let bytes = 0;
     let oldest = conversation.oldestId ? padSnowflake(conversation.oldestId) : null;
     let newest = conversation.newestId ? padSnowflake(conversation.newestId) : null;
     for (const message of messages) {
       const row = toRow(wid, cid, message);
       const existing = await req(rows.getKey([wid, cid, row.id]));
-      rows.put(row);
+      putMessage(tx, wid, cid, message);
       if (existing === undefined) {
         added++;
+        addedIds.push(message.id);
         bytes += estimateMessageBytes(message);
       }
       if (oldest === null || row.id < oldest) oldest = row.id;
@@ -941,6 +1083,8 @@ export function writePage(
     record.conversations[cid] = conversation;
     record.bytes += bytes;
     tx.objectStore(STORE_WORKSPACES).put(record);
+    // Day counts already read for this conversation take the new ids.
+    extendDayCounts(wid, cid, addedIds);
     return { added, bytes, count };
   });
 }
@@ -957,15 +1101,14 @@ export interface RowPatch {
  */
 export function patchRows(wid: string, cid: string, patches: RowPatch[]): Promise<number> {
   if (patches.length === 0) return Promise.resolve(0);
-  return withTx('readwrite', [STORE_ROWS], { wid, cid }, async (tx) => {
+  return withTx('readwrite', ROW_STORES, { wid, cid }, async (tx) => {
     const rows = tx.objectStore(STORE_ROWS);
     let patched = 0;
     for (const { id, patch } of patches) {
       const key = [wid, cid, padSnowflake(id)];
       const row = await req<StoredRow | undefined>(rows.get(key));
       if (!row) continue;
-      const message = { ...row.message, ...patch };
-      rows.put({ ...row, authorId: message.author?.id ?? row.authorId, message });
+      putMessage(tx, wid, cid, { ...row.message, ...patch });
       patched++;
     }
     return patched;
@@ -986,7 +1129,7 @@ export function updateRows(
 ): Promise<Message[]> {
   const list = [...ids];
   if (list.length === 0) return Promise.resolve([]);
-  return withTx('readwrite', [STORE_ROWS], { wid, cid }, async (tx) => {
+  return withTx('readwrite', ROW_STORES, { wid, cid }, async (tx) => {
     const rows = tx.objectStore(STORE_ROWS);
     const changed: Message[] = [];
     for (const id of list) {
@@ -994,7 +1137,7 @@ export function updateRows(
       if (!row) continue;
       const message = update(row.message);
       if (message === row.message) continue;
-      rows.put({ ...row, authorId: message.author?.id ?? row.authorId, message });
+      putMessage(tx, wid, cid, message);
       changed.push(message);
     }
     return changed;
@@ -1004,7 +1147,8 @@ export function updateRows(
 /** Removes rows by id and takes their byte estimate off the conversation. Returns how many were removed. */
 export function deleteRows(wid: string, cid: string, ids: string[]): Promise<number> {
   if (ids.length === 0) return Promise.resolve(0);
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid }, async (tx) => {
+  forgetDayCounts(wid, cid);
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES], { wid, cid }, async (tx) => {
     const rows = tx.objectStore(STORE_ROWS);
     let removed = 0;
     let bytes = 0;
@@ -1012,7 +1156,7 @@ export function deleteRows(wid: string, cid: string, ids: string[]): Promise<num
       const key = [wid, cid, padSnowflake(id)];
       const row = await req<StoredRow | undefined>(rows.get(key));
       if (!row) continue;
-      rows.delete(key);
+      deleteRowRange(tx, key);
       removed++;
       bytes += estimateMessageBytes(row.message);
     }
@@ -1049,47 +1193,166 @@ function firstKey(store: IDBObjectStore, range: IDBKeyRange, direction: IDBCurso
 }
 
 export interface ReadWindowOptions {
-  /** Only rows newer than this id (exclusive). */
+  /** Only rows newer than this id (exclusive unless `inclusive`). */
   afterId?: string;
-  /** Only rows older than this id (exclusive). */
+  /** Only rows older than this id (exclusive unless `inclusive`). */
   beforeId?: string;
   /** Rows to return, 500 when omitted. */
   limit?: number;
   /** `asc` is oldest first (key order), `desc` newest first. */
   direction?: 'asc' | 'desc';
+  /** 2.2.5 W2: the bound ids themselves are in the window. */
+  inclusive?: boolean;
+}
+
+function windowRange(wid: string, cid: string, options: ReadWindowOptions): IDBKeyRange {
+  const { afterId, beforeId, inclusive = false } = options;
+  const lower = afterId ? [wid, cid, padSnowflake(afterId)] : [wid, cid];
+  const upper = beforeId ? [wid, cid, padSnowflake(beforeId)] : [wid, cid, []];
+  return IDBKeyRange.bound(lower, upper, afterId !== undefined && !inclusive, beforeId !== undefined && !inclusive);
+}
+
+/** Values of `store` in `range` in key order or reversed, at most `limit`. */
+function readValues<T>(store: IDBObjectStore, range: IDBKeyRange, limit: number, direction: 'asc' | 'desc'): Promise<T[]> {
+  if (direction === 'asc') return req<T[]>(store.getAll(range, limit));
+  return new Promise<T[]>((resolve, reject) => {
+    const out: T[] = [];
+    if (limit <= 0) {
+      resolve(out);
+      return;
+    }
+    const request = store.openCursor(range, 'prev');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(out);
+        return;
+      }
+      out.push(cursor.value as T);
+      if (out.length >= limit) {
+        resolve(out);
+        return;
+      }
+      cursor.continue();
+    };
+  });
 }
 
 /** Reads a window of messages in id order. Export and the feed read in windows; hydration uses `getMessages`. */
 export function readWindow(wid: string, cid: string, options: ReadWindowOptions = {}): Promise<Message[]> {
-  const { afterId, beforeId, limit = 500, direction = 'asc' } = options;
-  const lower = afterId ? [wid, cid, padSnowflake(afterId)] : [wid, cid];
-  const upper = beforeId ? [wid, cid, padSnowflake(beforeId)] : [wid, cid, []];
-  const range = IDBKeyRange.bound(lower, upper, afterId !== undefined, beforeId !== undefined);
+  const { limit = 500, direction = 'asc' } = options;
   return withTx('readonly', [STORE_ROWS], { wid, cid }, async (tx) => {
-    const rows = tx.objectStore(STORE_ROWS);
-    if (direction === 'asc') {
-      const found = await req<StoredRow[]>(rows.getAll(range, limit));
-      return found.map((row) => row.message);
+    const found = await readValues<StoredRow>(tx.objectStore(STORE_ROWS), windowRange(wid, cid, options), limit, direction);
+    return found.map((row) => row.message);
+  });
+}
+
+/**
+ * 2.2.5 W2: a window of rows from the slim store, the same bounds as
+ * `readWindow`. An open reads every row this way without reading one full
+ * message (0.8 s and about 50 MB at 250K in Chrome).
+ */
+export function readRows(wid: string, cid: string, options: ReadWindowOptions = {}): Promise<MessageRow[]> {
+  const { limit = 500, direction = 'asc' } = options;
+  return withTx('readonly', [STORE_SLIM], { wid, cid }, async (tx) => {
+    const found = await readValues<StoredSlimRow>(tx.objectStore(STORE_SLIM), windowRange(wid, cid, options), limit, direction);
+    return found.map((stored) => stored.row);
+  });
+}
+
+/** How many rows of the conversation are older than `id`: its place in oldest first order. Key only. */
+export function rankOf(wid: string, cid: string, id: string): Promise<number> {
+  return withTx('readonly', [STORE_SLIM], { wid, cid }, (tx) =>
+    req(tx.objectStore(STORE_SLIM).count(IDBKeyRange.bound([wid, cid], [wid, cid, padSnowflake(id)], false, true))),
+  );
+}
+
+/** The workspace's authors by user id (2.2.5 W2). */
+export function readAuthors(wid: string): Promise<Record<string, User>> {
+  return withTx('readonly', [STORE_AUTHORS], { wid, cid: null }, async (tx) => {
+    const found = await req<StoredAuthor[]>(tx.objectStore(STORE_AUTHORS).getAll(authorsRange(wid)));
+    const out: Record<string, User> = {};
+    for (const stored of found) out[stored.id] = stored.user;
+    return out;
+  });
+}
+
+/* ─────────────────── Day counts (2.2.5 W2) ─────────────────── */
+
+const DAY_MS = 86_400_000;
+
+/** The local day of a snowflake, as days since the epoch, under a `Date.getTimezoneOffset` style offset. */
+export function snowflakeDay(id: string, zoneOffsetMinutes: number): number {
+  return Math.floor((snowflakeTime(id) - zoneOffsetMinutes * 60_000) / DAY_MS);
+}
+
+/** Days since the epoch as `YYYY-MM-DD`; empty for an id that is not a snowflake. */
+export function dayKeyOf(day: number): string {
+  if (!Number.isFinite(day)) return '';
+  return new Date(day * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** Read day counts by conversation and offset, kept current by page writes. */
+const dayCountCache = new Map<string, Map<number, Map<string, number>>>();
+const dayCacheKey = (wid: string, cid: string) => `${wid}\u0000${cid}`;
+
+function forgetDayCounts(wid: string, cid: string): void {
+  dayCountCache.delete(dayCacheKey(wid, cid));
+}
+
+function forgetWorkspaceDayCounts(wid: string): void {
+  const prefix = `${wid}\u0000`;
+  for (const key of [...dayCountCache.keys()]) if (key.startsWith(prefix)) dayCountCache.delete(key);
+}
+
+function extendDayCounts(wid: string, cid: string, ids: string[]): void {
+  const byOffset = dayCountCache.get(dayCacheKey(wid, cid));
+  if (!byOffset || ids.length === 0) return;
+  for (const [offset, counts] of byOffset) {
+    for (const id of ids) {
+      const key = dayKeyOf(snowflakeDay(id, offset));
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
     }
-    return new Promise<Message[]>((resolve, reject) => {
-      const out: Message[] = [];
-      const request = rows.openCursor(range, 'prev');
+  }
+}
+
+/**
+ * Messages per local day of a conversation, from one walk over its keys:
+ * no message is read, the day comes from the snowflake. Kept in memory
+ * after the first call and extended by later page writes; a delete or a
+ * clear drops it. The map returned is a copy.
+ */
+export async function dayCounts(wid: string, cid: string, zoneOffsetMinutes = new Date().getTimezoneOffset()): Promise<Map<string, number>> {
+  const key = dayCacheKey(wid, cid);
+  const held = dayCountCache.get(key)?.get(zoneOffsetMinutes);
+  if (held) return new Map(held);
+  const counts = await withTx('readonly', [STORE_SLIM], { wid, cid }, (tx) =>
+    new Promise<Map<string, number>>((resolve, reject) => {
+      const out = new Map<string, number>();
+      const request = tx.objectStore(STORE_SLIM).openKeyCursor(conversationRange(wid, cid));
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const cursor = request.result;
-        if (!cursor || out.length >= limit) {
+        if (!cursor) {
           resolve(out);
           return;
         }
-        out.push((cursor.value as StoredRow).message);
-        if (out.length >= limit) {
-          resolve(out);
-          return;
-        }
+        const day = dayKeyOf(snowflakeDay(unpadSnowflake((cursor.primaryKey as string[])[2]), zoneOffsetMinutes));
+        if (day) out.set(day, (out.get(day) ?? 0) + 1);
         cursor.continue();
       };
-    });
-  });
+    }),
+  );
+  const byOffset = dayCountCache.get(key) ?? new Map<number, Map<string, number>>();
+  byOffset.set(zoneOffsetMinutes, counts);
+  dayCountCache.set(key, byOffset);
+  return new Map(counts);
+}
+
+/** Tests: forget every cached day count. */
+export function resetDayCountCache(): void {
+  dayCountCache.clear();
 }
 
 /** Messages by id in the order asked, `undefined` where a row is missing. One transaction per call. */

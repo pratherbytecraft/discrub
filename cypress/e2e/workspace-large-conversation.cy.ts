@@ -1,6 +1,7 @@
 /**
  * 2.2.5 W1: a conversation larger than the 20,000 message cache. It is
- * seeded straight into the workspace database, then opened from disk the
+ * seeded straight into the workspace database (rows, and since W2 the slim
+ * rows and authors an open reads), then opened from disk the
  * way a reload opens it. The restore builds rows window by window, Select
  * all leaves every action ready at once, and Analytics reads the newest
  * 20,000 messages and says so, without reading for ever.
@@ -25,7 +26,7 @@ function seedLargeConversation(template: Record<string, unknown>) {
       open.onerror = () => reject(open.error);
       open.onsuccess = () => {
         const db = open.result;
-        const tx = db.transaction(['rows', 'workspaces', 'meta'], 'readwrite');
+        const tx = db.transaction(['rows', 'slimRows', 'authors', 'workspaces', 'meta'], 'readwrite');
         tx.onerror = () => reject(tx.error);
         tx.oncomplete = () => {
           db.close();
@@ -38,6 +39,8 @@ function seedLargeConversation(template: Record<string, unknown>) {
           recordRequest.onsuccess = () => {
             const record = recordRequest.result;
             const rows = tx.objectStore('rows');
+            const slimRows = tx.objectStore('slimRows');
+            const authors = tx.objectStore('authors');
             let bytes = 0;
             for (let i = 0; i < TOTAL; i++) {
               const id = String(BASE_ID + BigInt(i));
@@ -56,6 +59,14 @@ function seedLargeConversation(template: Record<string, unknown>) {
               };
               bytes += JSON.stringify(message).length;
               rows.put({ wid, cid: CHANNEL_ID, id: pad(id), authorId, message });
+              // 2.2.5 W2: the row an open reads, and the author it names.
+              slimRows.put({
+                wid,
+                cid: CHANNEL_ID,
+                id: pad(id),
+                row: { id, timestamp: message.timestamp, t: Date.parse(message.timestamp), authorId, type: 0, flags: 0, hasReactions: false },
+              });
+              if (i < 2) authors.put({ wid, id: authorId, user: message.author });
             }
             record.conversations[CHANNEL_ID] = {
               cid: CHANNEL_ID,

@@ -252,6 +252,20 @@ describe('restoreConversation', () => {
     expect(restored?.rows[7].authorId).toBe('u1');
   });
 
+  // 2.2.5 W2: rows come from the slim store and authors from the authors
+  // store, so an author seen only in old messages still comes back.
+  it('brings back authors of messages outside the newest window', async () => {
+    const { api } = apiFor(readyState());
+    const many = Array.from({ length: 2600 }, (_, i) => msg(String(100000 + i), {
+      author: { id: i === 0 ? 'old-author' : 'regular', username: i === 0 ? 'old' : 'reg' } as Message['author'],
+    }));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, many, seed);
+    const restored = await restoreConversation(api, CID);
+    expect(restored?.newest.some((m) => m.author.id === 'old-author')).toBe(false);
+    expect(restored?.authors['old-author']?.username).toBe('old');
+    expect(restored?.rows[0].authorId).toBe('old-author');
+  });
+
   it('answers the saved selection from its own key', async () => {
     const { api } = apiFor(readyState());
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1'), msg('2')], seed);

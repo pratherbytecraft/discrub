@@ -25,7 +25,7 @@ import { addStatusEntry } from '@features/status/statusSlice';
 import { waitWhilePaused, checkCancelled } from '@/utils/operationLoopUtils';
 import { getDmName } from '@/utils/dmListUtils';
 import { t } from '@/i18n';
-import { mergeAuthors, toMessageRow, type MessageRow } from './messageRows';
+import type { MessageRow } from './messageRows';
 import {
   WorkspaceQuotaError,
   clearConversation,
@@ -35,6 +35,8 @@ import {
   getSelection,
   patchRows,
   plainCidOf,
+  readAuthors,
+  readRows,
   readWindow,
   searchCid,
   setSelection,
@@ -52,8 +54,10 @@ export interface PersistApi {
   getState: GetState;
 }
 
-/** Rows read back per transaction when a conversation is restored. */
+/** Full messages read for the first screen when a conversation is restored. */
 const RESTORE_WINDOW = 2000;
+/** Slim rows read per transaction when a conversation is restored (2.2.5 W2). */
+const RESTORE_ROW_WINDOW = 10_000;
 
 let writeFailureLogged = false;
 let notSavedLogged = false;
@@ -335,7 +339,7 @@ export interface RestoredConversation {
   wid: string;
   /** One row per saved message, oldest first. The reducer sorts under the record's order. */
   rows: MessageRow[];
-  /** The authors of every saved message, keyed by user id. */
+  /** The authors saved in the workspace, keyed by user id (a superset of this conversation's). */
   authors: Record<string, User>;
   /**
    * The newest saved messages, oldest first, at most one restore window.
@@ -349,12 +353,12 @@ export interface RestoredConversation {
 
 /**
  * The saved rows and record for a conversation in the open workspace, or
- * null when there are none. Reads in windows so a large conversation does
- * not hold one transaction open for seconds.
+ * null when there are none.
  *
- * 2.2.5 W1: each window becomes rows and authors and is let go, so a
- * restore never holds more than two windows of full messages. At 250K
- * messages the old read kept every message in one array (about 1 GB).
+ * 2.2.5 W2: the rows come from the slim store and the authors from the
+ * authors store, so an open reads no full message except the newest
+ * window for the first screen (about a second at 250K). Before W1 every
+ * message was held in one array (about 1 GB at 250K).
  */
 export async function restoreConversation(api: PersistApi, cid: string): Promise<RestoredConversation | null> {
   // A channel clicked right after boot must not race the workspace open.
@@ -365,27 +369,16 @@ export async function restoreConversation(api: PersistApi, cid: string): Promise
     const conversation = await getConversation(wid, cid);
     if (!conversation || conversation.count === 0) return null;
     const rows: MessageRow[] = [];
-    let authors: Record<string, User> = {};
-    // The last two windows, so the first screen gets a full window of
-    // objects even when the last window is short.
-    let previous: Message[] = [];
-    let newest: Message[] = [];
     let afterId: string | undefined;
     while (true) {
-      const window = await readWindow(wid, cid, { afterId, limit: RESTORE_WINDOW });
-      for (const message of window) rows.push(toMessageRow(message));
-      authors = mergeAuthors(authors, window);
-      if (window.length > 0) {
-        previous = newest;
-        newest = window;
-      }
-      if (window.length < RESTORE_WINDOW) break;
+      const window = await readRows(wid, cid, { afterId, limit: RESTORE_ROW_WINDOW });
+      for (const row of window) rows.push(row);
+      if (window.length < RESTORE_ROW_WINDOW) break;
       afterId = window[window.length - 1].id;
     }
     if (rows.length === 0) return null;
-    if (newest.length < RESTORE_WINDOW && previous.length > 0) {
-      newest = previous.slice(newest.length).concat(newest);
-    }
+    const newest = (await readWindow(wid, cid, { limit: RESTORE_WINDOW, direction: 'desc' })).reverse();
+    const authors = await readAuthors(wid);
     const selectedIds = await restoreSelection(api, wid, cid, conversation);
     return { conversation, cid, wid, rows, authors, newest, selectedIds };
   } catch (error) {
