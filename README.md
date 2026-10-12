@@ -32,6 +32,7 @@ It runs as a **web app** (manual token entry) and as a **Chrome/Firefox extensio
   - [Settings & Preferences](#settings--preferences)
   - [Status Log](#status-log)
   - [Pause, Resume & Cancel](#pause-resume--cancel)
+  - [Workspaces](#workspaces)
   - [Themes](#themes)
   - [Additional Features](#additional-features)
 - [Web App vs Extension](#web-app-vs-extension)
@@ -272,6 +273,16 @@ Controls appear in the status bar while an operation runs. In Focus Mode, or any
 
 A dropped connection does not end a run. Exports, purge scans, thread Load All and package rehydration retry a failed page fetch with backoff (network errors and server 5xx only; a 4xx is final). Exports and Load All pause when the retries run out so you can fix the network and Resume from the same page, and the status log says what Discord answered on each retry. A purge scan that still cannot continue says so in the status log instead of finishing as if it had covered everything.
 
+### Workspaces
+
+Every conversation Discrub loads past its first page is kept in your browser, in a workspace. Close the tab, reload, or come back the next day and the conversation opens from disk with the same filters, sort, selection, thread tabs and scroll position. Load All continues from where it stopped instead of starting over.
+
+A run that is cut short, such as Load All, Export, Bulk Export, Purge or Bulk Edit, leaves a record behind. Its button reads Resume, and the dialog opens with the same settings. A resumed Bulk Export skips the channels that finished and writes a new zip.
+
+The workspace pill opens the Workspaces list. From there you can rename, duplicate, clear or delete a workspace, clear a single conversation, and export a workspace to a `.discrub-workspace` file that imports on any browser. The thin bar on the bottom edge shows how much browser storage Discrub uses and how much is left. If storage fills up during Load All, the run pauses so you can clear room and Resume.
+
+Everyone has one workspace, Default. Supporters can keep more than one. A workspace is open in one window at a time. Signing out clears every workspace.
+
 ### Themes
 
 Everything about how Discrub looks is under **Appearance** in the top bar: Layout, Theme, Scrublings and Supporter.
@@ -284,7 +295,7 @@ Everything about how Discrub looks is under **Appearance** in the top bar: Layou
 
 **Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. While something runs they say what it is, such as how far a Purge or Load All has got or how long a wait has left, and on a phone they say a shorter version. Suds, the Mage and the Cat are free, six more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all. A commissioned Scrubling is added for everyone once it's drawn.
 
-To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free; supporter perks are cosmetic only.
+To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free. Supporters get more layouts, themes and Scrublings, and can keep more than one workspace.
 
 ![Dark Theme](docs/screenshots/ui/theme-dark.png)
 ![Light Theme](docs/screenshots/ui/theme-light.png)
@@ -537,7 +548,7 @@ Yes. Forum and media channels are supported. Discrub discovers active and archiv
 
 ### What happens if I close the tab during an export?
 
-Discrub shows a browser warning before the tab closes during an operation. If you dismiss the warning and close anyway, the operation is lost and partial export data is discarded.
+Discrub shows a browser warning before the tab closes during an operation. If you close anyway, the export's settings are kept in your workspace. Open Discrub again and the Export button reads Resume. A resumed Bulk Export skips the channels that finished and writes a new zip.
 
 ### Can multiple people use Discrub on the same server?
 

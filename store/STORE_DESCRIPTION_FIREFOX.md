@@ -4,6 +4,7 @@ Features
 - Export to HTML, CSV, JSON, plain text, or media-only, with 10 built-in presets and custom preset creation
 - Discord data package import: drop the official Discord ZIP and browse it like a live account, with optional rehydration. Handles multi-gigabyte packages and packages from any Discord locale
 - Bulk export and bulk purge with filter support across multiple channels
+- Workspaces keep loaded conversations in your browser, so a reload or a closed tab picks up where you left off, and Load All, Export, Purge and Bulk Edit continue with Resume. Export a workspace to a file and import it on another browser
 - Search by content, author, date, mentions, message type, embeds, files, images, links, audio, video, stickers, and pinned status
 - Refine loaded messages client-side without additional API calls; show only or hide a chosen system-message type
 - Purge your own messages in servers and DMs, with attachments-only mode, archived thread handling, and an opt-in to also delete chosen system-message categories (pins, joins, boosts)
@@ -16,11 +17,12 @@ Features
 Privacy
 - Discord token stays in the browser
 - All processing is local
+- Loaded messages are kept in your browser's storage on your computer. Signing out clears them.
 - Your Discord data is never sent to any server of ours
 - One optional exception. If you apply a supporter key, the extension checks in with api.pratherbytecraft.com about once a day to keep that key current. Only the key itself is sent, never an email address or any Discord data, and removing your key stops this entirely.
 
-Supporter cosmetics
-- Every feature is free and stays free. Supporters unlock extra cosmetics, which are more layouts, themes and Scrublings, the small pixel characters on the top bar.
+Supporters
+- Every feature is free, with one workspace that holds everything. Supporters unlock more layouts, themes and Scrublings, the small pixel characters on the top bar, and can keep more than one workspace.
 
 Additional
 - Interface in English or German, auto-detected on first run and switchable in Settings

@@ -42,6 +42,13 @@ Purge
 - A final pass over each channel's newest messages catches what Discord's search index had not indexed yet
 - Archived threads auto-unarchive during purge and re-archive when done
 
+Workspaces
+- Loaded conversations are kept in your browser, so a reload or a closed tab picks up where you left off
+- Load All, Export, Purge and Bulk Edit continue with Resume after Discrub closes mid run
+- A resumed Bulk Export skips the channels that finished
+- Export a workspace to a file and import it on another browser
+- A bar on the bottom edge shows how much browser storage Discrub uses, and a long run pauses if storage fills up
+
 Reactions
 - View who reacted, with avatars
 - Remove individual reactions or batch-remove across selected messages
@@ -54,11 +61,12 @@ Analytics
 Privacy
 - Discord token stays in the browser
 - All processing is local
+- Loaded messages are kept in your browser's storage on your computer. Signing out clears them.
 - Your Discord data is never sent to any server of ours
 - One optional exception. If you apply a supporter key, the extension checks in with api.pratherbytecraft.com about once a day to keep that key current. Only the key itself is sent, never an email address or any Discord data, and removing your key stops this entirely.
 
-Supporter cosmetics
-- Every feature is free and stays free. Supporters unlock extra cosmetics, which are more layouts, themes and Scrublings, the small pixel characters on the top bar.
+Supporters
+- Every feature is free, with one workspace that holds everything. Supporters unlock more layouts, themes and Scrublings, the small pixel characters on the top bar, and can keep more than one workspace.
 
 Additional
 - Interface in English or German, auto-detected on first run and switchable in Settings

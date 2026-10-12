@@ -67,6 +67,7 @@
         "index.html",
         "assets/*",
         "*/*.zip",
+        "*/*.discrub-workspace",
         "launcher.html",
         "launcher.css",
         "launcher.js",
