@@ -30,6 +30,12 @@ export interface OperationSummary {
   progress?: number;
   /** heavy = pause/cancel/disables actions, light = spinner + status only */
   tier: OperationTier;
+  /**
+   * 2.2.5 fix A: a light line that runs beside everything else (user
+   * lookups). It shows like any light operation but does not count as a run
+   * for the switch dialog, Clear, Replace or the leave warning.
+   */
+  background?: boolean;
   state: OperationState;
   stateColor: OperationStateColor;
   /** The operation's short name for the state sentences ("Load All", "Export", "Purge"). */
@@ -302,7 +308,7 @@ const selectBaseSummary = createSelector(
 
     // User enrichment (display name / nickname lookups)
     if (messageState.isEnriching) {
-      return { isRunning: true, isPaused: false, tier: 'light', label: t('operation.lookingUpUsers') };
+      return { isRunning: true, isPaused: false, tier: 'light', background: true, label: t('operation.lookingUpUsers') };
     }
 
     // ── IDLE ─────────────────────────────────────────────────────
@@ -380,7 +386,7 @@ export const selectOperationSummary = createSelector(
 
 export const selectIsOperationRunning = createSelector(
   [selectOperationSummary],
-  (summary) => summary.isRunning,
+  (summary) => summary.isRunning && !summary.background,
 );
 
 /** True only for heavy operations that should disable buttons and show pause/cancel */

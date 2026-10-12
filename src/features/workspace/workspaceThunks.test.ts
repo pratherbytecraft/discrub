@@ -9,7 +9,9 @@ import type { AppDispatch } from '@/app/store';
 import type { Message } from 'discrub-core/types/discord-types';
 import { createMockChannel, createMockDmChannel, createMockGuild, createMockMessage } from '@/test/fixtures';
 import * as discordService from '@services/discordService';
-import messageReducer, { fetchAllMessages, fetchMessages, setActiveTab } from '@features/message/messageSlice';
+import messageReducer, { enrichMessageUsers, fetchAllMessages, fetchMessages, resetUserLookupQueue, setActiveTab } from '@features/message/messageSlice';
+import { userEnrichmentService } from '@services/userEnrichmentService';
+import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import workspaceReducer, {
   feedAnchorMoved,
   initializeWorkspaces,
@@ -22,7 +24,8 @@ import { workspacePersistenceMiddleware, flushPendingRecords } from './workspace
 import channelReducer, { setSelectedChannel } from '@features/channel/channelSlice';
 import dmReducer, { setSelectedDm } from '@features/dm/dmSlice';
 import guildReducer, { fetchGuilds, setSelectedGuild } from '@features/guild/guildSlice';
-import appReducer, { setDiscrubCancelled, selectFeedScrollAnchor } from '@features/app/appSlice';
+import appReducer, { setDiscrubCancelled, setSettings, selectFeedScrollAnchor } from '@features/app/appSlice';
+import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import statusReducer from '@features/status/statusSlice';
 import cacheReducer from '@features/cache/cacheSlice';
 import exportReducer from '@features/export/exportSlice';
@@ -54,6 +57,9 @@ vi.mock('@/utils/delayUtils', () => ({
 }));
 vi.mock('@services/reactionEnrichmentService', () => ({
   reactionEnrichmentService: { enrichMessages: vi.fn(async (messages: Message[]) => messages) },
+}));
+vi.mock('@services/userEnrichmentService', () => ({
+  userEnrichmentService: { enrichUserIds: vi.fn(async () => ({ userMap: {} })) },
 }));
 vi.mock('@services/replyEnrichmentService', () => ({
   replyEnrichmentService: { enrichMessages: vi.fn(async (messages: Message[]) => messages) },
@@ -245,6 +251,41 @@ describe('switchWorkspace', () => {
     expect(store.getState().app.discrubCancelled).toBe(false);
     // The open workspace's actions are the new workspace's (none).
     expect(selectHasUnfinishedWork(store.getState() as never)).toBe(false);
+  });
+});
+
+describe('switchWorkspace with a user lookup in flight (2.2.5 fix A)', () => {
+  it('does not wait on the lookup as a run, and stops it', async () => {
+    resetUserLookupQueue();
+    let stopCheck: (() => Promise<boolean>) | undefined;
+    let release: () => void = () => undefined;
+    const hung = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(userEnrichmentService.enrichUserIds).mockImplementationOnce(async (_ids, _g, _t, _s, map, _p, _st, _f, shouldStop) => {
+      stopCheck = shouldStop;
+      await hung;
+      return { userMap: map };
+    });
+    const store = makeStore();
+    await openDefault(store);
+    store.dispatch(setSettings({ ...store.getState().app.settings, [DiscrubSetting.DISPLAY_NAME_LOOKUP]: 'true' } as Parameters<typeof setSettings>[0]));
+    const other = await createWorkspace({ name: 'Raid archive' });
+    others.push(other.wid);
+
+    await store.dispatch(enrichMessageUsers({ userIds: ['u1'], guildId: '42', token: 'token' }));
+    expect(store.getState().message.isEnriching).toBe(true);
+    expect(selectIsOperationRunning(store.getState() as never)).toBe(false);
+
+    const switching = thunk(store)(switchWorkspace({ wid: other.wid }));
+    await until(() => stopCheck !== undefined);
+    await until(async () => (await stopCheck!()) === true);
+    // The switch does not set the run cancel flag for a lookup.
+    expect(store.getState().app.discrubCancelled).toBe(false);
+    release();
+    expect((await switching).type).toBe('workspace/switch/fulfilled');
+    expect(store.getState().message.isEnriching).toBe(false);
+    expect(store.getState().workspace.currentWid).toBe(other.wid);
   });
 });
 

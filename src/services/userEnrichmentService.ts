@@ -35,6 +35,7 @@ class UserEnrichmentServiceWrapper {
    * @param onProgress - Optional progress callback
    * @param onStatus - Optional status callback
    * @param failedUserIds - User IDs that previously returned 404 (skipped during enrichment)
+   * @param shouldStop - Checked before each user; true ends the run with what it has
    * @returns Updated ExportUserMap with enriched data and any newly failed user IDs
    */
   async enrichMessages(
@@ -45,7 +46,8 @@ class UserEnrichmentServiceWrapper {
     existingUserMap: ExportUserMap,
     onProgress?: EnrichmentProgressCallback,
     onStatus?: EnrichmentStatusCallback,
-    failedUserIds?: string[]
+    failedUserIds?: string[],
+    shouldStop?: () => Promise<boolean>
   ): Promise<{ userMap: ExportUserMap; failedUserIds?: string[] }> {
     try {
       // Check if enrichment is enabled via settings
@@ -75,6 +77,7 @@ class UserEnrichmentServiceWrapper {
         skipUserIds: failedUserIds,
         onProgress,
         onStatus,
+        shouldStop,
       });
 
       // Enrich user data for messages
@@ -112,7 +115,8 @@ class UserEnrichmentServiceWrapper {
     existingUserMap: ExportUserMap,
     onProgress?: EnrichmentProgressCallback,
     onStatus?: EnrichmentStatusCallback,
-    failedUserIds?: string[]
+    failedUserIds?: string[],
+    shouldStop?: () => Promise<boolean>
   ): Promise<{ userMap: ExportUserMap; failedUserIds?: string[] }> {
     try {
       // Create minimal messages with just user IDs
@@ -146,7 +150,8 @@ class UserEnrichmentServiceWrapper {
         existingUserMap,
         onProgress,
         onStatus,
-        failedUserIds
+        failedUserIds,
+        shouldStop
       );
     } catch (error) {
       console.error('Failed to enrich user IDs:', error);

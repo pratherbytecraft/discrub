@@ -6,7 +6,7 @@ import { setDiscrubCancelled, setDiscrubPaused, setFeedScrollAnchor } from '@fea
 import { setSelectedChannel } from '@features/channel/channelSlice';
 import { fetchDmById, setSelectedDm } from '@features/dm/dmSlice';
 import { setSelectedGuild } from '@features/guild/guildSlice';
-import { clearMessages, openThreadTab, removeThreadTab, setActiveTab } from '@features/message/messageSlice';
+import { clearMessages, openThreadTab, removeThreadTab, setActiveTab, stopUserLookups } from '@features/message/messageSlice';
 import { t } from '@/i18n';
 import { addStatusEntry, showToast } from '@features/status/statusSlice';
 import { countLabel } from '@components/workspace/workspaceFormat';
@@ -69,7 +69,11 @@ async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<boo
   return true;
 }
 
-export type SwitchRefusal = 'same' | 'missing' | 'needsUpdate' | 'heldElsewhere' | 'busy';
+export type SwitchRefusal = 'same' | 'missing' | 'needsUpdate' | 'heldElsewhere' | 'busy' | 'stuck';
+
+const SWITCH_STUCK = 'The running action did not stop';
+/** Longest a switch waits for the user lookup to stop at its next user. */
+const LOOKUP_SETTLE_MS = 5_000;
 
 /**
  * Opens another workspace (plan section 5.4). A running action is stopped
@@ -97,7 +101,13 @@ export const switchWorkspace = createAsyncThunk<OpenedWorkspace, { wid: string }
       return await finishSwitch(wid, from, record.name, actionsOf(record), bulkOf(record), dispatch, getState);
     } catch (error) {
       releaseWorkspaceLock(wid);
-      dispatch(workspaceSwitchFailed({ wid, reason: error instanceof Error ? error.message : 'switch failed' }));
+      const reason = error instanceof Error ? error.message : 'switch failed';
+      dispatch(workspaceSwitchFailed({ wid, reason }));
+      // The error log would print the raw thunk name; this line says it plainly.
+      if (reason === SWITCH_STUCK) {
+        dispatch(addStatusEntry({ level: 'error', message: t('workspace.switchStuck') }));
+        return rejectWithValue('stuck');
+      }
       throw error;
     }
   },
@@ -120,9 +130,13 @@ async function finishSwitch(
       const settled = await waitFor(() => !selectIsOperationRunning(getState()), SETTLE_TIMEOUT_MS);
       // A run that never let go would write its next page into the new
       // workspace, so the switch is refused instead.
-      if (!settled) throw new Error('The running action did not stop');
+      if (!settled) throw new Error(SWITCH_STUCK);
       dispatch(setDiscrubCancelled(false));
     }
+    // 2.2.5 fix A: the user lookup is not a run, but it ends with the
+    // workspace. It only fills the shared name cache, so a lookup that is
+    // slow to let go does not hold the switch up.
+    await Promise.race([stopUserLookups(), new Promise((resolve) => setTimeout(resolve, LOOKUP_SETTLE_MS))]);
     await flushPendingRecords({ dispatch, getState });
   } finally {
     setSuspendingForSwitch(false);

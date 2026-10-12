@@ -2,6 +2,7 @@ import { createAction, createSlice, createAsyncThunk, createSelector, isDraft, o
 import type { Message, Attachment, User, Channel } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { ReactionType, IsPinnedType } from 'discrub-core/discord-enum';
+import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { MessageOrder, initialMessageState, initialPaginationState, ThreadTabState, type MessageContainer, type MessageState } from './messageTypes';
 import {
   appendSortedRows,
@@ -2195,9 +2196,117 @@ export const fetchAllMessages = createAsyncThunk(
   }
 );
 
+/** Flips the light "Looking up users..." line; only the lookup queue sets it. */
+export const setEnriching = createAction<boolean>('message/setEnriching');
+
 /**
- * Enrich user data for messages
- * Fetches display names and server nicknames based on settings
+ * 2.2.5 fix A: user lookups run one at a time. Before, every Load All page
+ * started a new lookup carrying every author so far, each with its own copy
+ * of the user map, and they all shared the request pacing with Load All.
+ * Now a page only queues the ids it brings that no earlier page asked for
+ * (per server and lookup settings), one run works the queue, and a dispatch
+ * that arrives while it runs is folded into its next round.
+ */
+interface LookupJob { guildId: string | null; ids: Set<string> }
+const lookupQueue = {
+  running: null as Promise<void> | null,
+  stopped: false,
+  token: '',
+  pending: new Map<string, LookupJob>(),
+  asked: new Map<string, Set<string>>(),
+};
+
+const lookupKey = (guildId: string | null, settings: Record<string, string | undefined>): string =>
+  `${guildId ?? 'dm'}|${settings[DiscrubSetting.DISPLAY_NAME_LOOKUP] === 'true'}|${settings[DiscrubSetting.SERVER_NICKNAME_LOOKUP] === 'true'}`;
+
+/** Tests only: forget every queued and asked id. */
+export const resetUserLookupQueue = (): void => {
+  lookupQueue.running = null;
+  lookupQueue.stopped = false;
+  lookupQueue.token = '';
+  lookupQueue.pending.clear();
+  lookupQueue.asked.clear();
+};
+
+/**
+ * Ends the lookup in flight at its next user and drops what is queued.
+ * Resolves when the run has let go. A workspace switch calls it.
+ */
+export const stopUserLookups = (): Promise<void> => {
+  lookupQueue.pending.clear();
+  lookupQueue.asked.clear();
+  if (!lookupQueue.running) return Promise.resolve();
+  lookupQueue.stopped = true;
+  return lookupQueue.running;
+};
+
+async function runLookupRound(
+  job: LookupJob,
+  dispatch: (action: unknown) => unknown,
+  getState: () => RootState,
+): Promise<void> {
+  const state = getState();
+  const settings = selectSettings(state);
+  if (!settings) return;
+  const ids = [...job.ids];
+  const result = await userEnrichmentService.enrichUserIds(
+    ids,
+    job.guildId,
+    lookupQueue.token,
+    settings,
+    state.cache.userMap,
+    undefined,
+    undefined,
+    state.cache.failedUserIds,
+    async () => lookupQueue.stopped,
+  );
+
+  if (result.failedUserIds && result.failedUserIds.length > 0) {
+    result.failedUserIds.forEach((id) => dispatch(addFailedUserId(id)));
+    await (dispatch(saveCacheToLocalStorage()) as unknown as { unwrap: () => Promise<unknown> }).unwrap();
+  }
+
+  // The service hands back the whole map; only the asked ids can have changed.
+  const changed: Record<string, (typeof result.userMap)[string]> = {};
+  for (const id of ids) {
+    const entry = result.userMap[id];
+    if (entry) changed[id] = entry;
+  }
+  if (Object.keys(changed).length > 0) {
+    await (dispatch(mergeCachedUserMap(changed)) as unknown as { unwrap: () => Promise<unknown> }).unwrap();
+  }
+}
+
+async function runLookups(dispatch: (action: unknown) => unknown, getState: () => RootState): Promise<void> {
+  dispatch(setEnriching(true));
+  try {
+    while (!lookupQueue.stopped) {
+      const next = lookupQueue.pending.entries().next();
+      if (next.done) break;
+      const [key, job] = next.value;
+      lookupQueue.pending.delete(key);
+      try {
+        await runLookupRound(job, dispatch, getState);
+      } catch (error) {
+        // A failed round forgets its ids so a later page can ask again.
+        console.error('Failed to enrich user data:', error);
+        const asked = lookupQueue.asked.get(key);
+        if (asked) for (const id of job.ids) asked.delete(id);
+      }
+    }
+  } finally {
+    if (lookupQueue.stopped) lookupQueue.pending.clear();
+    lookupQueue.stopped = false;
+    lookupQueue.running = null;
+    dispatch(setEnriching(false));
+  }
+}
+
+/**
+ * Queues user lookups (display names and server nicknames, per settings)
+ * for the given ids. Ids already asked for this server, and ids that came
+ * back 404 before, are left out. Returns once the ids are queued; the run
+ * itself goes on in the background.
  */
 export const enrichMessageUsers = createAsyncThunk(
   'message/enrichMessageUsers',
@@ -2207,52 +2316,37 @@ export const enrichMessageUsers = createAsyncThunk(
       guildId,
       token,
     }: {
-      /** Authors and mentioned users of the loaded rows (2.2.5 WP2b). */
+      /** Authors and mentioned users of newly loaded rows. */
       userIds: string[];
       guildId: string | null;
       token: string;
     },
-    { getState, dispatch, rejectWithValue }
-  ) => {
-    try {
-      const state = getState() as RootState;
-      const settings = selectSettings(state);
-      const existingUserMap = state.cache.userMap;
-      const failedUserIds = state.cache.failedUserIds;
+    { getState, dispatch }
+  ): Promise<{ queued: number }> => {
+    const state = getState() as RootState;
+    const settings = selectSettings(state);
+    if (!settings || lookupQueue.stopped) return { queued: 0 };
 
-      if (!settings) {
-        return rejectWithValue('Settings not available');
-      }
-
-      // Enrich user data (skip users that previously returned 404)
-      const result = await userEnrichmentService.enrichUserIds(
-        userIds,
-        guildId,
-        token,
-        settings,
-        existingUserMap,
-        undefined,
-        undefined,
-        failedUserIds
-      );
-
-      // Cache newly failed user IDs (404 only) so they're skipped in future runs
-      if (result.failedUserIds && result.failedUserIds.length > 0) {
-        result.failedUserIds.forEach((id) => dispatch(addFailedUserId(id)));
-        // Persist to storage so failed IDs survive page refreshes
-        await dispatch(saveCacheToLocalStorage()).unwrap();
-      }
-
-      // Merge enriched data into cache
-      const enrichedUserMap = result.userMap;
-      await dispatch(mergeCachedUserMap(enrichedUserMap)).unwrap();
-
-      return enrichedUserMap;
-    } catch (error) {
-      console.error('Failed to enrich user data:', error);
-      // Don't reject - enrichment failures shouldn't block message display
-      return {};
+    const key = lookupKey(guildId, settings);
+    const asked = lookupQueue.asked.get(key) ?? new Set<string>();
+    lookupQueue.asked.set(key, asked);
+    const failed = new Set(state.cache.failedUserIds);
+    const job = lookupQueue.pending.get(key) ?? { guildId, ids: new Set<string>() };
+    let queued = 0;
+    for (const id of userIds) {
+      if (!id || asked.has(id) || failed.has(id)) continue;
+      asked.add(id);
+      job.ids.add(id);
+      queued++;
     }
+    if (queued === 0) return { queued };
+    lookupQueue.pending.set(key, job);
+    lookupQueue.token = token;
+
+    if (!lookupQueue.running) {
+      lookupQueue.running = runLookups(dispatch, getState as () => RootState);
+    }
+    return { queued };
   }
 );
 
@@ -3862,14 +3956,8 @@ const messageSlice = createSlice({
         else if (updatedMessage) replaceRows(state, container, key, [updatedMessage]);
       })
       // User enrichment (light operation — spinner only)
-      .addCase(enrichMessageUsers.pending, (state) => {
-        state.isEnriching = true;
-      })
-      .addCase(enrichMessageUsers.fulfilled, (state) => {
-        state.isEnriching = false;
-      })
-      .addCase(enrichMessageUsers.rejected, (state) => {
-        state.isEnriching = false;
+      .addCase(setEnriching, (state, action) => {
+        state.isEnriching = action.payload;
       });
   },
 });

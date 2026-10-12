@@ -465,12 +465,17 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   // Trigger user enrichment when main channel messages change. 2.2.1 perf:
   // a list that only shrank (a delete flush) holds no author the last pass
-  // did not see, so it is skipped; before, every flush walked all 30K
-  // messages again and flipped isEnriching twice.
+  // did not see, so it is skipped. 2.2.5 fix A: only ids this view has not
+  // handed over yet go to the lookup queue, so a Load All page sends its
+  // new authors rather than every author so far.
   const enrichedLengthRef = useRef(0);
+  const handedIdsRef = useRef<{ guildId: string | null; ids: Set<string> }>({ guildId: null, ids: new Set() });
   useEffect(() => {
     const grew = mainMessages.length > enrichedLengthRef.current;
     enrichedLengthRef.current = mainMessages.length;
+    // An emptied view (switch, clear) starts over, since a switch drops the
+    // lookups it had queued.
+    if (mainMessages.length === 0) handedIdsRef.current = { guildId: null, ids: new Set() };
     if (!grew) return;
     if (mainMessages.length > 0 && token && settings) {
       const shouldEnrich =
@@ -478,18 +483,22 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
         settings[DiscrubSetting.SERVER_NICKNAME_LOOKUP] === 'true';
 
       if (shouldEnrich) {
-        const userIds = new Set<string>();
+        const guildId = selectedGuild?.id || null;
+        if (handedIdsRef.current.guildId !== guildId) handedIdsRef.current = { guildId, ids: new Set() };
+        const handed = handedIdsRef.current.ids;
+        const fresh: string[] = [];
+        const take = (id: string) => {
+          if (handed.has(id)) return;
+          handed.add(id);
+          fresh.push(id);
+        };
         for (const row of mainMessages) {
-          if (row.authorId) userIds.add(row.authorId);
-          if (row.mentionIds) for (const id of row.mentionIds) userIds.add(id);
+          if (row.authorId) take(row.authorId);
+          if (row.mentionIds) for (const id of row.mentionIds) take(id);
         }
-        dispatch(
-          enrichMessageUsers({
-            userIds: [...userIds],
-            guildId: selectedGuild?.id || null,
-            token,
-          })
-        );
+        if (fresh.length > 0) {
+          dispatch(enrichMessageUsers({ userIds: fresh, guildId, token }));
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional trigger set

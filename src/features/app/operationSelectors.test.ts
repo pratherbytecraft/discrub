@@ -180,7 +180,7 @@ describe('operationSelectors', () => {
         },
       });
       const summary = selectOperationSummary(state);
-      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Looking up users...', tier: 'light' });
+      expect(summary).toMatchObject({ isRunning: true, isPaused: false, label: 'Looking up users...', tier: 'light', background: true });
     });
 
     it('should prioritize exporting over loadingAll', () => {
@@ -899,9 +899,16 @@ describe('operationSelectors', () => {
       expect(selectIsOperationRunning(state)).toBe(true);
     });
 
-    it('should return true when enriching users', () => {
+    it('should return false when only the user lookup runs (2.2.5 fix A)', () => {
       const state = createBaseState({
         message: { ...createBaseState().message, isEnriching: true },
+      });
+      expect(selectIsOperationRunning(state)).toBe(false);
+    });
+
+    it('should return true when a real run goes beside the user lookup', () => {
+      const state = createBaseState({
+        message: { ...createBaseState().message, isEnriching: true, isLoading: true },
       });
       expect(selectIsOperationRunning(state)).toBe(true);
     });
