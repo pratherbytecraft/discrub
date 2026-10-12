@@ -55,6 +55,24 @@ describe('errorLoggingMiddleware', () => {
     );
   });
 
+  it('logs a translation key payload as its text', () => {
+    const store = createMockStore();
+    const middleware = errorLoggingMiddleware(store)(next);
+
+    middleware({
+      type: 'supporter/applyPastedKey/rejected',
+      payload: 'supporter.error.accessEnded',
+      error: { message: 'Rejected' },
+    });
+
+    expect(store.dispatch).toHaveBeenCalledWith(
+      addStatusEntry({
+        level: 'error',
+        message: 'Your supporter access has ended. After renewing on Ko-fi, click Refresh or paste the new key from your email.',
+      })
+    );
+  });
+
   it('suppresses enrichMessageUsers rejections', () => {
     const store = createMockStore();
     const middleware = errorLoggingMiddleware(store)(next);

@@ -1,5 +1,6 @@
 import type { Middleware } from '@reduxjs/toolkit';
 import { addStatusEntry } from '@features/status/statusSlice';
+import i18n from '@/i18n';
 
 /**
  * Thunk action types that should NOT be logged as errors when rejected.
@@ -27,10 +28,13 @@ export const errorLoggingMiddleware: Middleware = (storeAPI) => (next) => (actio
     }
 
     // Extract error message — prefer payload (from rejectWithValue) over error.message
-    const errorMessage =
+    const raw =
       (typeof action.payload === 'string' && action.payload) ||
       action.error?.message ||
       'Unknown error';
+    // A thunk may reject with a translation key (supporter.error.*); log the
+    // line in the app's language.
+    const errorMessage = i18n.exists(raw) ? i18n.t(raw) : raw;
 
     // Skip generic "Rejected" or "Aborted" messages (user-initiated cancellations)
     if (errorMessage === 'Rejected' || errorMessage === 'Aborted' || errorMessage.includes('cancelled')) {

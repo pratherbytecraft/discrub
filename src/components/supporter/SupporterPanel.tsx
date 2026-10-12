@@ -306,7 +306,7 @@ const SupporterPanel = () => {
             )}
             {claimError && (
               <Typography variant="caption" color="error" data-testid="supporter-claim-error">
-                {claimError}
+                {t(claimError)}
               </Typography>
             )}
           </Box>
@@ -418,7 +418,7 @@ const SupporterPanel = () => {
             </Box>
             {!payload && claimError && (
               <Typography variant="caption" color="error" data-testid="supporter-claim-error">
-                {claimError}
+                {t(claimError)}
               </Typography>
             )}
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>

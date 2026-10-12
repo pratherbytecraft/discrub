@@ -360,7 +360,7 @@ const LandingPage = () => {
                         }}
                         error={Boolean(keyError)}
                         helperText={
-                          keyError ?? (
+                          (keyError && t(keyError)) || (
                             <span data-testid="hosted-gate-help">
                               <Trans
                                 i18nKey="landing.keyHelp"

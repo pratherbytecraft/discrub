@@ -25,6 +25,7 @@ import {
   SUPPORTER_KEY_STORAGE_KEY,
   SUPPORTER_EMAIL_STORAGE_KEY,
   SUPPORTER_LAST_REFRESH_STORAGE_KEY,
+  SUPPORTER_ACCESS_ENDED_SHOWN_STORAGE_KEY,
   FOOTER_TEXT_STORAGE_KEY,
   FOOTER_REMOVED_STORAGE_KEY,
   FOOTER_ICON_MEDIA_KEY,
@@ -50,6 +51,25 @@ import {
 
 /** Check a stored key against the server at most this often. */
 export const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The translation key for a server refusal. claimError always holds a key
+ * under supporter.error, so the line reads in the app's language; the
+ * server's own English text is not shown.
+ */
+export const claimErrorKey = (error: SupporterClaimError): string => {
+  switch (error.status) {
+    case SUPPORTER_ACCESS_ENDED_STATUS:
+      return 'supporter.error.accessEnded';
+    case 400:
+    case 404:
+      return 'supporter.error.notFound';
+    case 429:
+      return 'supporter.error.tooMany';
+    default:
+      return 'supporter.error.unreachable';
+  }
+};
 
 interface VerifiedKeyState {
   keyStatus: SupporterKeyVerification['status'];
@@ -106,6 +126,9 @@ export const initializeSupporter = createAsyncThunk(
         iconDataUri: typeof footerIcon === 'string' && footerIcon ? footerIcon : null,
       } as SupporterFooterPreferences,
       lastRefreshAt: typeof lastRefreshAt === 'number' ? lastRefreshAt : null,
+      // The check-in got 410 for a key that was live on this device, so the
+      // supporter had access until now and the app says it ended.
+      accessEnded: false,
     };
 
     if (!storedKey) {
@@ -147,6 +170,19 @@ export const initializeSupporter = createAsyncThunk(
           await storage.state.remove(SUPPORTER_LAST_REFRESH_STORAGE_KEY).catch(() => {});
           base.lastRefreshAt = null;
           if (verification.payload) {
+            // Every open checks again after a 410, so the notice is shown
+            // once per stored key, not on each open.
+            if (verification.status === 'valid') {
+              const shownFor = await storage.state
+                .get<string>(SUPPORTER_ACCESS_ENDED_SHOWN_STORAGE_KEY)
+                .catch(() => null);
+              if (shownFor !== storedKey) {
+                base.accessEnded = true;
+                await storage.state
+                  .set(SUPPORTER_ACCESS_ENDED_SHOWN_STORAGE_KEY, storedKey)
+                  .catch(() => {});
+              }
+            }
             verification = { status: 'expired', payload: verification.payload };
           }
         }
@@ -168,15 +204,13 @@ export const refreshSupporterKey = previewSafe(createAsyncThunk(
   async (_, { rejectWithValue }) => {
     const storedKey = await storage.state.get<string>(SUPPORTER_KEY_STORAGE_KEY);
     if (!storedKey) {
-      return rejectWithValue('No key to refresh. Paste your supporter key first.');
+      return rejectWithValue('supporter.error.noKeyToRefresh');
     }
     try {
       const result = await requestSupporterKeyRefresh(storedKey);
       const verification = await verifySupporterKey(result.key);
       if (verification.status !== 'valid' || !verification.payload) {
-        return rejectWithValue(
-          'The server issued a key this app version could not verify. Update Discrub and try again.',
-        );
+        return rejectWithValue('supporter.error.cannotVerify');
       }
       const now = Date.now();
       await Promise.all([
@@ -186,9 +220,9 @@ export const refreshSupporterKey = previewSafe(createAsyncThunk(
       return { keyStatus: verification.status, payload: verification.payload, lastRefreshAt: now };
     } catch (error) {
       if (error instanceof SupporterClaimError) {
-        return rejectWithValue(error.message);
+        return rejectWithValue(claimErrorKey(error));
       }
-      return rejectWithValue('Something went wrong refreshing your key. Try again.');
+      return rejectWithValue('supporter.error.refreshFailed');
     }
   },
 ));
@@ -212,9 +246,7 @@ export const applyPastedSupporterKey = createAsyncThunk(
         const result = await requestSupporterKeyRedemption(code);
         const verification = await verifySupporterKey(result.key);
         if (verification.status !== 'valid' || !verification.payload) {
-          return rejectWithValue(
-            'The server issued a key this app version could not verify. Update Discrub and try again.',
-          );
+          return rejectWithValue('supporter.error.cannotVerify');
         }
         const now = Date.now();
         await Promise.all([
@@ -224,25 +256,21 @@ export const applyPastedSupporterKey = createAsyncThunk(
         return { keyStatus: verification.status, payload: verification.payload, lastRefreshAt: now };
       } catch (error) {
         if (error instanceof SupporterClaimError) {
-          return rejectWithValue(error.message);
+          return rejectWithValue(claimErrorKey(error));
         }
-        return rejectWithValue(
-          'Something went wrong applying your key. Try again.',
-        );
+        return rejectWithValue('supporter.error.applyFailed');
       }
     }
 
     const verification = await verifySupporterKey(trimmed);
     if (verification.status === 'invalid') {
-      return rejectWithValue("That doesn't look like a valid supporter key.");
+      return rejectWithValue('supporter.error.invalidKey');
     }
     if (verification.status === 'expired') {
-      return rejectWithValue(
-        'That key has expired. Check your email for a newer one, or use Refresh key.',
-      );
+      return rejectWithValue('supporter.error.keyExpired');
     }
     if (verification.status === 'revoked') {
-      return rejectWithValue('That key is no longer active.');
+      return rejectWithValue('supporter.error.keyRevoked');
     }
     await Promise.all([
       storage.state.set(SUPPORTER_KEY_STORAGE_KEY, trimmed),
@@ -262,6 +290,7 @@ export const removeSupporterKey = createAsyncThunk('supporter/removeKey', async 
     storage.state.remove(SUPPORTER_KEY_STORAGE_KEY),
     storage.state.remove(SUPPORTER_EMAIL_STORAGE_KEY),
     storage.state.remove(SUPPORTER_LAST_REFRESH_STORAGE_KEY),
+    storage.state.remove(SUPPORTER_ACCESS_ENDED_SHOWN_STORAGE_KEY),
   ]);
 });
 
@@ -340,6 +369,7 @@ const supporterSlice = createSlice({
         // A key action beat this result: keep what the user just did.
         if (action.payload.generation !== state.keyGeneration) return;
         applyKeyStatus(state, action.payload.keyStatus);
+        if (action.payload.accessEnded) state.accessEndedNotice = true;
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
       })
@@ -361,7 +391,7 @@ const supporterSlice = createSlice({
       .addCase(refreshSupporterKey.rejected, (state, action) => {
         state.claimInProgress = false;
         state.claimError =
-          (action.payload as string) ?? 'Something went wrong refreshing your key.';
+          (action.payload as string) ?? 'supporter.error.refreshFailed';
       })
       .addCase(applyPastedSupporterKey.pending, (state) => {
         state.claimInProgress = true;
@@ -377,7 +407,7 @@ const supporterSlice = createSlice({
       .addCase(applyPastedSupporterKey.rejected, (state, action) => {
         state.claimInProgress = false;
         state.claimError =
-          (action.payload as string) ?? "That key couldn't be verified.";
+          (action.payload as string) ?? 'supporter.error.applyFailed';
       })
       .addCase(removeSupporterKey.fulfilled, (state) => {
         state.keyGeneration += 1;

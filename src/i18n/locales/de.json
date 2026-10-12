@@ -1664,7 +1664,20 @@
     "customFooterIcon": "Eigenes Fußzeilensymbol",
     "defaultFooterIcon": "Standard-Fußzeilensymbol von Discrub",
     "customIcon": "Eigenes Symbol",
-    "useDefault": "Standard verwenden"
+    "useDefault": "Standard verwenden",
+    "error": {
+      "accessEnded": "Dein Unterstützerzugang ist abgelaufen. Klicke nach der Verlängerung auf Ko-fi auf Aktualisieren oder füge den neuen Schlüssel aus deiner E-Mail ein.",
+      "notFound": "Dieser Schlüssel passt zu keinem aktiven Unterstützerschlüssel.",
+      "tooMany": "Zu viele Versuche. Warte etwas und versuche es erneut.",
+      "unreachable": "Der Unterstützer-Server ist nicht erreichbar. Versuche es gleich noch einmal.",
+      "noKeyToRefresh": "Kein Schlüssel zum Aktualisieren. Füge zuerst deinen Unterstützerschlüssel ein.",
+      "cannotVerify": "Der Server hat einen Schlüssel geschickt, den diese Version nicht prüfen kann. Aktualisiere Discrub und versuche es erneut.",
+      "refreshFailed": "Beim Aktualisieren deines Schlüssels ist etwas schiefgelaufen. Versuche es erneut.",
+      "applyFailed": "Beim Anwenden deines Schlüssels ist etwas schiefgelaufen. Versuche es erneut.",
+      "invalidKey": "Das sieht nicht nach einem gültigen Unterstützerschlüssel aus.",
+      "keyExpired": "Dieser Schlüssel ist abgelaufen. Suche in deiner E-Mail nach einem neueren oder nutze Schlüssel aktualisieren.",
+      "keyRevoked": "Dieser Schlüssel ist nicht mehr aktiv."
+    }
   },
   "status": {
     "msg": {

@@ -18,6 +18,8 @@ export const SUPPORTER_EMAIL_STORAGE_KEY = 'supporter:email';
 export const GIFT_ATTENTION_SEEN_STORAGE_KEY = 'supporter:giftAttentionSeen';
 /** Unix ms of the last successful (or 410-refused) daily check-in. */
 export const SUPPORTER_LAST_REFRESH_STORAGE_KEY = 'supporter:lastRefreshAt';
+/** The stored key the access ended notice was last shown for (once per key). */
+export const SUPPORTER_ACCESS_ENDED_SHOWN_STORAGE_KEY = 'supporter:accessEndedShownFor';
 export const FOOTER_TEXT_STORAGE_KEY = 'supporter:footerText';
 export const FOOTER_REMOVED_STORAGE_KEY = 'supporter:footerRemoved';
 /** Lives in Discrub-media (binary-ish payload), not Discrub-state. */

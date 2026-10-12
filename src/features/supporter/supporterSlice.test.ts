@@ -15,6 +15,7 @@ import supporterReducer, {
   selectHasHosted,
   selectSupporterKeyStatus,
   REFRESH_INTERVAL_MS,
+  claimErrorKey,
 } from './supporterSlice';
 import {
   SUPPORTER_KEY_STORAGE_KEY,
@@ -230,6 +231,41 @@ describe('supporterSlice', () => {
       // The key itself stays so Refresh works after a renewal.
       expect(stateData[SUPPORTER_KEY_STORAGE_KEY]).toBe('DSCRB-old');
       expect(selectIsSupporter(rootState(store))).toBe(false);
+      // Row 142 of the 2.2.5 pass: the key was live on this device, so the app says access ended.
+      expect(state.accessEndedNotice).toBe(true);
+    });
+
+    it('says access ended once per key, not on every open', async () => {
+      stateData[SUPPORTER_KEY_STORAGE_KEY] = 'DSCRB-old';
+      mockVerify.mockResolvedValue({ status: 'valid', payload: makePayload() });
+      mockRequestKey.mockRejectedValue(new MockClaimError('Your supporter access has ended', 410));
+
+      const first = makeStore();
+      await first.dispatch(initializeSupporter());
+      expect(first.getState().supporter.accessEndedNotice).toBe(true);
+
+      const second = makeStore();
+      await second.dispatch(initializeSupporter());
+      expect(second.getState().supporter.keyStatus).toBe('expired');
+      expect(second.getState().supporter.accessEndedNotice).toBe(false);
+
+      // A renewed key that lapses later says it again.
+      stateData[SUPPORTER_KEY_STORAGE_KEY] = 'DSCRB-renewed';
+      const third = makeStore();
+      await third.dispatch(initializeSupporter());
+      expect(third.getState().supporter.accessEndedNotice).toBe(true);
+    });
+
+    it('stays quiet on the 410 answer when the stored key had already expired locally', async () => {
+      stateData[SUPPORTER_KEY_STORAGE_KEY] = 'DSCRB-old';
+      mockVerify.mockResolvedValue({ status: 'expired', payload: makePayload() });
+      mockRequestKey.mockRejectedValue(new MockClaimError('Your supporter access has ended', 410));
+
+      const store = makeStore();
+      await store.dispatch(initializeSupporter());
+
+      expect(store.getState().supporter.keyStatus).toBe('expired');
+      expect(store.getState().supporter.accessEndedNotice).toBe(false);
     });
 
     it('fails open onto the old verification when the check-in fails (offline)', async () => {
@@ -350,16 +386,14 @@ describe('supporterSlice', () => {
       const store = makeStore();
       await store.dispatch(refreshSupporterKey());
 
-      expect(store.getState().supporter.claimError).toBe(
-        'That key does not match an active supporter membership',
-      );
+      expect(store.getState().supporter.claimError).toBe('supporter.error.notFound');
     });
 
     it('errors cleanly when no key is stored', async () => {
       const store = makeStore();
       await store.dispatch(refreshSupporterKey());
 
-      expect(store.getState().supporter.claimError).toContain('No key to refresh');
+      expect(store.getState().supporter.claimError).toBe('supporter.error.noKeyToRefresh');
       expect(mockRequestKey).not.toHaveBeenCalled();
     });
   });
@@ -376,16 +410,16 @@ describe('supporterSlice', () => {
     });
 
     it.each([
-      ['invalid', "doesn't look like a valid"],
-      ['expired', 'expired'],
-      ['revoked', 'no longer active'],
+      ['invalid', 'supporter.error.invalidKey'],
+      ['expired', 'supporter.error.keyExpired'],
+      ['revoked', 'supporter.error.keyRevoked'],
     ])('rejects a %s key with matching copy', async (status, copy) => {
       mockVerify.mockResolvedValue({ status, payload: makePayload() });
 
       const store = makeStore();
       await store.dispatch(applyPastedSupporterKey('DSCRB-bad'));
 
-      expect(store.getState().supporter.claimError).toContain(copy);
+      expect(store.getState().supporter.claimError).toBe(copy);
       expect(stateData[SUPPORTER_KEY_STORAGE_KEY]).toBeUndefined();
     });
 
@@ -414,10 +448,29 @@ describe('supporterSlice', () => {
       const store = makeStore();
       await store.dispatch(applyPastedSupporterKey('DSCRB-AAAA-2222'));
 
-      expect(store.getState().supporter.claimError).toBe(
-        'That key does not match an active supporter key',
-      );
+      expect(store.getState().supporter.claimError).toBe('supporter.error.notFound');
       expect(stateData[SUPPORTER_KEY_STORAGE_KEY]).toBeUndefined();
+    });
+
+    it('says access ended, in the app language, when a lapsed short key is refused with 410', async () => {
+      mockRedeemCode.mockRejectedValue(new MockClaimError('Your supporter access has ended', 410));
+
+      const store = makeStore();
+      await store.dispatch(applyPastedSupporterKey('PBYTE-VW2C-AGMP'));
+
+      expect(store.getState().supporter.claimError).toBe('supporter.error.accessEnded');
+      expect(stateData[SUPPORTER_KEY_STORAGE_KEY]).toBeUndefined();
+    });
+
+    it.each([
+      [410, 'supporter.error.accessEnded'],
+      [404, 'supporter.error.notFound'],
+      [400, 'supporter.error.notFound'],
+      [429, 'supporter.error.tooMany'],
+      [503, 'supporter.error.unreachable'],
+      [null, 'supporter.error.unreachable'],
+    ])('maps a %s refusal to %s', (status, key) => {
+      expect(claimErrorKey(new MockClaimError('server text', status as number | null) as any)).toBe(key);
     });
 
     it('rejects when the redeemed key does not verify locally', async () => {
@@ -432,7 +485,7 @@ describe('supporterSlice', () => {
       const store = makeStore();
       await store.dispatch(applyPastedSupporterKey('DSCRB-AAAA-2222'));
 
-      expect(store.getState().supporter.claimError).toContain('Update Discrub');
+      expect(store.getState().supporter.claimError).toBe('supporter.error.cannotVerify');
       expect(stateData[SUPPORTER_KEY_STORAGE_KEY]).toBeUndefined();
     });
 
@@ -442,9 +495,7 @@ describe('supporterSlice', () => {
       const store = makeStore();
       await store.dispatch(applyPastedSupporterKey('DSCRB-AAAA-2222'));
 
-      expect(store.getState().supporter.claimError).toContain(
-        'applying your key',
-      );
+      expect(store.getState().supporter.claimError).toBe('supporter.error.applyFailed');
     });
 
     it('never calls the redeem endpoint for a full key paste', async () => {
@@ -559,7 +610,7 @@ describe('supporterSlice', () => {
       const store = makeStore();
       store.dispatch(setSupporterPanelOpen(true));
       await store.dispatch(applyPastedSupporterKey('DSCRB-bad'));
-      expect(store.getState().supporter.claimError).toContain("doesn't look like");
+      expect(store.getState().supporter.claimError).toBe('supporter.error.invalidKey');
 
       store.dispatch(setSupporterPanelOpen(false));
       expect(store.getState().supporter.panelOpen).toBe(false);

@@ -295,6 +295,12 @@ describe('Supporter platform', () => {
     cy.wait('@ended');
     cy.get('body').should('have.css', 'background-color', DARK_BG);
     cy.get('[data-testid="supporter-badge"]').should('not.exist');
+    // Row 142 of the 2.2.5 pass: the key was live, so the app says access ended.
+    cy.get('[data-testid="access-ended-notice"]')
+      .should('be.visible')
+      .and('contain.text', 'Your supporter access has ended.');
+    cy.get('[data-testid="access-ended-notice"] button').click();
+    cy.get('[data-testid="access-ended-notice"]').should('not.exist');
     cy.openThemesHub();
     cy.get('[data-testid="supporter-lapsed-note"]').should('be.visible');
     // The key is kept so Refresh works after a renewal.
@@ -332,7 +338,7 @@ describe('Supporter platform', () => {
     cy.get('@refreshSpy').should('not.have.been.called');
   });
 
-  it('shows the server error copy when a short key is refused', () => {
+  it('shows its own error line when a short key is refused', () => {
     visitApp();
     cy.intercept('POST', '**/supporter/redeem', {
       statusCode: 404,
@@ -346,7 +352,7 @@ describe('Supporter platform', () => {
     );
   });
 
-  it('shows the server error copy when a manual refresh is refused', () => {
+  it('shows its own error line when a manual refresh is refused', () => {
     visitApp();
     cy.then(() => signKey()).then((key) => {
       applyKeyViaDialog(key as string);
@@ -358,9 +364,10 @@ describe('Supporter platform', () => {
     }).as('refresh');
     cy.get('[data-testid="supporter-refresh-key"]').click();
     cy.wait('@refresh');
+    // The app's own line in the app language, not the server's English text.
     cy.get('[data-testid="supporter-claim-error"]').should(
       'contain.text',
-      'That key does not match an active supporter membership',
+      'That key does not match an active supporter key.',
     );
   });
 

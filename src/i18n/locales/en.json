@@ -1664,7 +1664,20 @@
     "customFooterIcon": "Custom footer icon",
     "defaultFooterIcon": "Default Discrub footer icon",
     "customIcon": "Custom icon",
-    "useDefault": "Use default"
+    "useDefault": "Use default",
+    "error": {
+      "accessEnded": "Your supporter access has ended. After renewing on Ko-fi, click Refresh or paste the new key from your email.",
+      "notFound": "That key does not match an active supporter key.",
+      "tooMany": "Too many tries. Wait a while and try again.",
+      "unreachable": "Could not reach the supporter server. Try again in a moment.",
+      "noKeyToRefresh": "No key to refresh. Paste your supporter key first.",
+      "cannotVerify": "The server sent a key this version can't verify. Update Discrub and try again.",
+      "refreshFailed": "Something went wrong refreshing your key. Try again.",
+      "applyFailed": "Something went wrong applying your key. Try again.",
+      "invalidKey": "That doesn't look like a valid supporter key.",
+      "keyExpired": "That key has expired. Check your email for a newer one, or use Refresh key.",
+      "keyRevoked": "That key is no longer active."
+    }
   },
   "status": {
     "msg": {

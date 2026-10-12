@@ -88,10 +88,10 @@ const MessageTable = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, virtualItems.length > 0 ? `${virtualItems[0].index}:${virtualItems[virtualItems.length - 1].index}` : '']);
   const hydrated = useHydratedMessages(containerKey, hydrationSource, visibleIds);
-  const dateFormat = settings?.dateFormat || 'MM/dd/yyyy';
   const timeFormat = settings?.timeFormat || 'h:mm aa';
-  const stamp = useCallback((ts: string) => { try { return format(new Date(ts), `${dateFormat} ${timeFormat}`, { locale: getDateLocale() }); } catch { return ''; } }, [dateFormat, timeFormat]);
-  const grid = '40px 180px minmax(200px, 1fr) 70px 120px 150px';
+  // Row 145: the localized medium date the feed uses ("Oct 10, 2026", "10. Okt. 2026"), not the numeric export setting.
+  const stamp = useCallback((ts: string) => { try { return format(new Date(ts), `PP ${timeFormat}`, { locale: getDateLocale() }); } catch { return ''; } }, [timeFormat]);
+  const grid = '40px 180px minmax(200px, 1fr) 70px 120px 180px';
 
   return (
     <Box data-testid="message-table" sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'auto', backgroundColor: 'background.paper' }}>
