@@ -1034,9 +1034,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
           </Box>
           {/* Capped at the card's width at every size: the column can be 580 px wide in a 900 px window, and uncapped the row pushed Export off the edge. */}
           <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap', maxWidth: '100%', whiteSpace: 'nowrap' }}>
-            {/* 2.2.5: a restored conversation keeps the button even when complete, so Start over can refresh it. */}
-            {!isForumChannel && (pagination.hasMore || restored !== null) &&
-              (pagination.mode === 'paginated' || pagination.mode === 'search' || restored !== null) && (
+            {/* 2.2.5: a restored conversation keeps the button even when complete, so Start over can refresh it. A running or stopped Load All keeps it too (rows 5 and 59: the button left with mode 'all'). */}
+            {!isForumChannel && (pagination.hasMore || restored !== null || pagination.isLoadingAll) && (
               <HotkeyTooltip actionId="loadAll" label={t('serverView.loadAllMessages')} arrow>
                 <Button
                   variant="outlined"

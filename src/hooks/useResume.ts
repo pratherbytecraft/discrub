@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
+import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { selectActiveCid } from '@features/message/messageSlice';
 import {
   selectConversationAction,
@@ -30,7 +31,9 @@ export function useConversationResume(kind: ActionKind): UnfinishedAction | null
 
 /**
  * The labels of the buttons that open Export, Purge and the bulk Export in
- * the open server or the DM list: Resume while a matching run is recorded.
+ * the open server or the DM list: Resume while a matching run is recorded
+ * and nothing runs. A run records itself when it starts, so without the
+ * running check its own button read Resume while it ran.
  */
 export function useResumeLabels(listMode?: 'channels' | 'dms') {
   const { t } = useTranslation();
@@ -41,15 +44,16 @@ export function useResumeLabels(listMode?: 'channels' | 'dms') {
   const purgeResume = useBulkResume('bulkPurge', mode, guildId);
   const bulkExportResume = useBulkResume('bulkExport', mode, guildId);
   const editResume = useBulkResume('bulkEdit', mode, guildId);
+  const running = useAppSelector(selectIsHeavyOperationRunning);
   const resume = t('workspace.resume');
   return {
-    exportResumable: exportResume !== null,
-    purgeResumable: purgeResume !== null,
-    bulkExportResumable: bulkExportResume !== null,
-    editResumable: editResume !== null,
-    exportLabel: exportResume ? resume : t('serverView.export'),
-    purgeLabel: purgeResume ? resume : t('native.purge'),
-    bulkExportLabel: bulkExportResume ? resume : t('serverView.export'),
-    editLabel: editResume ? resume : t('nav.edit'),
+    exportResumable: !running && exportResume !== null,
+    purgeResumable: !running && purgeResume !== null,
+    bulkExportResumable: !running && bulkExportResume !== null,
+    editResumable: !running && editResume !== null,
+    exportLabel: !running && exportResume ? resume : t('serverView.export'),
+    purgeLabel: !running && purgeResume ? resume : t('native.purge'),
+    bulkExportLabel: !running && bulkExportResume ? resume : t('serverView.export'),
+    editLabel: !running && editResume ? resume : t('nav.edit'),
   };
 }

@@ -194,6 +194,32 @@ describe('Workspace persistence (2.2.5)', () => {
     });
   });
 
+  it('a first Load All keeps its greyed button, reads Load All while it runs, and a Stop leaves the button there (rows 5, 27, 59)', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      const pageA = makePage(messages[0], 9000);
+      const pageB = makePage(messages[0], 8900);
+      let calls = 0;
+      cy.intercept('GET', '**/api/v10/channels/*/messages?*', (req) => {
+        calls += 1;
+        // Call 2 is the first Load All page, held so the run is still going.
+        req.reply({ statusCode: 200, body: calls === 1 ? pageA : calls === 2 ? pageB : [], delay: calls === 2 ? 4000 : 0 });
+      }).as('pagedMessages');
+      cy.contains(CHANNEL).click();
+      cy.wait('@pagedMessages');
+      cy.contains('100 messages').should('be.visible');
+
+      cy.contains('button', 'Load All').click();
+      cy.get('[data-testid="load-all-confirm"]').click();
+      cy.window().its('__store__').invoke('getState').its('message.pagination.isLoadingAll').should('eq', true);
+      cy.contains('button', 'Load All').should('be.visible').and('be.disabled');
+      cy.contains('button', 'Resume').should('not.exist');
+
+      cy.get('[aria-label="Stop"]').first().click({ force: true });
+      cy.window().its('__store__').invoke('getState').its('message.pagination.isLoadingAll', { timeout: 15000 }).should('eq', false);
+      cy.contains('button', 'Load All').should('be.visible').and('not.be.disabled');
+    });
+  });
+
   it('a Load All cut short by a reload reads Resume and continues from the cursor', () => {
     cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
       const pageA = makePage(messages[0], 9000);
