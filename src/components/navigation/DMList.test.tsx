@@ -171,6 +171,24 @@ describe('DMList', () => {
       });
       expect(screen.getByText('Alice')).toBeInTheDocument();
     });
+
+    // #274: a fancy font display name has to match plain typing.
+    it('should match fancy font recipient names against plain text', () => {
+      const fancyDm = {
+        id: 'dm-fancy',
+        type: 1,
+        last_message_id: 'msg-101',
+        recipients: [createMockUser({ id: 'u9', username: 'plainname', global_name: '𝕭𝖔𝖇𝖇𝖞', avatar: 'avt9' })],
+      } as any;
+      renderWithProviders(<DMList filterText="bobby" />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+          dm: { dms: [dmWithRecipient, fancyDm], selectedDm: null, selectedDms: [], isLoading: false, error: null },
+        }),
+      });
+      expect(screen.getByText('𝕭𝖔𝖇𝖇𝖞')).toBeInTheDocument();
+      expect(screen.queryByText('Alice')).toBeNull();
+    });
   });
 
   describe('Selection', () => {

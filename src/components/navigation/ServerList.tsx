@@ -43,6 +43,7 @@ import { useLoadGuilds } from '@/hooks/useLoadGuilds';
 import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
+import { nameIncludes } from '@utils/nameMatch';
 
 const PAGE_SIZE = 50;
 
@@ -71,10 +72,8 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
   const filteredGuilds = useMemo(() => {
     if (!filterText.trim()) return guilds;
 
-    const searchLower = filterText.toLowerCase().trim();
-    return guilds.filter((guild) =>
-      guild.name?.toLowerCase().includes(searchLower)
-    );
+    // #274: NFKC fold so fancy font Server names match plain typing.
+    return guilds.filter((guild) => nameIncludes(guild.name, filterText));
   }, [guilds, filterText]);
 
   const visible = filteredGuilds.slice(0, visibleCount);

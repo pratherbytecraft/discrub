@@ -71,6 +71,7 @@ import BulkEditDialog from '@containers/PurgeView/BulkEditDialog';
 import { t as translate } from '@/i18n';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
+import { nameIncludes } from '@utils/nameMatch';
 
 const PAGE_SIZE = 50;
 
@@ -275,16 +276,14 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
     const sorted = sortDms(dms, dmSortOrder);
     if (!filterText.trim()) return sorted;
 
-    const searchLower = filterText.toLowerCase().trim();
+    // #274: NFKC fold so fancy font names match plain typing.
     return sorted.filter((dm) => {
       // Match the custom group name AND member usernames — a named group's
       // primary label is its name (#227), but people still look for groups
       // by who's in them.
-      if (getDmName(dm).toLowerCase().includes(searchLower)) return true;
+      if (nameIncludes(getDmName(dm), filterText)) return true;
       return (dm.recipients ?? []).some(
-        (r) =>
-          r.username?.toLowerCase().includes(searchLower) ||
-          r.global_name?.toLowerCase().includes(searchLower),
+        (r) => nameIncludes(r.username, filterText) || nameIncludes(r.global_name, filterText),
       );
     });
   }, [dms, filterText, dmSortOrder]);

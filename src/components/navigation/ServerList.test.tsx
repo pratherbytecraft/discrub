@@ -148,6 +148,19 @@ describe('ServerList', () => {
       expect(screen.getByText('Beta Server')).toBeInTheDocument();
     });
 
+    // #274: a Server named in a fancy Unicode font has to match plain typing.
+    it('should match fancy font server names against plain text', () => {
+      const fancy = createMockGuild({ id: 'g-fancy', name: '𝘛𝘩𝘦 𝘎𝘢𝘮𝘪𝘯𝘨 𝘓𝘰𝘶𝘯𝘨𝘦' });
+      renderWithProviders(<ServerList filterText="gaming" />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+          guild: { guilds: [...guilds, fancy], selectedGuild: null, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
+        }),
+      });
+      expect(screen.getByText('𝘛𝘩𝘦 𝘎𝘢𝘮𝘪𝘯𝘨 𝘓𝘰𝘶𝘯𝘨𝘦')).toBeInTheDocument();
+      expect(screen.queryByText('Alpha Server')).toBeNull();
+    });
+
     it('should show all guilds when filter is empty', () => {
       renderWithProviders(<ServerList filterText="" />, {
         preloadedState: createBaseState({

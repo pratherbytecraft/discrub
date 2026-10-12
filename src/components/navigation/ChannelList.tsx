@@ -54,6 +54,7 @@ import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
 import BulkEditDialog from '@containers/PurgeView/BulkEditDialog';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
+import { nameIncludes } from '@utils/nameMatch';
 
 export type QueueMarks = Record<string, 'done' | 'running'>;
 interface ChannelListProps {
@@ -210,10 +211,8 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
   const filteredChannels = useMemo(() => {
     if (!filterText.trim()) return textChannels;
 
-    const searchLower = filterText.toLowerCase().trim();
-    return textChannels.filter((channel) =>
-      channel.name?.toLowerCase().includes(searchLower)
-    );
+    // #274: NFKC fold so fancy font Channel names match plain typing.
+    return textChannels.filter((channel) => nameIncludes(channel.name, filterText));
   }, [textChannels, filterText]);
 
   // Channels eligible for "Select all" in multi-select mode: anything

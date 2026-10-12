@@ -147,6 +147,20 @@ describe('ChannelList', () => {
       });
       expect(screen.getByText('general')).toBeInTheDocument();
     });
+
+    // #274: a Channel named in a fancy Unicode font has to match plain typing.
+    it('should match fancy font channel names against plain text', () => {
+      const fancy = createMockChannel({ id: 'ch-fancy', name: '𝓶𝓮𝓶𝓮𝓼', type: 0 });
+      renderWithProviders(<ChannelList filterText="memes" />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+          guild: { guilds: [guild], selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
+          channel: { channels: [textChannel, fancy], selectedChannel: null, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
+        }),
+      });
+      expect(screen.getByText('𝓶𝓮𝓶𝓮𝓼')).toBeInTheDocument();
+      expect(screen.queryByText('general')).toBeNull();
+    });
   });
 
   describe('Selection', () => {

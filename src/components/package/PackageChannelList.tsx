@@ -45,6 +45,7 @@ import { useTranslation } from 'react-i18next';
 
 interface PackageChannelListProps {
   filterText?: string;
+import { nameIncludes } from '@utils/nameMatch';
 }
 
 /**
@@ -77,15 +78,12 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
 
   const filtered = useMemo(() => {
     if (!parsed) return [];
-    const q = filterText.trim().toLowerCase();
+    const q = filterText.trim();
     return parsed.channels.filter((c) => {
       if (!showEmpty && c.messageCount === 0) return false;
       if (!q) return true;
-      const label = getPackageChannelLabel(c);
-      return (
-        label.toLowerCase().includes(q) ||
-        (c.guildName?.toLowerCase().includes(q) ?? false)
-      );
+      // #274: NFKC fold so fancy font names match plain typing.
+      return nameIncludes(getPackageChannelLabel(c), q) || nameIncludes(c.guildName, q);
     });
   }, [parsed, filterText, showEmpty]);
 

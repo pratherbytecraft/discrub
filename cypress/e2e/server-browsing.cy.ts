@@ -22,6 +22,33 @@ describe('Server Browsing', () => {
     cy.contains('Dev Community').should('not.exist');
   });
 
+  // #274: a Server named in a fancy Unicode font (mathematical italic here)
+  // has to show up when the person types the plain letters.
+  it('matches fancy font server names against plain typing (#274)', () => {
+    const fancyName = '𝘛𝘩𝘦 𝘎𝘢𝘮𝘪𝘯𝘨 𝘓𝘰𝘶𝘯𝘨𝘦';
+    // The guild list comes from the login fetch, so the fancy Server has
+    // to ride in on that response rather than a store dispatch the fetch
+    // would overwrite.
+    cy.fixture('guilds.json').then((guilds) => {
+      cy.intercept('GET', '**/api/v10/users/@me/guilds', {
+        statusCode: 200,
+        body: [
+          ...guilds,
+          { id: '999000000000000001', name: fancyName, icon: null, owner: false, permissions: '0', features: [] },
+        ],
+      }).as('getGuilds');
+    });
+    // Reload so the app boots again and fetches the list through this
+    // intercept (the newest intercept wins).
+    cy.reload();
+    cy.wait('@getGuilds');
+    cy.contains(fancyName).should('be.visible');
+    cy.get('input[placeholder="Search servers..."]').type('the gaming');
+    cy.contains(fancyName).should('be.visible');
+    cy.contains('Gaming Lounge').should('not.exist');
+    cy.contains('Cypress Test Server').should('not.exist');
+  });
+
   it('shows channel list after clicking a guild', () => {
     cy.selectServer('Cypress Test Server');
     cy.contains('general').should('be.visible');
