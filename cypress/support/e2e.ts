@@ -33,6 +33,7 @@ const DBS_TO_WIPE = [
   'Discrub-statuslog',
   'Discrub-package',
   'Discrub-media',
+  'Discrub-workspaces',
   'keyval-store',
 ];
 

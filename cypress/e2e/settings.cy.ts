@@ -36,6 +36,49 @@ describe('Settings', () => {
     });
   });
 
+  // ─── Reset Discrub drops the workspaces database (2.2.5 WP1) ──────
+  it('Reset Discrub deletes the Discrub-workspaces database', () => {
+    // Seed the database with the same schema the app creates, so a later
+    // open by the app finds every store in place.
+    cy.window({ log: false }).then((win) => {
+      return new Cypress.Promise<void>((resolve, reject) => {
+        const req = win.indexedDB.open('Discrub-workspaces', 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          const rows = db.createObjectStore('rows', { keyPath: ['wid', 'cid', 'id'] });
+          rows.createIndex('byAuthor', ['wid', 'cid', 'authorId', 'id'], { unique: false });
+          db.createObjectStore('workspaces', { keyPath: 'wid' });
+          db.createObjectStore('meta');
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('workspaces', 'readwrite');
+          tx.objectStore('workspaces').put({ wid: 'default', name: 'Default' });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    });
+    cy.window({ log: false })
+      .then((win) => win.indexedDB.databases())
+      .then((dbs) => expect(dbs.map((d) => d.name)).to.include('Discrub-workspaces'));
+
+    cy.get('[aria-label="Settings"]').click();
+    cy.get('[role="dialog"]').contains('button', 'Reset Discrub').click();
+    cy.get('[data-testid="reset-discrub-button"]').click();
+    cy.get('[data-testid="reset-discrub-confirm"]').click();
+
+    // resetDiscrubData reloads the page; the env token signs back in.
+    cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
+    cy.window({ log: false })
+      .then((win) => win.indexedDB.databases())
+      .then((dbs) => expect(dbs.map((d) => d.name)).not.to.include('Discrub-workspaces'));
+  });
+
   // ─── Safest zone (2.1.3): delay sliders reach 30s ─────────────────
   it('lets the search delay reach 30s in the Safest zone and persists it', () => {
     cy.get('[aria-label="Settings"]').click();

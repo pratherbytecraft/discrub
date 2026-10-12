@@ -17,6 +17,10 @@
  *   Discrub-statuslog   status log entries (timestamp-keyed)
  *   Discrub-package     imported package + rehydration cache
  *   Discrub-media       (reserved) avatar/emoji binary blobs
+ *   Discrub-workspaces  workspaces and their message rows (2.2.5). Not
+ *                       idb-keyval: it needs a compound key and an index,
+ *                       so it is opened raw in services/workspaceStore.ts
+ *                       and is cleared here only by resetDiscrubData.
  *
  * Each database holds ONE object store (`keyval`) because idb-keyval
  * manages a single store per database. Per-purpose split (vs one DB
@@ -66,6 +70,7 @@ import {
   setMany as idbSetMany,
   type UseStore,
 } from 'idb-keyval';
+import { deleteWorkspaceDatabase } from '@/services/workspaceStore';
 
 const DB_PREFIX = 'Discrub-';
 
@@ -463,7 +468,8 @@ async function migrateStatusLogLocalStorage(): Promise<number> {
  * Wipe every byte of Discrub data on this device + reload.
  *
  * Single source of truth for "what counts as Discrub data" — keep this
- * in sync with any new IDB store added to `ALL_STORE_NAMES`. Used by the
+ * in sync with any new IDB store added to `ALL_STORE_NAMES`, plus the raw
+ * `Discrub-workspaces` database (2.2.5). Used by the
  * Reset button on LandingPage and Settings (#134) to recover from any
  * stale-state issue without DevTools.
  *
@@ -472,9 +478,10 @@ async function migrateStatusLogLocalStorage(): Promise<number> {
  * failure would defeat the whole point of the escape hatch.
  */
 export async function resetDiscrubData(): Promise<void> {
-  await Promise.allSettled(
-    ALL_STORE_NAMES.map((name) => storage[name].clear()),
-  );
+  await Promise.allSettled([
+    ...ALL_STORE_NAMES.map((name) => storage[name].clear()),
+    deleteWorkspaceDatabase(),
+  ]);
 
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     try {

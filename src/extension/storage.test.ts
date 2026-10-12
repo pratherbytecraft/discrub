@@ -15,6 +15,8 @@ import {
   type StoreName,
 } from './storage';
 import { clear as idbClear, createStore, set as idbSet } from 'idb-keyval';
+import { countRows, ensureDefaultWorkspace, writePage, WORKSPACE_DB_NAME } from '@/services/workspaceStore';
+import { createMockMessage } from '@/test/fixtures';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 
 const ALL_STORES: StoreName[] = [
@@ -447,6 +449,17 @@ describe('resetDiscrubData (Backlog #134 escape hatch)', () => {
     for (const name of ALL_STORES) {
       expect(await storage[name].get('seed')).toBeNull();
     }
+  });
+
+  it('deletes the workspaces database (2.2.5)', async () => {
+    await ensureDefaultWorkspace();
+    await writePage('default', '1000', [createMockMessage({ id: '1' })], { kind: 'channel', guildId: null, name: 'general' });
+    expect(await countRows('default', '1000')).toBe(1);
+
+    await resetDiscrubData();
+
+    const names = await indexedDB.databases();
+    expect(names.map((d) => d.name)).not.toContain(WORKSPACE_DB_NAME);
   });
 
   it('clears localStorage', async () => {
