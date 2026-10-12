@@ -42,8 +42,10 @@ export interface MultiSelectControlsProps {
  * - Status (count + select-all toggle link) is plain text + a quiet
  *   link, not buttons. It conveys state, not actions.
  * - Action buttons (Export / Purge) reserve the visual weight of a
- *   filled button. They only appear when the user has something
- *   selected — the status row implies "you need to select first."
+ *   filled button. They show as soon as multi select is on, disabled
+ *   until something is selected, so the list below does not move on the
+ *   first tick (pass 3, row 103: a quick second click landed on the
+ *   channel above).
  * - Thin divider separates status from actions when both are visible,
  *   for clear hierarchy without excess chrome.
  */
@@ -64,8 +66,8 @@ const MultiSelectControls = ({
   if (!active) return null;
 
   const toggleLabel = allSelected ? t('nav.deselectAll') : t('nav.selectAll');
-  const resumable = !!(resume?.export || resume?.purge || resume?.edit);
-  const showActions = selectedCount > 0 || resumable;
+  // A Resume button works with nothing selected.
+  const noneSelected = selectedCount === 0;
   const resumeLabel = t('workspace.resume');
 
   return (
@@ -95,67 +97,69 @@ const MultiSelectControls = ({
         </Link>
       </Box>
 
-      {showActions && (
-        <>
-          <Divider sx={{ my: 0.25 }} />
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            {onExport && (
-              <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                startIcon={<DownloadIcon fontSize="small" />}
-                onClick={onExport}
-                aria-label={t('nav.exportSelectedAria', { noun })}
-                data-testid="multi-select-export"
-                sx={{ textTransform: 'none' }}
-              >
-                {resume?.export ? resumeLabel : t('nav.export')}
-              </Button>
-            )}
-            {onEdit && (
-              <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                startIcon={<EditIcon fontSize="small" />}
-                onClick={onEdit}
-                aria-label={t('nav.editSelectedAria', { noun })}
-                data-testid="multi-select-edit"
-                sx={{ textTransform: 'none' }}
-              >
-                {resume?.edit ? resumeLabel : t('nav.edit')}
-              </Button>
-            )}
-            {onPurge && (
-              <Button
-                size="small"
-                variant="contained"
-                color="error"
-                startIcon={<PurgeIcon fontSize="small" />}
-                onClick={onPurge}
-                aria-label={t('nav.purgeSelectedAria', { noun })}
-                data-testid="multi-select-purge"
-                sx={{ textTransform: 'none' }}
-              >
-                {resume?.purge ? resumeLabel : t('nav.purge')}
-              </Button>
-            )}
+      <>
+        <Divider sx={{ my: 0.25 }} />
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          {onExport && (
             <Button
               size="small"
-              variant="outlined"
-              color="inherit"
-              startIcon={<CopyIcon fontSize="small" />}
-              onClick={onCopyNames}
-              aria-label={t('nav.copySelectedNamesAria', { noun })}
-              data-testid="multi-select-copy"
+              variant="contained"
+              color="primary"
+              startIcon={<DownloadIcon fontSize="small" />}
+              onClick={onExport}
+              aria-label={t('nav.exportSelectedAria', { noun })}
+              disabled={noneSelected && !resume?.export}
+              data-testid="multi-select-export"
               sx={{ textTransform: 'none' }}
             >
-              {t('nav.copy')}
+              {resume?.export ? resumeLabel : t('nav.export')}
             </Button>
-          </Box>
-        </>
-      )}
+          )}
+          {onEdit && (
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              startIcon={<EditIcon fontSize="small" />}
+              onClick={onEdit}
+              aria-label={t('nav.editSelectedAria', { noun })}
+              disabled={noneSelected && !resume?.edit}
+              data-testid="multi-select-edit"
+              sx={{ textTransform: 'none' }}
+            >
+              {resume?.edit ? resumeLabel : t('nav.edit')}
+            </Button>
+          )}
+          {onPurge && (
+            <Button
+              size="small"
+              variant="contained"
+              color="error"
+              startIcon={<PurgeIcon fontSize="small" />}
+              onClick={onPurge}
+              aria-label={t('nav.purgeSelectedAria', { noun })}
+              disabled={noneSelected && !resume?.purge}
+              data-testid="multi-select-purge"
+              sx={{ textTransform: 'none' }}
+            >
+              {resume?.purge ? resumeLabel : t('nav.purge')}
+            </Button>
+          )}
+          <Button
+            size="small"
+            variant="outlined"
+            color="inherit"
+            startIcon={<CopyIcon fontSize="small" />}
+            onClick={onCopyNames}
+            aria-label={t('nav.copySelectedNamesAria', { noun })}
+            disabled={noneSelected}
+            data-testid="multi-select-copy"
+            sx={{ textTransform: 'none' }}
+          >
+            {t('nav.copy')}
+          </Button>
+        </Box>
+      </>
     </Stack>
   );
 };

@@ -232,7 +232,7 @@ describe('ServerList', () => {
       expect(state.guild.selectedGuild).toBeNull();
     });
 
-    it('shows the MultiSelectControls Copy button only after selecting at least one server', () => {
+    it('enables the MultiSelectControls Copy button only after selecting at least one server', () => {
       renderWithProviders(<ServerList />, {
         preloadedState: createBaseState({
           auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
@@ -240,9 +240,9 @@ describe('ServerList', () => {
         }),
       });
       fireEvent.click(screen.getByLabelText('Toggle multi-select'));
-      expect(screen.queryByTestId('multi-select-copy')).toBeNull();
+      expect(screen.getByTestId('multi-select-copy')).toBeDisabled();
       fireEvent.click(screen.getByText('Alpha Server'));
-      expect(screen.getByTestId('multi-select-copy')).toBeInTheDocument();
+      expect(screen.getByTestId('multi-select-copy')).toBeEnabled();
     });
 
     it('renders Purge but not Export in server multi-select (#255)', () => {

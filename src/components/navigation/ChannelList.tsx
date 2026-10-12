@@ -202,6 +202,17 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
     );
   }, [filteredChannels, guildPermissions, memberRoles, selectedGuild?.id, currentUserId]);
 
+  // Row 130 (pass 3): Select all and its count take text channels only.
+  // A voice or stage channel's chat is usually empty and often answers
+  // 404, so it failed every bulk run it was swept into; it can still be
+  // ticked on its own.
+  const selectAllChannelsList = useMemo(
+    () => accessibleChannels.filter((ch) => ch.type !== ChannelType.GUILD_VOICE && ch.type !== ChannelType.GUILD_STAGE_VOICE),
+    [accessibleChannels],
+  );
+  const allSelectableSelected = selectAllChannelsList.length > 0
+    && selectAllChannelsList.every((ch) => selectedChannels.some((sel) => sel.id === ch.id));
+
   // Build category map from all channels (including type 4 categories)
   const categoryMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -358,14 +369,10 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
       <MultiSelectControls
         active={multiSelectMode && !queue}
         selectedCount={selectedChannels.length}
-        totalCount={accessibleChannels.length}
-        allSelected={accessibleChannels.length > 0 && selectedChannels.length === accessibleChannels.length}
+        totalCount={selectAllChannelsList.length}
+        allSelected={allSelectableSelected}
         onToggleAll={() =>
-          dispatch(
-            accessibleChannels.length > 0 && selectedChannels.length === accessibleChannels.length
-              ? deselectAllChannels()
-              : selectAllChannels(accessibleChannels),
-          )
+          dispatch(allSelectableSelected ? deselectAllChannels() : selectAllChannels(selectAllChannelsList))
         }
         onExport={() => setBulkExportOpen(true)}
         onPurge={() => setBulkPurgeOpen(true)}

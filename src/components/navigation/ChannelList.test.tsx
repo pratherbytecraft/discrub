@@ -402,7 +402,7 @@ describe('ChannelList', () => {
       expect(row).not.toHaveClass('Mui-disabled');
     });
 
-    it('includes voice channels in the multi-select Select-all set when the user has access', () => {
+    it('leaves voice and stage channels out of Select all and its count (pass 3, row 130)', () => {
       const { store } = renderWithProviders(<ChannelList />, {
         preloadedState: createBaseState({
           auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
@@ -411,11 +411,23 @@ describe('ChannelList', () => {
         }),
       });
       fireEvent.click(screen.getByLabelText('Toggle multi-select'));
+      expect(screen.getByTestId('multi-select-count')).toHaveTextContent('0 of 1');
       fireEvent.click(screen.getByTestId('multi-select-toggle-all'));
       const selectedIds = store.getState().channel.selectedChannels.map((c: { id: string }) => c.id);
-      expect(selectedIds).toContain('ch-1');
-      expect(selectedIds).toContain('ch-3');
-      expect(selectedIds).toContain('ch-stage');
+      expect(selectedIds).toEqual(['ch-1']);
+      expect(screen.getByTestId('multi-select-toggle-all')).toHaveTextContent('Deselect all');
+    });
+
+    it('counts all text channels as selected when a voice channel is ticked as well', () => {
+      renderWithProviders(<ChannelList />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+          guild: { guilds: [accessibleGuild], selectedGuild: accessibleGuild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
+          channel: { channels: [textChannel, voiceChannel], selectedChannel: null, selectedChannels: [textChannel, voiceChannel], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
+        }),
+      });
+      fireEvent.click(screen.getByLabelText('Toggle multi-select'));
+      expect(screen.getByTestId('multi-select-toggle-all')).toHaveTextContent('Deselect all');
     });
   });
 });

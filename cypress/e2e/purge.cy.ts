@@ -267,9 +267,9 @@ describe('Bulk Purge Operations', () => {
       cy.get('[aria-label="Purge selected channels"]').should('be.visible');
     });
 
-    it('should not show Purge button with no selections', () => {
+    it('keeps the Purge button in place but disabled with no selections (row 103)', () => {
       cy.get('[aria-label="Toggle multi-select"]').first().click();
-      cy.get('[aria-label="Purge selected channels"]').should('not.exist');
+      cy.get('[aria-label="Purge selected channels"]').should('be.disabled');
     });
 
     it('should open BulkPurgeDialog when clicking Purge', () => {

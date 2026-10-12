@@ -1332,6 +1332,18 @@ describe('messageSlice', () => {
       expect(state.error).toBe('Failed to fetch messages');
     });
 
+    it('says there is no access on a 403 and leaves nothing more to load (pass 3, row 97)', async () => {
+      vi.mocked(discordService.getDiscordService).mockReturnValue({
+        fetchMessageData: vi.fn().mockResolvedValue({ success: false, status: 403 }),
+      } as any);
+
+      await store.dispatch(fetchMessages({ channelId: 'channel-1', token: 'token' }));
+
+      const state = store.getState().message;
+      expect(state.error).toBe("You don't have access to this channel.");
+      expect(state.pagination.hasMore).toBe(false);
+    });
+
     it('should clear selected messages on fetch', async () => {
       store.dispatch(setSelectedIds(['msg-1']));
 

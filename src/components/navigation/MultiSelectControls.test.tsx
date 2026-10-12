@@ -38,11 +38,17 @@ describe('MultiSelectControls (Backlog #135)', () => {
     expect(link).toHaveAttribute('aria-label', 'Deselect all channels');
   });
 
-  it('hides Export, Purge, and Copy buttons when nothing is selected', () => {
+  it('keeps Export, Purge, and Copy in place but disabled when nothing is selected (pass 3, row 103)', () => {
     render(<MultiSelectControls {...baseProps} active selectedCount={0} />);
-    expect(screen.queryByTestId('multi-select-export')).toBeNull();
-    expect(screen.queryByTestId('multi-select-purge')).toBeNull();
-    expect(screen.queryByTestId('multi-select-copy')).toBeNull();
+    expect(screen.getByTestId('multi-select-export')).toBeDisabled();
+    expect(screen.getByTestId('multi-select-purge')).toBeDisabled();
+    expect(screen.getByTestId('multi-select-copy')).toBeDisabled();
+  });
+
+  it('leaves a Resume button enabled with nothing selected', () => {
+    render(<MultiSelectControls {...baseProps} active selectedCount={0} resume={{ purge: true }} />);
+    expect(screen.getByTestId('multi-select-purge')).toBeEnabled();
+    expect(screen.getByTestId('multi-select-export')).toBeDisabled();
   });
 
   it('shows Export, Purge, and Copy buttons once at least one item is selected', () => {

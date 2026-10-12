@@ -75,9 +75,9 @@ describe('Bulk Edit Channels (#215)', () => {
       cy.get('[aria-label="Edit selected channels"]').should('be.visible');
     });
 
-    it('does not show the Edit button with no selection', () => {
+    it('keeps the Edit button in place but disabled with no selection (row 103)', () => {
       cy.get('[aria-label="Toggle multi-select"]').first().click();
-      cy.get('[aria-label="Edit selected channels"]').should('not.exist');
+      cy.get('[aria-label="Edit selected channels"]').should('be.disabled');
     });
 
     it('opens BulkEditDialog when clicking Edit', () => {

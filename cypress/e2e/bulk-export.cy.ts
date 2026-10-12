@@ -37,9 +37,9 @@ describe('Bulk Export', () => {
       cy.get('[aria-label="Export selected channels"]').should('be.visible');
     });
 
-    it('should not show Export Selected button with no selections', () => {
+    it('keeps Export Selected in place but disabled with no selections (row 103)', () => {
       cy.get('[aria-label="Toggle multi-select"]').first().click();
-      cy.get('[aria-label="Export selected channels"]').should('not.exist');
+      cy.get('[aria-label="Export selected channels"]').should('be.disabled');
     });
 
     it('should select all channels with Select All button', () => {

@@ -669,6 +669,19 @@ const attachPartialResult = (error: unknown, partial: unknown): void => {
   if (carrier.partialResult === undefined) carrier.partialResult = partial;
 };
 
+/** Discord's error code for a channel that no longer exists. */
+const UNKNOWN_CHANNEL_CODE = 10003;
+
+/**
+ * Row 135 (pass 3): a channel deleted mid purge answers every next
+ * delete with Unknown Channel. The channel stops at the first one and
+ * ends as a channel error, instead of 25 more failed requests before the
+ * failure streak pauses the run.
+ */
+const throwIfChannelGone = (response: { code?: number }): void => {
+  if (response.code === UNKNOWN_CHANNEL_CODE) throw new Error(t('status.purge.channelGone'));
+};
+
 /**
  * Purge messages from a single channel using the Search API.
  * Tracks searchOffset to avoid infinite loops on system-message-only batches.
@@ -1197,6 +1210,7 @@ async function purgeChannelMessages(
               noteLiveDeletion(targetChannelId, message.id);
             } else {
               throwIfSignInExpired(response);
+              throwIfChannelGone(response);
               totalFailed++;
               dispatch(addStatusEntry({
                 level: 'warning',
@@ -1217,6 +1231,7 @@ async function purgeChannelMessages(
               // Don't count as "stripped". Log once per miss so the user
               // can audit; keep Discord's status for diagnostics.
               throwIfSignInExpired(response);
+              throwIfChannelGone(response);
               totalFailed++;
               dispatch(addStatusEntry({
                 level: 'warning',
@@ -1242,6 +1257,7 @@ async function purgeChannelMessages(
               failureStreak = 0;
             } else {
               throwIfSignInExpired(response);
+              throwIfChannelGone(response);
               totalFailed++;
               dispatch(addStatusEntry({
                 level: 'warning',
@@ -1270,6 +1286,7 @@ async function purgeChannelMessages(
             if (finalPassIds.has(message.id)) totalFinalPass++;
           } else {
             throwIfSignInExpired(response);
+            throwIfChannelGone(response);
             totalFailed++;
             dispatch(addStatusEntry({
               level: 'warning',

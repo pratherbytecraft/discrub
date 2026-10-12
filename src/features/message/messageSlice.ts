@@ -1335,7 +1335,8 @@ export const fetchMessages = createAsyncThunk(
       );
 
       if (!response.success || !response.data) {
-        return rejectWithValue('Failed to fetch messages');
+        // Row 97 (pass 3): a channel the account cannot read says so once, in the app language.
+        return rejectWithValue(response.status === 403 ? t('status.msg.noAccess') : t('status.msg.fetchFailed'));
       }
 
       const messages = response.data as Message[];
@@ -1354,9 +1355,8 @@ export const fetchMessages = createAsyncThunk(
         settings,
       };
     } catch (error) {
-      return rejectWithValue(
-        error instanceof Error ? error.message : 'Failed to fetch messages'
-      );
+      console.error('[messages] first page failed', error);
+      return rejectWithValue(t('status.msg.fetchFailed'));
     }
   }
 );
@@ -4002,6 +4002,9 @@ const messageSlice = createSlice({
       .addCase(fetchMessages.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
+        // Row 97: nothing loaded, so there is nothing more to load. This
+        // hides More available, Load All and Resume for that channel.
+        state.pagination.hasMore = false;
       })
       // Fetch more messages (infinite scroll)
       .addCase(fetchMoreMessages.pending, (state) => {

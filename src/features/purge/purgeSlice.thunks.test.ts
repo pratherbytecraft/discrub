@@ -1247,6 +1247,28 @@ describe('purgeSlice thunks', () => {
       expect(warning).toBeDefined();
     });
 
+    it('stops the channel at the first Unknown Channel and records it as a channel error (pass 3, row 135)', async () => {
+      setupSearchResults([[mockMessage('m1'), mockMessage('m2'), mockMessage('m3')]]);
+      mockDeleteMessage
+        .mockResolvedValueOnce({ success: true, status: 204 })
+        .mockResolvedValue({ success: false, status: 404, code: 10003 });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general'), mockChannel('ch2', 'random')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      // m1 deleted, m2 hit the gone channel; m3 was never tried in ch1.
+      const ch1Calls = mockDeleteMessage.mock.calls.filter((call) => call[2] === 'ch1');
+      expect(ch1Calls).toHaveLength(2);
+      const entries = store.getState().status.entries;
+      expect(entries.some((e) => e.level === 'error' && e.message.includes('general') && e.message.includes('This channel no longer exists.'))).toBe(true);
+      expect(store.getState().purge.channelErrorCount).toBe(1);
+    });
+
     it('regular-delete defensively skips messages whose author does not match the targeted user (#148)', async () => {
       // Discord's docs say search returns hits-only, but if that ever
       // regresses to include context messages, we never want to delete a
