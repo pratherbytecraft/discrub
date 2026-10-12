@@ -46,6 +46,14 @@ describe('createDownloadWriter', () => {
     expect((w as unknown as { tag: string }).tag).toBe('drip');
   });
 
+  it('hands drip-fs a name the download URL keeps as is', async () => {
+    Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (X11; Linux) Chrome/126', configurable: true });
+    await createDownloadWriter('Raid archive #2.discrub-workspace');
+    expect(createStreamingDownload).toHaveBeenCalledWith('Raid_archive_2.discrub-workspace');
+    await createDownloadWriter('my-export-2026-02-25.zip');
+    expect(createStreamingDownload).toHaveBeenLastCalledWith('my-export-2026-02-25.zip');
+  });
+
   it('delegates to drip-fs on iOS too (1.1 stages through OPFS itself)', async () => {
     Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) CriOS/126', configurable: true });
     const w = await createDownloadWriter('x.zip');

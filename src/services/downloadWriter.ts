@@ -16,6 +16,16 @@ export const isIOSSafari = (nav: Navigator = navigator): boolean => {
   return applePhone || iPadOSDesktopUA;
 };
 
+/**
+ * drip-fs puts the file name into the download URL as is. Chrome encodes
+ * a space, a # or a non ASCII letter there, the URL no longer matches,
+ * and no file is saved while the export still finishes (2.2.5 row 30).
+ * Anything but letters, digits, dot, dash and underscore becomes one
+ * underscore.
+ */
+export const urlSafeFileName = (filename: string): string =>
+  filename.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+|_+$/g, '');
+
 /** Buffered writer with the drip-fs `StreamDownloadWriter` shape. */
 export const createBlobDownloadWriter = (
   filename: string,
@@ -161,9 +171,10 @@ export const createDownloadWriter = async (
   const opfs = stagesThroughOpfs();
   try {
     if (opfs) return await createOpfsDownloadWriter(filename, size);
+    const streamed = urlSafeFileName(filename) || 'download';
     return size && size > 0
-      ? await createStreamingDownload(filename, { size })
-      : await createStreamingDownload(filename);
+      ? await createStreamingDownload(streamed, { size })
+      : await createStreamingDownload(streamed);
   } catch (err) {
     if (!opfs && !isIOSSafari()) throw err;
     console.warn('Could not stage the download on this device; buffering in memory instead.', err);

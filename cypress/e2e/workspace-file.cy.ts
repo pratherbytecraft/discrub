@@ -115,6 +115,27 @@ describe('Workspace file (2.2.5 WP6b)', () => {
     });
   });
 
+  it('saves a workspace with a space in its name under a name the download keeps (row 30)', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      interceptPagedChannel(messages[0]);
+      cy.contains(CHANNEL).click();
+      cy.wait('@pagedMessages');
+      cy.contains('100 messages').should('be.visible');
+
+      openPopover();
+      cy.get('[data-testid="workspace-row-toggle-default"]').click();
+      cy.get('[data-testid="workspace-rename"]').click();
+      cy.get('[data-testid="workspace-rename-input"]').clear().type('Raid archive{enter}');
+      cy.get('[data-testid="workspace-row-default"]').should('contain', 'Raid archive');
+      cy.get('[data-testid="workspace-export"]').click();
+      cy.get('[data-testid="workspace-confirm-button"]').click();
+      cy.contains('Saved Raid archive to a workspace file', { timeout: 15000 }).should('exist');
+      cy.task('downloads:list', null, { timeout: 15000 }).should((files) => {
+        expect((files as Array<{ name: string }>).map((f) => f.name)).to.include('Raid_archive.discrub-workspace');
+      });
+    });
+  });
+
   it('refuses a file that is not a workspace', () => {
     openPopover();
     cy.get('[data-testid="workspace-import-input"]').selectFile({ contents: Cypress.Buffer.from('not a zip'), fileName: 'notes.discrub-workspace' }, { force: true });

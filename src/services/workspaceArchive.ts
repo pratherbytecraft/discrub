@@ -22,6 +22,7 @@ import type { Message } from 'discrub-core/types/discord-types';
 import type { WorkspaceAuthor, WorkspaceRecord } from '@features/workspace/workspaceTypes';
 import { WORKSPACE_SCHEMA_VERSION } from '@features/workspace/workspaceTypes';
 import { StreamingZipService } from './streamingZipService';
+import { urlSafeFileName } from './downloadWriter';
 import { readPackageEntries, type PackageZipSource } from './packageZipReader';
 import { getWorkspace, isRunCid, plainCidOf, readWindow, writePage } from './workspaceStore';
 
@@ -58,10 +59,9 @@ export class WorkspaceFileError extends Error {
 
 const json = (value: unknown): Blob => new Blob([JSON.stringify(value)], { type: 'application/json' });
 
-/** Characters no file system takes in a name. */
+/** The name the file is saved under: only characters the download URL keeps as they are. */
 export function workspaceFileName(name: string): string {
-  const cleaned = name.replace(/[\\/:*?"<>|]+/g, '_').trim();
-  return cleaned || 'workspace';
+  return urlSafeFileName(name.trim()) || 'workspace';
 }
 
 export function manifestOf(record: WorkspaceRecord, exportedAt = Date.now()): WorkspaceManifest {

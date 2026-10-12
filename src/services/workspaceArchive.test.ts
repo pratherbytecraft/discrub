@@ -84,8 +84,8 @@ describe('workspace files', () => {
     const wid = await seedRaidArchive();
     const manifest = await exportWorkspaceFile(wid, { partSize: 3 });
     expect(manifest).toMatchObject({ format: 'discrub-workspace', schema: WORKSPACE_SCHEMA_VERSION, wid, name: 'Raid: archive', conversations: 2, messages: 10 });
-    expect([...files.keys()]).toEqual(['Raid_ archive.discrub-workspace']);
-    const entries = Object.keys(unzipSync(fileBytes('Raid_ archive.discrub-workspace')));
+    expect([...files.keys()]).toEqual(['Raid_archive.discrub-workspace']);
+    const entries = Object.keys(unzipSync(fileBytes('Raid_archive.discrub-workspace')));
     expect(entries).toEqual([
       'manifest.json',
       'workspace.json',
@@ -100,14 +100,14 @@ describe('workspace files', () => {
   it('reads the manifest alone', async () => {
     const wid = await seedRaidArchive();
     await exportWorkspaceFile(wid);
-    const manifest = await readWorkspaceManifest(fileBytes('Raid_ archive.discrub-workspace'));
+    const manifest = await readWorkspaceManifest(fileBytes('Raid_archive.discrub-workspace'));
     expect(manifest).toMatchObject({ wid, name: 'Raid: archive', messages: 10 });
   });
 
   it('imports into a new workspace with every row, the record and the authors', async () => {
     const wid = await seedRaidArchive();
     await exportWorkspaceFile(wid, { partSize: 4 });
-    const bytes = fileBytes('Raid_ archive.discrub-workspace');
+    const bytes = fileBytes('Raid_archive.discrub-workspace');
     const progress: number[] = [];
     const result = await importWorkspaceFile(
       bytes,
@@ -142,7 +142,7 @@ describe('workspace files', () => {
     const manifest = await exportWorkspaceFile(wid);
     expect(manifest).toMatchObject({ conversations: 2, messages: 12 });
     await importWorkspaceFile(
-      fileBytes('Raid_ archive.discrub-workspace'),
+      fileBytes('Raid_archive.discrub-workspace'),
       { wid: 'imported', name: 'Raid copy', color: '#faa61a' },
       (record) => installImportedWorkspace(record, false),
     );
@@ -156,7 +156,7 @@ describe('workspace files', () => {
     const wid = await seedRaidArchive();
     await exportWorkspaceFile(wid);
     await importWorkspaceFile(
-      fileBytes('Raid_ archive.discrub-workspace'),
+      fileBytes('Raid_archive.discrub-workspace'),
       { wid: LEGACY_DEFAULT_WORKSPACE_ID, name: 'Raid: archive', color: '#3ba55d' },
       (record) => installImportedWorkspace(record, true),
     );
@@ -171,7 +171,7 @@ describe('workspace files', () => {
     const wid = await seedRaidArchive();
     await exportWorkspaceFile(wid);
     await expect(
-      importWorkspaceFile(fileBytes('Raid_ archive.discrub-workspace'), { wid, name: 'x', color: '#000' }, (record) => installImportedWorkspace(record, false)),
+      importWorkspaceFile(fileBytes('Raid_archive.discrub-workspace'), { wid, name: 'x', color: '#000' }, (record) => installImportedWorkspace(record, false)),
     ).rejects.toThrow(/already exists/);
     expect(await countRows(wid, '100')).toBe(7);
   });
@@ -184,9 +184,14 @@ describe('workspace files', () => {
     await expect(readWorkspaceManifest(u8('not a zip at all'))).rejects.toMatchObject({ reason: 'notWorkspace' });
   });
 
-  it('cleans names no file system takes', () => {
-    expect(workspaceFileName('Raid: archive')).toBe('Raid_ archive');
+  it('keeps only characters the download URL takes as they are', () => {
+    expect(workspaceFileName('Raid archive')).toBe('Raid_archive');
+    expect(workspaceFileName('Raid: archive')).toBe('Raid_archive');
     expect(workspaceFileName('a/b\\c')).toBe('a_b_c');
+    expect(workspaceFileName('Mod #2 (50%)')).toBe('Mod_2_50');
+    expect(workspaceFileName('Ünïcödé')).toBe('n_c_d');
+    expect(workspaceFileName('Mod-work_v2.1')).toBe('Mod-work_v2.1');
     expect(workspaceFileName('  ')).toBe('workspace');
+    expect(workspaceFileName('日本語')).toBe('workspace');
   });
 });
