@@ -20,7 +20,8 @@ import {
   selectExport,
 } from '@features/export/exportSlice';
 import type { ExportConfig } from '@features/export/exportTypes';
-import { selectActiveFilteredMessages, selectActiveTab, selectThreadTabs } from '@features/message/messageSlice';
+import { selectActiveContainerKey, selectActiveFilteredRows, selectActiveHydrationSource, selectActiveTab, selectThreadTabs } from '@features/message/messageSlice';
+import { useHydratedAll } from '@features/message/messageCache';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
@@ -73,7 +74,13 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
   const { t } = useTranslation();
   const packageChannelId = isPackageContext ? exportContext.channelId : null;
 
-  const liveMessages = useAppSelector(selectActiveFilteredMessages);
+  // 2.2.5 WP2b: the store holds rows; the objects are read from the message
+  // cache and the workspace store while the dialog is open.
+  const liveRows = useAppSelector(selectActiveFilteredRows);
+  const containerKey = useAppSelector(selectActiveContainerKey);
+  const hydrationSource = useAppSelector(selectActiveHydrationSource);
+  const liveIds = useMemo(() => liveRows.map((r) => r.id), [liveRows]);
+  const { messages: liveMessages, loading: liveLoading } = useHydratedAll(containerKey, hydrationSource, liveIds, open && !isPackageContext);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
   const selectedGuild = useAppSelector(selectSelectedGuild);
@@ -171,7 +178,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
   const isMediaOnly = exportState.exportFormat === 'media';
 
   const handleExport = () => {
-    if (messages.length === 0 || isOperationRunning) return;
+    if (messages.length === 0 || isOperationRunning || liveLoading) return;
 
     // Build ExportConfig — dateFormat/timeFormat from settings, rest from exportState
     const exportConfig: ExportConfig = {
@@ -297,7 +304,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
             onClick={handleExport}
             variant="contained"
             startIcon={<DownloadIcon />}
-            disabled={messages.length === 0 || isOperationRunning}
+            disabled={messages.length === 0 || isOperationRunning || liveLoading}
           >
             {t('export.export')}
           </Button>

@@ -5,7 +5,7 @@ import { ChannelType } from 'discrub-core/discord-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { setDialogOpen } from '@features/app/appSlice';
 import { selectRecentExports } from '@features/history/historySlice';
-import { selectActiveFilteredMessages } from '@features/message/messageSlice';
+import { selectActiveFilteredRows } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { getDmName } from '@/utils/dmListUtils';
@@ -16,7 +16,7 @@ export const OperatorFeedToolbar = ({ feedOpen, onToggleFeed }: { feedOpen: bool
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
-  const messages = useAppSelector(selectActiveFilteredMessages);
+  const messages = useAppSelector(selectActiveFilteredRows);
   const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
   const hasContext = !!channel || !!dm;
   const name = channel ? `#${channel.name}` : dm ? getDmName(dm) : '';

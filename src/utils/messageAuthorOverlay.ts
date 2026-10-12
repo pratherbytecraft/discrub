@@ -20,14 +20,22 @@ export const overlayMessageAuthors = (
   map: Record<string, AuthorOverlayEntry>,
   messages: Message[],
 ): Record<string, AuthorOverlayEntry> => {
-  messages.forEach((msg) => {
-    const author = msg.author;
-    if (!author) return;
+  const authors: User[] = [];
+  for (const msg of messages) if (msg.author) authors.push(msg.author);
+  return overlayAuthors(map, authors);
+};
+
+/** The same overlay from an author list (2.2.5 WP2b: the slice keeps the authors, not the messages). */
+export const overlayAuthors = (
+  map: Record<string, AuthorOverlayEntry>,
+  authors: Iterable<User>,
+): Record<string, AuthorOverlayEntry> => {
+  for (const author of authors) {
     const cur = map[author.id];
     const displayName = author.global_name || cur?.displayName;
-    if (cur && cur.userName === author.username && cur.displayName === displayName) return;
+    if (cur && cur.userName === author.username && cur.displayName === displayName) continue;
     map[author.id] = { ...cur, userName: author.username, displayName };
-  });
+  }
   return map;
 };
 

@@ -73,7 +73,7 @@ describe('Workbench layout (2.2.0)', () => {
     cy.get('[data-testid="table-row"]').first().click();
     cy.get('[data-testid="workbench-status-bar"]').should('contain.text', '1 selected');
     cy.get('[data-testid="table-select-all"] input').click();
-    cy.window().its('__store__').invoke('getState').its('message.selectedMessages.length').should('be.greaterThan', 1);
+    cy.window().its('__store__').invoke('getState').its('message.selectedIds.length').should('be.greaterThan', 1);
     cy.get('[data-testid="table-select-all"] input').click();
     cy.get('[data-testid="table-sort-date"]').click();
     cy.window().its('__store__').invoke('getState').its('message.order.order').should('eq', 'asc');

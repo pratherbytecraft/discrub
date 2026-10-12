@@ -86,7 +86,7 @@ describe('Server Browsing', () => {
     // Verify messages loaded in Redux
     cy.window().then((win) => {
       const store = (win as any).__store__;
-      expect(store.getState().message.messages.length).to.be.greaterThan(0);
+      expect(store.getState().message.rows.length).to.be.greaterThan(0);
       expect(store.getState().channel.selectedChannel).to.not.be.null;
     });
 
@@ -103,7 +103,7 @@ describe('Server Browsing', () => {
     // Verify messages and channel are cleared
     cy.window().then((win) => {
       const store = (win as any).__store__;
-      expect(store.getState().message.messages.length).to.eq(0);
+      expect(store.getState().message.rows.length).to.eq(0);
       expect(store.getState().channel.selectedChannel).to.be.null;
     });
   });

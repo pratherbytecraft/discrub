@@ -1,10 +1,32 @@
 import { createSlice, createAsyncThunk, createSelector, isDraft, original, PayloadAction } from '@reduxjs/toolkit';
 import type { Message, Attachment, User, Channel } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
-import { getSortedMessages } from 'discrub-core/discrub-utils';
-import { appendSortedPage } from './messageOrdering';
 import { ReactionType, IsPinnedType } from 'discrub-core/discord-enum';
-import { MessageOrder, initialMessageState, initialPaginationState, ThreadTabState } from './messageTypes';
+import { MessageOrder, initialMessageState, initialPaginationState, ThreadTabState, type MessageContainer, type MessageState } from './messageTypes';
+import {
+  appendSortedRows,
+  mergeAuthors,
+  messageMatchesContentRefine,
+  refineNeedsContent,
+  rowWithReactions,
+  sortRows,
+  toMessageRow,
+  toMessageRows,
+  type MessageRow,
+} from './messageRows';
+import {
+  MAIN_CONTAINER,
+  cacheMessages,
+  cachedMessagesOf,
+  dropCachedMessages,
+  evictContainer,
+  getCachedMessage,
+  replaceCachedMessage,
+  updateCachedMessage,
+  type HydrationSource,
+} from './messageCache';
+import { countRows, scan } from '@services/workspaceStore';
+import { selectCurrentWid } from '@features/workspace/workspaceSlice';
 import { getDiscordService } from '@services/discordService';
 import type { RootState } from '@/app/store';
 import { selectSearchDelay, selectDeleteDelay, selectDelayModifier, selectSettings, selectDiscrubPaused, setDiscrubPaused, setOperationHold } from '@features/app/appSlice';
@@ -17,6 +39,7 @@ import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, 
 import { addStatusEntry, showOperationTip, showToast } from '@features/status/statusSlice';
 import { getEmojiKey } from '@/utils/emojiUtils';
 import { applyRefineCriteria, criteriaIsActive, type RefineCriteria } from './messageFiltering';
+import { applyRefineToRows } from './messageRows';
 import { nextMilestone, iterateSearchMessagesRedux } from '@utils/searchPagination';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
@@ -35,6 +58,16 @@ import {
   threadSeedFromState,
 } from './messagePersistence';
 import type { Conversation } from '@features/workspace/workspaceTypes';
+
+/** The cached objects behind some rows, for a backfill write (2.2.5 WP2b). */
+const cachedRowsOf = (container: string, rows: MessageRow[]): Message[] => {
+  const out: Message[] = [];
+  for (const row of rows) {
+    const message = getCachedMessage(container, row.id);
+    if (message) out.push(message);
+  }
+  return out;
+};
 
 /**
  * Status-log hooks for a single-page search request (#262): one warning
@@ -1091,7 +1124,7 @@ export const deleteAttachment = createAsyncThunk(
       const discordService = getDiscordService();
       // Read fresh message from Redux state to ensure accurate attachment list
       const state = getState() as RootState;
-      const freshMessage = state.message.messages.find((m) => m.id === message.id) || message;
+      const freshMessage = getCachedMessage(activeContainerKey(state.message), message.id) || message;
       const remainingAttachments = (freshMessage.attachments || []).filter(
         (a) => a.id !== attachment.id
       );
@@ -1205,11 +1238,16 @@ export const fetchMessages = createAsyncThunk(
       if (restored) {
         dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.messages.length }) }));
         const oldest = restored.messages[0];
+        const refine = restored.conversation.refineCriteria;
+        const contentMatchIds = refineNeedsContent(refine)
+          ? restored.messages.filter((m) => messageMatchesContentRefine(m, refine as RefineCriteria)).map((m) => m.id)
+          : null;
         return {
           messages: restored.messages,
           hasMore: restored.conversation.pagination.hasMore,
           lastMessageId: restored.conversation.pagination.lastMessageId ?? oldest?.id ?? null,
           restored: restored.conversation,
+          contentMatchIds,
         };
       }
 
@@ -1235,6 +1273,7 @@ export const fetchMessages = createAsyncThunk(
         hasMore: messages.length === 100, // If we got 100, there might be more
         lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : null,
         restored: null as Conversation | null,
+        contentMatchIds: null as string[] | null,
       };
     } catch (error) {
       return rejectWithValue(
@@ -1292,7 +1331,7 @@ export const fetchMoreMessages = createAsyncThunk(
       // (plan section 4.2); the first page rides along as the backfill.
       await persistPage({ dispatch, getState: getState as () => RootState }, channelId, messages, {
         seed: conversationSeedFromState(stateNow, channelId),
-        backfill: stateNow.message.messages,
+        backfill: cachedRowsOf(MAIN_CONTAINER, stateNow.message.rows),
         record: { pagination: paginationRecord({ mode: 'paginated', lastMessageId: nextLastMessageId, hasMore }) },
       });
 
@@ -1628,9 +1667,10 @@ export const loadAllSearchResults = createAsyncThunk(
     const searchDelay = selectSearchDelay(initial);
     const delayModifier = selectDelayModifier(initial);
 
-    const aggregated: Message[] = [...initial.message.messages];
-    const seenIds = new Set(aggregated.map((m) => m.id));
-    let milestoneBoundary = nextMilestone(aggregated.length);
+    const initialRows = initial.message.rows;
+    let loaded = initialRows.length;
+    const seenIds = new Set(initialRows.map((r) => r.id));
+    let milestoneBoundary = nextMilestone(loaded);
 
     // #221: freeze the grand total used for the "X of Y matches loaded
     // (Z remaining)" header + status-log denominators. The lib iterator
@@ -1640,7 +1680,7 @@ export const loadAllSearchResults = createAsyncThunk(
     // overtake "total" (e.g. "5250 of 188") and "remaining" go negative.
     // Anchor to the initial search's full-window total and never let it drop
     // below what we've actually loaded.
-    let grandTotal = initial.message.pagination.totalCount ?? aggregated.length;
+    let grandTotal = initial.message.pagination.totalCount ?? loaded;
 
     // #208: pagination is delegated to the lib's iterateSearchResults, which
     // walks newest→oldest by tightening searchBeforeDate to the oldest message
@@ -1649,9 +1689,9 @@ export const loadAllSearchResults = createAsyncThunk(
     // loaded so we don't refetch the top — and so a transient-failure restart
     // resumes from progress rather than from scratch.
     let resumeBeforeDate: Date | undefined;
-    for (const m of aggregated) {
-      if (m.timestamp) {
-        const t = new Date(m.timestamp);
+    for (const r of initialRows) {
+      if (r.timestamp) {
+        const t = new Date(r.timestamp);
         if (!resumeBeforeDate || t < resumeBeforeDate) resumeBeforeDate = t;
       }
     }
@@ -1801,10 +1841,10 @@ export const loadAllSearchResults = createAsyncThunk(
               // Exhausted retries — pause and let the user fix their network,
               // then Resume to continue from progress (#185 Bug A).
               dispatch(setDiscrubPaused(true));
-              dispatch(setOperationHold({ kind: 'retryExhausted', answer: lastAnswer, loaded: aggregated.length }));
+              dispatch(setOperationHold({ kind: 'retryExhausted', answer: lastAnswer, loaded: loaded }));
               dispatch(addStatusEntry({
                 level: 'warning',
-                message: t('status.msg.searchLoadAllPaused', { answer: lastAnswer, count: aggregated.length }),
+                message: t('status.msg.searchLoadAllPaused', { answer: lastAnswer, count: loaded }),
               }));
               await waitWhilePaused(getState as () => RootState);
               if (checkCancelled(getState as () => RootState)) {
@@ -1837,7 +1877,7 @@ export const loadAllSearchResults = createAsyncThunk(
           if (pageResult.incomplete) {
             dispatch(addStatusEntry({
               level: 'warning',
-              message: t('status.msg.searchLoadAllStopped', { count: aggregated.length, total: pageResult.totalResults }),
+              message: t('status.msg.searchLoadAllStopped', { count: loaded, total: pageResult.totalResults }),
             }));
             continue;
           }
@@ -1891,24 +1931,24 @@ export const loadAllSearchResults = createAsyncThunk(
             },
           );
 
-          aggregated.push(...page);
+          loaded += page.length;
 
           // #221: defensive — never show fewer total than we've loaded, even
           // if Discord under-reported total_results for the first window.
-          grandTotal = Math.max(grandTotal, aggregated.length);
+          grandTotal = Math.max(grandTotal, loaded);
 
           // 2.2.5: on disk before it reaches Redux (plan section 7). A full
           // quota pauses the walk here; a cancel while paused ends it.
           if (channelId) {
             const outcome = await persistPage({ dispatch, getState: getState as () => RootState }, channelId, page, {
               seed: conversationSeedFromState(getState() as RootState, channelId),
-              loaded: aggregated.length,
+              loaded: loaded,
               record: {
                 searchCriteria: initialCriteria,
                 pagination: paginationRecord({
                   mode: 'search',
                   totalCount: grandTotal,
-                  searchOffset: aggregated.length,
+                  searchOffset: loaded,
                   searchBeforeDate: resumeBeforeDate ? resumeBeforeDate.toISOString() : null,
                 }),
               },
@@ -1922,26 +1962,26 @@ export const loadAllSearchResults = createAsyncThunk(
             messageSlice.actions.appendLoadAllPage({
               messages: page,
               totalCount: grandTotal,
-              searchOffset: aggregated.length,
+              searchOffset: loaded,
             })
           );
 
           dispatch(
             updateLoadAllProgress({
-              current: aggregated.length,
+              current: loaded,
               total: grandTotal,
-              message: t('status.msg.searchFetched', { count: aggregated.length, total: grandTotal }),
+              message: t('status.msg.searchFetched', { count: loaded, total: grandTotal }),
             })
           );
 
-          if (aggregated.length >= milestoneBoundary) {
+          if (loaded >= milestoneBoundary) {
             dispatch(
               addStatusEntry({
                 level: 'info',
-                message: t('status.msg.searchFetched', { count: aggregated.length, total: grandTotal }),
+                message: t('status.msg.searchFetched', { count: loaded, total: grandTotal }),
               })
             );
-            milestoneBoundary = nextMilestone(aggregated.length);
+            milestoneBoundary = nextMilestone(loaded);
           }
         }
       }
@@ -1963,21 +2003,20 @@ export const loadAllSearchResults = createAsyncThunk(
         addStatusEntry({
           level: 'success',
           message: isFiltered
-            ? `Loaded ${aggregated.length} filtered message${aggregated.length === 1 ? '' : 's'}`
-            : `Loaded ${aggregated.length} message${aggregated.length === 1 ? '' : 's'}`,
+            ? `Loaded ${loaded} filtered message${loaded === 1 ? '' : 's'}`
+            : `Loaded ${loaded} message${loaded === 1 ? '' : 's'}`,
         })
       );
 
       if (channelId) {
         await persistConversation({ dispatch, getState: getState as () => RootState }, channelId, {
           complete: true,
-          pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: aggregated.length, searchOffset: aggregated.length }),
+          pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: loaded, searchOffset: loaded }),
         });
       }
 
       return {
-        messages: aggregated,
-        totalResults: aggregated.length,
+        totalResults: loaded,
       };
     } catch (error) {
       return rejectWithValue(
@@ -2017,10 +2056,11 @@ export const fetchAllMessages = createAsyncThunk(
       // 2.2.5: continue from the pages already loaded on the plain path
       // instead of walking from the top again. The cursor is the oldest
       // loaded id, which a restored conversation carries from its record.
-      const existing = state.message.messages;
+      const existingRows = state.message.rows;
+      const existing = cachedRowsOf(MAIN_CONTAINER, existingRows);
       // The pending reducer already set mode 'all', so the plain path is
       // anything that is not a search.
-      const continuing = state.message.pagination.mode !== 'search' && existing.length > 0 && !!state.message.pagination.lastMessageId;
+      const continuing = state.message.pagination.mode !== 'search' && existingRows.length > 0 && !!state.message.pagination.lastMessageId;
       const seed = conversationSeedFromState(state, channelId);
       const api = { dispatch, getState: getState as () => RootState };
 
@@ -2079,7 +2119,7 @@ export const fetchAllMessages = createAsyncThunk(
         const outcome = await persistPage(api, channelId, messages, {
           seed,
           backfill: existing,
-          loaded: existing.length + allMessages.length,
+          loaded: existingRows.length + allMessages.length,
           record: { pagination: paginationRecord({ mode: 'all', lastMessageId: pageCursor, hasMore: pageHasMore }) },
         });
         if (outcome === 'cancelled') return rejectWithValue('Load cancelled');
@@ -2147,11 +2187,12 @@ export const enrichMessageUsers = createAsyncThunk(
   'message/enrichMessageUsers',
   async (
     {
-      messages,
+      userIds,
       guildId,
       token,
     }: {
-      messages: Message[];
+      /** Authors and mentioned users of the loaded rows (2.2.5 WP2b). */
+      userIds: string[];
       guildId: string | null;
       token: string;
     },
@@ -2168,8 +2209,8 @@ export const enrichMessageUsers = createAsyncThunk(
       }
 
       // Enrich user data (skip users that previously returned 404)
-      const result = await userEnrichmentService.enrichMessages(
-        messages,
+      const result = await userEnrichmentService.enrichUserIds(
+        userIds,
         guildId,
         token,
         settings,
@@ -2233,10 +2274,9 @@ export const openThreadTab = createAsyncThunk(
       // 2.2.5: a thread with saved rows comes back from disk.
       const restored = await restoreConversation(api, threadId);
       if (restored) {
-        const tabOrder = (getState() as RootState).message.threadTabs[threadId]?.order.order ?? restored.conversation.order.order;
         dispatch(messageSlice.actions.setThreadSearchCriteria({ threadId, criteria: restored.conversation.searchCriteria }));
-        dispatch(messageSlice.actions.setThreadRefineCriteria({ threadId, criteria: restored.conversation.refineCriteria }));
-        dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: getSortedMessages(restored.messages, tabOrder) }));
+        dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: restored.messages }));
+        await dispatch(setThreadRefineCriteria({ threadId, criteria: restored.conversation.refineCriteria }));
         const p = restored.conversation.pagination;
         dispatch(messageSlice.actions.updateThreadPagination({
           threadId,
@@ -2265,12 +2305,7 @@ export const openThreadTab = createAsyncThunk(
       }
 
       const messages = response.data as Message[];
-      const sorted = getSortedMessages(
-        messages,
-        (getState() as RootState).message.threadTabs[threadId]?.order.order ?? 'desc'
-      );
-
-      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: sorted }));
+      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
         pagination: {
@@ -2319,10 +2354,10 @@ export const navigateToMessage = createAsyncThunk(
     const state = getState() as RootState;
     const activeTab = state.message.activeTab;
     const pool = activeTab
-      ? state.message.threadTabs[activeTab]?.filteredMessages ?? []
-      : state.message.filteredMessages;
+      ? state.message.threadTabs[activeTab]?.filteredRows ?? []
+      : state.message.filteredRows;
 
-    const found = pool.some((m) => m.id === messageId);
+    const found = pool.some((r) => r.id === messageId);
     if (!found) {
       dispatch(showToast({
         level: 'info',
@@ -2448,18 +2483,17 @@ export const fetchMoreThreadMessages = createAsyncThunk(
       const tab = state.message.threadTabs[threadId];
       if (!tab) return rejectWithValue('Thread tab no longer exists');
 
-      // #263: same end-merge as appendLoadAllPage, no full re-sort per page.
-      const sorted = appendSortedPage(tab.messages, newMessages, tab.order.order);
       const threadHasMore = newMessages.length === 100;
       const threadCursor = newMessages.length > 0 ? newMessages[newMessages.length - 1].id : lastMessageId;
 
       await persistPage({ dispatch, getState: getState as () => RootState }, threadId, newMessages, {
         seed: threadSeedFromState(state, threadId),
-        backfill: tab.messages,
+        backfill: cachedRowsOf(threadId, tab.rows),
         record: { pagination: paginationRecord({ mode: 'paginated', hasMore: threadHasMore, lastMessageId: threadCursor }) },
       });
 
-      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: sorted }));
+      // #263: same end-merge as appendLoadAllPage, no full re-sort per page.
+      dispatch(messageSlice.actions.appendThreadMessages({ threadId, messages: newMessages }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
         pagination: {
@@ -2518,8 +2552,9 @@ export const fetchAllThreadMessages = createAsyncThunk(
 
       // 2.2.5: continue from the thread's loaded pages (see fetchAllMessages).
       const startTab = state.message.threadTabs[threadId];
-      const existing = startTab?.messages ?? [];
-      const continuing = !!startTab && startTab.pagination.mode !== 'search' && existing.length > 0 && !!startTab.pagination.lastMessageId;
+      const existingRows = startTab?.rows ?? [];
+      const existing = cachedRowsOf(threadId, existingRows);
+      const continuing = !!startTab && startTab.pagination.mode !== 'search' && existingRows.length > 0 && !!startTab.pagination.lastMessageId;
       const api = { dispatch, getState: getState as () => RootState };
       const seed = threadSeedFromState(state, threadId);
 
@@ -2576,7 +2611,7 @@ export const fetchAllThreadMessages = createAsyncThunk(
         const outcome = await persistPage(api, threadId, messages, {
           seed,
           backfill: existing,
-          loaded: existing.length + allMessages.length,
+          loaded: existingRows.length + allMessages.length,
           record: { pagination: paginationRecord({ mode: 'all', hasMore: messages.length >= 100, lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : lastMsgId }) },
         });
         if (outcome === 'cancelled') {
@@ -2624,9 +2659,9 @@ export const fetchAllThreadMessages = createAsyncThunk(
 
       // When continuing, the pages already in the tab stay and the new ones
       // merge in behind them.
-      const merged = continuing ? appendSortedPage(tab.messages, allMessages.filter((m) => !existing.some((e) => e.id === m.id)), tab.order.order) : getSortedMessages(allMessages, tab.order.order);
       const threadFinalCursor = allMessages.length > 0 ? allMessages[allMessages.length - 1].id : (continuing ? lastMsgId : null);
-      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: merged }));
+      if (continuing) dispatch(messageSlice.actions.appendThreadMessages({ threadId, messages: allMessages }));
+      else dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: allMessages }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
         pagination: {
@@ -2908,8 +2943,7 @@ export const searchThreadMessages = createAsyncThunk(
       const tab = (getState() as RootState).message.threadTabs[threadId];
       if (!tab) return rejectWithValue('Thread tab no longer exists');
 
-      const sorted = getSortedMessages(allMessages, tab.order.order);
-      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: sorted }));
+      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: allMessages }));
       dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
@@ -2980,162 +3014,277 @@ export const clearSavedSearch = createAsyncThunk(
   },
 );
 
+/* ─────────────────── Containers (2.2.5 WP2b) ─────────────────── */
+
+type Container = MessageContainer;
+
 /**
  * Helper to get the active message container (thread tab or main state).
- * Returns an object with messages, filteredMessages, and selectedMessages
- * that can be mutated in place (Immer draft).
+ * Returns the draft that holds rows, filteredRows and selectedIds.
  */
-const getActiveContainer = (state: import('./messageTypes').MessageState) => {
+const getActiveContainer = (state: MessageState): Container => {
   if (state.activeTab && state.threadTabs[state.activeTab]) {
     return state.threadTabs[state.activeTab];
   }
   return state;
 };
 
-/**
- * F14: resolve the container an operation CAPTURED when it started
- * (null = main arrays, otherwise a thread tab id). The batched
- * reducers take this instead of reading the active tab at flush time —
- * tab switching is deliberately allowed mid-operation (#237 keeps the
- * tab bar interactive), and an active-tab lookup at flush time silently
- * routed a whole batch of confirmed deletions into the wrong
- * container's arrays. Returns null when the captured thread tab no
- * longer exists (nothing left to update).
- */
+/** The message cache key of the active container: 'main' or the thread id. */
+export const activeContainerKey = (state: MessageState): string =>
+  state.activeTab && state.threadTabs[state.activeTab] ? state.activeTab : MAIN_CONTAINER;
+
 /**
  * #263: the plain (non-draft) array behind a draft field. Iterating an
  * Immer draft array creates a proxy per element touched, so a `filter`,
- * `findIndex`, spread or `map` over a 30K-message draft costs tens of
+ * `findIndex`, spread or `map` over a 30K-row draft costs tens of
  * milliseconds before any real work. Reducers below read through this and
  * assign a fresh array instead of mutating the draft in place. Only valid
  * before the field is reassigned in the same reducer (original() is the
  * base value).
  */
 const plain = <T,>(arr: T[]): T[] => (isDraft(arr) ? (original(arr) as T[]) : arr);
+const plainRecord = <T,>(rec: Record<string, T>): Record<string, T> => (isDraft(rec) ? (original(rec) as Record<string, T>) : rec);
 
 /**
  * 2.2.1 perf: a replaced array handed to immer already frozen. Immer deep
  * freezes every new object a reducer leaves in the draft and skips objects
- * that are frozen already, so freezing the array here (its elements are the
- * frozen message objects from before) saves the walk over 30K elements on
- * every Load All page and every delete flush. Same end state as before.
+ * that are frozen already, so freezing the array here saves the walk over
+ * 30K elements on every Load All page and every delete flush.
  */
 const sealed = <T,>(arr: T[]): T[] => Object.freeze(arr) as T[];
 
-const resolveCapturedContainer = (
-  state: import('./messageTypes').MessageState,
-  containerId: string | null,
-) => {
+/**
+ * F14: resolve the container an operation CAPTURED when it started
+ * (null = main, otherwise a thread tab id). The batched reducers take
+ * this instead of reading the active tab at flush time, since tab
+ * switching is allowed mid-operation (#237). Returns null when the
+ * captured thread tab no longer exists.
+ */
+const resolveCapturedContainer = (state: MessageState, containerId: string | null): Container | null => {
   if (containerId === null) return state;
   return state.threadTabs[containerId] ?? null;
+};
+
+const keyOfContainer = (containerId: string | null): string => containerId ?? MAIN_CONTAINER;
+
+const contentSet = (container: Container): ReadonlySet<string> | null =>
+  container.contentMatchIds ? new Set(plain(container.contentMatchIds)) : null;
+
+/** Rebuilds `filteredRows` from `rows` under the container's refine. */
+const refilter = (container: Container): void => {
+  const rows = plain(container.rows);
+  const filtered = applyRefineToRows(rows, container.refineCriteria, contentSet(container));
+  container.filteredRows = filtered === rows ? rows : sealed(filtered);
+};
+
+/** The content matches of a page under the container's refine, or null when the refine has no content part. */
+const contentMatchesOf = (container: Container, messages: Message[]): string[] | null => {
+  const criteria = container.refineCriteria;
+  if (!refineNeedsContent(criteria)) return null;
+  const out: string[] = [];
+  for (const message of messages) if (messageMatchesContentRefine(message, criteria as RefineCriteria)) out.push(message.id);
+  return out;
+};
+
+const mergeContentMatches = (container: Container, messages: Message[], replace: boolean): void => {
+  const matches = contentMatchesOf(container, messages);
+  if (matches === null) {
+    if (replace) container.contentMatchIds = null;
+    return;
+  }
+  container.contentMatchIds = replace || !container.contentMatchIds ? matches : plain(container.contentMatchIds).concat(matches);
+};
+
+const recordAuthors = (state: MessageState, messages: Message[]): void => {
+  const held = plainRecord(state.authors);
+  const next = mergeAuthors(held, messages);
+  if (next !== held) state.authors = next;
+};
+
+/**
+ * A page of messages replaces or joins a container. The objects go to the
+ * message cache under the container's key, their authors to the author
+ * map, and the rows into `rows` sorted under the container's order.
+ */
+const ingestPage = (
+  state: MessageState,
+  container: Container,
+  key: string,
+  messages: Message[],
+  mode: 'replace' | 'append',
+): void => {
+  cacheMessages(key, messages);
+  recordAuthors(state, messages);
+  const rows = toMessageRows(messages);
+  if (mode === 'replace') {
+    container.rows = sealed(sortRows(rows, container.order.order));
+    mergeContentMatches(container, messages, true);
+  } else {
+    const existing = plain(container.rows);
+    const existingIds = new Set(existing.map((r) => r.id));
+    const fresh = rows.filter((r) => !existingIds.has(r.id));
+    if (fresh.length === 0) return;
+    container.rows = sealed(appendSortedRows(existing, fresh, container.order.order));
+    mergeContentMatches(container, messages.filter((m) => !existingIds.has(m.id)), false);
+  }
+  refilter(container);
+};
+
+const removeRows = (container: Container, key: string, ids: Set<string>): void => {
+  const rows = plain(container.rows);
+  const filtered = plain(container.filteredRows);
+  const nextRows = sealed(rows.filter((r) => !ids.has(r.id)));
+  container.rows = nextRows;
+  // With no refine active the two arrays are one, keep it that way.
+  container.filteredRows = filtered === rows ? nextRows : sealed(filtered.filter((r) => !ids.has(r.id)));
+  container.selectedIds = plain(container.selectedIds).filter((id) => !ids.has(id));
+  if (container.contentMatchIds) container.contentMatchIds = plain(container.contentMatchIds).filter((id) => !ids.has(id));
+  dropCachedMessages(key, ids);
+};
+
+/** Replaces rows by id (an edit) and the cached objects behind them. */
+const replaceRows = (state: MessageState, container: Container, key: string, messages: Message[]): void => {
+  if (messages.length === 0) return;
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const swap = (rows: MessageRow[]) => rows.map((r) => {
+    const m = byId.get(r.id);
+    return m ? { ...toMessageRow(m), t: r.t } : r;
+  });
+  const rows = plain(container.rows);
+  const filtered = plain(container.filteredRows);
+  const nextRows = sealed(swap(rows));
+  container.rows = nextRows;
+  container.filteredRows = filtered === rows ? nextRows : sealed(swap(filtered));
+  for (const m of messages) replaceCachedMessage(key, m);
+  recordAuthors(state, messages);
+  // An edit can change what a content refine matches.
+  if (refineNeedsContent(container.refineCriteria)) {
+    const criteria = container.refineCriteria as RefineCriteria;
+    const held = new Set(plain(container.contentMatchIds ?? []));
+    for (const m of messages) {
+      if (messageMatchesContentRefine(m, criteria)) held.add(m.id); else held.delete(m.id);
+    }
+    container.contentMatchIds = [...held];
+    refilter(container);
+  }
+};
+
+/** Rewrites the reactions of some rows through `update`, in the cache and on the rows. */
+const patchReactions = (container: Container, key: string, ids: Iterable<string>, update: (m: Message) => Message): void => {
+  const changed = new Map<string, Message>();
+  for (const id of ids) {
+    const next = updateCachedMessage(key, id, update);
+    if (next) changed.set(id, next);
+  }
+  if (changed.size === 0) return;
+  const swap = (rows: MessageRow[]) => rows.map((r) => {
+    const m = changed.get(r.id);
+    return m ? rowWithReactions(r, m) : r;
+  });
+  const rows = plain(container.rows);
+  const filtered = plain(container.filteredRows);
+  const nextRows = sealed(swap(rows));
+  container.rows = nextRows;
+  container.filteredRows = filtered === rows ? nextRows : sealed(swap(filtered));
+};
+
+const emojiMatches = (r: { emoji: { id?: string | null; name?: string | null } }, emoji: string): boolean => {
+  const emojiKey = r.emoji.id || r.emoji.name;
+  return emojiKey === emoji || `${r.emoji.name}:${r.emoji.id}` === emoji;
 };
 
 const messageSlice = createSlice({
   name: 'message',
   initialState: initialMessageState,
   reducers: {
+    /** Replaces the open conversation with these messages (the first page, a restore, tests). */
     setMessages: (state, action: PayloadAction<Message[]>) => {
-      state.messages = action.payload;
-      state.filteredMessages = action.payload;
+      ingestPage(state, state, MAIN_CONTAINER, action.payload, 'replace');
     },
-    setFilteredMessages: (state, action: PayloadAction<Message[]>) => {
-      state.filteredMessages = action.payload;
+    setSelectedIds: (state, action: PayloadAction<string[]>) => {
+      state.selectedIds = action.payload;
     },
-    setSelectedMessages: (state, action: PayloadAction<Message[]>) => {
-      state.selectedMessages = action.payload;
-    },
-    toggleMessageSelection: (state, action: PayloadAction<Message>) => {
+    toggleMessageSelection: (state, action: PayloadAction<string>) => {
       // #263: work on the plain array and assign a new one; a splice/push
       // on a 30K draft walks every element through a proxy.
-      const base = plain(state.selectedMessages);
-      const index = base.findIndex((msg: Message) => msg.id === action.payload.id);
-      state.selectedMessages = index >= 0
-        ? base.filter((_, i) => i !== index)
-        : [...base, action.payload];
+      const base = plain(state.selectedIds);
+      const index = base.indexOf(action.payload);
+      state.selectedIds = index >= 0 ? base.filter((_, i) => i !== index) : [...base, action.payload];
     },
     selectAllMessages: (state) => {
-      state.selectedMessages = plain(state.filteredMessages).slice();
+      state.selectedIds = plain(state.filteredRows).map((r) => r.id);
     },
     // #183: batched removal used by the bulk-delete loop. One Set lookup +
-    // one filter pass per array for the whole batch, instead of a full
-    // three-array rewrite per deleted message (the per-message
-    // `deleteMessage.fulfilled` path). Final state is identical to applying
-    // the same ids one at a time — removal by id is order-independent.
-    // F14: routed by the containerId the operation captured at start, not
-    // whichever tab is active when the flush lands.
+    // one filter pass per array for the whole batch. F14: routed by the
+    // containerId the operation captured at start, not whichever tab is
+    // active when the flush lands.
     messagesRemoved: (state, action: PayloadAction<{ ids: string[]; containerId: string | null }>) => {
       if (action.payload.ids.length === 0) return;
       const container = resolveCapturedContainer(state, action.payload.containerId);
       if (!container) return;
-      const ids = new Set(action.payload.ids);
-      const messages = plain(container.messages);
-      const filtered = plain(container.filteredMessages);
-      const nextMessages = sealed(messages.filter((m) => !ids.has(m.id)));
-      container.messages = nextMessages;
-      // With no refine active the two arrays are one, keep it that way.
-      container.filteredMessages = filtered === messages ? nextMessages : sealed(filtered.filter((m) => !ids.has(m.id)));
-      container.selectedMessages = sealed(plain(container.selectedMessages).filter((m) => !ids.has(m.id)));
+      removeRows(container, keyOfContainer(action.payload.containerId), new Set(action.payload.ids));
     },
     // F13 (#183 follow-up): batched in-place replacement used by the
-    // bulk-edit loop — same shape as messagesRemoved. Pre-fix, bulk edit
-    // dispatched the per-message editMessage thunk whose fulfilled
-    // reducer rewrote all three arrays per message: the exact freeze
-    // class #183 removed for delete, still live for edit.
+    // bulk-edit loop, same shape as messagesRemoved.
     messagesEdited: (state, action: PayloadAction<{ messages: Message[]; containerId: string | null }>) => {
       if (action.payload.messages.length === 0) return;
       const container = resolveCapturedContainer(state, action.payload.containerId);
       if (!container) return;
-      const byId = new Map(action.payload.messages.map((m) => [m.id, m]));
-      const replaceInArray = (arr: Message[]) => plain(arr).map((m) => byId.get(m.id) ?? m);
-      container.messages = replaceInArray(container.messages);
-      container.filteredMessages = replaceInArray(container.filteredMessages);
-      container.selectedMessages = replaceInArray(container.selectedMessages);
+      replaceRows(state, container, keyOfContainer(action.payload.containerId), action.payload.messages);
     },
     deselectAllMessages: (state) => {
-      state.selectedMessages = [];
+      state.selectedIds = [];
     },
     setSearchCriteria: (state, action: PayloadAction<SearchCriteria | null>) => {
       state.searchCriteria = action.payload;
     },
-    setRefineCriteria: (state, action: PayloadAction<RefineCriteria | null>) => {
-      state.refineCriteria = action.payload;
-      // Re-derive filteredMessages now so the UI snaps to the new refine
-      // without the caller needing a second dispatch.
-      state.filteredMessages = applyRefineCriteria(plain(state.messages), action.payload);
+    /**
+     * The refine and, when it has a content part, the ids the scan
+     * accepted. Dispatched by the `setRefineCriteria` thunk, which runs
+     * the scan; a plain row refine can be dispatched here directly.
+     */
+    refineApplied: (state, action: PayloadAction<{ criteria: RefineCriteria | null; contentMatchIds?: string[] | null }>) => {
+      state.refineCriteria = action.payload.criteria;
+      state.contentMatchIds = refineNeedsContent(action.payload.criteria) ? action.payload.contentMatchIds ?? [] : null;
+      refilter(state);
     },
     clearRefineCriteria: (state) => {
       state.refineCriteria = null;
-      state.filteredMessages = state.messages;
+      state.contentMatchIds = null;
+      state.filteredRows = state.rows;
     },
-    setThreadRefineCriteria: (
+    threadRefineApplied: (
       state,
-      action: PayloadAction<{ threadId: string; criteria: RefineCriteria | null }>,
+      action: PayloadAction<{ threadId: string; criteria: RefineCriteria | null; contentMatchIds?: string[] | null }>,
     ) => {
       const tab = state.threadTabs?.[action.payload.threadId];
       if (!tab) return;
       tab.refineCriteria = action.payload.criteria;
-      tab.filteredMessages = applyRefineCriteria(plain(tab.messages), action.payload.criteria);
+      tab.contentMatchIds = refineNeedsContent(action.payload.criteria) ? action.payload.contentMatchIds ?? [] : null;
+      refilter(tab);
     },
     clearThreadRefineCriteria: (state, action: PayloadAction<string>) => {
       const tab = state.threadTabs?.[action.payload];
       if (!tab) return;
       tab.refineCriteria = null;
-      tab.filteredMessages = tab.messages;
+      tab.contentMatchIds = null;
+      tab.filteredRows = tab.rows;
     },
     setOrder: (state, action: PayloadAction<MessageOrder>) => {
       state.order = action.payload;
-      // Re-sort messages when order changes
-      if (state.filteredMessages.length > 0) {
-        state.filteredMessages = getSortedMessages(
-          state.filteredMessages,
-          action.payload.order
-        );
+      const rows = plain(state.rows);
+      const filtered = plain(state.filteredRows);
+      if (rows.length > 0) {
+        const nextRows = sealed(sortRows(rows, action.payload.order));
+        state.rows = nextRows;
+        state.filteredRows = filtered === rows ? nextRows : sealed(sortRows(filtered, action.payload.order));
       }
     },
     clearMessages: (state) => {
-      state.messages = [];
-      state.filteredMessages = [];
-      state.selectedMessages = [];
+      state.rows = [];
+      state.filteredRows = [];
+      state.selectedIds = [];
+      state.contentMatchIds = null;
       state.searchCriteria = null;
       // #226: refine must not survive navigation — every data-arrival
       // reducer re-applies state.refineCriteria to incoming pages, so a
@@ -3150,9 +3299,12 @@ const messageSlice = createSlice({
       state.isLoading = false;
       state.isDeleting = false;
       state.error = null;
+      for (const threadId of Object.keys(state.threadTabs ?? {})) evictContainer(threadId);
       state.activeTab = null;
       state.threadTabs = {};
       state.restored = null;
+      state.authors = {};
+      evictContainer(MAIN_CONTAINER);
     },
     resetPagination: (state) => {
       state.pagination = initialMessageState.pagination;
@@ -3164,29 +3316,16 @@ const messageSlice = createSlice({
       state.pagination.loadAllProgress = action.payload;
     },
     // #181: per-page live append during Load All. Appends new messages,
-    // dedupes against existing, re-sorts under the active order, and
+    // dedupes against existing, merges under the active order, and
     // refreshes the filtered view. Used by loadAllSearchResults +
     // fetchAllMessages so the table grows while the iterator is still
-    // walking pages. The fulfilled reducer re-applies the same sort over
-    // the final aggregated set — these appends are not a separate "preview
-    // slice"; they are the same source of truth, just written incrementally.
+    // walking pages.
     appendLoadAllPage: (
       state,
       action: PayloadAction<{ messages: Message[]; totalCount?: number; searchOffset?: number }>
     ) => {
       const { messages: pageMessages, totalCount, searchOffset } = action.payload;
-      if (pageMessages.length === 0) return;
-      const existing = plain(state.messages);
-      const existingIds = new Set(existing.map((m) => m.id));
-      const fresh = pageMessages.filter((m) => !existingIds.has(m.id));
-      if (fresh.length === 0) return;
-      // #263: merge the page at the right end instead of re-sorting the
-      // whole list every page (quadratic at 30K). When no refine is active
-      // filteredMessages is the same array, not a copy.
-      const sorted = sealed(appendSortedPage(existing, fresh, state.order.order));
-      state.messages = sorted;
-      const filtered = applyRefineCriteria(sorted, state.refineCriteria);
-      state.filteredMessages = filtered === sorted ? sorted : sealed(filtered);
+      if (pageMessages.length > 0) ingestPage(state, state, MAIN_CONTAINER, pageMessages, 'append');
       if (totalCount !== undefined) state.pagination.totalCount = totalCount;
       if (searchOffset !== undefined) state.pagination.searchOffset = searchOffset;
     },
@@ -3218,9 +3357,10 @@ const messageSlice = createSlice({
         state.threadTabs[threadId] = {
           threadId,
           threadName,
-          messages: [],
-          filteredMessages: [],
-          selectedMessages: [],
+          rows: [],
+          filteredRows: [],
+          selectedIds: [],
+          contentMatchIds: null,
           searchCriteria: null,
           refineCriteria: null,
           order: { ...state.order },
@@ -3235,68 +3375,55 @@ const messageSlice = createSlice({
       const threadId = action.payload;
       if (!state.threadTabs) return;
       delete state.threadTabs[threadId];
+      evictContainer(threadId);
       if (state.activeTab === threadId) {
         state.activeTab = null;
       }
     },
     // Thread-tab-aware reducers
+    /** Replaces a thread tab's messages (first page, restore, a full search). */
     setThreadMessages: (
       state,
       action: PayloadAction<{ threadId: string; messages: Message[] }>
     ) => {
       const tab = state.threadTabs[action.payload.threadId];
-      if (tab) {
-        tab.messages = action.payload.messages;
-        tab.filteredMessages = applyRefineCriteria(
-          action.payload.messages,
-          tab.refineCriteria,
-        );
-      }
+      if (tab) ingestPage(state, tab, action.payload.threadId, action.payload.messages, 'replace');
     },
-    setThreadFilteredMessages: (
+    /** Merges a page into a thread tab (#263 end merge, no full re-sort). */
+    appendThreadMessages: (
       state,
       action: PayloadAction<{ threadId: string; messages: Message[] }>
     ) => {
       const tab = state.threadTabs[action.payload.threadId];
-      if (tab) {
-        tab.filteredMessages = action.payload.messages;
-      }
+      if (tab) ingestPage(state, tab, action.payload.threadId, action.payload.messages, 'append');
     },
     toggleThreadMessageSelection: (
       state,
-      action: PayloadAction<{ threadId: string; message: Message }>
+      action: PayloadAction<{ threadId: string; messageId: string }>
     ) => {
       const tab = state.threadTabs[action.payload.threadId];
       if (tab) {
-        const base = plain(tab.selectedMessages);
-        const index = base.findIndex((msg: Message) => msg.id === action.payload.message.id);
-        tab.selectedMessages = index >= 0
-          ? base.filter((_, i) => i !== index)
-          : [...base, action.payload.message];
+        const base = plain(tab.selectedIds);
+        const index = base.indexOf(action.payload.messageId);
+        tab.selectedIds = index >= 0 ? base.filter((_, i) => i !== index) : [...base, action.payload.messageId];
       }
     },
     selectAllThreadMessages: (state, action: PayloadAction<string>) => {
       const tab = state.threadTabs[action.payload];
-      if (tab) {
-        tab.selectedMessages = [...tab.filteredMessages];
-      }
+      if (tab) tab.selectedIds = plain(tab.filteredRows).map((r) => r.id);
     },
     deselectAllThreadMessages: (state, action: PayloadAction<string>) => {
       const tab = state.threadTabs[action.payload];
-      if (tab) {
-        tab.selectedMessages = [];
-      }
+      if (tab) tab.selectedIds = [];
     },
     // #220: drag-select writes the whole selection per pointer move —
-    // thread-tab counterpart of setSelectedMessages.
-    setThreadSelectedMessages: (
+    // thread-tab counterpart of setSelectedIds.
+    setThreadSelectedIds: (
       state,
-      action: PayloadAction<{ threadId: string; messages: Message[] }>
+      action: PayloadAction<{ threadId: string; ids: string[] }>
     ) => {
       const tab = state.threadTabs[action.payload.threadId];
-      if (tab) {
-        tab.selectedMessages = action.payload.messages;
-      }
+      if (tab) tab.selectedIds = action.payload.ids;
     },
     setThreadOrder: (
       state,
@@ -3305,11 +3432,12 @@ const messageSlice = createSlice({
       const tab = state.threadTabs[action.payload.threadId];
       if (tab) {
         tab.order = action.payload.order;
-        if (tab.filteredMessages.length > 0) {
-          tab.filteredMessages = getSortedMessages(
-            tab.filteredMessages,
-            action.payload.order.order
-          );
+        const rows = plain(tab.rows);
+        const filtered = plain(tab.filteredRows);
+        if (rows.length > 0) {
+          const nextRows = sealed(sortRows(rows, action.payload.order.order));
+          tab.rows = nextRows;
+          tab.filteredRows = filtered === rows ? nextRows : sealed(sortRows(filtered, action.payload.order.order));
         }
       }
     },
@@ -3374,12 +3502,11 @@ const messageSlice = createSlice({
           state.order = restored.order;
           state.searchCriteria = restored.searchCriteria;
           state.refineCriteria = restored.refineCriteria;
-          const sorted = sealed(getSortedMessages(action.payload.messages, restored.order.order));
-          state.messages = sorted;
-          const filtered = applyRefineCriteria(sorted, restored.refineCriteria);
-          state.filteredMessages = filtered === sorted ? sorted : sealed(filtered);
-          const selected = new Set(restored.selectedIds);
-          state.selectedMessages = selected.size > 0 ? sorted.filter((m) => selected.has(m.id)) : [];
+          state.contentMatchIds = refineNeedsContent(restored.refineCriteria) ? action.payload.contentMatchIds ?? [] : null;
+          ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'replace');
+          const rows = plain(state.rows);
+          const known = new Set(rows.map((r) => r.id));
+          state.selectedIds = restored.selectedIds.filter((id) => known.has(id));
           state.pagination.mode = restored.pagination.mode;
           state.pagination.lastMessageId = action.payload.lastMessageId;
           state.pagination.hasMore = action.payload.hasMore;
@@ -3387,17 +3514,14 @@ const messageSlice = createSlice({
           state.pagination.searchOffset = restored.pagination.searchOffset;
           state.pagination.isLoadingMore = false;
           let oldestTimestamp: string | null = null;
-          for (const m of sorted) {
-            if (m.timestamp && (oldestTimestamp === null || m.timestamp < oldestTimestamp)) oldestTimestamp = m.timestamp;
+          for (const r of rows) {
+            if (r.timestamp && (oldestTimestamp === null || r.timestamp < oldestTimestamp)) oldestTimestamp = r.timestamp;
           }
-          state.restored = { count: sorted.length, oldestTimestamp };
+          state.restored = { count: rows.length, oldestTimestamp };
           return;
         }
-        // Sort messages by order
-        const sorted = getSortedMessages(action.payload.messages, state.order.order);
-        state.messages = sorted;
-        state.filteredMessages = sorted;
-        state.selectedMessages = [];
+        ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'replace');
+        state.selectedIds = [];
         state.restored = null;
 
         // Update pagination state
@@ -3417,15 +3541,9 @@ const messageSlice = createSlice({
       })
       .addCase(fetchMoreMessages.fulfilled, (state, action) => {
         state.pagination.isLoadingMore = false;
-
-        // Append new messages (don't replace). Then re-apply any active
-        // refine so newly-loaded pages stay filtered as the user scrolls.
-        const newMessages = [...state.messages, ...action.payload.messages];
-        const sorted = getSortedMessages(newMessages, state.order.order);
-        state.messages = sorted;
-        state.filteredMessages = applyRefineCriteria(sorted, state.refineCriteria);
-
-        // Update pagination state
+        // Append new messages (don't replace); the refine is re-applied so
+        // newly-loaded pages stay filtered as the user scrolls.
+        ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'append');
         state.pagination.lastMessageId = action.payload.lastMessageId;
         state.pagination.hasMore = action.payload.hasMore;
       })
@@ -3435,11 +3553,7 @@ const messageSlice = createSlice({
       })
       // Delete single message
       .addCase(deleteMessage.fulfilled, (state, action) => {
-        const messageId = action.payload;
-        const container = getActiveContainer(state);
-        container.messages = plain(container.messages).filter((m) => m.id !== messageId);
-        container.filteredMessages = plain(container.filteredMessages).filter((m) => m.id !== messageId);
-        container.selectedMessages = plain(container.selectedMessages).filter((m) => m.id !== messageId);
+        removeRows(getActiveContainer(state), activeContainerKey(state), new Set([action.payload]));
       })
       // Delete multiple messages
       .addCase(deleteMessages.pending, (state) => {
@@ -3447,8 +3561,7 @@ const messageSlice = createSlice({
       })
       .addCase(deleteMessages.fulfilled, (state) => {
         state.isDeleting = false;
-        const container = getActiveContainer(state);
-        container.selectedMessages = [];
+        getActiveContainer(state).selectedIds = [];
       })
       .addCase(deleteMessages.rejected, (state, action) => {
         state.isDeleting = false;
@@ -3460,13 +3573,7 @@ const messageSlice = createSlice({
       })
       .addCase(editMessage.fulfilled, (state, action) => {
         state.isEditing = false;
-        const updatedMessage = action.payload;
-        const container = getActiveContainer(state);
-        const updateInArray = (arr: Message[]) =>
-          arr.map((m) => (m.id === updatedMessage.id ? updatedMessage : m));
-        container.messages = updateInArray(container.messages);
-        container.filteredMessages = updateInArray(container.filteredMessages);
-        container.selectedMessages = updateInArray(container.selectedMessages);
+        replaceRows(state, getActiveContainer(state), activeContainerKey(state), [action.payload]);
       })
       .addCase(editMessage.rejected, (state, action) => {
         state.isEditing = false;
@@ -3486,18 +3593,10 @@ const messageSlice = createSlice({
       })
       .addCase(fetchAllMessages.fulfilled, (state, action) => {
         // Messages were appended live via appendLoadAllPage (#181); just
-        // finalize flags + run a defensive canonical sort over what's
-        // already in state.
+        // finalize flags. Pages were merged in order, so the rows are sorted.
         state.pagination.isLoadingAll = false;
         state.pagination.loadAllProgress = null;
-
-        // #263: pages were merged in order, so this is only a defensive
-        // pass, done on the plain array rather than the draft.
-        const finalSorted = getSortedMessages(plain(state.messages), state.order.order);
-        state.messages = finalSorted;
-        state.filteredMessages = applyRefineCriteria(finalSorted, state.refineCriteria);
-        state.selectedMessages = [];
-
+        state.selectedIds = [];
         state.pagination.lastMessageId = action.payload.lastMessageId;
         state.pagination.hasMore = false;
         state.error = null;
@@ -3508,9 +3607,7 @@ const messageSlice = createSlice({
         // #193: the in-flight thunk emits the cancel sentinel via
         // rejectWithValue when the user-driven cancel flag is detected
         // mid-poll. Route that payload to the soft-callout state instead
-        // of state.error — partial results below remain rendered, and
-        // ServerView shows a dismissable "Load All stopped" callout
-        // instead of the red error banner.
+        // of state.error.
         const payload = action.payload as string | undefined;
         if (payload === 'Load all cancelled' || payload === 'Load cancelled') {
           state.pagination.loadAllCancelled = true;
@@ -3518,24 +3615,20 @@ const messageSlice = createSlice({
         }
         state.error = payload ?? null;
       })
-      // Bulk edit messages (F13: array updates land via the batched
-      // messagesEdited flushes during the run — the fulfilled case only
-      // finalizes flags + selection, mirroring deleteMessages.fulfilled)
+      // Bulk edit messages (F13: row updates land via the batched
+      // messagesEdited flushes during the run)
       .addCase(editMessages.pending, (state) => {
         state.isEditing = true;
       })
       .addCase(editMessages.fulfilled, (state) => {
         state.isEditing = false;
-        const container = getActiveContainer(state);
-        container.selectedMessages = [];
+        getActiveContainer(state).selectedIds = [];
       })
       .addCase(editMessages.rejected, (state, action) => {
         state.isEditing = false;
         state.error = action.payload as string;
       })
-      // #215 multi-channel bulk edit — hold isEditing for the whole run so the
-      // "Editing messages..." indicator + pause/cancel controls stay surfaced
-      // (the per-message service calls don't touch isEditing).
+      // #215 multi-channel bulk edit — hold isEditing for the whole run.
       .addCase(bulkEditChannels.pending, (state) => {
         state.isEditing = true;
       })
@@ -3556,12 +3649,8 @@ const messageSlice = createSlice({
       .addCase(searchMessages.fulfilled, (state, action) => {
         state.isLoading = false;
         state.pagination.loadAllProgress = null;
-
-        const sorted = getSortedMessages(action.payload.messages, state.order.order);
-        state.messages = sorted;
-        state.filteredMessages = applyRefineCriteria(sorted, state.refineCriteria);
-        state.selectedMessages = [];
-
+        ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'replace');
+        state.selectedIds = [];
         state.pagination.totalCount = action.payload.totalResults;
         state.pagination.hasMore = action.payload.hasMore;
         state.pagination.searchOffset = action.payload.nextOffset;
@@ -3579,16 +3668,7 @@ const messageSlice = createSlice({
       })
       .addCase(fetchNextSearchPage.fulfilled, (state, action) => {
         state.pagination.isLoadingMore = false;
-
-        const existing = plain(state.messages);
-        const existingIds = new Set(existing.map((m) => m.id));
-        const newMessages = action.payload.messages.filter(
-          (m) => !existingIds.has(m.id)
-        );
-        const sorted = appendSortedPage(existing, newMessages, state.order.order);
-        state.messages = sorted;
-        state.filteredMessages = applyRefineCriteria(sorted, state.refineCriteria);
-
+        ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'append');
         state.pagination.totalCount = action.payload.totalResults;
         state.pagination.hasMore = action.payload.hasMore;
         state.pagination.searchOffset = action.payload.newOffset;
@@ -3600,29 +3680,19 @@ const messageSlice = createSlice({
         state.pagination.isLoadingAll = true;
         state.pagination.loadAllCancelled = false; // #193: clear stale cancel state on a new attempt
         state.pagination.loadAllProgress = {
-          current: state.messages.length,
+          current: state.rows.length,
           total: state.pagination.totalCount ?? 0,
           message: t('status.msg.loadingAllSearchResults'),
         };
       })
       .addCase(loadAllSearchResults.fulfilled, (state, action) => {
         // Messages were appended live via appendLoadAllPage (#181); just
-        // finalize flags + run a defensive canonical sort over what's
-        // already in state. The aggregated payload may contain duplicates
-        // (the thunk doesn't dedup the local accumulator) — using
-        // state.messages here preserves the deduped/sorted version.
+        // finalize flags.
         state.pagination.isLoadingAll = false;
         state.pagination.loadAllProgress = null;
-
-        // #263: pages were merged in order, so this is only a defensive
-        // pass, done on the plain array rather than the draft.
-        const finalSorted = getSortedMessages(plain(state.messages), state.order.order);
-        state.messages = finalSorted;
-        state.filteredMessages = applyRefineCriteria(finalSorted, state.refineCriteria);
-
         state.pagination.totalCount = action.payload.totalResults;
         state.pagination.hasMore = false;
-        state.pagination.searchOffset = state.messages.length;
+        state.pagination.searchOffset = state.rows.length;
       })
       .addCase(loadAllSearchResults.rejected, (state, action) => {
         state.pagination.isLoadingAll = false;
@@ -3638,68 +3708,34 @@ const messageSlice = createSlice({
       // Delete single reaction
       .addCase(deleteReaction.fulfilled, (state, action) => {
         const { messageId, emoji } = action.payload;
-        const container = getActiveContainer(state);
-        const updateReactions = (arr: Message[]) =>
-          arr.map((m) => {
-            if (m.id !== messageId || !m.reactions) return m;
-            const updatedReactions = m.reactions
-              .map((r) => {
-                const emojiKey = r.emoji.id || r.emoji.name;
-                if (emojiKey === emoji || `${r.emoji.name}:${r.emoji.id}` === emoji) {
-                  return { ...r, count: (r.count || 1) - 1 };
-                }
-                return r;
-              })
-              .filter((r) => (r.count || 0) > 0);
-            return { ...m, reactions: updatedReactions };
-          });
-        container.messages = updateReactions(container.messages);
-        container.filteredMessages = updateReactions(container.filteredMessages);
-        container.selectedMessages = updateReactions(container.selectedMessages);
+        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => {
+          if (!m.reactions) return m;
+          const updatedReactions = m.reactions
+            .map((r) => (emojiMatches(r, emoji) ? { ...r, count: (r.count || 1) - 1 } : r))
+            .filter((r) => (r.count || 0) > 0);
+          return { ...m, reactions: updatedReactions };
+        });
       })
       // Delete all reactions of an emoji
       .addCase(deleteAllReactions.fulfilled, (state, action) => {
         const { messageId, emoji } = action.payload;
-        const container = getActiveContainer(state);
-        const removeEmoji = (arr: Message[]) =>
-          arr.map((m) => {
-            if (m.id !== messageId || !m.reactions) return m;
-            const updatedReactions = m.reactions.filter((r) => {
-              const emojiKey = r.emoji.id || r.emoji.name;
-              return emojiKey !== emoji && `${r.emoji.name}:${r.emoji.id}` !== emoji;
-            });
-            return { ...m, reactions: updatedReactions };
-          });
-        container.messages = removeEmoji(container.messages);
-        container.filteredMessages = removeEmoji(container.filteredMessages);
-        container.selectedMessages = removeEmoji(container.selectedMessages);
+        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => {
+          if (!m.reactions) return m;
+          return { ...m, reactions: m.reactions.filter((r) => !emojiMatches(r, emoji)) };
+        });
       })
       // Bulk delete all reactions from a message (MANAGE_MESSAGES)
       .addCase(bulkDeleteAllReactions.fulfilled, (state, action) => {
         const { messageId } = action.payload;
-        const container = getActiveContainer(state);
-        const clearReactions = (arr: Message[]) =>
-          arr.map((m) => m.id === messageId ? { ...m, reactions: [] } : m);
-        container.messages = clearReactions(container.messages);
-        container.filteredMessages = clearReactions(container.filteredMessages);
-        container.selectedMessages = clearReactions(container.selectedMessages);
+        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => ({ ...m, reactions: [] }));
       })
       // Bulk delete all reactions for a specific emoji (MANAGE_MESSAGES)
       .addCase(bulkDeleteReactionsForEmoji.fulfilled, (state, action) => {
         const { messageId, emoji } = action.payload;
-        const container = getActiveContainer(state);
-        const removeEmoji = (arr: Message[]) =>
-          arr.map((m) => {
-            if (m.id !== messageId || !m.reactions) return m;
-            const updatedReactions = m.reactions.filter((r) => {
-              const emojiKey = r.emoji.id || r.emoji.name;
-              return emojiKey !== emoji && `${r.emoji.name}:${r.emoji.id}` !== emoji;
-            });
-            return { ...m, reactions: updatedReactions };
-          });
-        container.messages = removeEmoji(container.messages);
-        container.filteredMessages = removeEmoji(container.filteredMessages);
-        container.selectedMessages = removeEmoji(container.selectedMessages);
+        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => {
+          if (!m.reactions) return m;
+          return { ...m, reactions: m.reactions.filter((r) => !emojiMatches(r, emoji)) };
+        });
       })
       // Batch remove reactions across multiple messages
       .addCase(batchRemoveReactions.pending, (state) => {
@@ -3711,32 +3747,23 @@ const messageSlice = createSlice({
       .addCase(batchRemoveReactions.fulfilled, (state, action) => {
         state.isRemovingReactions = false;
         const { processedMessageIds, mode, emojis } = action.payload;
-        const idSet = new Set(processedMessageIds);
         const emojiSet = emojis ? new Set(emojis) : null;
-        const container = getActiveContainer(state);
-        const update = (arr: Message[]) =>
-          arr.map((m) => {
-            if (!idSet.has(m.id) || !m.reactions) return m;
-            if (mode === 'all') return { ...m, reactions: [] };
-            if (mode === 'emoji' && emojiSet) {
-              return {
-                ...m,
-                reactions: m.reactions.filter((r) => !emojiSet.has(getEmojiKey(r.emoji))),
-              };
-            }
-            return {
-              ...m,
-              reactions: m.reactions
-                .map((r) => {
-                  if (emojiSet && !emojiSet.has(getEmojiKey(r.emoji))) return r;
-                  return { ...r, count: Math.max(0, (r.count || 1) - 1), me: false };
-                })
-                .filter((r) => r.count > 0),
-            };
-          });
-        container.messages = update(container.messages);
-        container.filteredMessages = update(container.filteredMessages);
-        container.selectedMessages = update(container.selectedMessages);
+        patchReactions(getActiveContainer(state), activeContainerKey(state), processedMessageIds, (m) => {
+          if (!m.reactions) return m;
+          if (mode === 'all') return { ...m, reactions: [] };
+          if (mode === 'emoji' && emojiSet) {
+            return { ...m, reactions: m.reactions.filter((r) => !emojiSet.has(getEmojiKey(r.emoji))) };
+          }
+          return {
+            ...m,
+            reactions: m.reactions
+              .map((r) => {
+                if (emojiSet && !emojiSet.has(getEmojiKey(r.emoji))) return r;
+                return { ...r, count: Math.max(0, (r.count || 1) - 1), me: false };
+              })
+              .filter((r) => r.count > 0),
+          };
+        });
       })
       // Batch add reactions across multiple messages (Backlog #202)
       .addCase(batchAddReactions.pending, (state) => {
@@ -3750,9 +3777,8 @@ const messageSlice = createSlice({
         const { successfulAdds } = action.payload;
         if (!successfulAdds.length) return;
         const byId = new Map(successfulAdds.map((s) => [s.messageId, s.emojis]));
-        const container = getActiveContainer(state);
         // Optimistically merge the added reactions so the feed reflects them without a refetch.
-        const mergeReactions = (m: Message): Message => {
+        patchReactions(getActiveContainer(state), activeContainerKey(state), byId.keys(), (m) => {
           const toAdd = byId.get(m.id);
           if (!toAdd) return m;
           let reactions = [...(m.reactions || [])];
@@ -3786,43 +3812,23 @@ const messageSlice = createSlice({
             }
           }
           return { ...m, reactions };
-        };
-        const update = (arr: Message[]) => arr.map(mergeReactions);
-        container.messages = update(container.messages);
-        container.filteredMessages = update(container.filteredMessages);
-        container.selectedMessages = update(container.selectedMessages);
+        });
       })
       // Delete single attachment
       .addCase(deleteAttachment.fulfilled, (state, action) => {
         const { messageId, deleted, updatedMessage } = action.payload;
         const container = getActiveContainer(state);
-        if (deleted) {
-          container.messages = plain(container.messages).filter((m) => m.id !== messageId);
-          container.filteredMessages = plain(container.filteredMessages).filter((m) => m.id !== messageId);
-          container.selectedMessages = plain(container.selectedMessages).filter((m) => m.id !== messageId);
-        } else if (updatedMessage) {
-          const updateInArray = (arr: Message[]) =>
-            arr.map((m) => (m.id === messageId ? updatedMessage : m));
-          container.messages = updateInArray(container.messages);
-          container.filteredMessages = updateInArray(container.filteredMessages);
-          container.selectedMessages = updateInArray(container.selectedMessages);
-        }
+        const key = activeContainerKey(state);
+        if (deleted) removeRows(container, key, new Set([messageId]));
+        else if (updatedMessage) replaceRows(state, container, key, [updatedMessage]);
       })
       // Delete all attachments
       .addCase(deleteAllAttachments.fulfilled, (state, action) => {
         const { messageId, deleted, updatedMessage } = action.payload;
         const container = getActiveContainer(state);
-        if (deleted) {
-          container.messages = plain(container.messages).filter((m) => m.id !== messageId);
-          container.filteredMessages = plain(container.filteredMessages).filter((m) => m.id !== messageId);
-          container.selectedMessages = plain(container.selectedMessages).filter((m) => m.id !== messageId);
-        } else if (updatedMessage) {
-          const updateInArray = (arr: Message[]) =>
-            arr.map((m) => (m.id === messageId ? updatedMessage : m));
-          container.messages = updateInArray(container.messages);
-          container.filteredMessages = updateInArray(container.filteredMessages);
-          container.selectedMessages = updateInArray(container.selectedMessages);
-        }
+        const key = activeContainerKey(state);
+        if (deleted) removeRows(container, key, new Set([messageId]));
+        else if (updatedMessage) replaceRows(state, container, key, [updatedMessage]);
       })
       // User enrichment (light operation — spinner only)
       .addCase(enrichMessageUsers.pending, (state) => {
@@ -3839,17 +3845,16 @@ const messageSlice = createSlice({
 
 export const {
   setMessages,
-  setFilteredMessages,
-  setSelectedMessages,
+  setSelectedIds,
   toggleMessageSelection,
   selectAllMessages,
   deselectAllMessages,
   messagesRemoved,
   messagesEdited,
   setSearchCriteria,
-  setRefineCriteria,
+  refineApplied,
   clearRefineCriteria,
-  setThreadRefineCriteria,
+  threadRefineApplied,
   clearThreadRefineCriteria,
   setOrder,
   clearMessages,
@@ -3862,11 +3867,11 @@ export const {
   addThreadTab,
   removeThreadTab,
   setThreadMessages,
-  setThreadFilteredMessages,
+  appendThreadMessages,
   toggleThreadMessageSelection,
   selectAllThreadMessages,
   deselectAllThreadMessages,
-  setThreadSelectedMessages,
+  setThreadSelectedIds,
   setThreadOrder,
   setThreadSearchCriteria,
   setThreadLoading,
@@ -3875,16 +3880,90 @@ export const {
   setHighlightedMessageId,
 } = messageSlice.actions;
 
+/* ─────────────────── Refine (2.2.5 WP2b) ─────────────────── */
+
+/**
+ * The ids a content or attachment name refine accepts, from a scan of
+ * the conversation's message objects: the workspace store when it holds
+ * the conversation, the message cache otherwise (tests, a store failure).
+ */
+async function scanContentMatches(
+  getState: () => RootState,
+  dispatch: (action: unknown) => unknown,
+  containerKey: string,
+  cid: string | null,
+  criteria: RefineCriteria,
+): Promise<string[]> {
+  const state = getState();
+  const wid = selectCurrentWid(state);
+  const predicate = (message: Message) => messageMatchesContentRefine(message, criteria);
+  if (wid && cid) {
+    try {
+      const total = await countRows(wid, cid);
+      if (total > 0) {
+        if (total >= SCAN_NOTICE_ROWS) dispatch(addStatusEntry({ level: 'info', message: t('status.msg.scanningMessages', { count: total }) }));
+        const result = await scan(wid, cid, predicate);
+        return result.ids;
+      }
+    } catch (error) {
+      console.error('[workspace] content scan failed, using the cache', error);
+    }
+  }
+  return cachedMessagesOf(containerKey).filter(predicate).map((m) => m.id);
+}
+
+/** Rows a status line is worth above. */
+const SCAN_NOTICE_ROWS = 5000;
+
+const mainCidOf = (state: RootState): string | null =>
+  state.channel?.selectedChannel?.id ?? state.dm?.selectedDm?.id ?? null;
+
+/**
+ * Applies a refine to the open conversation. A refine on row fields is
+ * applied at once; one with a content or attachment name part scans the
+ * message objects first (plan section 11).
+ */
+export const setRefineCriteria = createAsyncThunk(
+  'message/setRefineCriteria',
+  async (criteria: RefineCriteria | null, { dispatch, getState }) => {
+    if (!refineNeedsContent(criteria)) {
+      dispatch(messageSlice.actions.refineApplied({ criteria }));
+      return;
+    }
+    const contentMatchIds = await scanContentMatches(
+      getState as () => RootState, dispatch, MAIN_CONTAINER, mainCidOf(getState() as RootState), criteria as RefineCriteria,
+    );
+    dispatch(messageSlice.actions.refineApplied({ criteria, contentMatchIds }));
+  },
+);
+
+export const setThreadRefineCriteria = createAsyncThunk(
+  'message/setThreadRefineCriteria',
+  async ({ threadId, criteria }: { threadId: string; criteria: RefineCriteria | null }, { dispatch, getState }) => {
+    if (!refineNeedsContent(criteria)) {
+      dispatch(messageSlice.actions.threadRefineApplied({ threadId, criteria }));
+      return;
+    }
+    const contentMatchIds = await scanContentMatches(getState as () => RootState, dispatch, threadId, threadId, criteria as RefineCriteria);
+    dispatch(messageSlice.actions.threadRefineApplied({ threadId, criteria, contentMatchIds }));
+  },
+);
+
+/* ─────────────────── Selectors ─────────────────── */
+
 // Base selectors (always return main channel state)
 export const selectMessage = (state: RootState) => state.message;
-export const selectMessages = (state: RootState) => state.message.messages;
+export const selectRows = (state: RootState) => state.message.rows;
 export const selectClearSeq = (state: RootState) => state.message.clearSeq;
 /** 2.2.5: non-null when the open conversation was restored from the workspace store. */
 export const selectRestored = (state: RootState) => state.message.restored ?? null;
 export const selectHighlightedMessageId = (state: RootState) =>
   state.message.highlightedMessageId;
-export const selectFilteredMessages = (state: RootState) => state.message.filteredMessages;
-export const selectSelectedMessages = (state: RootState) => state.message.selectedMessages;
+export const selectFilteredRows = (state: RootState) => state.message.filteredRows;
+export const selectSelectedIds = (state: RootState) => state.message.selectedIds;
+/** The authors of every loaded message, keyed by user id (2.2.5 WP2b). */
+const NO_AUTHORS: Record<string, User> = Object.freeze({});
+export const selectAuthors = (state: RootState) => state.message.authors ?? NO_AUTHORS;
 export const selectSearchCriteria = (state: RootState) => state.message.searchCriteria;
 export const selectMessageOrder = (state: RootState) => state.message.order;
 export const selectMessageLoading = (state: RootState) => state.message.isLoading;
@@ -3900,45 +3979,57 @@ export const selectThreadTab = (state: RootState, threadId: string) =>
   state.message.threadTabs[threadId] ?? null;
 
 // Active-tab-aware selectors (return data from whichever tab is active)
-export const selectActiveMessages = (state: RootState) => {
-  const { activeTab, threadTabs, messages } = state.message;
+export const selectActiveRows = (state: RootState) => {
+  const { activeTab, threadTabs, rows } = state.message;
   if (activeTab && threadTabs[activeTab]) {
-    return threadTabs[activeTab].messages;
+    return threadTabs[activeTab].rows;
   }
-  return messages;
+  return rows;
 };
 
-// #190 Phase 3: converted to a Reselect createSelector. The previous
-// raw-property selector was already referentially stable (it returns one
-// of two stored arrays without deriving), so the direct perf win is
-// marginal — what this conversion buys is INTENT DOCUMENTATION (this
-// selector is on the MessageFeed hot path and must stay ref-stable) and
-// FUTURE-PROOFING against a refactor that adds derived work (a .map,
-// a filter, a spread) — Reselect would still cache the output, where a
-// raw selector would emit a new reference on every dispatch and force
-// the whole feed to re-render. Backed by 4 regression-guard tests in
-// the Active-tab-aware selectors describe block.
-export const selectActiveFilteredMessages = createSelector(
+// #190 Phase 3: a Reselect createSelector so this stays ref-stable on the
+// MessageFeed hot path, where a new reference on every dispatch would force
+// the whole feed to re-render.
+export const selectActiveFilteredRows = createSelector(
   [
     (state: RootState) => state.message.activeTab,
     (state: RootState) => state.message.threadTabs,
-    (state: RootState) => state.message.filteredMessages,
+    (state: RootState) => state.message.filteredRows,
   ],
-  (activeTab, threadTabs, filteredMessages) => {
+  (activeTab, threadTabs, filteredRows) => {
     if (activeTab && threadTabs[activeTab]) {
-      return threadTabs[activeTab].filteredMessages;
+      return threadTabs[activeTab].filteredRows;
     }
-    return filteredMessages;
+    return filteredRows;
   },
 );
 
-export const selectActiveSelectedMessages = (state: RootState) => {
-  const { activeTab, threadTabs, selectedMessages } = state.message;
+export const selectActiveSelectedIds = (state: RootState) => {
+  const { activeTab, threadTabs, selectedIds } = state.message;
   if (activeTab && threadTabs[activeTab]) {
-    return threadTabs[activeTab].selectedMessages;
+    return threadTabs[activeTab].selectedIds;
   }
-  return selectedMessages;
+  return selectedIds;
 };
+
+/** The message cache key of the active container: 'main' or the thread id. */
+export const selectActiveContainerKey = (state: RootState): string => activeContainerKey(state.message);
+
+/**
+ * Where the active container's objects live in the workspace store: the
+ * thread id, or the open channel or DM.
+ */
+export const selectActiveCid = (state: RootState): string | null => {
+  const { activeTab, threadTabs } = state.message;
+  if (activeTab && threadTabs[activeTab]) return activeTab;
+  return mainCidOf(state);
+};
+
+/** What hydration needs: the open workspace and the active conversation id. */
+export const selectActiveHydrationSource = createSelector(
+  [selectCurrentWid, selectActiveCid],
+  (wid, cid): HydrationSource => ({ wid, cid }),
+);
 
 export const selectActiveSearchCriteria = (state: RootState) => {
   const { activeTab, threadTabs, searchCriteria } = state.message;

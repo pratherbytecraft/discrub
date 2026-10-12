@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
-import { createAuthenticatedState } from '@/test/state-factories';
+import { createAuthenticatedState, messageStateWith } from '@/test/state-factories';
 import { createMockMessage } from '@/test/fixtures';
 import { virtualizerMock } from '@/test/virtualizer-mock';
 import { SortDirection } from 'discrub-core/common-enum';
@@ -11,7 +11,7 @@ vi.mock('@tanstack/react-virtual', () => virtualizerMock);
 const withMessages = () => {
   const messages = [createMockMessage({ id: 'm1', content: 'first' }), createMockMessage({ id: 'm2', content: 'second' })];
   const state = createAuthenticatedState();
-  state.message = { ...state.message, messages, filteredMessages: messages };
+  state.message = messageStateWith(state.message, messages);
   return state;
 };
 
@@ -20,17 +20,17 @@ describe('<MessageTable />', () => {
     const { store } = renderWithProviders(<MessageTable />, { preloadedState: withMessages() });
     expect(screen.getAllByTestId('table-row')).toHaveLength(2);
     fireEvent.click(screen.getAllByTestId('table-row')[0]);
-    expect(store.getState().message.selectedMessages.map((m) => m.id)).toEqual(['m1']);
+    expect(store.getState().message.selectedIds).toEqual(['m1']);
     fireEvent.click(screen.getAllByTestId('table-row')[0]);
-    expect(store.getState().message.selectedMessages).toHaveLength(0);
+    expect(store.getState().message.selectedIds).toHaveLength(0);
   });
 
   it('selects and clears everything from the header checkbox', () => {
     const { store } = renderWithProviders(<MessageTable />, { preloadedState: withMessages() });
     fireEvent.click(screen.getByTestId('table-select-all').querySelector('input') as HTMLInputElement);
-    expect(store.getState().message.selectedMessages).toHaveLength(2);
+    expect(store.getState().message.selectedIds).toHaveLength(2);
     fireEvent.click(screen.getByTestId('table-select-all').querySelector('input') as HTMLInputElement);
-    expect(store.getState().message.selectedMessages).toHaveLength(0);
+    expect(store.getState().message.selectedIds).toHaveLength(0);
   });
 
   it('a message with no text says what it holds: the embed title, a plain embed, or a sticker', () => {
@@ -43,7 +43,7 @@ describe('<MessageTable />', () => {
       createMockMessage({ id: 't1', content: 'plain text' }),
     ];
     const state = createAuthenticatedState();
-    state.message = { ...state.message, messages, filteredMessages: messages };
+    state.message = messageStateWith(state.message, messages);
     renderWithProviders(<MessageTable />, { preloadedState: state });
     expect(screen.getAllByTestId('table-standin').map((el) => el.textContent)).toEqual(['Embed: Most attachments shared', 'Embed: all channels Aug 2', 'Embed', 'Sticker: Wave', expect.stringMatching(/call/i)]);
   });

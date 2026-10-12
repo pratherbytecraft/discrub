@@ -10,10 +10,12 @@ import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { formatSystemMessage } from 'discrub-core/system-messages';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
-  selectActiveFilteredMessages, selectActiveSelectedMessages, selectActiveOrder, selectActiveTab,
+  selectActiveFilteredRows, selectActiveSelectedIds, selectActiveOrder, selectActiveTab,
+  selectActiveContainerKey, selectActiveHydrationSource,
   toggleMessageSelection, toggleThreadMessageSelection, selectAllMessages, deselectAllMessages,
   selectAllThreadMessages, deselectAllThreadMessages, setOrder, setThreadOrder,
 } from '@features/message/messageSlice';
+import { useHydratedMessages } from '@features/message/messageCache';
 import { selectSettings } from '@features/app/appSlice';
 import { format } from 'date-fns';
 import { getDateLocale } from '@/i18n/dateLocale';
@@ -49,17 +51,19 @@ const MessageTable = () => {
   }, [guildName, t]);
   const dispatch = useAppDispatch();
   const theme = useTheme();
-  const messages = useAppSelector(selectActiveFilteredMessages);
-  const selected = useAppSelector(selectActiveSelectedMessages);
+  const messages = useAppSelector(selectActiveFilteredRows);
+  const selected = useAppSelector(selectActiveSelectedIds);
   const order = useAppSelector(selectActiveOrder);
   const activeTab = useAppSelector(selectActiveTab);
   const settings = useAppSelector(selectSettings);
-  const selectedIds = useMemo(() => new Set(selected.map((m) => m.id)), [selected]);
+  const containerKey = useAppSelector(selectActiveContainerKey);
+  const hydrationSource = useAppSelector(selectActiveHydrationSource);
+  const selectedIds = useMemo(() => new Set(selected), [selected]);
   const allSelected = messages.length > 0 && selected.length === messages.length;
 
-  const toggle = useCallback((message: Message) => {
-    if (activeTab) dispatch(toggleThreadMessageSelection({ threadId: activeTab, message }));
-    else dispatch(toggleMessageSelection(message));
+  const toggle = useCallback((messageId: string) => {
+    if (activeTab) dispatch(toggleThreadMessageSelection({ threadId: activeTab, messageId }));
+    else dispatch(toggleMessageSelection(messageId));
   }, [activeTab, dispatch]);
   const toggleAll = useCallback(() => {
     if (allSelected) { if (activeTab) dispatch(deselectAllThreadMessages(activeTab)); else dispatch(deselectAllMessages()); }
@@ -72,6 +76,16 @@ const MessageTable = () => {
 
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({ count: messages.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW_HEIGHT, overscan: 30 });
+  // 2.2.5 WP2b: the rows on screen hydrate from the message cache and the
+  // workspace store; a row still being read draws as a placeholder.
+  const virtualItems = virtualizer.getVirtualItems();
+  const visibleIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of virtualItems) { const r = messages[item.index]; if (r) ids.push(r.id); }
+    return ids;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, virtualItems.length > 0 ? `${virtualItems[0].index}:${virtualItems[virtualItems.length - 1].index}` : '']);
+  const hydrated = useHydratedMessages(containerKey, hydrationSource, visibleIds);
   const dateFormat = settings?.dateFormat || 'MM/dd/yyyy';
   const timeFormat = settings?.timeFormat || 'h:mm aa';
   const stamp = useCallback((ts: string) => { try { return format(new Date(ts), `${dateFormat} ${timeFormat}`, { locale: getDateLocale() }); } catch { return ''; } }, [dateFormat, timeFormat]);
@@ -91,8 +105,16 @@ const MessageTable = () => {
       </Box>
       <Box ref={parentRef} sx={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-testid="message-table-scroll">
         <Box sx={{ height: virtualizer.getTotalSize(), position: 'relative', minWidth: 640 }}>
-          {virtualizer.getVirtualItems().map((row) => {
-            const m = messages[row.index];
+          {virtualItems.map((row) => {
+            const r = messages[row.index];
+            const m = hydrated.get(r.id);
+            if (!m) {
+              return (
+                <Box key={r.id} role="row" data-testid="table-row-pending" data-message-id={r.id} sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: row.size, transform: `translateY(${row.start}px)`, display: 'grid', gridTemplateColumns: grid, alignItems: 'center', px: 1, opacity: 0.5 }}>
+                  <Box /><Box sx={{ height: 12, borderRadius: 1, bgcolor: alpha(theme.palette.text.primary, 0.08), mx: 1 }} /><Box sx={{ height: 12, borderRadius: 1, bgcolor: alpha(theme.palette.text.primary, 0.08), mx: 1 }} />
+                </Box>
+              );
+            }
             return (
               <MessageTableRow
                 key={m.id}
@@ -124,7 +146,7 @@ const MessageTableRow = memo(function MessageTableRow({
   message: m, isSelected, top, height, stamp, standIn, onToggle, grid, t,
 }: {
   message: Message; isSelected: boolean; top: number; height: number;
-  stamp: (ts: string) => string; standIn: (m: Message, files: number) => string; onToggle: (m: Message) => void; grid: string; t: TFunction;
+  stamp: (ts: string) => string; standIn: (m: Message, files: number) => string; onToggle: (id: string) => void; grid: string; t: TFunction;
 }) {
   const theme = useTheme();
   const author = m.author?.global_name || m.author?.username || '';
@@ -135,7 +157,7 @@ const MessageTableRow = memo(function MessageTableRow({
       aria-selected={isSelected}
       data-testid="table-row"
       data-message-id={m.id}
-      onClick={() => onToggle(m)}
+      onClick={() => onToggle(m.id)}
       sx={{
         position: 'absolute', top: 0, left: 0, width: '100%', height, transform: `translateY(${top}px)`,
         display: 'grid', gridTemplateColumns: grid, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider',
@@ -143,7 +165,7 @@ const MessageTableRow = memo(function MessageTableRow({
         '&:hover': { backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.18) : alpha(theme.palette.text.primary, 0.04) },
       }}
     >
-      <Box sx={{ ...cellSx, px: 0.5 }}><Checkbox size="small" checked={isSelected} tabIndex={-1} onClick={(e) => e.stopPropagation()} onChange={() => onToggle(m)} inputProps={{ 'aria-label': t('table.selectRow') }} sx={{ p: 0.5 }} /></Box>
+      <Box sx={{ ...cellSx, px: 0.5 }}><Checkbox size="small" checked={isSelected} tabIndex={-1} onClick={(e) => e.stopPropagation()} onChange={() => onToggle(m.id)} inputProps={{ 'aria-label': t('table.selectRow') }} sx={{ p: 0.5 }} /></Box>
       <Box sx={{ ...cellSx, gap: 0.75 }}>
         <Box component="img" src={m.author?.avatar ? `https://cdn.discordapp.com/avatars/${m.author.id}/${m.author.avatar}.png?size=32` : undefined} alt="" sx={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, backgroundColor: 'action.hover' }} />
         <Typography variant="body2" noWrap sx={{ fontSize: 'inherit', fontWeight: 600 }}>{author}</Typography>

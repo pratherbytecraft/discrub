@@ -1123,7 +1123,7 @@ describe('selectOperationSummary identity (2.2.1 perf)', () => {
     const base = createBaseState();
     const first = selectOperationSummary(base);
     // A message slice change that does not touch anything the summary reads.
-    const next = { ...base, message: { ...base.message, messages: [...base.message.messages] } };
+    const next = { ...base, message: { ...base.message, rows: [...base.message.rows] } };
     expect(selectOperationSummary(next)).toBe(first);
   });
 

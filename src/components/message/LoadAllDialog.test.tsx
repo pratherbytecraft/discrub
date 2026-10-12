@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderWithProviders, screen, fireEvent } from '../../test/test-utils';
 import LoadAllDialog from './LoadAllDialog';
-import { createBaseState } from '../../test/state-factories';
+import { createBaseState, messageStateWith, rowsOf } from '../../test/state-factories';
 import { createMockMessage } from '../../test/fixtures';
 
 vi.mock('@services/discordService', () => ({
@@ -55,8 +55,7 @@ describe('LoadAllDialog', () => {
       return createBaseState({
         message: {
           ...base.message,
-          messages: [createMockMessage({ id: '1', timestamp: '2026-03-03T12:00:00.000Z' })],
-          filteredMessages: [createMockMessage({ id: '1', timestamp: '2026-03-03T12:00:00.000Z' })],
+          ...messageStateWith(base.message, [createMockMessage({ id: '1', timestamp: '2026-03-03T12:00:00.000Z' })]),
           restored: { count: 12480, oldestTimestamp: '2026-03-03T12:00:00.000Z' },
         },
       });
@@ -119,9 +118,10 @@ describe('LoadAllDialog', () => {
       renderWithProviders(<LoadAllDialog {...defaultProps} />, {
         preloadedState: createBaseState({
           message: {
-            messages,
-            filteredMessages: messages,
-            selectedMessages: [],
+            rows: rowsOf(messages),
+            filteredRows: rowsOf(messages),
+            selectedIds: [],
+            contentMatchIds: null,
             searchCriteria: null,
             order: { order: 'desc' as any, orderBy: 'timestamp' },
             isLoading: false,
@@ -196,9 +196,10 @@ describe('LoadAllDialog', () => {
       renderWithProviders(<LoadAllDialog {...defaultProps} />, {
         preloadedState: createBaseState({
           message: {
-            messages: [],
-            filteredMessages: [],
-            selectedMessages: [],
+            rows: rowsOf([]),
+            filteredRows: rowsOf([]),
+            selectedIds: [],
+            contentMatchIds: null,
             searchCriteria: null,
             order: { order: 'desc' as any, orderBy: 'timestamp' },
             isLoading: false,
@@ -218,9 +219,10 @@ describe('LoadAllDialog', () => {
               'thread-123': {
                 threadId: 'thread-123',
                 threadName: 'Test Thread',
-                messages: [],
-                filteredMessages: [],
-                selectedMessages: [],
+                rows: rowsOf([]),
+                filteredRows: rowsOf([]),
+                selectedIds: [],
+                contentMatchIds: null,
                 searchCriteria: null,
                 order: { order: 'desc' as any, orderBy: 'timestamp' },
                 isLoading: false,
@@ -248,9 +250,10 @@ describe('LoadAllDialog', () => {
     const buildFilteredState = (criteria: Record<string, unknown>) =>
       createBaseState({
         message: {
-          messages: [],
-          filteredMessages: [],
-          selectedMessages: [],
+          rows: rowsOf([]),
+          filteredRows: rowsOf([]),
+          selectedIds: [],
+          contentMatchIds: null,
           searchCriteria: criteria as any,
           order: { order: 'desc' as any, orderBy: 'timestamp' },
           isLoading: false,
@@ -307,9 +310,10 @@ describe('LoadAllDialog', () => {
       renderWithProviders(<LoadAllDialog {...defaultProps} />, {
         preloadedState: createBaseState({
           message: {
-            messages: [],
-            filteredMessages: [],
-            selectedMessages: [],
+            rows: rowsOf([]),
+            filteredRows: rowsOf([]),
+            selectedIds: [],
+            contentMatchIds: null,
             searchCriteria: { searchMessageContents: ['hello'] } as any,
             order: { order: 'desc' as any, orderBy: 'timestamp' },
             isLoading: false,

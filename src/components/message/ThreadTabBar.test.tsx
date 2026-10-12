@@ -53,9 +53,10 @@ function renderTabBar(
 const makeThreadTab = (id: string, name: string) => ({
   threadId: id,
   threadName: name,
-  messages: [],
-  filteredMessages: [],
-  selectedMessages: [],
+  rows: [],
+  filteredRows: [],
+  selectedIds: [],
+  contentMatchIds: null,
   searchCriteria: null, refineCriteria: null,
   order: initialMessageState.order,
   isLoading: false,

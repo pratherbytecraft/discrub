@@ -32,6 +32,10 @@ if (import.meta.env.DEV) {
   import('./features/guild/guildSlice').then((guild) => {
     (window as any).__thunks__ = { fetchGuilds: guild.fetchGuilds };
   });
+  // 2.2.5 WP2b: the store holds rows; specs that check message content read the objects here.
+  import('./features/message/messageCache').then((cache) => {
+    (window as any).__messageCache__ = { get: cache.getCachedMessage };
+  });
 }
 
 // #263: measurement hooks for tooling/perf. Only a build made with

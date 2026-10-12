@@ -1,3 +1,4 @@
+import { rowsOf } from '@/test/state-factories';
 /**
  * ExportDialog Tests
  *
@@ -84,8 +85,8 @@ describe('ExportDialog', () => {
             settings: settings as any,
           },
           message: {
-            messages,
-            filteredMessages: messages,
+            rows: rowsOf(messages),
+            filteredRows: rowsOf(messages),
             isLoading: false,
             isEditing: false,
             messageFilters: {
@@ -180,8 +181,8 @@ describe('ExportDialog', () => {
               settings: defaultSettings as any,
             },
             message: {
-              messages: [createMockMessage()],
-              filteredMessages: [createMockMessage()],
+              rows: rowsOf([createMockMessage()]),
+              filteredRows: rowsOf([createMockMessage()]),
               isLoading: false,
               isEditing: false,
               pagination: {
@@ -194,9 +195,10 @@ describe('ExportDialog', () => {
                 'thread-123': {
                   threadId: 'thread-123',
                   threadName: 'My Test Thread',
-                  messages: [createMockMessage()],
-                  filteredMessages: [createMockMessage()],
-                  selectedMessages: [],
+                  rows: rowsOf([createMockMessage()]),
+                  filteredRows: rowsOf([createMockMessage()]),
+                  selectedIds: [],
+                  contentMatchIds: null,
                   searchCriteria: null,
                   order: { order: 'desc', orderBy: 'timestamp' },
                   isLoading: false,
@@ -536,8 +538,8 @@ describe('ExportDialog', () => {
               settings: defaultSettings as any,
             },
             message: {
-              messages: [createMockMessage()],
-              filteredMessages: [createMockMessage()],
+              rows: rowsOf([createMockMessage()]),
+              filteredRows: rowsOf([createMockMessage()]),
               isLoading: false,
               isEditing: false,
               messageFilters: {
@@ -588,8 +590,8 @@ describe('ExportDialog', () => {
               settings: defaultSettings as any,
             },
             message: {
-              messages: [createMockMessage()],
-              filteredMessages: [createMockMessage()],
+              rows: rowsOf([createMockMessage()]),
+              filteredRows: rowsOf([createMockMessage()]),
               isLoading: false,
               isEditing: false,
               messageFilters: {
@@ -636,8 +638,8 @@ describe('ExportDialog', () => {
               settings: defaultSettings as any,
             },
             message: {
-              messages: [createMockMessage()],
-              filteredMessages: [createMockMessage()],
+              rows: rowsOf([createMockMessage()]),
+              filteredRows: rowsOf([createMockMessage()]),
               isLoading: false,
               isEditing: false,
               messageFilters: {

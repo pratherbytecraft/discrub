@@ -242,7 +242,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       // The thunk sorts and commits after the last page; retry until it has.
       cy.window().its('__store__').should((store: any) => {
-        expect(store.getState().message.threadTabs[THREAD_ID].messages.length).to.equal(30);
+        expect(store.getState().message.threadTabs[THREAD_ID].rows.length).to.equal(30);
       });
       cy.window().then((win) => {
         const store = (win as any).__store__;
@@ -909,7 +909,7 @@ describe('Thread Tabs — Comprehensive', () => {
         expect(state.activeTab).to.equal(THREAD_ID);
         expect(state.threadTabs[THREAD_ID]).to.exist;
         expect(state.threadTabs[THREAD_ID].threadName).to.equal('test-thread');
-        expect(state.threadTabs[THREAD_ID].messages).to.have.length(3);
+        expect(state.threadTabs[THREAD_ID].rows).to.have.length(3);
       });
     });
 
@@ -965,9 +965,9 @@ describe('Thread Tabs — Comprehensive', () => {
         const store = (win as any).__store__;
         const state = store.getState().message;
         // Main messages should still be in state
-        expect(state.messages.length).to.be.greaterThan(0);
+        expect(state.rows.length).to.be.greaterThan(0);
         // Thread messages should be in thread tab
-        expect(state.threadTabs[THREAD_ID].messages.length).to.equal(3);
+        expect(state.threadTabs[THREAD_ID].rows.length).to.equal(3);
       });
     });
   });

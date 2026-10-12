@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderWithProviders, screen, fireEvent, within, act } from '@/test/test-utils';
-import { createAuthenticatedState } from '@/test/state-factories';
+import { createAuthenticatedState, messageStateWith } from '@/test/state-factories';
 import { createMockChannel, createMockGuild, createMockMessage } from '@/test/fixtures';
 import MessageDayHeading from '@components/message/MessageDayHeading';
 import TimelineShell from './TimelineShell';
@@ -19,7 +19,7 @@ const withChannel = (hasMore = false) => {
   const state = createAuthenticatedState();
   state.guild = { ...state.guild, guilds: [guild], selectedGuild: guild };
   state.channel = { ...state.channel, channels: [channel], selectedChannel: channel };
-  state.message = { ...state.message, messages: MESSAGES, filteredMessages: MESSAGES, pagination: { ...state.message.pagination, hasMore } };
+  state.message = { ...messageStateWith(state.message, MESSAGES), pagination: { ...state.message.pagination, hasMore } };
   return state;
 };
 const withNothingOpen = () => {
@@ -81,12 +81,12 @@ describe('<TimelineShell />', () => {
     const refine = store.getState().message.refineCriteria!;
     expect(refine.searchAfterDate).toEqual(new Date(2026, 6, 14, 0, 0, 0, 0));
     expect(refine.searchBeforeDate).toEqual(new Date(2026, 6, 15, 23, 59, 59, 999));
-    expect(store.getState().message.filteredMessages.map((m) => m.id)).toEqual(['m4', 'm3']);
+    expect(store.getState().message.filteredRows.map((m) => m.id)).toEqual(['m4', 'm3']);
     expect(screen.getByTestId('timeline-range')).toHaveTextContent('2 of 6 messages shown. Select all and Export use this range.');
     expect(screen.getAllByTestId('timeline-bar')).toHaveLength(18);
     expect(screen.getAllByTestId('timeline-bar').filter((b) => b.getAttribute('data-in-range') === 'true')).toHaveLength(2);
     fireEvent.click(screen.getByTestId('timeline-range-clear'));
-    expect(store.getState().message.filteredMessages).toHaveLength(6);
+    expect(store.getState().message.filteredRows).toHaveLength(6);
     expect(screen.queryByTestId('timeline-range')).not.toBeInTheDocument();
   });
 

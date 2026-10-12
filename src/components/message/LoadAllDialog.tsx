@@ -12,7 +12,7 @@ import {
 import { Warning as WarningIcon } from '@mui/icons-material';
 import { useAppSelector } from '@/app/hooks';
 import {
-  selectActiveMessages,
+  selectActiveRows,
   selectActiveTab,
   selectActiveSearchCriteria,
   selectActivePagination,
@@ -36,7 +36,7 @@ interface LoadAllDialogProps {
  * LoadAllDialog component - confirmation dialog before loading all messages
  */
 const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: LoadAllDialogProps) => {
-  const messages = useAppSelector(selectActiveMessages);
+  const messages = useAppSelector(selectActiveRows);
   const { t, i18n } = useTranslation();
   const activeTab = useAppSelector(selectActiveTab);
   const restored = useAppSelector(selectRestored);

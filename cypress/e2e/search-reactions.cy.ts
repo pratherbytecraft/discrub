@@ -38,7 +38,7 @@ const searchViaModal = (content: string) => {
 const searchResponseWithoutReactions = (count: number) => ({
   messages: [
     Array.from({ length: count }, (_, i) => ({
-      id: `${700000000000000000 + i}`,
+      id: `70000000000000000${i}`,
       channel_id: '801000000000000001',
       author: {
         id: '222333444555666777',

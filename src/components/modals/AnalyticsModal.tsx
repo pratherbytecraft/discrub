@@ -18,8 +18,7 @@ import {
   Tabs,
   Tab,
   TextField,
-  alpha,
-} from '@mui/material';
+  alpha, LinearProgress } from '@mui/material';
 import {
   FileDownload as DownloadIcon,
   BarChart as AnalyticsIcon,
@@ -58,6 +57,8 @@ interface AnalyticsModalProps {
   threadNames?: Record<string, string>;
   /** Report shown first; defaults to Mentions. */
   initialReport?: ReportId;
+  /** True while the message objects are still being read (2.2.5 WP2b). */
+  loading?: boolean;
 }
 
 type SortField = 'label' | 'count';
@@ -72,7 +73,7 @@ type SortDir = 'asc' | 'desc';
  */
 const CLOSED_RESULT: ReportResult = { rows: [], empty: '' };
 
-const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadNames, initialReport = 'mentions' }: AnalyticsModalProps) => {
+const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadNames, initialReport = 'mentions', loading = false }: AnalyticsModalProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [reportId, setReportId] = useState<ReportId>(initialReport);
@@ -185,6 +186,7 @@ const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadN
         ))}
       </Tabs>
       <DialogContent sx={{ px: 3, py: 2 }}>
+        {loading && <LinearProgress data-testid="analytics-loading" sx={{ mb: 1 }} />}
         {isKeywords && (
           <TextField
             size="small"

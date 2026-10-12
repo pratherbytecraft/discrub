@@ -1,10 +1,11 @@
 import { useCallback, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
-  selectActiveFilteredMessages, selectActiveMessages, selectActivePagination, selectActiveTab,
+  selectActiveFilteredRows, selectActiveRows, selectActivePagination, selectActiveTab,
   setRefineCriteria, setThreadRefineCriteria, navigateToMessage,
 } from '@features/message/messageSlice';
-import { applyRefineCriteria, type RefineCriteria } from '@features/message/messageFiltering';
+import type { RefineCriteria } from '@features/message/messageFiltering';
+import { applyRefineToRows } from '@features/message/messageRows';
 import { defaultCriteria } from '@components/search/searchConstants';
 import { localDayKey } from '@/utils/messageChunking';
 import { buildTimeline, rangeToDates, type TimelineModel } from '@/utils/timelineDays';
@@ -24,15 +25,17 @@ export const useTimeline = (): {
 } => {
   const dispatch = useAppDispatch();
   const activeTab = useAppSelector(selectActiveTab);
-  const raw = useAppSelector(selectActiveMessages);
-  const shownMessages = useAppSelector(selectActiveFilteredMessages);
+  const raw = useAppSelector(selectActiveRows);
+  const shownMessages = useAppSelector(selectActiveFilteredRows);
   const pagination = useAppSelector(selectActivePagination);
   const refine = useAppSelector((s) => (activeTab ? s.message.threadTabs[activeTab]?.refineCriteria ?? null : s.message.refineCriteria)) as RefineCriteria | null;
+  const contentMatchIds = useAppSelector((s) => (activeTab ? s.message.threadTabs[activeTab]?.contentMatchIds ?? null : s.message.contentMatchIds));
 
   const base = useMemo(() => {
     if (pagination.mode === 'search') return shownMessages;
-    return applyRefineCriteria(raw, refine ? { ...refine, searchAfterDate: null, searchBeforeDate: null } : null);
-  }, [pagination.mode, raw, refine, shownMessages]);
+    const contentIds = contentMatchIds ? new Set(contentMatchIds) : null;
+    return applyRefineToRows(raw, refine ? { ...refine, searchAfterDate: null, searchBeforeDate: null } : null, contentIds);
+  }, [pagination.mode, raw, refine, shownMessages, contentMatchIds]);
   const model = useMemo(() => buildTimeline(base), [base]);
 
   const range = useMemo<TimelineRange | null>(() => {

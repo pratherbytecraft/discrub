@@ -44,21 +44,22 @@ import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import type { Channel } from 'discrub-core/types/discord-types';
-import { overlayMessageAuthors, sameAuthorEntries, sameAuthorFields, sameEntriesByRef, type AuthorOverlayEntry } from '@/utils/messageAuthorOverlay';
-import { extendedRange, removedFrom } from '@/utils/listExtension';
+import { overlayAuthors, sameAuthorEntries, type AuthorOverlayEntry } from '@/utils/messageAuthorOverlay';
+import { getCachedMessage, useHydratedAll } from '@features/message/messageCache';
 import {
-  selectActiveFilteredMessages,
+  selectActiveFilteredRows,
+  selectActiveContainerKey,
+  selectActiveHydrationSource,
+  selectAuthors,
   selectClearSeq,
-  selectActiveMessages,
+  selectActiveRows,
   selectActiveLoading,
   selectActiveError,
   selectActiveLoadAllCancelled,
   selectRestored,
   selectActivePagination,
   selectActiveTab,
-  selectMessages,
-  setFilteredMessages,
-  setThreadFilteredMessages,
+  selectRows,
   setSearchCriteria,
   setThreadSearchCriteria,
   selectSearchCriteria,
@@ -152,9 +153,12 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const selectedDm = useAppSelector(selectSelectedDm);
   const selectedGuild = useAppSelector(selectSelectedGuild);
   const guildEmojis = useAppSelector(selectGuildEmojis);
-  const mainMessages = useAppSelector(selectMessages);
-  const allMessages = useAppSelector(selectActiveMessages);
-  const messages = useAppSelector(selectActiveFilteredMessages);
+  const mainMessages = useAppSelector(selectRows);
+  const allMessages = useAppSelector(selectActiveRows);
+  const messages = useAppSelector(selectActiveFilteredRows);
+  const authors = useAppSelector(selectAuthors);
+  const containerKey = useAppSelector(selectActiveContainerKey);
+  const hydrationSource = useAppSelector(selectActiveHydrationSource);
   const clearSeq = useAppSelector(selectClearSeq);
   const isLoading = useAppSelector(selectActiveLoading);
   const error = useAppSelector(selectActiveError);
@@ -236,6 +240,10 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const loadAllDialogOpen = dialogs.loadAll;
   const threadLoadOpen = dialogs.threadLoad;
   const analyticsOpen = dialogs.analytics;
+  // 2.2.5 WP2b: analytics runs over the message objects, read from the
+  // cache and the workspace store while the dialog is open.
+  const analyticsIds = useMemo(() => messages.map((r) => r.id), [messages]);
+  const { messages: analyticsMessages, loading: analyticsLoading } = useHydratedAll(containerKey, hydrationSource, analyticsIds, analyticsOpen);
   const openDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: true })), [dispatch]);
   const closeDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: false })), [dispatch]);
   // Close filter modal when switching tabs so it re-opens with correct tab criteria
@@ -407,73 +415,33 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   // Build userMap from message authors for markdown rendering
   // Merge with cached data to include nicknames and display names
-  // 2.2.1 perf: both maps are rebuilt on every Load All page and delete
-  // flush, and `userMap` feeds `formattingContext`, so a new object here
+  // 2.2.1 perf: `userMap` feeds `formattingContext`, so a new object here
   // re-runs the markdown formatting of every visible row. When the rebuilt
   // map says the same thing as the last one, the last one is kept.
-  const userMapRef = useRef<{ map: Record<string, AuthorOverlayEntry>; messages: Message[] | null; cachedUserMap: typeof cachedUserMap | null; guildId: string | null }>({ map: {}, messages: null, cachedUserMap: null, guildId: null });
+  // 2.2.5 WP2b: the authors come from the slice's author map, which keeps
+  // its identity across pages, instead of a walk over every message.
+  const userMapRef = useRef<Record<string, AuthorOverlayEntry>>({});
   const userMap = useMemo(() => {
-    const held = userMapRef.current;
     const guildId = selectedGuild?.id ?? null;
-    let map: Record<string, AuthorOverlayEntry>;
-
-    // An appended page over the same cache: overlay only the new messages
-    // onto a copy of the last map instead of walking every loaded message.
-    const sameBase = held.cachedUserMap === cachedUserMap && held.guildId === guildId;
-    const ext = sameBase ? extendedRange(held.messages, allMessages) : null;
-    if (sameBase && held.messages && !ext && removedFrom(held.messages, allMessages)) {
-      // A delete flush brings no author the map has not seen; an entry for
-      // an author whose last message went is harmless.
-      map = held.map;
-    } else if (ext) {
-      map = { ...held.map };
-      overlayMessageAuthors(map, allMessages.slice(ext.from, ext.to));
-    } else {
-      map = {};
-      // Start with cached data
-      Object.keys(cachedUserMap).forEach((userId) => {
-        const cached = cachedUserMap[userId];
-        const guildData = guildId ? cached.guilds?.[guildId] : null;
-        map[userId] = {
-          userName: cached.userName || undefined,
-          displayName: cached.displayName || undefined,
-          nick: guildData?.nick || undefined,
-        };
-      });
-      // Overlay message author data (#263: skips authors already recorded
-      // unchanged, since this runs on every Load All page and delete flush).
-      overlayMessageAuthors(map, allMessages);
-    }
-
-    const next = sameAuthorEntries(held.map, map) ? held.map : map;
-    userMapRef.current = { map: next, messages: allMessages, cachedUserMap, guildId };
-    return next;
-  }, [allMessages, cachedUserMap, selectedGuild?.id]);
-
-  // Build full user map with complete User objects for profile modals
-  // Every message carries its own copy of its author, so the map keeps the
-  // copy it already holds unless the author's name or avatar changed;
-  // otherwise each page would swap every entry for the newest copy and the
-  // map would never keep its identity.
-  const fullUserMapRef = useRef<Record<string, User>>({});
-  const fullUserMessagesRef = useRef<Message[] | null>(null);
-  const fullUserMap = useMemo(() => {
-    const held = fullUserMapRef.current;
-    const before = fullUserMessagesRef.current;
-    fullUserMessagesRef.current = allMessages;
-    // A delete flush: every author is already in the map.
-    if (before && removedFrom(before, allMessages)) return held;
-    const map: Record<string, User> = {};
-    allMessages.forEach((msg) => {
-      const author = msg.author;
-      if (!author) return;
-      const cur = map[author.id] ?? held[author.id];
-      map[author.id] = cur && sameAuthorFields(cur, author) ? cur : author;
+    const map: Record<string, AuthorOverlayEntry> = {};
+    // Start with cached data
+    Object.keys(cachedUserMap).forEach((userId) => {
+      const cached = cachedUserMap[userId];
+      const guildData = guildId ? cached.guilds?.[guildId] : null;
+      map[userId] = {
+        userName: cached.userName || undefined,
+        displayName: cached.displayName || undefined,
+        nick: guildData?.nick || undefined,
+      };
     });
-    if (sameEntriesByRef(held, map)) return held;
-    fullUserMapRef.current = map;
-    return map;
-  }, [allMessages]);
+    overlayAuthors(map, Object.values(authors));
+    const next = sameAuthorEntries(userMapRef.current, map) ? userMapRef.current : map;
+    userMapRef.current = next;
+    return next;
+  }, [authors, cachedUserMap, selectedGuild?.id]);
+
+  // Full User objects for profile modals: the slice's author map.
+  const fullUserMap = authors;
 
   // Build channelMap from channels for channel mentions
   const channelMap = useMemo(() => {
@@ -506,9 +474,14 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
         settings[DiscrubSetting.SERVER_NICKNAME_LOOKUP] === 'true';
 
       if (shouldEnrich) {
+        const userIds = new Set<string>();
+        for (const row of mainMessages) {
+          if (row.authorId) userIds.add(row.authorId);
+          if (row.mentionIds) for (const id of row.mentionIds) userIds.add(id);
+        }
         dispatch(
           enrichMessageUsers({
-            messages: mainMessages,
+            userIds: [...userIds],
             guildId: selectedGuild?.id || null,
             token,
           })
@@ -529,7 +502,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   // Local refine filter logic moved to `src/features/message/messageFiltering.ts`
   // (`applyRefineCriteria`) so the message slice can re-apply it as new pages
   // arrive. This component dispatches setRefineCriteria/setThreadRefineCriteria;
-  // the reducer takes care of deriving filteredMessages.
+  // the reducer takes care of deriving the filtered rows.
 
   // --- Server search handler ---
   const handleServerSearch = async (criteria: SearchCriteria) => {
@@ -539,9 +512,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     saveSearchCriteria(criteria);
 
     if (isOperationRunning) return;
-    // The search reducer now applies any active refineCriteria itself when
-    // it writes filteredMessages, so no manual re-apply step is needed
-    // after the dispatch resolves.
+    // The search reducer applies any active refineCriteria itself when it
+    // writes the filtered rows, so no manual re-apply step is needed after
+    // the dispatch resolves.
     const dispatchResult = activeTab
       ? dispatch(searchThreadMessages({ threadId: activeTab, token, searchCriteria: criteria }))
       : dispatch(searchMessages({ channelId: currentContext.id, guildId: selectedGuild?.id, token, searchCriteria: criteria }));
@@ -550,9 +523,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   };
 
   // --- Local refine handler ---
-  // The setRefineCriteria reducer derives filteredMessages itself from the
-  // current raw `state.messages`, so this handler only needs to dispatch
-  // and update the partial-results warning.
+  // The setRefineCriteria thunk derives the filtered rows itself (and scans
+  // the message objects for a content refine), so this handler only needs
+  // to dispatch and update the partial-results warning.
   const handleRefine = (criteria: SearchCriteria) => {
     dispatchSetRefine(criteria);
     const hasMoreMessages = pagination.hasMore || pagination.mode === 'paginated';
@@ -564,15 +537,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     saveSearchCriteria(null);
     // 2.2.5: the saved search rows go with the criteria (plan section 11).
     if (pagination.mode === 'search') dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
-    // Restore all messages. The setFilteredMessages dispatch is then
-    // shadowed by setRefineCriteria's derive logic if refine is active —
-    // but since we only call setFilteredMessages here, we manually
-    // re-apply refine afterward by re-dispatching the existing criteria.
-    if (activeTab) {
-      dispatch(setThreadFilteredMessages({ threadId: activeTab, messages: allMessages }));
-    } else {
-      dispatch(setFilteredMessages(allMessages));
-    }
+    // The rows of the plain view come back with the fetch the clear
+    // starts; the reducers derive the refined view from them.
     if (currentRefineCriteria && countActiveFilters(currentRefineCriteria) > 0) {
       dispatchSetRefine(currentRefineCriteria);
     }
@@ -588,11 +554,6 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     saveSearchCriteria(null);
     if (pagination.mode === 'search') dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
     dispatchClearRefine();
-    if (activeTab) {
-      dispatch(setThreadFilteredMessages({ threadId: activeTab, messages: allMessages }));
-    } else {
-      dispatch(setFilteredMessages(allMessages));
-    }
     setShowPartialResultsWarning(false);
   };
 
@@ -701,7 +662,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   // DM context: return current user from reaction.me without API calls
   const handleFetchReactingUsersDm = useCallback(async (messageId: string, emoji: string): Promise<User[]> => {
-    const msg = messages.find((m) => m.id === messageId);
+    const msg = getCachedMessage(containerKey, messageId);
     if (!msg?.reactions || !currentUser) return [];
 
     const reaction = msg.reactions.find((r) => {
@@ -713,7 +674,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
       return [currentUser as User];
     }
     return [];
-  }, [messages, currentUser]);
+  }, [containerKey, currentUser]);
 
   const handleDeleteReaction = useCallback(async (messageId: string, emoji: string, userId: string) => {
     if (!token) return;
@@ -1362,7 +1323,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
       <AnalyticsModal
         open={analyticsOpen}
         onClose={() => closeDialog('analytics')}
-        messages={messages}
+        messages={analyticsMessages}
+        loading={analyticsLoading}
         userMap={userMap}
         containerId={activeTab ?? selectedChannel?.id ?? null}
         threadNames={analyticsThreadNames}

@@ -6,7 +6,7 @@ import { countActiveFilters } from 'discrub-core/filtering';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { setDialogOpen } from '@features/app/appSlice';
 import { selectOperationSummary } from '@features/app/operationSelectors';
-import { selectActiveFilteredMessages, selectActivePagination, selectActiveSearchCriteria } from '@features/message/messageSlice';
+import { selectActiveFilteredRows, selectActivePagination, selectActiveSearchCriteria } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { getDmName } from '@/utils/dmListUtils';
@@ -23,7 +23,7 @@ const SimpleSearchCard = () => {
   const theme = useTheme();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
-  const messages = useAppSelector(selectActiveFilteredMessages);
+  const messages = useAppSelector(selectActiveFilteredRows);
   const pagination = useAppSelector(selectActivePagination);
   const criteria = useAppSelector(selectActiveSearchCriteria);
   const summary = useAppSelector(selectOperationSummary);

@@ -18,7 +18,8 @@ import ReactionRemovalModal from '@components/modals/ReactionRemovalModal';
 import AddReactionsModal from '@components/modals/AddReactionsModal';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
-import { selectActiveSelectedMessages } from '@features/message/messageSlice';
+import { selectActiveContainerKey, selectActiveHydrationSource, selectActiveSelectedIds } from '@features/message/messageSlice';
+import { useHydratedAll } from '@features/message/messageCache';
 import { perfCount } from '@/utils/perfCounters';
 
 interface MessageActionsProps {
@@ -69,7 +70,12 @@ const MessageActions = ({
 }: MessageActionsProps) => {
   perfCount('MessageActions');
   const { t } = useTranslation();
-  const selectedFromStore = useAppSelector(selectActiveSelectedMessages);
+  // 2.2.5 WP2b: the store holds the selected ids; the objects behind them
+  // come from the message cache and the workspace store.
+  const selectedIds = useAppSelector(selectActiveSelectedIds);
+  const containerKey = useAppSelector(selectActiveContainerKey);
+  const hydrationSource = useAppSelector(selectActiveHydrationSource);
+  const { messages: selectedFromStore, loading: selectionLoading } = useHydratedAll(containerKey, hydrationSource, selectedIds, !selectedMessagesProp);
   const selectedMessages = selectedMessagesProp ?? selectedFromStore;
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -77,8 +83,10 @@ const MessageActions = ({
   const [reactionRemovalOpen, setReactionRemovalOpen] = useState(false);
   const [addReactionsOpen, setAddReactionsOpen] = useState(false);
 
-  const selectedCount = selectedMessages.length;
-  const singleMessage = selectedCount === 1 ? selectedMessages[0] : null;
+  const selectedCount = selectedMessagesProp ? selectedMessagesProp.length : selectedIds.length;
+  // The objects lag the ids by a read; the controls wait for them.
+  const selectionReady = !selectionLoading && selectedMessages.length === selectedCount;
+  const singleMessage = selectedCount === 1 && selectionReady ? selectedMessages[0] : null;
 
   // Discord requires MANAGE_MESSAGES to delete messages authored by others,
   // and PATCH (edit) is author-only regardless of permission. Surface both
@@ -132,7 +140,7 @@ const MessageActions = ({
                 size="small"
                 color="error"
                 startIcon={<DeleteIcon />}
-                disabled={selectedCount === 0 || isOperationRunning || deleteBlockedByPermission}
+                disabled={selectedCount === 0 || !selectionReady || isOperationRunning || deleteBlockedByPermission}
                 onClick={() => setDeleteModalOpen(true)}
               >
                 {t('messageActions.delete')}
@@ -146,7 +154,7 @@ const MessageActions = ({
                 variant="outlined"
                 size="small"
                 startIcon={<EditIcon />}
-                disabled={selectedCount === 0 || (selectedCount > 1 && isOperationRunning) || editBlocked}
+                disabled={selectedCount === 0 || !selectionReady || (selectedCount > 1 && isOperationRunning) || editBlocked}
                 onClick={() => setEditModalOpen(true)}
               >
                 {t('messageActions.edit')}
@@ -173,7 +181,7 @@ const MessageActions = ({
               startIcon={<ReactionAddIcon />}
               // Adding your own reaction only needs Add Reactions perm, which
               // Discord enforces per message — no manage-messages gate here.
-              disabled={selectedCount === 0 || isOperationRunning}
+              disabled={selectedCount === 0 || !selectionReady || isOperationRunning}
               onClick={() => setAddReactionsOpen(true)}
             >
               {t('messageActions.addReactions')}
@@ -186,7 +194,7 @@ const MessageActions = ({
               size="small"
               color="warning"
               startIcon={<ReactionRemoveIcon />}
-              disabled={selectedCount === 0 || isOperationRunning || !selectedMessages.some((m) =>
+              disabled={selectedCount === 0 || !selectionReady || isOperationRunning || !selectedMessages.some((m) =>
                 (m.reactions || []).some((r) => canManageMessages || r.me)
               )}
               onClick={() => setReactionRemovalOpen(true)}

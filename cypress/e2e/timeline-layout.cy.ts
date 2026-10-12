@@ -10,7 +10,7 @@ const switchTo = (key: string) => {
   cy.get('[data-testid="appearance-popover"]').should('not.exist');
 };
 const barTotal = () => cy.get('[data-testid="timeline-bar"]').then(($b) => $b.toArray().reduce((a, el) => a + Number(el.getAttribute('data-count')), 0));
-const loaded = () => cy.window().then((win) => (win as any).__store__.getState().message.filteredMessages.length as number);
+const loaded = () => cy.window().then((win) => (win as any).__store__.getState().message.filteredRows.length as number);
 
 describe('Timeline layout (2.2.0)', () => {
   beforeEach(() => {
@@ -64,9 +64,9 @@ describe('Timeline layout (2.2.0)', () => {
     cy.get('[data-testid="day-heading"]').first().then(($h) => {
       const n = Number(($h.find('[data-testid="day-count"]').text().match(/\d+/) ?? ['0'])[0]);
       cy.wrap($h).find('[data-testid="select-day"]').click();
-      cy.window().then((win) => expect((win as any).__store__.getState().message.selectedMessages.length).to.eq(n));
+      cy.window().then((win) => expect((win as any).__store__.getState().message.selectedIds.length).to.eq(n));
       cy.get('[data-testid="day-heading"]').first().find('[data-testid="select-day"]').should('have.text', 'Clear day').click();
-      cy.window().then((win) => expect((win as any).__store__.getState().message.selectedMessages.length).to.eq(0));
+      cy.window().then((win) => expect((win as any).__store__.getState().message.selectedIds.length).to.eq(0));
     });
   });
 

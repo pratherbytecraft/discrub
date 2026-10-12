@@ -1,7 +1,8 @@
-import type { Message } from 'discrub-core/types/discord-types';
+import type { Message, User } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { SortDirection } from 'discrub-core/common-enum';
 import type { RefineCriteria } from './messageFiltering';
+import type { MessageRow } from './messageRows';
 
 /**
  * Types for message feature
@@ -42,12 +43,29 @@ export interface PaginationState {
   searchOffset: number;
 }
 
-export interface ThreadTabState {
+/**
+ * 2.2.5 WP2b: what Redux holds for one conversation. The message objects
+ * live in the workspace store and the message cache; see messageRows.ts.
+ */
+export interface MessageContainer {
+  /** Every loaded message, sorted under `order`. */
+  rows: MessageRow[];
+  /** `rows` with the refine applied; the same array when no refine is active. */
+  filteredRows: MessageRow[];
+  selectedIds: string[];
+  /**
+   * The ids a content or attachment name refine accepted, from a scan of
+   * the message objects. Null when the refine has no such part.
+   */
+  contentMatchIds: string[] | null;
+  searchCriteria: SearchCriteria | null;
+  refineCriteria: RefineCriteria | null;
+  order: MessageOrder;
+}
+
+export interface ThreadTabState extends MessageContainer {
   threadId: string;
   threadName: string;
-  messages: Message[];
-  filteredMessages: Message[];
-  selectedMessages: Message[];
   searchCriteria: SearchCriteria | null;
   /** Client-side refine applied on top of the raw message list. Kept here
    *  (not in a component ref) so data-arrival reducers can re-apply it
@@ -60,10 +78,9 @@ export interface ThreadTabState {
   pagination: PaginationState;
 }
 
-export interface MessageState {
-  messages: Message[];
-  filteredMessages: Message[];
-  selectedMessages: Message[];
+export interface MessageState extends MessageContainer {
+  /** The authors seen in every open container, keyed by user id. */
+  authors: Record<string, User>;
   searchCriteria: SearchCriteria | null;
   /** Client-side refine applied on top of the raw message list. See
    *  ThreadTabState.refineCriteria for rationale. */
@@ -114,9 +131,11 @@ export const initialPaginationState: PaginationState = {
 };
 
 export const initialMessageState: MessageState = {
-  messages: [],
-  filteredMessages: [],
-  selectedMessages: [],
+  rows: [],
+  filteredRows: [],
+  selectedIds: [],
+  contentMatchIds: null,
+  authors: {},
   searchCriteria: null,
   refineCriteria: null,
   order: {

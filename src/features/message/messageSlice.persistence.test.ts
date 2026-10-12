@@ -108,7 +108,7 @@ describe('fetchMessages', () => {
     const store = makeStore();
     serviceWith({ fetchMessageData: vi.fn().mockResolvedValue({ success: true, data: page(100, 100) }) });
     await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
-    expect(store.getState().message.messages).toHaveLength(100);
+    expect(store.getState().message.rows).toHaveLength(100);
     expect(await getConversation(DEFAULT_WORKSPACE_ID, CID)).toBeNull();
     expect(selectRestored(store.getState() as never)).toBeNull();
   });
@@ -128,11 +128,11 @@ describe('fetchMessages', () => {
 
     expect(fetchMessageData).not.toHaveBeenCalled();
     const state = store.getState().message;
-    expect(state.messages).toHaveLength(300);
-    expect(state.messages[0].id).toBe('300');
+    expect(state.rows).toHaveLength(300);
+    expect(state.rows[0].id).toBe('300');
     expect(state.pagination).toMatchObject({ mode: 'paginated', lastMessageId: '1', hasMore: true });
-    expect(state.selectedMessages.map((m) => m.id).sort()).toEqual(['5', '7']);
-    expect(selectRestored(store.getState() as never)).toEqual({ count: 300, oldestTimestamp: state.messages[299].timestamp });
+    expect([...state.selectedIds].sort()).toEqual(['5', '7']);
+    expect(selectRestored(store.getState() as never)).toEqual({ count: 300, oldestTimestamp: state.rows[299].timestamp });
     const statusLines = store.getState().status.entries.map((e) => e.message);
     expect(statusLines.some((line) => /Restored 300 messages/.test(line))).toBe(true);
   });
@@ -191,7 +191,7 @@ describe('fetchAllMessages', () => {
         .mockResolvedValueOnce({ success: true, data: page(50, 50) }),
     });
     await store.dispatch(fetchAllMessages({ channelId: CID, token: TOKEN }));
-    expect(store.getState().message.messages).toHaveLength(250);
+    expect(store.getState().message.rows).toHaveLength(250);
     expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(250);
     const record = await getConversation(DEFAULT_WORKSPACE_ID, CID);
     expect(record).toMatchObject({ complete: true, count: 250, oldestId: '1', newestId: '250' });
@@ -212,7 +212,7 @@ describe('fetchAllMessages', () => {
     await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
     await store.dispatch(fetchAllMessages({ channelId: CID, token: TOKEN }));
     expect(fetchMessageData.mock.calls[0][1]).toBe('201');
-    expect(store.getState().message.messages).toHaveLength(300);
+    expect(store.getState().message.rows).toHaveLength(300);
     expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(300);
     expect((await getConversation(DEFAULT_WORKSPACE_ID, CID))?.complete).toBe(true);
   });
@@ -238,7 +238,7 @@ describe('fetchAllMessages', () => {
     } finally {
       IDBObjectStore.prototype.put = original;
     }
-    expect(store.getState().message.messages).toHaveLength(150);
+    expect(store.getState().message.rows).toHaveLength(150);
     expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(150);
     expect(store.getState().app.operationHold).toEqual({ kind: 'storageFull', loaded: 100 });
     const statusLines = store.getState().status.entries.map((e) => e.message);
@@ -264,7 +264,7 @@ describe('openThreadTab', () => {
     serviceWith({ fetchMessageData });
     await again.dispatch(openThreadTab({ threadId: 't1', threadName: 'Plans', token: TOKEN }));
     expect(fetchMessageData).toHaveBeenCalledTimes(1);
-    expect(again.getState().message.threadTabs.t1.messages).toHaveLength(5);
+    expect(again.getState().message.threadTabs.t1.rows).toHaveLength(5);
     expect(again.getState().message.threadTabs.t1.isLoading).toBe(false);
   });
 });
@@ -280,6 +280,6 @@ describe('clearSavedMessages', () => {
     serviceWith({ fetchMessageData });
     await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
     expect(fetchMessageData).toHaveBeenCalledTimes(1);
-    store.dispatch(toggleMessageSelection(page(1, 1)[0]));
+    store.dispatch(toggleMessageSelection(page(1, 1)[0].id));
   });
 });

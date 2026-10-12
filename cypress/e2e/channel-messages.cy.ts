@@ -314,15 +314,14 @@ describe('Channel Messages', () => {
     cy.contains('230 messages', { timeout: 20000 }).should('be.visible');
 
     cy.window().its('__store__').should((store: any) => {
-      const messages = store.getState().message.messages;
-      expect(messages).to.have.length(230);
-      const times = messages.map((m: any) => new Date(m.timestamp).getTime());
+      // 2.2.5 WP2b: the store holds rows; the objects behind them are in the message cache.
+      const rows = store.getState().message.rows;
+      expect(rows).to.have.length(230);
+      const times = rows.map((m: any) => new Date(m.timestamp).getTime());
       for (let i = 1; i < times.length; i += 1) {
         expect(times[i]).to.be.at.most(times[i - 1]);
       }
-      expect(messages[0].content).to.equal('Ordered 0');
-      expect(messages[229].content).to.equal('Ordered 229');
-      expect(store.getState().message.filteredMessages).to.equal(messages);
+      expect(store.getState().message.filteredRows).to.equal(rows);
     });
   });
 });

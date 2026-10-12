@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
-import { createAuthenticatedState } from '@/test/state-factories';
+import { createAuthenticatedState, messageStateWith } from '@/test/state-factories';
+import { toMessageRows } from '@features/message/messageRows';
 import { createMockMessage, createMockUser, createMockDmChannel } from '@/test/fixtures';
 import { virtualizerMock } from '@/test/virtualizer-mock';
 import MessageFeed from './MessageFeed';
@@ -37,11 +38,7 @@ const baseProps = {
 
 const stateWithMessages = (messages: ReturnType<typeof createMockMessage>[]) =>
   createAuthenticatedState({
-    message: {
-      ...createAuthenticatedState().message,
-      messages,
-      filteredMessages: messages,
-    },
+    message: messageStateWith(createAuthenticatedState().message, messages),
   });
 
 describe('<MessageFeed />', () => {
@@ -221,11 +218,11 @@ describe('<MessageFeed />', () => {
       preloadedState: stateWithMessages(messages),
     });
 
-    expect(store.getState().message.selectedMessages).toHaveLength(0);
+    expect(store.getState().message.selectedIds).toHaveLength(0);
     fireEvent.click(
       screen.getByRole('checkbox', { name: /select all messages/i }),
     );
-    expect(store.getState().message.selectedMessages).toHaveLength(2);
+    expect(store.getState().message.selectedIds).toHaveLength(2);
   });
 
   it('Select All with all selected unselects everything', () => {
@@ -234,16 +231,16 @@ describe('<MessageFeed />', () => {
       createMockMessage({ id: 'm2', content: 'b' }),
     ];
     const state = stateWithMessages(messages);
-    state.message.selectedMessages = messages;
+    state.message.selectedIds = messages.map((m) => m.id);
     const { store } = renderWithProviders(<MessageFeed {...baseProps} />, {
       preloadedState: state,
     });
 
-    expect(store.getState().message.selectedMessages).toHaveLength(2);
+    expect(store.getState().message.selectedIds).toHaveLength(2);
     fireEvent.click(
       screen.getByRole('checkbox', { name: /select all messages/i }),
     );
-    expect(store.getState().message.selectedMessages).toHaveLength(0);
+    expect(store.getState().message.selectedIds).toHaveLength(0);
   });
 
   it('shows chunk header with author name and timestamp', () => {
@@ -445,7 +442,7 @@ describe('<MessageFeed />', () => {
       createMockMessage({ id: 'm2', content: 'b' }),
     ];
     const state = stateWithMessages(messages);
-    state.message.selectedMessages = [messages[0]];
+    state.message.selectedIds = [messages[0].id];
     renderWithProviders(<MessageFeed {...baseProps} />, {
       preloadedState: state,
     });
@@ -552,7 +549,7 @@ describe('<MessageFeed />', () => {
       fireEvent.mouseDown(checkboxFor('m1'));
       dragOver('m3');
       fireEvent.mouseUp(window);
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id).sort();
+      const ids = [...store.getState().message.selectedIds].sort();
       expect(ids).toEqual(['m1', 'm2', 'm3']);
     });
 
@@ -564,7 +561,7 @@ describe('<MessageFeed />', () => {
       dragOver('m4');
       dragOver('m2');
       fireEvent.mouseUp(window);
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id).sort();
+      const ids = [...store.getState().message.selectedIds].sort();
       expect(ids).toEqual(['m1', 'm2']);
     });
 
@@ -576,20 +573,20 @@ describe('<MessageFeed />', () => {
       dragOver('m3');
       dragOver('m1');
       fireEvent.mouseUp(window);
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id);
+      const ids = store.getState().message.selectedIds;
       expect(ids).toEqual(['m1']);
     });
 
     it('unions the drag range with the pre-drag selection', () => {
       const state = stateWithMessages(dragMessages);
-      state.message.selectedMessages = [dragMessages[3]]; // m4 already selected
+      state.message.selectedIds = [dragMessages[3].id]; // m4 already selected
       const { store } = renderWithProviders(<MessageFeed {...baseProps} />, {
         preloadedState: state,
       });
       fireEvent.mouseDown(checkboxFor('m1'));
       dragOver('m2');
       fireEvent.mouseUp(window);
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id).sort();
+      const ids = [...store.getState().message.selectedIds].sort();
       expect(ids).toEqual(['m1', 'm2', 'm4']);
     });
 
@@ -597,8 +594,8 @@ describe('<MessageFeed />', () => {
       // m4 is selected but refine-hidden (not in filteredMessages); a drag
       // over visible rows must not silently drop it from the selection.
       const state = stateWithMessages(dragMessages);
-      state.message.selectedMessages = [dragMessages[3]];
-      state.message.filteredMessages = dragMessages.slice(0, 3); // m4 hidden
+      state.message.selectedIds = [dragMessages[3].id];
+      state.message.filteredRows = toMessageRows(dragMessages.slice(0, 3)); // m4 hidden
       state.message.refineCriteria = { searchMessageContents: ['msg'] } as any;
       const { store } = renderWithProviders(<MessageFeed {...baseProps} />, {
         preloadedState: state,
@@ -606,7 +603,7 @@ describe('<MessageFeed />', () => {
       fireEvent.mouseDown(checkboxFor('m1'));
       dragOver('m2');
       fireEvent.mouseUp(window);
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id).sort();
+      const ids = [...store.getState().message.selectedIds].sort();
       expect(ids).toEqual(['m1', 'm2', 'm4']);
     });
 
@@ -620,7 +617,7 @@ describe('<MessageFeed />', () => {
       // The browser fires a click right after mouseup; without suppression
       // this would toggle the release row straight back out.
       fireEvent.click(checkboxFor('m3'));
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id).sort();
+      const ids = [...store.getState().message.selectedIds].sort();
       expect(ids).toEqual(['m1', 'm2', 'm3']);
     });
 
@@ -634,7 +631,7 @@ describe('<MessageFeed />', () => {
       fireEvent.click(checkboxFor('m3')); // trailing click, swallowed
       await new Promise((r) => setTimeout(r, 0)); // suppression window ends
       fireEvent.click(checkboxFor('m3')); // real user click
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id).sort();
+      const ids = [...store.getState().message.selectedIds].sort();
       expect(ids).toEqual(['m1', 'm2']);
     });
 
@@ -647,9 +644,9 @@ describe('<MessageFeed />', () => {
       // window): the next hover arrives with no button pressed and must
       // not mutate the selection — now or on any later hover.
       fireEvent.mouseEnter(rowEl('m3'), { buttons: 0 });
-      expect(store.getState().message.selectedMessages).toHaveLength(0);
+      expect(store.getState().message.selectedIds).toHaveLength(0);
       fireEvent.mouseEnter(rowEl('m4'), { buttons: 1 });
-      expect(store.getState().message.selectedMessages).toHaveLength(0);
+      expect(store.getState().message.selectedIds).toHaveLength(0);
     });
 
     it('does not extend selection from hover after the drag ended', () => {
@@ -662,7 +659,7 @@ describe('<MessageFeed />', () => {
       // Selection untouched: the mousedown+mouseup pair without an
       // intervening row-enter selects nothing by itself (the click event,
       // suppressed in this simulation, is what toggles).
-      expect(store.getState().message.selectedMessages).toHaveLength(0);
+      expect(store.getState().message.selectedIds).toHaveLength(0);
     });
 
     it('plain checkbox click still toggles a single message', () => {
@@ -670,7 +667,7 @@ describe('<MessageFeed />', () => {
         preloadedState: stateWithMessages(dragMessages),
       });
       fireEvent.click(checkboxFor('m2'));
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id);
+      const ids = store.getState().message.selectedIds;
       expect(ids).toEqual(['m2']);
     });
 
@@ -683,7 +680,7 @@ describe('<MessageFeed />', () => {
       fireEvent.mouseDown(checkboxFor('m2'));
       fireEvent.mouseUp(window);
       fireEvent.click(checkboxFor('m2'));
-      const ids = store.getState().message.selectedMessages.map((m: any) => m.id);
+      const ids = store.getState().message.selectedIds;
       expect(ids).toEqual(['m2']);
     });
   });
@@ -697,7 +694,6 @@ describe('<MessageFeed />', () => {
           author: alice,
           content: 'test',
           timestamp: '2026-04-19T15:00:00.000Z',
-          // @ts-expect-error — `thread` is on the Discord wire shape, not in our trimmed Message type
           thread: { id: 't-1', name: 'first thread', type: 11 },
         }),
         createMockMessage({
@@ -705,7 +701,6 @@ describe('<MessageFeed />', () => {
           author: alice,
           content: 'test',
           timestamp: '2026-04-19T15:02:00.000Z',
-          // @ts-expect-error — same as above
           thread: { id: 't-2', name: 'second thread', type: 11 },
         }),
       ];
@@ -735,7 +730,6 @@ describe('<MessageFeed />', () => {
           author: alice,
           content: 'just one',
           timestamp: '2026-04-19T15:00:00.000Z',
-          // @ts-expect-error — `thread` is on the Discord wire shape, not in our trimmed Message type
           thread: { id: 't-1', name: 'only thread', type: 11 },
         }),
       ];
@@ -841,11 +835,7 @@ describe('<MessageFeed />', () => {
     const stateWithTimeFormat = (timeFormat: string) => {
       const messages = buildMessages();
       const base = createAuthenticatedState({
-        message: {
-          ...createAuthenticatedState().message,
-          messages,
-          filteredMessages: messages,
-        },
+        message: messageStateWith(createAuthenticatedState().message, messages),
       });
       return {
         ...base,

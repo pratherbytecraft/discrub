@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
-import { createAuthenticatedState } from '@/test/state-factories';
+import { createAuthenticatedState, messageStateWith } from '@/test/state-factories';
 import { createMockMessage, createMockUser } from '@/test/fixtures';
 import { virtualizerMock } from '@/test/virtualizer-mock';
 import { appendLoadAllPage, messagesRemoved } from '@features/message/messageSlice';
@@ -40,9 +40,7 @@ const baseProps = {
 const stateWith = (messages: ReturnType<typeof createMockMessage>[]) =>
   createAuthenticatedState({
     message: {
-      ...createAuthenticatedState().message,
-      messages,
-      filteredMessages: messages,
+      ...messageStateWith(createAuthenticatedState().message, messages),
       order: { order: SortDirection.DESCENDING, orderBy: 'timestamp' },
     },
   });

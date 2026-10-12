@@ -4,7 +4,7 @@ import { ExpandMore as ChevronIcon, BarChart as AnalyticsIcon, Settings as Setti
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectFocusedView, selectSidebarView, setDialogOpen, toggleFocusedView } from '@features/app/appSlice';
-import { selectActiveFilteredMessages } from '@features/message/messageSlice';
+import { selectActiveFilteredRows } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
@@ -36,7 +36,7 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
   const dm = useAppSelector(selectSelectedDm);
   const sidebarView = useAppSelector(selectSidebarView);
   const focusedView = useAppSelector(selectFocusedView);
-  const messages = useAppSelector(selectActiveFilteredMessages);
+  const messages = useAppSelector(selectActiveFilteredRows);
   const user = useAppSelector(selectCurrentUser);
   const isSupporter = useAppSelector(selectIsSupporter);
   const isPackage = sidebarView === 'package';

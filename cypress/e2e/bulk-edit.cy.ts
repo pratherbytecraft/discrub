@@ -174,7 +174,7 @@ describe('Bulk edit batching (#183/F13)', () => {
     }).as('getMessages');
     cy.selectChannel('general');
     cy.window().should((win) => {
-      expect((win as any).__store__.getState().message.messages, 'seeded table loaded')
+      expect((win as any).__store__.getState().message.rows, 'seeded table loaded')
         .to.have.length(MESSAGE_COUNT);
     });
     zeroDelays();
@@ -210,11 +210,12 @@ describe('Bulk edit batching (#183/F13)', () => {
       const st = (win as any).__store__.getState().message;
       expect(patchCount, 'one PATCH per selected message').to.eq(MESSAGE_COUNT);
       expect(st.isEditing, 'edit run completed').to.eq(false);
-      const contents = (st.messages as { content: string }[]).map((m) => m.content);
+      // 2.2.5 WP2b: rows carry no content; the objects are in the message cache.
+      const contents = (st.rows as { id: string }[]).map((r) => (win as any).__messageCache__.get('main', r.id)?.content);
       expect(contents, 'no rows lost by the batched flushes').to.have.length(MESSAGE_COUNT);
       expect(contents.every((c) => c === 'Batch edited content'),
         'every message content updated via messagesEdited').to.eq(true);
-      expect(st.selectedMessages, 'selection cleared on completion').to.have.length(0);
+      expect(st.selectedIds, 'selection cleared on completion').to.have.length(0);
     });
 
     // Visible rows all show the new content (the feed virtualizes, so
@@ -306,11 +307,11 @@ describe('Bulk edit flush routing (#183/F14)', () => {
       expect(st.isEditing, 'edit run completed').to.eq(false);
       const tab = st.threadTabs[THREAD_ID];
       expect(tab, 'thread tab still open').to.exist;
-      const threadContents = (tab.messages as { content: string }[]).map((m) => m.content);
+      const threadContents = (tab.rows as { id: string }[]).map((r) => (win as any).__messageCache__.get(THREAD_ID, r.id)?.content);
       expect(threadContents, 'thread container intact').to.have.length(MESSAGE_COUNT);
       expect(threadContents.every((c) => c === 'Rerouted thread content'),
         'all edits flushed into the starting container').to.eq(true);
-      const mainContents = (st.messages as { content: string }[]).map((m) => m.content);
+      const mainContents = (st.rows as { id: string }[]).map((r) => (win as any).__messageCache__.get('main', r.id)?.content);
       expect(mainContents, 'main container untouched').to.have.length(13);
       expect(mainContents.some((c) => c === 'Rerouted thread content'),
         'no edits misrouted into Main').to.eq(false);

@@ -12,8 +12,9 @@ import messageReducer, {
   messagesEdited,
   setThreadRefineCriteria,
   setMessages,
-  setFilteredMessages,
-  setSelectedMessages,
+  setSelectedIds,
+  refineApplied,
+  threadRefineApplied,
   toggleMessageSelection,
   selectAllMessages,
   deselectAllMessages,
@@ -41,9 +42,9 @@ import messageReducer, {
   searchMessages,
   fetchAllMessages,
   selectMessage,
-  selectMessages,
-  selectFilteredMessages,
-  selectSelectedMessages,
+  selectRows,
+  selectFilteredRows,
+  selectSelectedIds,
   selectSearchCriteria,
   selectMessageOrder,
   selectMessageLoading,
@@ -54,7 +55,6 @@ import messageReducer, {
   addThreadTab,
   removeThreadTab,
   setThreadMessages,
-  setThreadFilteredMessages,
   toggleThreadMessageSelection,
   selectAllThreadMessages,
   deselectAllThreadMessages,
@@ -66,9 +66,9 @@ import messageReducer, {
   selectActiveTab,
   selectThreadTabs,
   selectThreadTab,
-  selectActiveMessages,
-  selectActiveFilteredMessages,
-  selectActiveSelectedMessages,
+  selectActiveRows,
+  selectActiveFilteredRows,
+  selectActiveSelectedIds,
   selectActiveSearchCriteria,
   selectActiveOrder,
   selectActiveLoading,
@@ -86,7 +86,10 @@ import messageReducer, {
   cancelLoadAll,
   dismissLoadAllCancelled,
 } from './messageSlice';
-import { initialMessageState } from './messageTypes';
+import { initialMessageState, type ThreadTabState } from './messageTypes';
+import { RowFlag, sortRows, toMessageRows, type MessageRow } from './messageRows';
+import { MAIN_CONTAINER, cacheMessages, clearMessageCache, getCachedMessage } from './messageCache';
+import type { RefineCriteria } from './messageFiltering';
 import * as discordService from '@services/discordService';
 import { DiscordService } from 'discrub-core/discord-service';
 import { createMockMessages, createMockMessage, createMockAttachment, createMockReaction, createMockUser } from '@/test/fixtures';
@@ -97,10 +100,6 @@ import { addStatusEntry, showToast } from '@features/status/statusSlice';
 // Mock dependencies
 vi.mock('@services/discordService', () => ({
   getDiscordService: vi.fn(),
-}));
-
-vi.mock('discrub-core/discrub-utils', () => ({
-  getSortedMessages: vi.fn((messages) => messages),
 }));
 
 vi.mock('@/utils/delayUtils', () => ({
@@ -181,6 +180,54 @@ const makeSearchService = (overrides: Record<string, unknown>) => {
   return svc as unknown as ReturnType<typeof discordService.getDiscordService>;
 };
 
+/* 2.2.5 WP2b: Redux holds rows, the message objects live in the message
+ * cache. These helpers build the row shapes the slice produces and read
+ * the objects back the way the screen does. */
+
+/** The rows a page becomes under the default DESC order. */
+const rowsDesc = (messages: Message[]): MessageRow[] => sortRows(toMessageRows(messages), SortDirection.DESCENDING);
+const ids = (rows: readonly { id: string }[]): string[] => rows.map((r) => r.id);
+const cached = (id: string, container: string = MAIN_CONTAINER): Message => getCachedMessage(container, id) as Message;
+const cachedContent = (id: string, container: string = MAIN_CONTAINER): string | undefined => getCachedMessage(container, id)?.content;
+
+/**
+ * A preloaded main container. The objects go to the cache as the reducers
+ * would have put them, so edits and reaction changes have something to
+ * patch.
+ */
+const loaded = (messages: Message[], selected: Message[] = []) => {
+  cacheMessages(MAIN_CONTAINER, messages);
+  const rows = toMessageRows(messages);
+  return { rows, filteredRows: rows, selectedIds: ids(selected) };
+};
+
+/** A preloaded thread tab, objects cached under the thread id. */
+const threadTab = (threadId: string, messages: Message[] = [], overrides: Partial<ThreadTabState> = {}): ThreadTabState => {
+  cacheMessages(threadId, messages);
+  const rows = toMessageRows(messages);
+  return {
+    threadId,
+    threadName: 'Thread',
+    rows,
+    filteredRows: rows,
+    selectedIds: [],
+    contentMatchIds: null,
+    searchCriteria: null,
+    refineCriteria: null,
+    order: initialMessageState.order,
+    isLoading: false,
+    error: null,
+    pagination: { ...initialMessageState.pagination },
+    ...overrides,
+  };
+};
+
+/** A refine that keeps exactly these ids: a content refine with the scan result supplied. */
+const keepOnly = (keep: string[]) =>
+  refineApplied({ criteria: { searchMessageContents: ['keep'] } as RefineCriteria, contentMatchIds: keep });
+const threadKeepOnly = (threadId: string, keep: string[]) =>
+  threadRefineApplied({ threadId, criteria: { searchMessageContents: ['keep'] } as RefineCriteria, contentMatchIds: keep });
+
 describe('messageSlice', () => {
   let store: TestStore;
 
@@ -189,15 +236,17 @@ describe('messageSlice', () => {
   beforeEach(() => {
     store = createTestStore({ message: messageReducer });
     vi.clearAllMocks();
+    clearMessageCache();
   });
 
   describe('initial state', () => {
     it('should have correct initial state', () => {
       const state = store.getState();
       expect(state.message).toEqual(initialMessageState);
-      expect(state.message.messages).toEqual([]);
-      expect(state.message.filteredMessages).toEqual([]);
-      expect(state.message.selectedMessages).toEqual([]);
+      expect(state.message.rows).toEqual([]);
+      expect(state.message.filteredRows).toEqual([]);
+      expect(state.message.selectedIds).toEqual([]);
+      expect(state.message.authors).toEqual({});
       expect(state.message.searchCriteria).toBeNull();
       expect(state.message.isLoading).toBe(false);
       expect(state.message.error).toBeNull();
@@ -210,7 +259,7 @@ describe('messageSlice', () => {
         store.dispatch(setMessages(mockMessages));
 
         const state = store.getState().message;
-        expect(state.messages).toEqual(mockMessages);
+        expect(state.rows).toEqual(rowsDesc(mockMessages));
       });
 
       it('should replace existing messages', () => {
@@ -219,108 +268,111 @@ describe('messageSlice', () => {
         store.dispatch(setMessages(newMessages));
 
         const state = store.getState().message;
-        expect(state.messages).toEqual(newMessages);
-        expect(state.messages).toHaveLength(3);
+        expect(state.rows).toEqual(rowsDesc(newMessages));
+        expect(state.rows).toHaveLength(3);
+        expect(getCachedMessage(MAIN_CONTAINER, 'msg-3')).toBe(newMessages[2]);
       });
     });
 
-    describe('setFilteredMessages', () => {
+    describe('refineApplied', () => {
       it('should set filtered messages', () => {
-        const filtered = [mockMessages[0], mockMessages[1]];
-        store.dispatch(setFilteredMessages(filtered));
+        store.dispatch(setMessages(mockMessages));
+        store.dispatch(keepOnly(['msg-1', 'msg-2']));
 
         const state = store.getState().message;
-        expect(state.filteredMessages).toEqual(filtered);
+        expect(ids(state.filteredRows)).toEqual(['msg-2', 'msg-1']);
+        expect(state.rows).toHaveLength(5);
+        expect(state.contentMatchIds).toEqual(['msg-1', 'msg-2']);
       });
 
       it('should allow empty filtered messages', () => {
-        store.dispatch(setFilteredMessages([]));
+        store.dispatch(setMessages(mockMessages));
+        store.dispatch(keepOnly([]));
 
         const state = store.getState().message;
-        expect(state.filteredMessages).toEqual([]);
+        expect(state.filteredRows).toEqual([]);
       });
     });
 
-    describe('setSelectedMessages', () => {
+    describe('setSelectedIds', () => {
       it('should set selected messages', () => {
-        const selected = [mockMessages[0]];
-        store.dispatch(setSelectedMessages(selected));
+        store.dispatch(setSelectedIds(['msg-1']));
 
         const state = store.getState().message;
-        expect(state.selectedMessages).toEqual(selected);
+        expect(state.selectedIds).toEqual(['msg-1']);
       });
     });
 
     describe('toggleMessageSelection', () => {
       it('should add message to selection if not selected', () => {
-        store.dispatch(toggleMessageSelection(mockMessages[0]));
+        store.dispatch(toggleMessageSelection('msg-1'));
 
         const state = store.getState().message;
-        expect(state.selectedMessages).toContainEqual(mockMessages[0]);
+        expect(state.selectedIds).toContain('msg-1');
       });
 
       it('should remove message from selection if already selected', () => {
-        store.dispatch(setSelectedMessages([mockMessages[0]]));
-        store.dispatch(toggleMessageSelection(mockMessages[0]));
+        store.dispatch(setSelectedIds(['msg-1']));
+        store.dispatch(toggleMessageSelection('msg-1'));
 
         const state = store.getState().message;
-        expect(state.selectedMessages).not.toContainEqual(mockMessages[0]);
+        expect(state.selectedIds).not.toContain('msg-1');
       });
 
       it('should handle multiple toggles', () => {
-        store.dispatch(toggleMessageSelection(mockMessages[0]));
-        expect(store.getState().message.selectedMessages).toHaveLength(1);
+        store.dispatch(toggleMessageSelection('msg-1'));
+        expect(store.getState().message.selectedIds).toHaveLength(1);
 
-        store.dispatch(toggleMessageSelection(mockMessages[1]));
-        expect(store.getState().message.selectedMessages).toHaveLength(2);
+        store.dispatch(toggleMessageSelection('msg-2'));
+        expect(store.getState().message.selectedIds).toHaveLength(2);
 
-        store.dispatch(toggleMessageSelection(mockMessages[0]));
-        expect(store.getState().message.selectedMessages).toHaveLength(1);
+        store.dispatch(toggleMessageSelection('msg-1'));
+        expect(store.getState().message.selectedIds).toHaveLength(1);
       });
     });
 
     describe('selectAllMessages', () => {
       it('should select all filtered messages', () => {
-        store.dispatch(setFilteredMessages(mockMessages));
+        store.dispatch(setMessages(mockMessages));
         store.dispatch(selectAllMessages());
 
         const state = store.getState().message;
-        expect(state.selectedMessages).toEqual(mockMessages);
+        expect(state.selectedIds).toEqual(ids(rowsDesc(mockMessages)));
       });
 
       it('should handle empty filtered messages', () => {
-        store.dispatch(setFilteredMessages([]));
+        store.dispatch(setMessages([]));
         store.dispatch(selectAllMessages());
 
         const state = store.getState().message;
-        expect(state.selectedMessages).toEqual([]);
+        expect(state.selectedIds).toEqual([]);
       });
 
       it('should replace previous selection', () => {
-        store.dispatch(setSelectedMessages([mockMessages[0]]));
-        store.dispatch(setFilteredMessages(mockMessages));
+        store.dispatch(setSelectedIds(['msg-1']));
+        store.dispatch(setMessages(mockMessages));
         store.dispatch(selectAllMessages());
 
         const state = store.getState().message;
-        expect(state.selectedMessages).toHaveLength(mockMessages.length);
+        expect(state.selectedIds).toHaveLength(mockMessages.length);
       });
     });
 
     describe('deselectAllMessages', () => {
       it('should clear selected messages', () => {
-        store.dispatch(setSelectedMessages(mockMessages));
+        store.dispatch(setSelectedIds(ids(mockMessages)));
         store.dispatch(deselectAllMessages());
 
         const state = store.getState().message;
-        expect(state.selectedMessages).toEqual([]);
+        expect(state.selectedIds).toEqual([]);
       });
 
       it('should be idempotent', () => {
         store.dispatch(deselectAllMessages());
-        const state1 = store.getState().message.selectedMessages;
+        const state1 = store.getState().message.selectedIds;
 
         store.dispatch(deselectAllMessages());
-        const state2 = store.getState().message.selectedMessages;
+        const state2 = store.getState().message.selectedIds;
 
         expect(state1).toEqual(state2);
         expect(state2).toEqual([]);
@@ -355,12 +407,15 @@ describe('messageSlice', () => {
       });
 
       it('should re-sort messages when order changes', () => {
-        store.dispatch(setFilteredMessages(mockMessages));
-        store.dispatch(setOrder({ order: SortDirection.DESCENDING } as any));
+        store.dispatch(setMessages(mockMessages));
+        store.dispatch(setOrder({ order: SortDirection.ASCENDING } as any));
+        expect(ids(store.getState().message.rows)).toEqual(['msg-1', 'msg-2', 'msg-3', 'msg-4', 'msg-5']);
 
-        // getSortedMessages is mocked to return messages as-is for testing
+        store.dispatch(setOrder({ order: SortDirection.DESCENDING } as any));
         const state = store.getState().message;
-        expect(state.filteredMessages).toBeDefined();
+        expect(ids(state.rows)).toEqual(['msg-5', 'msg-4', 'msg-3', 'msg-2', 'msg-1']);
+        // With no refine active the filtered view is the same array.
+        expect(state.filteredRows).toBe(state.rows);
       });
     });
 
@@ -368,17 +423,19 @@ describe('messageSlice', () => {
       it('should clear all messages and reset state', () => {
         // Set up state
         store.dispatch(setMessages(mockMessages));
-        store.dispatch(setFilteredMessages(mockMessages));
-        store.dispatch(setSelectedMessages([mockMessages[0]]));
+        store.dispatch(setSelectedIds(['msg-1']));
         store.dispatch(setSearchCriteria({ content: 'test' } as any));
 
         // Clear
         store.dispatch(clearMessages());
 
         const state = store.getState().message;
-        expect(state.messages).toEqual([]);
-        expect(state.filteredMessages).toEqual([]);
-        expect(state.selectedMessages).toEqual([]);
+        expect(state.rows).toEqual([]);
+        expect(state.filteredRows).toEqual([]);
+        expect(state.selectedIds).toEqual([]);
+        expect(state.authors).toEqual({});
+        // The objects behind the rows leave the cache with them.
+        expect(getCachedMessage(MAIN_CONTAINER, 'msg-1')).toBeUndefined();
         expect(state.searchCriteria).toBeNull();
         expect(state.isLoading).toBe(false);
         expect(state.error).toBeNull();
@@ -422,7 +479,7 @@ describe('messageSlice', () => {
       it('should clear refine criteria so it cannot filter the next channel (#226)', async () => {
         const { setRefineCriteria } = await import('./messageSlice');
         store.dispatch(setMessages(mockMessages));
-        store.dispatch(setRefineCriteria({ userIds: ['user-1'] } as any));
+        await store.dispatch(setRefineCriteria({ userIds: ['user-1'] } as any));
         expect(store.getState().message.refineCriteria).not.toBeNull();
 
         store.dispatch(clearMessages());
@@ -432,7 +489,7 @@ describe('messageSlice', () => {
 
         // New pages arriving after the switch must not be refine-filtered.
         store.dispatch(setMessages(mockMessages));
-        expect(store.getState().message.filteredMessages).toHaveLength(mockMessages.length);
+        expect(store.getState().message.filteredRows).toHaveLength(mockMessages.length);
       });
     });
 
@@ -460,7 +517,7 @@ describe('messageSlice', () => {
         store.dispatch(resetPagination());
 
         const state = store.getState().message;
-        expect(state.messages).toEqual(mockMessages);
+        expect(state.rows).toEqual(rowsDesc(mockMessages));
       });
     });
   });
@@ -557,8 +614,7 @@ describe('messageSlice', () => {
 
       const appStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [createMockMessage({ id: 'msg-1' })],
-        selectedMessages: [createMockMessage({ id: 'msg-1' })],
+        ...loaded([createMockMessage({ id: 'msg-1' })], [createMockMessage({ id: 'msg-1' })]),
       });
 
       appStore.dispatch(
@@ -578,8 +634,7 @@ describe('messageSlice', () => {
       const messages = [createMockMessage({ id: 'msg-1' })];
       const appStore = await createStoreWithApp({
         ...initialMessageState,
-        messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       await appStore.dispatch(
@@ -587,7 +642,7 @@ describe('messageSlice', () => {
       );
 
       expect(appStore.getState().message.isDeleting).toBe(false);
-      expect(appStore.getState().message.selectedMessages).toEqual([]);
+      expect(appStore.getState().message.selectedIds).toEqual([]);
     });
 
     it('should set error and clear isDeleting on rejection', async () => {
@@ -599,8 +654,7 @@ describe('messageSlice', () => {
       const messages = [createMockMessage({ id: 'msg-1' })];
       const appStore = await createStoreWithApp({
         ...initialMessageState,
-        messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       await appStore.dispatch(
@@ -620,8 +674,7 @@ describe('messageSlice', () => {
       const messages = [createMockMessage({ id: 'msg-1' })];
       const appStore = await createStoreWithApp({
         ...initialMessageState,
-        messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       await appStore.dispatch(
@@ -641,8 +694,7 @@ describe('messageSlice', () => {
       const messages = [createMockMessage({ id: 'msg-1' })];
       const appStore = await createStoreWithApp({
         ...initialMessageState,
-        messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       await appStore.dispatch(
@@ -662,27 +714,27 @@ describe('messageSlice', () => {
     it('toggleMessageSelection adds then removes the same message and never mutates the previous array', () => {
       const msgs = createMockMessages(3);
       store.dispatch(setMessages(msgs));
-      store.dispatch(toggleMessageSelection(msgs[1]));
-      const afterAdd = store.getState().message.selectedMessages;
-      expect(afterAdd.map((m: Message) => m.id)).toEqual(['msg-2']);
+      store.dispatch(toggleMessageSelection('msg-2'));
+      const afterAdd = store.getState().message.selectedIds;
+      expect(afterAdd).toEqual(['msg-2']);
 
-      store.dispatch(toggleMessageSelection(msgs[0]));
-      const afterSecond = store.getState().message.selectedMessages;
-      expect(afterSecond.map((m: Message) => m.id)).toEqual(['msg-2', 'msg-1']);
-      expect(afterAdd.map((m: Message) => m.id)).toEqual(['msg-2']);
+      store.dispatch(toggleMessageSelection('msg-1'));
+      const afterSecond = store.getState().message.selectedIds;
+      expect(afterSecond).toEqual(['msg-2', 'msg-1']);
+      expect(afterAdd).toEqual(['msg-2']);
 
-      store.dispatch(toggleMessageSelection(msgs[1]));
-      expect(store.getState().message.selectedMessages.map((m: Message) => m.id)).toEqual(['msg-1']);
+      store.dispatch(toggleMessageSelection('msg-2'));
+      expect(store.getState().message.selectedIds).toEqual(['msg-1']);
     });
 
     it('selectAllMessages copies filteredMessages instead of sharing the array', () => {
       const msgs = createMockMessages(3);
       store.dispatch(setMessages(msgs));
-      store.dispatch(setFilteredMessages([msgs[0], msgs[2]]));
+      store.dispatch(keepOnly(['msg-1', 'msg-3']));
       store.dispatch(selectAllMessages());
       const state = store.getState().message;
-      expect(state.selectedMessages.map((m: Message) => m.id)).toEqual(['msg-1', 'msg-3']);
-      expect(state.selectedMessages).not.toBe(state.filteredMessages);
+      expect(state.selectedIds).toEqual(['msg-3', 'msg-1']);
+      expect(state.selectedIds).not.toBe(state.filteredRows);
     });
 
     it('toggleThreadMessageSelection adds then removes inside the thread tab only', () => {
@@ -692,28 +744,31 @@ describe('messageSlice', () => {
       const tmsg = createMockMessage({ id: 'tmsg-1' });
       store.dispatch(setThreadMessages({ threadId: 'thread-1', messages: [tmsg] }));
 
-      store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-1', message: tmsg }));
-      expect(store.getState().message.threadTabs['thread-1'].selectedMessages.map((m: Message) => m.id)).toEqual(['tmsg-1']);
-      expect(store.getState().message.selectedMessages).toEqual([]);
+      store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-1', messageId: 'tmsg-1' }));
+      expect(store.getState().message.threadTabs['thread-1'].selectedIds).toEqual(['tmsg-1']);
+      expect(store.getState().message.selectedIds).toEqual([]);
 
-      store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-1', message: tmsg }));
-      expect(store.getState().message.threadTabs['thread-1'].selectedMessages).toEqual([]);
+      store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-1', messageId: 'tmsg-1' }));
+      expect(store.getState().message.threadTabs['thread-1'].selectedIds).toEqual([]);
     });
 
     it('messagesEdited replaces the given ids in messages, filteredMessages, and selectedMessages', () => {
       const msgs = createMockMessages(3);
       store.dispatch(setMessages(msgs));
-      store.dispatch(setFilteredMessages([msgs[1], msgs[2]]));
-      store.dispatch(setSelectedMessages([msgs[1]]));
+      // A date refine keeps msg-2 and msg-3, so the edit lands in a filtered view too.
+      store.dispatch(refineApplied({ criteria: { searchAfterDate: new Date(msgs[1].timestamp) } as unknown as RefineCriteria }));
+      store.dispatch(setSelectedIds(['msg-2']));
       const edited = { ...msgs[1], content: 'edited' };
 
       store.dispatch(messagesEdited({ messages: [edited, createMockMessage({ id: 'unknown' })], containerId: null }));
 
       const state = store.getState().message;
-      expect(state.messages.map((m: Message) => m.content)).toEqual(['Test message 1', 'edited', 'Test message 3']);
-      expect(state.filteredMessages.map((m: Message) => m.content)).toEqual(['edited', 'Test message 3']);
-      expect(state.selectedMessages.map((m: Message) => m.content)).toEqual(['edited']);
-      expect(state.messages).toHaveLength(3);
+      expect(state.rows.map((r) => cachedContent(r.id))).toEqual(['Test message 3', 'edited', 'Test message 1']);
+      expect(ids(state.filteredRows)).toEqual(['msg-3', 'msg-2']);
+      expect(state.filteredRows[1]).toEqual(state.rows[1]);
+      expect(state.selectedIds).toEqual(['msg-2']);
+      expect(state.rows).toHaveLength(3);
+      expect(getCachedMessage(MAIN_CONTAINER, 'unknown')).toBeUndefined();
     });
 
     it('messagesEdited targets the thread container named in the payload', () => {
@@ -724,29 +779,28 @@ describe('messageSlice', () => {
 
       store.dispatch(messagesEdited({ messages: [{ ...tmsg, content: 'after' }], containerId: 'thread-1' }));
 
-      const state = store.getState().message;
-      expect(state.threadTabs['thread-1'].messages[0].content).toBe('after');
-      expect(state.messages[0].content).toBe('Test message 1');
+      expect(cachedContent('tmsg-1', 'thread-1')).toBe('after');
+      expect(cachedContent('msg-1')).toBe('Test message 1');
     });
 
-    it('setThreadRefineCriteria filters the tab from its raw messages and clears back to all', () => {
+    it('setThreadRefineCriteria filters the tab from its raw messages and clears back to all', async () => {
       store.dispatch(setMessages(createMockMessages(1)));
       store.dispatch(addThreadTab({ threadId: 'thread-1', threadName: 'Thread 1' }));
       const a = createMockMessage({ id: 'ta', author: createMockUser({ id: 'user-a' }) });
       const b = createMockMessage({ id: 'tb', author: createMockUser({ id: 'user-b' }) });
       store.dispatch(setThreadMessages({ threadId: 'thread-1', messages: [a, b] }));
 
-      store.dispatch(setThreadRefineCriteria({ threadId: 'thread-1', criteria: { userIds: ['user-b'] } as any }));
-      expect(store.getState().message.threadTabs['thread-1'].filteredMessages.map((m: Message) => m.id)).toEqual(['tb']);
-      expect(store.getState().message.threadTabs['thread-1'].messages).toHaveLength(2);
+      await store.dispatch(setThreadRefineCriteria({ threadId: 'thread-1', criteria: { userIds: ['user-b'] } as any }));
+      expect(ids(store.getState().message.threadTabs['thread-1'].filteredRows)).toEqual(['tb']);
+      expect(store.getState().message.threadTabs['thread-1'].rows).toHaveLength(2);
 
-      store.dispatch(setThreadRefineCriteria({ threadId: 'thread-1', criteria: null }));
-      expect(store.getState().message.threadTabs['thread-1'].filteredMessages.map((m: Message) => m.id)).toEqual(['ta', 'tb']);
+      await store.dispatch(setThreadRefineCriteria({ threadId: 'thread-1', criteria: null }));
+      expect(ids(store.getState().message.threadTabs['thread-1'].filteredRows)).toEqual(['ta', 'tb']);
     });
 
-    it('setThreadRefineCriteria ignores a thread tab that does not exist', () => {
+    it('setThreadRefineCriteria ignores a thread tab that does not exist', async () => {
       const before = store.getState().message;
-      store.dispatch(setThreadRefineCriteria({ threadId: 'nope', criteria: { userIds: ['x'] } as any }));
+      await store.dispatch(setThreadRefineCriteria({ threadId: 'nope', criteria: { userIds: ['x'] } as any }));
       expect(store.getState().message).toBe(before);
     });
   });
@@ -756,15 +810,18 @@ describe('messageSlice', () => {
     it('removes exactly the given ids from messages, filteredMessages, and selectedMessages in one dispatch', () => {
       const msgs = createMockMessages(5);
       store.dispatch(setMessages(msgs));
-      store.dispatch(setFilteredMessages([msgs[0], msgs[1], msgs[3]]));
-      store.dispatch(setSelectedMessages([msgs[1], msgs[3], msgs[4]]));
+      store.dispatch(keepOnly(['msg-1', 'msg-2', 'msg-4']));
+      store.dispatch(setSelectedIds(['msg-2', 'msg-4', 'msg-5']));
 
       store.dispatch(messagesRemoved({ ids: ['msg-2', 'msg-4'], containerId: null }));
 
       const state = store.getState().message;
-      expect(state.messages.map((m: Message) => m.id)).toEqual(['msg-1', 'msg-3', 'msg-5']);
-      expect(state.filteredMessages.map((m: Message) => m.id)).toEqual(['msg-1']);
-      expect(state.selectedMessages.map((m: Message) => m.id)).toEqual(['msg-5']);
+      expect(ids(state.rows)).toEqual(['msg-5', 'msg-3', 'msg-1']);
+      expect(ids(state.filteredRows)).toEqual(['msg-1']);
+      expect(state.selectedIds).toEqual(['msg-5']);
+      expect(state.contentMatchIds).toEqual(['msg-1']);
+      expect(getCachedMessage(MAIN_CONTAINER, 'msg-2')).toBeUndefined();
+      expect(getCachedMessage(MAIN_CONTAINER, 'msg-3')).toBe(msgs[2]);
     });
 
     it('ignores unknown ids and leaves other messages intact', () => {
@@ -774,7 +831,7 @@ describe('messageSlice', () => {
       store.dispatch(messagesRemoved({ ids: ['not-a-real-id', 'msg-2'], containerId: null }));
 
       const state = store.getState().message;
-      expect(state.messages.map((m: Message) => m.id)).toEqual(['msg-1', 'msg-3']);
+      expect(ids(state.rows)).toEqual(['msg-3', 'msg-1']);
     });
 
     it('is a no-op (same array identities) for an empty payload', () => {
@@ -784,9 +841,9 @@ describe('messageSlice', () => {
       store.dispatch(messagesRemoved({ ids: [], containerId: null }));
 
       const after = store.getState().message;
-      expect(after.messages).toBe(before.messages);
-      expect(after.filteredMessages).toBe(before.filteredMessages);
-      expect(after.selectedMessages).toBe(before.selectedMessages);
+      expect(after.rows).toBe(before.rows);
+      expect(after.filteredRows).toBe(before.filteredRows);
+      expect(after.selectedIds).toBe(before.selectedIds);
     });
 
     it('targets the container named in the payload, not the main arrays', () => {
@@ -803,10 +860,11 @@ describe('messageSlice', () => {
       store.dispatch(messagesRemoved({ ids: ['tmsg-1', 'msg-1'], containerId: 'thread-1' }));
 
       const state = store.getState().message;
-      expect(state.threadTabs['thread-1'].messages.map((m: Message) => m.id)).toEqual(['tmsg-2']);
-      expect(state.threadTabs['thread-1'].filteredMessages.map((m: Message) => m.id)).toEqual(['tmsg-2']);
-      // Main arrays untouched — the batch was addressed to the thread tab.
-      expect(state.messages.map((m: Message) => m.id)).toEqual(['msg-1', 'msg-2']);
+      expect(ids(state.threadTabs['thread-1'].rows)).toEqual(['tmsg-2']);
+      expect(ids(state.threadTabs['thread-1'].filteredRows)).toEqual(['tmsg-2']);
+      // Main arrays untouched, the batch was addressed to the thread tab.
+      expect(ids(state.rows)).toEqual(['msg-2', 'msg-1']);
+      expect(getCachedMessage(MAIN_CONTAINER, 'msg-1')).toBeDefined();
     });
 
     it('F14: routes by the captured containerId even when the active tab has changed', () => {
@@ -825,8 +883,8 @@ describe('messageSlice', () => {
       store.dispatch(messagesRemoved({ ids: ['msg-1'], containerId: null }));
 
       const state = store.getState().message;
-      expect(state.messages.map((m: Message) => m.id)).toEqual(['msg-2']);
-      expect(state.threadTabs['thread-1'].messages.map((m: Message) => m.id)).toEqual(['tmsg-1']);
+      expect(ids(state.rows)).toEqual(['msg-2']);
+      expect(ids(state.threadTabs['thread-1'].rows)).toEqual(['tmsg-1']);
     });
 
     it('F14: is a safe no-op when the captured thread tab no longer exists', () => {
@@ -835,7 +893,7 @@ describe('messageSlice', () => {
 
       store.dispatch(messagesRemoved({ ids: ['msg-1'], containerId: 'closed-thread' }));
 
-      expect(store.getState().message.messages).toHaveLength(2);
+      expect(store.getState().message.rows).toHaveLength(2);
     });
   });
 
@@ -892,9 +950,7 @@ describe('messageSlice', () => {
       const messages = createMockMessages(count);
       const { recordingStore, actionTypes } = await createRecordingStoreWithApp({
         ...initialMessageState,
-        messages,
-        filteredMessages: messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       const result = await recordingStore.dispatch(
@@ -904,9 +960,9 @@ describe('messageSlice', () => {
       expect(result.type).toBe('message/deleteMessages/fulfilled');
       expect(result.payload).toHaveLength(count);
       const state = recordingStore.getState().message;
-      expect(state.messages).toHaveLength(0);
-      expect(state.filteredMessages).toHaveLength(0);
-      expect(state.selectedMessages).toHaveLength(0);
+      expect(state.rows).toHaveLength(0);
+      expect(state.filteredRows).toHaveLength(0);
+      expect(state.selectedIds).toHaveLength(0);
 
       const flushes = actionTypes.filter((t) => t === 'message/messagesRemoved');
       expect(flushes).toHaveLength(Math.ceil(count / DELETE_BATCH_SIZE));
@@ -921,9 +977,7 @@ describe('messageSlice', () => {
       const messages = createMockMessages(10);
       const { recordingStore, actionTypes } = await createRecordingStoreWithApp({
         ...initialMessageState,
-        messages,
-        filteredMessages: messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       await recordingStore.dispatch(
@@ -935,7 +989,7 @@ describe('messageSlice', () => {
       // of them — a sub-batch run collapses to a single final flush.
       expect(actionTypes.filter((t) => t.startsWith('message/deleteMessage/'))).toHaveLength(0);
       expect(actionTypes.filter((t) => t === 'message/messagesRemoved')).toHaveLength(1);
-      expect(recordingStore.getState().message.messages).toHaveLength(0);
+      expect(recordingStore.getState().message.rows).toHaveLength(0);
     });
 
     it('still lands all confirmed deletions when cancelled mid-run', async () => {
@@ -952,9 +1006,7 @@ describe('messageSlice', () => {
       const messages = createMockMessages(40);
       const { recordingStore, actionTypes } = await createRecordingStoreWithApp({
         ...initialMessageState,
-        messages,
-        filteredMessages: messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       await recordingStore.dispatch(
@@ -965,8 +1017,8 @@ describe('messageSlice', () => {
       // Every confirmed deletion (including the partial pending batch at the
       // moment of cancellation) must be reflected in state.
       const state = recordingStore.getState().message;
-      expect(state.messages).toHaveLength(40 - confirmedBeforeCancel);
-      expect(state.messages[0].id).toBe(`msg-${confirmedBeforeCancel + 1}`);
+      expect(state.rows).toHaveLength(40 - confirmedBeforeCancel);
+      expect(state.rows[0].id).toBe(`msg-${confirmedBeforeCancel + 1}`);
       expect(actionTypes.filter((t) => t === 'message/messagesRemoved')).toHaveLength(2);
     });
 
@@ -982,9 +1034,7 @@ describe('messageSlice', () => {
       const messages = createMockMessages(5);
       const { recordingStore } = await createRecordingStoreWithApp({
         ...initialMessageState,
-        messages,
-        filteredMessages: messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       const result = await recordingStore.dispatch(
@@ -993,8 +1043,8 @@ describe('messageSlice', () => {
 
       // The failed message survives in state; every confirmed one is gone.
       const state = recordingStore.getState().message;
-      expect(state.messages.map((m: Message) => m.id)).toEqual(['msg-3']);
-      expect(state.filteredMessages.map((m: Message) => m.id)).toEqual(['msg-3']);
+      expect(state.rows.map((r) => r.id)).toEqual(['msg-3']);
+      expect(ids(state.filteredRows)).toEqual(['msg-3']);
       expect(result.payload).toEqual(['msg-1', 'msg-2', 'msg-4', 'msg-5']);
 
       // #212 warning contract survives the direct-service-call refactor.
@@ -1018,9 +1068,7 @@ describe('messageSlice', () => {
       const { recordingStore, actionTypes } = await createRecordingStoreWithApp(
         {
           ...initialMessageState,
-          messages,
-          filteredMessages: messages,
-          selectedMessages: messages,
+          ...loaded(messages, messages),
         },
         { discrubPaused: true },
       );
@@ -1030,7 +1078,7 @@ describe('messageSlice', () => {
       );
 
       const state = recordingStore.getState().message;
-      expect(state.messages).toHaveLength(0);
+      expect(state.rows).toHaveLength(0);
       // Pre-pause flushes for iterations 2 and 3, plus the final flush —
       // every confirmed deletion lands without waiting for a full batch.
       expect(actionTypes.filter((t) => t === 'message/messagesRemoved')).toHaveLength(3);
@@ -1040,9 +1088,7 @@ describe('messageSlice', () => {
       const messages = createMockMessages(3);
       const { recordingStore } = await createRecordingStoreWithApp({
         ...initialMessageState,
-        messages,
-        filteredMessages: messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       // The user opens and switches to a thread tab while the delete is
@@ -1072,9 +1118,9 @@ describe('messageSlice', () => {
       const state = recordingStore.getState().message;
       // All three deletions landed in the main arrays despite the flush
       // arriving while the thread tab was active…
-      expect(state.messages).toHaveLength(0);
+      expect(state.rows).toHaveLength(0);
       // …and the thread tab's arrays were not touched.
-      expect(state.threadTabs['thread-1'].messages.map((m: Message) => m.id)).toEqual(['tmsg-1']);
+      expect(state.threadTabs['thread-1'].rows.map((r) => r.id)).toEqual(['tmsg-1']);
     });
   });
 
@@ -1134,9 +1180,7 @@ describe('messageSlice', () => {
       const messages = createMockMessages(count);
       const { recordingStore, actionTypes } = await createRecordingStoreWithApp({
         ...initialMessageState,
-        messages,
-        filteredMessages: messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       const result = await recordingStore.dispatch(
@@ -1152,9 +1196,9 @@ describe('messageSlice', () => {
       expect(actionTypes.filter((t) => t === 'message/messagesEdited')).toHaveLength(2);
 
       const state = recordingStore.getState().message;
-      expect(state.messages.every((m: Message) => m.content === 'redacted')).toBe(true);
-      expect(state.filteredMessages.every((m: Message) => m.content === 'redacted')).toBe(true);
-      expect(state.selectedMessages.every((m: Message) => m.content === 'redacted')).toBe(true);
+      expect(state.rows.every((r) => cachedContent(r.id) === 'redacted')).toBe(true);
+      expect(state.filteredRows.every((r) => cachedContent(r.id) === 'redacted')).toBe(true);
+      expect(state.selectedIds.every((id) => cachedContent(id) === 'redacted')).toBe(true);
     });
 
     it('holds isEditing stable for the whole run and lands partial edits on failure', async () => {
@@ -1175,9 +1219,7 @@ describe('messageSlice', () => {
       const messages = createMockMessages(3);
       const { recordingStore } = await createRecordingStoreWithApp({
         ...initialMessageState,
-        messages,
-        filteredMessages: messages,
-        selectedMessages: messages,
+        ...loaded(messages, messages),
       });
 
       const dispatchPromise = recordingStore.dispatch(
@@ -1190,7 +1232,7 @@ describe('messageSlice', () => {
       expect(result.payload).toHaveLength(2); // msg-2 failed
 
       const state = recordingStore.getState().message;
-      const contentById = new Map(state.messages.map((m: Message) => [m.id, m.content]));
+      const contentById = new Map(state.rows.map((r) => [r.id, cachedContent(r.id)]));
       expect(contentById.get('msg-1')).toBe('redacted');
       expect(contentById.get('msg-2')).not.toBe('redacted');
       expect(contentById.get('msg-3')).toBe('redacted');
@@ -1224,8 +1266,9 @@ describe('messageSlice', () => {
 
       const state = store.getState().message;
       expect(state.isLoading).toBe(false);
-      expect(state.messages).toEqual(mockMessages);
-      expect(state.filteredMessages).toEqual(mockMessages);
+      expect(state.rows).toEqual(rowsDesc(mockMessages));
+      expect(state.filteredRows).toBe(state.rows);
+      expect(getCachedMessage(MAIN_CONTAINER, 'msg-1')).toBe(mockMessages[0]);
       expect(state.error).toBeNull();
     });
 
@@ -1277,7 +1320,7 @@ describe('messageSlice', () => {
     });
 
     it('should clear selected messages on fetch', async () => {
-      store.dispatch(setSelectedMessages([mockMessages[0]]));
+      store.dispatch(setSelectedIds(['msg-1']));
 
       const mockDiscordService = {
         fetchMessageData: vi.fn().mockResolvedValue({
@@ -1290,7 +1333,7 @@ describe('messageSlice', () => {
       await store.dispatch(fetchMessages({ channelId: 'channel-1', token: 'token' }));
 
       const state = store.getState().message;
-      expect(state.selectedMessages).toEqual([]);
+      expect(state.selectedIds).toEqual([]);
     });
 
     it('should dispatch status entry with message count on success', async () => {
@@ -1340,8 +1383,7 @@ describe('messageSlice', () => {
       store = createTestStore({ message: messageReducer }, {
         message: {
           ...initialMessageState,
-          messages: initialMessages,
-          filteredMessages: initialMessages,
+          ...loaded(initialMessages),
           pagination: {
             ...initialMessageState.pagination,
             lastMessageId: 'msg-5',
@@ -1349,7 +1391,8 @@ describe('messageSlice', () => {
         },
       });
 
-      const newMessages = createMockMessages(3);
+      // Fresh ids: a page is deduped against what is already loaded.
+      const newMessages = createMockMessages(3).map((m, i) => createMockMessage({ ...m, id: `more-${i + 1}` }));
       const mockDiscordService = {
         fetchMessageData: vi.fn().mockResolvedValue({
           success: true,
@@ -1361,7 +1404,7 @@ describe('messageSlice', () => {
       await store.dispatch(fetchMoreMessages({ channelId: 'channel-1', token: 'token', lastMessageId: 'msg-5' }));
 
       const state = store.getState().message;
-      expect(state.messages).toHaveLength(8);
+      expect(state.rows).toHaveLength(8);
       expect(state.pagination.isLoadingMore).toBe(false);
     });
 
@@ -1504,7 +1547,7 @@ describe('messageSlice', () => {
 
       expect(result.type).toBe('message/searchMessages/fulfilled');
       expect(fetchSearchMessageData).toHaveBeenCalledTimes(2);
-      expect(testStore.getState().message.messages).toHaveLength(2);
+      expect(testStore.getState().message.rows).toHaveLength(2);
       const waits = vi.mocked(addStatusEntry).mock.calls.filter(
         ([entry]: any[]) => entry?.level === 'warning' && /still indexing, retrying in 1s \(attempt 1\/5\)/.test(entry.message)
       );
@@ -1728,7 +1771,7 @@ describe('messageSlice', () => {
       expect(mockDiscordService.fetchSearchMessageData).toHaveBeenCalledTimes(1);
 
       const state = testStore.getState().message;
-      expect(state.messages).toHaveLength(25);
+      expect(state.rows).toHaveLength(25);
       expect(state.pagination.mode).toBe('search');
       expect(state.pagination.hasMore).toBe(true);
       expect(state.pagination.searchOffset).toBe(25);
@@ -1827,7 +1870,7 @@ describe('messageSlice', () => {
       );
 
       const state = testStore.getState().message;
-      expect(state.messages).toHaveLength(50);
+      expect(state.rows).toHaveLength(50);
       expect(state.pagination.searchOffset).toBe(50);
       expect(state.pagination.hasMore).toBe(false);
     });
@@ -1880,7 +1923,7 @@ describe('messageSlice', () => {
       expect(result.type).toBe('message/fetchNextSearchPage/fulfilled');
       expect(fetchSearchMessageData).toHaveBeenCalledTimes(3);
       const state = testStore.getState().message;
-      expect(state.messages).toHaveLength(50);
+      expect(state.rows).toHaveLength(50);
       expect(state.pagination.searchOffset).toBe(50);
       expect(state.pagination.hasMore).toBe(false);
       const waits = vi.mocked(addStatusEntry).mock.calls.filter(
@@ -1911,7 +1954,7 @@ describe('messageSlice', () => {
       expect(result.type).toBe('message/fetchNextSearchPage/rejected');
       expect(result.payload).toBe('Failed to search messages (HTTP 403)');
       const state = testStore.getState().message;
-      expect(state.messages).toHaveLength(25);
+      expect(state.rows).toHaveLength(25);
       expect(state.pagination.searchOffset).toBe(25);
       expect(state.pagination.hasMore).toBe(true);
       expect(state.pagination.isLoadingMore).toBe(false);
@@ -1954,7 +1997,7 @@ describe('messageSlice', () => {
 
       const state = testStore.getState().message;
       // 25 unique from page 1 + 24 new from page 2 (one dupe removed) = 49
-      expect(state.messages).toHaveLength(49);
+      expect(state.rows).toHaveLength(49);
     });
   });
 
@@ -1972,13 +2015,9 @@ describe('messageSlice', () => {
 
       // Apply refine for "important"
       const { setRefineCriteria } = await import('./messageSlice');
-      testStore.dispatch(
-        setRefineCriteria({
-          searchMessageContents: ['important'],
-        } as any),
-      );
+      await testStore.dispatch(setRefineCriteria({ searchMessageContents: ['important'] } as any));
 
-      expect(testStore.getState().message.filteredMessages).toHaveLength(2);
+      expect(testStore.getState().message.filteredRows).toHaveLength(2);
 
       // Now fetch more messages — 5 new, 2 match "important"
       const newPage = [
@@ -2006,11 +2045,11 @@ describe('messageSlice', () => {
       );
 
       const state = testStore.getState().message;
-      expect(state.messages).toHaveLength(8); // 3 seed + 5 new
+      expect(state.rows).toHaveLength(8); // 3 seed + 5 new
       // Refine still applied: 4 total important messages (2 seed + 2 new)
-      expect(state.filteredMessages).toHaveLength(4);
+      expect(state.filteredRows).toHaveLength(4);
       expect(
-        state.filteredMessages.every((m) => m.content?.includes('important')),
+        state.filteredRows.every((r) => cachedContent(r.id)?.includes('important')),
       ).toBe(true);
     });
 
@@ -2056,23 +2095,21 @@ describe('messageSlice', () => {
         }),
       );
       // Apply refine restricting to "match"
-      testStore.dispatch(
-        setRefineCriteria({ searchMessageContents: ['match'] } as any),
-      );
+      await testStore.dispatch(setRefineCriteria({ searchMessageContents: ['match'] } as any));
 
-      const beforeFiltered = testStore.getState().message.filteredMessages.length;
+      const beforeFiltered = testStore.getState().message.filteredRows.length;
 
       await testStore.dispatch(
         fetchNextSearchPage({ channelId: 'c', token: 't' }),
       );
 
       const state = testStore.getState().message;
-      expect(state.messages).toHaveLength(50);
+      expect(state.rows).toHaveLength(50);
       // Refine still active and applied to combined set
       expect(
-        state.filteredMessages.every((m) => m.content?.includes('match')),
+        state.filteredRows.every((r) => cachedContent(r.id)?.includes('match')),
       ).toBe(true);
-      expect(state.filteredMessages.length).toBeGreaterThan(beforeFiltered);
+      expect(state.filteredRows.length).toBeGreaterThan(beforeFiltered);
     });
 
     it('emits a status entry when fetchMoreMessages produces zero refine matches', async () => {
@@ -2083,9 +2120,7 @@ describe('messageSlice', () => {
       });
 
       const { setRefineCriteria, fetchMoreMessages } = await import('./messageSlice');
-      testStore.dispatch(
-        setRefineCriteria({ searchMessageContents: ['rare-match'] } as any),
-      );
+      await testStore.dispatch(setRefineCriteria({ searchMessageContents: ['rare-match'] } as any));
 
       // 5 new messages, none match "rare-match"
       const newPage = createMockMessages(5).map((m, i) =>
@@ -2120,9 +2155,7 @@ describe('messageSlice', () => {
       });
 
       const { setRefineCriteria, fetchMoreMessages } = await import('./messageSlice');
-      testStore.dispatch(
-        setRefineCriteria({ searchMessageContents: ['match'] } as any),
-      );
+      await testStore.dispatch(setRefineCriteria({ searchMessageContents: ['match'] } as any));
 
       const newPage = [
         createMockMessage({ id: 'n1', content: 'no' }),
@@ -2190,15 +2223,13 @@ describe('messageSlice', () => {
       });
 
       const { setRefineCriteria, clearRefineCriteria } = await import('./messageSlice');
-      testStore.dispatch(
-        setRefineCriteria({ searchMessageContents: ['match'] } as any),
-      );
-      expect(testStore.getState().message.filteredMessages).toHaveLength(1);
+      await testStore.dispatch(setRefineCriteria({ searchMessageContents: ['match'] } as any));
+      expect(testStore.getState().message.filteredRows).toHaveLength(1);
 
       testStore.dispatch(clearRefineCriteria());
       const state = testStore.getState().message;
       expect(state.refineCriteria).toBeNull();
-      expect(state.filteredMessages).toHaveLength(2);
+      expect(state.filteredRows).toHaveLength(2);
     });
   });
 
@@ -2289,9 +2320,9 @@ describe('messageSlice', () => {
       store = createTestStore({ message: messageReducer }, {
         message: {
           ...initialMessageState,
-          messages: mockMessages,
-          filteredMessages: [mockMessages[0], mockMessages[1]],
-          selectedMessages: [mockMessages[0]],
+          rows: toMessageRows(mockMessages),
+          filteredRows: toMessageRows([mockMessages[0], mockMessages[1]]),
+          selectedIds: ['msg-1'],
           searchCriteria: { content: 'test' },
           order: { order: SortDirection.ASCENDING },
           isLoading: false,
@@ -2302,25 +2333,26 @@ describe('messageSlice', () => {
 
     it('selectMessage should return entire message state', () => {
       const messageState = selectMessage(store.getState());
-      expect(messageState).toHaveProperty('messages');
-      expect(messageState).toHaveProperty('filteredMessages');
-      expect(messageState).toHaveProperty('selectedMessages');
+      expect(messageState).toHaveProperty('rows');
+      expect(messageState).toHaveProperty('filteredRows');
+      expect(messageState).toHaveProperty('selectedIds');
+      expect(messageState).toHaveProperty('authors');
     });
 
     it('selectMessages should return messages array', () => {
-      const messages = selectMessages(store.getState());
-      expect(messages).toEqual(mockMessages);
+      const rows = selectRows(store.getState());
+      expect(rows).toEqual(toMessageRows(mockMessages));
     });
 
-    it('selectFilteredMessages should return filtered messages', () => {
-      const filtered = selectFilteredMessages(store.getState());
+    it('selectFilteredRows should return filtered messages', () => {
+      const filtered = selectFilteredRows(store.getState());
       expect(filtered).toHaveLength(2);
     });
 
     it('selectSelectedMessages should return selected messages', () => {
-      const selected = selectSelectedMessages(store.getState());
+      const selected = selectSelectedIds(store.getState());
       expect(selected).toHaveLength(1);
-      expect(selected[0]).toEqual(mockMessages[0]);
+      expect(selected[0]).toBe('msg-1');
     });
 
     it('selectSearchCriteria should return search criteria', () => {
@@ -2408,15 +2440,15 @@ describe('messageSlice', () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
 
       store.dispatch(setMessages([original]));
-      store.dispatch(setFilteredMessages([original]));
 
       await store.dispatch(
         editMessage({ messageId: 'msg-1', channelId: 'channel-1', content: 'edited', token: 'token' })
       );
 
       const state = store.getState().message;
-      expect(state.messages[0].content).toBe('edited');
-      expect(state.filteredMessages[0].content).toBe('edited');
+      expect(cachedContent('msg-1')).toBe('edited');
+      expect(state.filteredRows).toBe(state.rows);
+      expect(state.rows[0].id).toBe('msg-1');
     });
 
     it('should handle edit failure and surface the HTTP status (#212)', async () => {
@@ -2461,8 +2493,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: msgs,
-        filteredMessages: msgs,
+        ...loaded(msgs),
       });
 
       const result = await testStore.dispatch(
@@ -2485,8 +2516,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: msgs,
-        filteredMessages: msgs,
+        ...loaded(msgs),
       });
 
       await testStore.dispatch(
@@ -2494,9 +2524,9 @@ describe('messageSlice', () => {
       );
 
       const state = testStore.getState().message;
-      expect(state.messages[0].content).toBe('new content');
-      expect(state.messages[1].content).toBe('new content');
-      expect(state.selectedMessages).toEqual([]);
+      expect(cachedContent('msg-1')).toBe('new content');
+      expect(cachedContent('msg-2')).toBe('new content');
+      expect(state.selectedIds).toEqual([]);
     });
 
     it('should handle error from editMessages', async () => {
@@ -2529,8 +2559,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: msgs,
-        filteredMessages: msgs,
+        ...loaded(msgs),
       });
 
       await testStore.dispatch(
@@ -2658,7 +2687,6 @@ describe('messageSlice', () => {
       const msgWithReaction = createMockMessage({ id: 'msg-1', reactions: [reaction] });
 
       store.dispatch(setMessages([msgWithReaction]));
-      store.dispatch(setFilteredMessages([msgWithReaction]));
 
       const mockDiscordService = {
         deleteReaction: vi.fn().mockResolvedValue({ success: true }),
@@ -2670,7 +2698,8 @@ describe('messageSlice', () => {
       );
 
       const state = store.getState().message;
-      expect(state.messages[0].reactions![0].count).toBe(2);
+      expect(cached('msg-1').reactions![0].count).toBe(2);
+      expect(state.rows[0].hasReactions).toBe(true);
     });
 
     it('should remove reaction entirely when count reaches zero', async () => {
@@ -2678,7 +2707,6 @@ describe('messageSlice', () => {
       const msgWithReaction = createMockMessage({ id: 'msg-1', reactions: [reaction] });
 
       store.dispatch(setMessages([msgWithReaction]));
-      store.dispatch(setFilteredMessages([msgWithReaction]));
 
       const mockDiscordService = {
         deleteReaction: vi.fn().mockResolvedValue({ success: true }),
@@ -2690,7 +2718,8 @@ describe('messageSlice', () => {
       );
 
       const state = store.getState().message;
-      expect(state.messages[0].reactions).toHaveLength(0);
+      expect(cached('msg-1').reactions).toHaveLength(0);
+      expect(state.rows[0].hasReactions).toBe(false);
     });
 
     it('should handle delete reaction failure and surface the HTTP status (#212)', async () => {
@@ -2720,8 +2749,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [msgWithReaction],
-        filteredMessages: [msgWithReaction],
+        ...loaded([msgWithReaction]),
       });
 
       const result = await testStore.dispatch(
@@ -2750,8 +2778,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [msgWithReactions],
-        filteredMessages: [msgWithReactions],
+        ...loaded([msgWithReactions]),
       });
 
       await testStore.dispatch(
@@ -2765,9 +2792,10 @@ describe('messageSlice', () => {
       );
 
       const state = testStore.getState().message;
+      expect(state.rows[0].hasReactions).toBe(true);
       // The 👍 reaction should be removed entirely, ❤️ should remain
-      expect(state.messages[0].reactions).toHaveLength(1);
-      expect(state.messages[0].reactions![0].emoji.name).toBe('❤️');
+      expect(cached('msg-1').reactions).toHaveLength(1);
+      expect(cached('msg-1').reactions![0].emoji.name).toBe('❤️');
     });
 
     it('should handle partial failures gracefully', async () => {
@@ -2820,7 +2848,6 @@ describe('messageSlice', () => {
       const msg = createMockMessage({ id: 'msg-1', reactions: [reaction1, reaction2] });
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       const mockDiscordService = {
         deleteAllReactionsFromMessage: vi.fn().mockResolvedValue({ success: true }),
@@ -2832,7 +2859,8 @@ describe('messageSlice', () => {
       );
 
       const state = store.getState().message;
-      expect(state.messages[0].reactions).toEqual([]);
+      expect(cached('msg-1').reactions).toEqual([]);
+      expect(state.rows[0].hasReactions).toBe(false);
     });
 
     it('should reject on API failure', async () => {
@@ -2874,7 +2902,6 @@ describe('messageSlice', () => {
       const msg = createMockMessage({ id: 'msg-1', reactions: [thumbsUp, heart] });
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       const mockDiscordService = {
         deleteAllReactionsForEmoji: vi.fn().mockResolvedValue({ success: true }),
@@ -2886,8 +2913,9 @@ describe('messageSlice', () => {
       );
 
       const state = store.getState().message;
-      expect(state.messages[0].reactions).toHaveLength(1);
-      expect(state.messages[0].reactions![0].emoji.name).toBe('❤️');
+      expect(state.rows[0].hasReactions).toBe(true);
+      expect(cached('msg-1').reactions).toHaveLength(1);
+      expect(cached('msg-1').reactions![0].emoji.name).toBe('❤️');
     });
 
     it('should reject on API failure and surface the HTTP status (#212)', async () => {
@@ -3106,8 +3134,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [msg],
-        filteredMessages: [msg],
+        ...loaded([msg]),
       });
 
       await testStore.dispatch(
@@ -3120,7 +3147,8 @@ describe('messageSlice', () => {
       );
 
       const state = testStore.getState().message;
-      expect(state.messages[0].reactions).toEqual([]);
+      expect(cached('msg-1').reactions).toEqual([]);
+      expect(state.rows[0].hasReactions).toBe(false);
     });
 
     it('should update state correctly for "emoji" mode — remove only targeted emojis', async () => {
@@ -3136,8 +3164,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [msg],
-        filteredMessages: [msg],
+        ...loaded([msg]),
       });
 
       await testStore.dispatch(
@@ -3151,9 +3178,10 @@ describe('messageSlice', () => {
       );
 
       const state = testStore.getState().message;
+      expect(state.rows[0].hasReactions).toBe(true);
       // Only ❤️ should remain
-      expect(state.messages[0].reactions).toHaveLength(1);
-      expect(state.messages[0].reactions![0].emoji.name).toBe('❤️');
+      expect(cached('msg-1').reactions).toHaveLength(1);
+      expect(cached('msg-1').reactions![0].emoji.name).toBe('❤️');
       // 2 emojis × 1 message = 2 API calls
       expect(mockDiscordService.deleteAllReactionsForEmoji).toHaveBeenCalledTimes(2);
     });
@@ -3170,8 +3198,7 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [msg],
-        filteredMessages: [msg],
+        ...loaded([msg]),
       });
 
       await testStore.dispatch(
@@ -3185,10 +3212,11 @@ describe('messageSlice', () => {
       );
 
       const state = testStore.getState().message;
+      expect(state.rows[0].hasReactions).toBe(true);
       // 👍 decremented 3→2, ❤️ decremented 1→0 (removed)
-      expect(state.messages[0].reactions).toHaveLength(1);
-      expect(state.messages[0].reactions![0].emoji.name).toBe('👍');
-      expect(state.messages[0].reactions![0].count).toBe(2);
+      expect(cached('msg-1').reactions).toHaveLength(1);
+      expect(cached('msg-1').reactions![0].emoji.name).toBe('👍');
+      expect(cached('msg-1').reactions![0].count).toBe(2);
     });
 
     it('should stop when cancelled', async () => {
@@ -3467,18 +3495,19 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [msg],
-        filteredMessages: [msg],
+        ...loaded([msg]),
       });
       await testStore.dispatch(
         batchAddReactions({ channelId: 'ch-1', messages: [{ id: 'msg-1' }], emojis: [{ name: '🔥' }], token: 'tok' })
       );
 
       const state = testStore.getState().message;
-      expect(state.messages[0].reactions).toHaveLength(1);
-      expect(state.messages[0].reactions![0].emoji.name).toBe('🔥');
-      expect(state.messages[0].reactions![0].count).toBe(1);
-      expect(state.messages[0].reactions![0].me).toBe(true);
+      expect(cached('msg-1').reactions).toHaveLength(1);
+      expect(cached('msg-1').reactions![0].emoji.name).toBe('🔥');
+      expect(cached('msg-1').reactions![0].count).toBe(1);
+      expect(cached('msg-1').reactions![0].me).toBe(true);
+      expect(state.rows[0].hasReactions).toBe(true);
+      expect(state.rows[0].flags & RowFlag.MY_REACTION).toBe(RowFlag.MY_REACTION);
     });
 
     it('bumps the count of an existing reaction (idempotent on me)', async () => {
@@ -3491,16 +3520,17 @@ describe('messageSlice', () => {
 
       const testStore = await createStoreWithApp({
         ...initialMessageState,
-        messages: [msg],
+        ...loaded([msg]),
       });
       await testStore.dispatch(
         batchAddReactions({ channelId: 'ch-1', messages: [{ id: 'msg-1' }], emojis: [{ name: '🔥' }], token: 'tok' })
       );
 
       const state = testStore.getState().message;
-      expect(state.messages[0].reactions).toHaveLength(1);
-      expect(state.messages[0].reactions![0].count).toBe(3);
-      expect(state.messages[0].reactions![0].me).toBe(true);
+      expect(state.rows[0].flags & RowFlag.MY_REACTION).toBe(RowFlag.MY_REACTION);
+      expect(cached('msg-1').reactions).toHaveLength(1);
+      expect(cached('msg-1').reactions![0].count).toBe(3);
+      expect(cached('msg-1').reactions![0].me).toBe(true);
     });
 
     it('no-ops with a status entry when nothing is selected', async () => {
@@ -3561,7 +3591,6 @@ describe('messageSlice', () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       const result = await store.dispatch(
         deleteAttachment({ message: msg, attachment: attachment1, channelId: 'channel-1', token: 'token' })
@@ -3595,15 +3624,15 @@ describe('messageSlice', () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       await store.dispatch(
         deleteAttachment({ message: msg, attachment: attachment1, channelId: 'channel-1', token: 'token' })
       );
 
       const state = store.getState().message;
-      expect(state.messages[0].attachments).toHaveLength(1);
-      expect(state.messages[0].attachments[0].id).toBe('att-2');
+      expect(state.rows[0].id).toBe('msg-1');
+      expect(cached('msg-1').attachments).toHaveLength(1);
+      expect(cached('msg-1').attachments[0].id).toBe('att-2');
     });
 
     it('should delete entire message when last attachment removed and no content', async () => {
@@ -3620,7 +3649,6 @@ describe('messageSlice', () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       const result = await store.dispatch(
         deleteAttachment({ message: msg, attachment, channelId: 'channel-1', token: 'token' })
@@ -3632,7 +3660,7 @@ describe('messageSlice', () => {
 
       // Message should be removed from state
       const state = store.getState().message;
-      expect(state.messages).toHaveLength(0);
+      expect(state.rows).toHaveLength(0);
     });
 
     it('should handle edit failure', async () => {
@@ -3677,7 +3705,6 @@ describe('messageSlice', () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       const result = await store.dispatch(
         deleteAllAttachments({ message: msg, channelId: 'channel-1', token: 'token' })
@@ -3709,14 +3736,14 @@ describe('messageSlice', () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       await store.dispatch(
         deleteAllAttachments({ message: msg, channelId: 'channel-1', token: 'token' })
       );
 
       const state = store.getState().message;
-      expect(state.messages[0].attachments).toHaveLength(0);
+      expect(state.rows[0].id).toBe('msg-1');
+      expect(cached('msg-1').attachments).toHaveLength(0);
     });
 
     it('should delete entire message when no content remains', async () => {
@@ -3733,7 +3760,6 @@ describe('messageSlice', () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
 
       store.dispatch(setMessages([msg]));
-      store.dispatch(setFilteredMessages([msg]));
 
       const result = await store.dispatch(
         deleteAllAttachments({ message: msg, channelId: 'channel-1', token: 'token' })
@@ -3743,7 +3769,7 @@ describe('messageSlice', () => {
       expect(result.payload).toEqual({ messageId: 'msg-1', deleted: true });
 
       const state = store.getState().message;
-      expect(state.messages).toHaveLength(0);
+      expect(state.rows).toHaveLength(0);
     });
 
     it('should handle edit failure', async () => {
@@ -3778,7 +3804,7 @@ describe('messageSlice', () => {
         expect(state.threadTabs['thread-100']).toBeDefined();
         expect(state.threadTabs['thread-100'].threadName).toBe('My Thread');
         expect(state.threadTabs['thread-100'].isLoading).toBe(true);
-        expect(state.threadTabs['thread-100'].messages).toEqual([]);
+        expect(state.threadTabs['thread-100'].rows).toEqual([]);
         expect(state.activeTab).toBe('thread-100');
       });
 
@@ -3790,7 +3816,7 @@ describe('messageSlice', () => {
         store.dispatch(addThreadTab({ threadId: 'thread-100', threadName: 'Different Name' }));
         const state = store.getState().message;
         expect(state.threadTabs['thread-100'].threadName).toBe('My Thread');
-        expect(state.threadTabs['thread-100'].messages).toEqual(threadMessages);
+        expect(state.threadTabs['thread-100'].rows).toEqual(rowsDesc(threadMessages));
         expect(state.activeTab).toBe('thread-100');
       });
     });
@@ -3839,8 +3865,9 @@ describe('messageSlice', () => {
         store.dispatch(addThreadTab({ threadId: 'thread-100', threadName: 'My Thread' }));
         store.dispatch(setThreadMessages({ threadId: 'thread-100', messages: threadMessages }));
         const tab = store.getState().message.threadTabs['thread-100'];
-        expect(tab.messages).toEqual(threadMessages);
-        expect(tab.filteredMessages).toEqual(threadMessages);
+        expect(tab.rows).toEqual(rowsDesc(threadMessages));
+        expect(tab.filteredRows).toBe(tab.rows);
+        expect(getCachedMessage('thread-100', 'thread-msg-1')).toBe(threadMessages[0]);
       });
 
       it('should no-op for non-existent thread', () => {
@@ -3849,15 +3876,14 @@ describe('messageSlice', () => {
       });
     });
 
-    describe('setThreadFilteredMessages', () => {
+    describe('threadRefineApplied', () => {
       it('should set filtered messages independently from messages', () => {
         store.dispatch(addThreadTab({ threadId: 'thread-100', threadName: 'My Thread' }));
         store.dispatch(setThreadMessages({ threadId: 'thread-100', messages: threadMessages }));
-        const filtered = [threadMessages[0]];
-        store.dispatch(setThreadFilteredMessages({ threadId: 'thread-100', messages: filtered }));
+        store.dispatch(threadKeepOnly('thread-100', ['thread-msg-1']));
         const tab = store.getState().message.threadTabs['thread-100'];
-        expect(tab.messages).toEqual(threadMessages);
-        expect(tab.filteredMessages).toEqual(filtered);
+        expect(tab.rows).toEqual(rowsDesc(threadMessages));
+        expect(ids(tab.filteredRows)).toEqual(['thread-msg-1']);
       });
     });
 
@@ -3868,30 +3894,30 @@ describe('messageSlice', () => {
       });
 
       it('should toggle message selection on', () => {
-        store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-100', message: threadMessages[0] }));
+        store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-100', messageId: threadMessages[0].id }));
         const tab = store.getState().message.threadTabs['thread-100'];
-        expect(tab.selectedMessages).toHaveLength(1);
-        expect(tab.selectedMessages[0].id).toBe(threadMessages[0].id);
+        expect(tab.selectedIds).toHaveLength(1);
+        expect(tab.selectedIds[0]).toBe(threadMessages[0].id);
       });
 
       it('should toggle message selection off', () => {
-        store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-100', message: threadMessages[0] }));
-        store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-100', message: threadMessages[0] }));
+        store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-100', messageId: threadMessages[0].id }));
+        store.dispatch(toggleThreadMessageSelection({ threadId: 'thread-100', messageId: threadMessages[0].id }));
         const tab = store.getState().message.threadTabs['thread-100'];
-        expect(tab.selectedMessages).toHaveLength(0);
+        expect(tab.selectedIds).toHaveLength(0);
       });
 
       it('should select all messages', () => {
         store.dispatch(selectAllThreadMessages('thread-100'));
         const tab = store.getState().message.threadTabs['thread-100'];
-        expect(tab.selectedMessages).toHaveLength(3);
+        expect(tab.selectedIds).toHaveLength(3);
       });
 
       it('should deselect all messages', () => {
         store.dispatch(selectAllThreadMessages('thread-100'));
         store.dispatch(deselectAllThreadMessages('thread-100'));
         const tab = store.getState().message.threadTabs['thread-100'];
-        expect(tab.selectedMessages).toHaveLength(0);
+        expect(tab.selectedIds).toHaveLength(0);
       });
     });
 
@@ -3972,14 +3998,13 @@ describe('messageSlice', () => {
 
     beforeEach(() => {
       store.dispatch(setMessages(mainMessages));
-      store.dispatch(setFilteredMessages(mainMessages));
     });
 
     it('should return main tab data when activeTab is null', () => {
       const state = store.getState();
-      expect(selectActiveMessages(state)).toEqual(mainMessages);
-      expect(selectActiveFilteredMessages(state)).toEqual(mainMessages);
-      expect(selectActiveSelectedMessages(state)).toEqual([]);
+      expect(selectActiveRows(state)).toEqual(rowsDesc(mainMessages));
+      expect(selectActiveFilteredRows(state)).toEqual(rowsDesc(mainMessages));
+      expect(selectActiveSelectedIds(state)).toEqual([]);
       expect(selectActiveSearchCriteria(state)).toBeNull();
       expect(selectActiveOrder(state)).toEqual(state.message.order);
       expect(selectActiveLoading(state)).toBe(false);
@@ -3994,9 +4019,9 @@ describe('messageSlice', () => {
 
       const state = store.getState();
       expect(selectActiveTab(state)).toBe('thread-100');
-      expect(selectActiveMessages(state)).toEqual(threadMessages);
-      expect(selectActiveFilteredMessages(state)).toEqual(threadMessages);
-      expect(selectActiveSelectedMessages(state)).toEqual([]);
+      expect(selectActiveRows(state)).toEqual(rowsDesc(threadMessages));
+      expect(selectActiveFilteredRows(state)).toEqual(rowsDesc(threadMessages));
+      expect(selectActiveSelectedIds(state)).toEqual([]);
       expect(selectActiveLoading(state)).toBe(false);
     });
 
@@ -4005,22 +4030,22 @@ describe('messageSlice', () => {
       store.dispatch(setThreadMessages({ threadId: 'thread-100', messages: threadMessages }));
 
       // Active tab is thread
-      expect(selectActiveMessages(store.getState())).toEqual(threadMessages);
+      expect(selectActiveRows(store.getState())).toEqual(rowsDesc(threadMessages));
 
       // Switch to main
       store.dispatch(setActiveTab(null));
-      expect(selectActiveMessages(store.getState())).toEqual(mainMessages);
+      expect(selectActiveRows(store.getState())).toEqual(rowsDesc(mainMessages));
 
       // Switch back to thread
       store.dispatch(setActiveTab('thread-100'));
-      expect(selectActiveMessages(store.getState())).toEqual(threadMessages);
+      expect(selectActiveRows(store.getState())).toEqual(rowsDesc(threadMessages));
     });
 
     it('should return main tab data if activeTab points to non-existent thread', () => {
       store.dispatch(setActiveTab('nonexistent'));
       const state = store.getState();
-      expect(selectActiveMessages(state)).toEqual(mainMessages);
-      expect(selectActiveFilteredMessages(state)).toEqual(mainMessages);
+      expect(selectActiveRows(state)).toEqual(rowsDesc(mainMessages));
+      expect(selectActiveFilteredRows(state)).toEqual(rowsDesc(mainMessages));
     });
 
     // #190 Phase 3: reference-stability regression guards. The selector
@@ -4030,40 +4055,40 @@ describe('messageSlice', () => {
     // settings update) fires. Pinned so a future refactor that introduces
     // derived work (a .map(), a filter(), a new Array spread) breaks
     // visibly here instead of silently regressing scroll perf.
-    it('selectActiveFilteredMessages returns the same reference across unrelated state changes (main tab)', () => {
-      const before = selectActiveFilteredMessages(store.getState());
+    it('selectActiveFilteredRows returns the same reference across unrelated state changes (main tab)', () => {
+      const before = selectActiveFilteredRows(store.getState());
       // Trigger an unrelated state change — settings update doesn't touch
       // state.message.filteredMessages.
       store.dispatch({ type: 'app/updateSetting/fulfilled', payload: {} as any });
-      const after = selectActiveFilteredMessages(store.getState());
+      const after = selectActiveFilteredRows(store.getState());
       expect(after).toBe(before);
     });
 
-    it('selectActiveFilteredMessages returns the same reference across unrelated state changes (thread tab)', () => {
+    it('selectActiveFilteredRows returns the same reference across unrelated state changes (thread tab)', () => {
       store.dispatch(addThreadTab({ threadId: 'thread-100', threadName: 'My Thread' }));
       store.dispatch(setThreadMessages({ threadId: 'thread-100', messages: threadMessages }));
-      const before = selectActiveFilteredMessages(store.getState());
+      const before = selectActiveFilteredRows(store.getState());
       store.dispatch({ type: 'app/updateSetting/fulfilled', payload: {} as any });
-      const after = selectActiveFilteredMessages(store.getState());
+      const after = selectActiveFilteredRows(store.getState());
       expect(after).toBe(before);
     });
 
-    it('selectActiveFilteredMessages returns a NEW reference when filteredMessages actually changes', () => {
-      const before = selectActiveFilteredMessages(store.getState());
-      store.dispatch(setFilteredMessages([...mainMessages, createMockMessage({ id: 'new-1' })]));
-      const after = selectActiveFilteredMessages(store.getState());
+    it('selectActiveFilteredRows returns a NEW reference when filteredMessages actually changes', () => {
+      const before = selectActiveFilteredRows(store.getState());
+      store.dispatch(keepOnly(['msg-1']));
+      const after = selectActiveFilteredRows(store.getState());
       expect(after).not.toBe(before);
     });
 
-    it('selectActiveFilteredMessages returns the same reference when activeTab toggles between equivalent main states', () => {
+    it('selectActiveFilteredRows returns the same reference when activeTab toggles between equivalent main states', () => {
       // Set active tab to a nonexistent thread (falls back to main),
       // then back to null (still main). Both states should return the
       // same main filteredMessages reference.
-      const beforeMain = selectActiveFilteredMessages(store.getState());
+      const beforeMain = selectActiveFilteredRows(store.getState());
       store.dispatch(setActiveTab('nonexistent'));
-      const afterToggle = selectActiveFilteredMessages(store.getState());
+      const afterToggle = selectActiveFilteredRows(store.getState());
       store.dispatch(setActiveTab(null));
-      const backToMain = selectActiveFilteredMessages(store.getState());
+      const backToMain = selectActiveFilteredRows(store.getState());
       expect(afterToggle).toBe(beforeMain);
       expect(backToMain).toBe(beforeMain);
     });
@@ -4091,18 +4116,16 @@ describe('messageSlice', () => {
 
     beforeEach(() => {
       store.dispatch(setMessages(mainMessages));
-      store.dispatch(setFilteredMessages(mainMessages));
       store.dispatch(addThreadTab({ threadId: 'thread-100', threadName: 'My Thread' }));
       store.dispatch(setThreadMessages({ threadId: 'thread-100', messages: threadMessages }));
     });
 
     it('should not affect thread filteredMessages when main filter changes', () => {
-      const singleMsg = [mainMessages[0]];
-      store.dispatch(setFilteredMessages(singleMsg));
+      store.dispatch(keepOnly(['msg-1']));
 
       const state = store.getState().message;
-      expect(state.filteredMessages).toEqual(singleMsg);
-      expect(state.threadTabs['thread-100'].filteredMessages).toEqual(threadMessages);
+      expect(ids(state.filteredRows)).toEqual(['msg-1']);
+      expect(state.threadTabs['thread-100'].filteredRows).toEqual(rowsDesc(threadMessages));
     });
 
     it('should not leak thread searchCriteria to main', () => {
@@ -4115,16 +4138,15 @@ describe('messageSlice', () => {
     });
 
     it('should preserve thread filter state after switching tabs', () => {
-      const filtered = [threadMessages[0]];
-      store.dispatch(setThreadFilteredMessages({ threadId: 'thread-100', messages: filtered }));
+      store.dispatch(threadKeepOnly('thread-100', ['thread-msg-1']));
 
       // Switch away to main
       store.dispatch(setActiveTab(null));
-      expect(selectActiveFilteredMessages(store.getState())).toEqual(mainMessages);
+      expect(selectActiveFilteredRows(store.getState())).toEqual(rowsDesc(mainMessages));
 
-      // Switch back to thread — filtered subset should still be preserved
+      // Switch back to thread, the filtered subset is still there
       store.dispatch(setActiveTab('thread-100'));
-      expect(selectActiveFilteredMessages(store.getState())).toEqual(filtered);
+      expect(ids(selectActiveFilteredRows(store.getState()))).toEqual(['thread-msg-1']);
     });
   });
 
@@ -4147,7 +4169,7 @@ describe('messageSlice', () => {
 
         const state = store.getState().message;
         expect(state.activeTab).toBe('thread-100');
-        expect(state.threadTabs['thread-100'].messages).toHaveLength(3);
+        expect(state.threadTabs['thread-100'].rows).toHaveLength(3);
         expect(state.threadTabs['thread-100'].isLoading).toBe(false);
         expect(state.threadTabs['thread-100'].pagination.hasMore).toBe(false); // <100 messages
         expect(mockDiscordService.fetchMessageData).toHaveBeenCalledWith('token', '', 'thread-100');
@@ -4185,7 +4207,7 @@ describe('messageSlice', () => {
 
         const tab = store.getState().message.threadTabs['thread-100'];
         expect(tab.pagination.hasMore).toBe(true);
-        expect(tab.messages).toHaveLength(100);
+        expect(tab.rows).toHaveLength(100);
       });
 
       it('should remove tab on fetch failure and return to main tab', async () => {
@@ -4279,7 +4301,7 @@ describe('messageSlice', () => {
 
         expect(result.type).toBe('message/fetchMoreThreadMessages/fulfilled');
         const tab = store.getState().message.threadTabs['thread-100'];
-        expect(tab.messages).toHaveLength(4);
+        expect(tab.rows).toHaveLength(4);
         expect(tab.pagination.isLoadingMore).toBe(false);
       });
 
@@ -4350,18 +4372,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -4371,7 +4382,7 @@ describe('messageSlice', () => {
 
         expect(result.type).toBe('message/fetchAllThreadMessages/fulfilled');
         const tab = testStore.getState().message.threadTabs['thread-100'];
-        expect(tab.messages).toHaveLength(150);
+        expect(tab.rows).toHaveLength(150);
         expect(tab.pagination.hasMore).toBe(false);
         expect(tab.pagination.isLoadingAll).toBe(false);
         expect(tab.pagination.loadAllProgress).toBeNull();
@@ -4389,18 +4400,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -4440,18 +4440,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -4465,7 +4454,7 @@ describe('messageSlice', () => {
 
         expect(result.type).toBe('message/searchThreadMessages/fulfilled');
         const tab = testStore.getState().message.threadTabs['thread-100'];
-        expect(tab.messages).toHaveLength(2);
+        expect(tab.rows).toHaveLength(2);
         expect(tab.isLoading).toBe(false);
         expect(tab.pagination.mode).toBe('search');
         expect(tab.pagination.hasMore).toBe(false);
@@ -4488,18 +4477,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -4515,7 +4493,7 @@ describe('messageSlice', () => {
         expect(fetchSearchMessageData).toHaveBeenCalledTimes(2);
         // Second page starts where the short first page ended, not at 25.
         expect(fetchSearchMessageData.mock.calls[1][1]).toBe(20);
-        expect(testStore.getState().message.threadTabs['thread-100'].messages).toHaveLength(40);
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(40);
       });
 
       it('stops at total_results even when the last page is short (#264)', async () => {
@@ -4532,18 +4510,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -4552,7 +4519,7 @@ describe('messageSlice', () => {
         );
 
         expect(fetchSearchMessageData).toHaveBeenCalledTimes(2);
-        expect(testStore.getState().message.threadTabs['thread-100'].messages).toHaveLength(30);
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(30);
       });
 
       it('should dispatch starting and completion status entries on success', async () => {
@@ -4573,18 +4540,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -4614,18 +4570,7 @@ describe('messageSlice', () => {
         ...initialMessageState,
         activeTab: 'thread-100',
         threadTabs: {
-          'thread-100': {
-            threadId: 'thread-100',
-            threadName: 'Thread',
-            messages: [],
-            filteredMessages: [],
-            selectedMessages: [],
-            searchCriteria: null, refineCriteria: null,
-            order: initialMessageState.order,
-            isLoading: false,
-            error: null,
-            pagination: { ...initialMessageState.pagination },
-          },
+          'thread-100': threadTab('thread-100'),
         },
       });
 
@@ -4648,7 +4593,7 @@ describe('messageSlice', () => {
 
         expect(result.type).toBe('message/searchThreadMessages/fulfilled');
         expect(fetchSearchMessageData).toHaveBeenCalledTimes(2);
-        expect(testStore.getState().message.threadTabs['thread-100'].messages).toHaveLength(3);
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(3);
         const waits = vi.mocked(addStatusEntry).mock.calls.filter(
           ([entry]) => entry.level === 'warning' && /still indexing, retrying in 1s \(attempt 1\/5\)/.test(entry.message)
         );
@@ -4729,7 +4674,6 @@ describe('messageSlice', () => {
     const setupThreadTabStore = () => {
       // Set up main messages
       store.dispatch(setMessages(mainMessages));
-      store.dispatch(setFilteredMessages(mainMessages));
       // Set up thread tab with messages
       store.dispatch(addThreadTab({ threadId: 'thread-1', threadName: 'Test Thread' }));
       store.dispatch(setThreadMessages({ threadId: 'thread-1', messages: threadMessages }));
@@ -4749,12 +4693,12 @@ describe('messageSlice', () => {
 
         const state = testStore.getState().message;
         // Thread tab should have message removed
-        expect(state.threadTabs['thread-1'].messages).toHaveLength(2);
-        expect(state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-1')).toBeUndefined();
-        expect(state.threadTabs['thread-1'].filteredMessages).toHaveLength(2);
+        expect(state.threadTabs['thread-1'].rows).toHaveLength(2);
+        expect(state.threadTabs['thread-1'].rows.find((r) => r.id === 'tmsg-1')).toBeUndefined();
+        expect(state.threadTabs['thread-1'].filteredRows).toHaveLength(2);
         // Main messages should be untouched
-        expect(state.messages).toHaveLength(2);
-        expect(state.messages[0].id).toBe('main-1');
+        expect(state.rows).toHaveLength(2);
+        expect(state.rows[0].id).toBe('main-1');
       });
     });
 
@@ -4767,22 +4711,10 @@ describe('messageSlice', () => {
 
         const testStore = await createStoreWithApp({
           ...initialMessageState,
-          messages: mainMessages,
-          filteredMessages: mainMessages,
+          ...loaded(mainMessages),
           activeTab: 'thread-1',
           threadTabs: {
-            'thread-1': {
-              threadId: 'thread-1',
-              threadName: 'Test Thread',
-              messages: threadMessages,
-              filteredMessages: threadMessages,
-              selectedMessages: [threadMessages[0]],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-1': threadTab('thread-1', threadMessages, { threadName: 'Test Thread', selectedIds: ids([threadMessages[0]]) }),
           },
         });
 
@@ -4792,11 +4724,11 @@ describe('messageSlice', () => {
 
         const state = testStore.getState().message;
         // Thread tab selected messages should be cleared
-        expect(state.threadTabs['thread-1'].selectedMessages).toHaveLength(0);
+        expect(state.threadTabs['thread-1'].selectedIds).toHaveLength(0);
         // Thread tab messages should have the deleted one removed (via deleteMessage.fulfilled)
-        expect(state.threadTabs['thread-1'].messages).toHaveLength(2);
+        expect(state.threadTabs['thread-1'].rows).toHaveLength(2);
         // Main messages should be untouched
-        expect(state.messages).toEqual(mainMessages);
+        expect(state.rows).toEqual(rowsDesc(mainMessages));
       });
     });
 
@@ -4815,11 +4747,11 @@ describe('messageSlice', () => {
 
         const state = testStore.getState().message;
         // Thread tab should have updated message
-        expect(state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-2')?.content).toBe('edited content');
-        expect(state.threadTabs['thread-1'].filteredMessages.find((m: Message) => m.id === 'tmsg-2')?.content).toBe('edited content');
+        expect(cachedContent('tmsg-2', 'thread-1')).toBe('edited content');
+        expect(cachedContent('tmsg-2', 'thread-1')).toBe('edited content');
         // Main messages should be untouched
-        expect(state.messages).toHaveLength(2);
-        expect(state.messages.find((m: Message) => m.id === 'tmsg-2')).toBeUndefined();
+        expect(state.rows).toHaveLength(2);
+        expect(state.rows.find((r) => r.id === 'tmsg-2')).toBeUndefined();
       });
     });
 
@@ -4827,22 +4759,10 @@ describe('messageSlice', () => {
       it('should update messages in thread tab and clear thread tab selections', async () => {
         const testStore = await createStoreWithApp({
           ...initialMessageState,
-          messages: mainMessages,
-          filteredMessages: mainMessages,
+          ...loaded(mainMessages),
           activeTab: 'thread-1',
           threadTabs: {
-            'thread-1': {
-              threadId: 'thread-1',
-              threadName: 'Test Thread',
-              messages: threadMessages,
-              filteredMessages: threadMessages,
-              selectedMessages: [threadMessages[0], threadMessages[1]],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-1': threadTab('thread-1', threadMessages, { threadName: 'Test Thread', selectedIds: ids([threadMessages[0], threadMessages[1]]) }),
           },
         });
 
@@ -4865,11 +4785,11 @@ describe('messageSlice', () => {
         );
 
         const state = testStore.getState().message;
-        expect(state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-1')?.content).toBe('bulk edited');
-        expect(state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-2')?.content).toBe('bulk edited');
-        expect(state.threadTabs['thread-1'].selectedMessages).toHaveLength(0);
+        expect(cachedContent('tmsg-1', 'thread-1')).toBe('bulk edited');
+        expect(cachedContent('tmsg-2', 'thread-1')).toBe('bulk edited');
+        expect(state.threadTabs['thread-1'].selectedIds).toHaveLength(0);
         // Main messages untouched
-        expect(state.messages).toEqual(mainMessages);
+        expect(state.rows).toEqual(rowsDesc(mainMessages));
       });
     });
 
@@ -4878,7 +4798,6 @@ describe('messageSlice', () => {
         const reaction = createMockReaction({ emoji: { name: '👍', id: null as any }, count: 2 });
         const msgWithReaction = createMockMessage({ id: 'tmsg-1', reactions: [reaction] });
         store.dispatch(setMessages(mainMessages));
-        store.dispatch(setFilteredMessages(mainMessages));
         store.dispatch(addThreadTab({ threadId: 'thread-1', threadName: 'Test Thread' }));
         store.dispatch(setThreadMessages({ threadId: 'thread-1', messages: [msgWithReaction, threadMessages[1]] }));
         store.dispatch(setActiveTab('thread-1'));
@@ -4893,10 +4812,10 @@ describe('messageSlice', () => {
         );
 
         const state = store.getState().message;
-        const threadMsg = state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-1');
+        const threadMsg = getCachedMessage('thread-1', 'tmsg-1');
         expect(threadMsg?.reactions?.[0].count).toBe(1);
         // Main messages untouched
-        expect(state.messages).toEqual(mainMessages);
+        expect(state.rows).toEqual(rowsDesc(mainMessages));
       });
     });
 
@@ -4912,22 +4831,10 @@ describe('messageSlice', () => {
 
         const testStore = await createStoreWithApp({
           ...initialMessageState,
-          messages: mainMessages,
-          filteredMessages: mainMessages,
+          ...loaded(mainMessages),
           activeTab: 'thread-1',
           threadTabs: {
-            'thread-1': {
-              threadId: 'thread-1',
-              threadName: 'Test Thread',
-              messages: [msgWithReaction],
-              filteredMessages: [msgWithReaction],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-1': threadTab('thread-1', [msgWithReaction], { threadName: 'Test Thread' }),
           },
         });
 
@@ -4936,10 +4843,10 @@ describe('messageSlice', () => {
         );
 
         const state = testStore.getState().message;
-        const threadMsg = state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-1');
+        const threadMsg = getCachedMessage('thread-1', 'tmsg-1');
         expect(threadMsg?.reactions).toHaveLength(0);
         // Main messages untouched
-        expect(state.messages).toEqual(mainMessages);
+        expect(state.rows).toEqual(rowsDesc(mainMessages));
       });
     });
 
@@ -4950,7 +4857,6 @@ describe('messageSlice', () => {
         const updatedMsg = createMockMessage({ id: 'tmsg-1', content: 'has content', attachments: [] });
 
         store.dispatch(setMessages(mainMessages));
-        store.dispatch(setFilteredMessages(mainMessages));
         store.dispatch(addThreadTab({ threadId: 'thread-1', threadName: 'Test Thread' }));
         store.dispatch(setThreadMessages({ threadId: 'thread-1', messages: [msgWithAttachment, threadMessages[1]] }));
         store.dispatch(setActiveTab('thread-1'));
@@ -4965,10 +4871,10 @@ describe('messageSlice', () => {
         );
 
         const state = store.getState().message;
-        const threadMsg = state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-1');
+        const threadMsg = getCachedMessage('thread-1', 'tmsg-1');
         expect(threadMsg?.attachments).toHaveLength(0);
         // Main messages untouched
-        expect(state.messages).toEqual(mainMessages);
+        expect(state.rows).toEqual(rowsDesc(mainMessages));
       });
 
       it('should delete message from thread tab when last attachment removed with no content', async () => {
@@ -4976,7 +4882,6 @@ describe('messageSlice', () => {
         const msgWithAttachment = createMockMessage({ id: 'tmsg-1', content: '', attachments: [attachment] });
 
         store.dispatch(setMessages(mainMessages));
-        store.dispatch(setFilteredMessages(mainMessages));
         store.dispatch(addThreadTab({ threadId: 'thread-1', threadName: 'Test Thread' }));
         store.dispatch(setThreadMessages({ threadId: 'thread-1', messages: [msgWithAttachment, threadMessages[1]] }));
         store.dispatch(setActiveTab('thread-1'));
@@ -4991,10 +4896,10 @@ describe('messageSlice', () => {
         );
 
         const state = store.getState().message;
-        expect(state.threadTabs['thread-1'].messages).toHaveLength(1);
-        expect(state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-1')).toBeUndefined();
+        expect(state.threadTabs['thread-1'].rows).toHaveLength(1);
+        expect(state.threadTabs['thread-1'].rows.find((r) => r.id === 'tmsg-1')).toBeUndefined();
         // Main messages untouched
-        expect(state.messages).toEqual(mainMessages);
+        expect(state.rows).toEqual(rowsDesc(mainMessages));
       });
     });
 
@@ -5006,7 +4911,6 @@ describe('messageSlice', () => {
         const updatedMsg = createMockMessage({ id: 'tmsg-1', content: 'has content', attachments: [] });
 
         store.dispatch(setMessages(mainMessages));
-        store.dispatch(setFilteredMessages(mainMessages));
         store.dispatch(addThreadTab({ threadId: 'thread-1', threadName: 'Test Thread' }));
         store.dispatch(setThreadMessages({ threadId: 'thread-1', messages: [msgWithAttachments] }));
         store.dispatch(setActiveTab('thread-1'));
@@ -5021,10 +4925,10 @@ describe('messageSlice', () => {
         );
 
         const state = store.getState().message;
-        const threadMsg = state.threadTabs['thread-1'].messages.find((m: Message) => m.id === 'tmsg-1');
+        const threadMsg = getCachedMessage('thread-1', 'tmsg-1');
         expect(threadMsg?.attachments).toHaveLength(0);
         // Main messages untouched
-        expect(state.messages).toEqual(mainMessages);
+        expect(state.rows).toEqual(rowsDesc(mainMessages));
       });
     });
 
@@ -5041,18 +4945,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -5071,18 +4964,7 @@ describe('messageSlice', () => {
         ...initialMessageState,
         activeTab: 'thread-100',
         threadTabs: {
-          'thread-100': {
-            threadId: 'thread-100',
-            threadName: 'Thread',
-            messages: [],
-            filteredMessages: [],
-            selectedMessages: [],
-            searchCriteria: null, refineCriteria: null,
-            order: initialMessageState.order,
-            isLoading: false,
-            error: null,
-            pagination: { ...initialMessageState.pagination },
-          },
+          'thread-100': threadTab('thread-100'),
         },
       });
 
@@ -5103,7 +4985,7 @@ describe('messageSlice', () => {
 
         expect(result.type).toBe('message/fetchAllThreadMessages/fulfilled');
         expect(fetchSpy).toHaveBeenCalledTimes(3);
-        expect(testStore.getState().message.threadTabs['thread-100'].messages).toHaveLength(10);
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(10);
         const retryEntries = vi.mocked(addStatusEntry).mock.calls.filter(
           ([p]) => p.level === 'warning' && /retrying in/.test(p.message),
         );
@@ -5179,7 +5061,7 @@ describe('messageSlice', () => {
         testStore.dispatch(setDiscrubCancelled(true));
         const result = await pending;
         expect(result.type).toBe('message/fetchAllThreadMessages/fulfilled');
-        expect(testStore.getState().message.threadTabs['thread-100'].messages).toHaveLength(100);
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(100);
 
         const pauseEntries = vi.mocked(addStatusEntry).mock.calls.filter(
           ([p]) => p.level === 'warning' && /paused after 5 failed retries/.test(p.message),
@@ -5201,18 +5083,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -5268,18 +5139,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -5309,18 +5169,7 @@ describe('messageSlice', () => {
           ...initialMessageState,
           activeTab: 'thread-100',
           threadTabs: {
-            'thread-100': {
-              threadId: 'thread-100',
-              threadName: 'Thread',
-              messages: [],
-              filteredMessages: [],
-              selectedMessages: [],
-              searchCriteria: null, refineCriteria: null,
-              order: initialMessageState.order,
-              isLoading: false,
-              error: null,
-              pagination: { ...initialMessageState.pagination },
-            },
+            'thread-100': threadTab('thread-100'),
           },
         });
 
@@ -5398,10 +5247,10 @@ describe('messageSlice', () => {
 
         const state = testStore.getState().message;
         // Main messages should have the deleted message removed
-        expect(state.messages).toHaveLength(1);
-        expect(state.messages[0].id).toBe('main-2');
+        expect(state.rows).toHaveLength(1);
+        expect(state.rows[0].id).toBe('main-2');
         // Thread tab should be untouched
-        expect(state.threadTabs['thread-1'].messages).toHaveLength(3);
+        expect(state.threadTabs['thread-1'].rows).toHaveLength(3);
       });
     });
   });
@@ -5443,20 +5292,13 @@ describe('messageSlice', () => {
       // an active refine that filtered it out). Ensures the Phase 1
       // visibility check prevents the "highlight set but nothing scrolls"
       // dead-click bug.
-      testStore.dispatch(setMessages([createMockMessage({ id: 'visible' })]));
-      testStore.dispatch(
-        setFilteredMessages([createMockMessage({ id: 'visible' })]),
-      );
-      // Now add a message to raw `messages` only
       testStore.dispatch(
         setMessages([
           createMockMessage({ id: 'visible' }),
           createMockMessage({ id: 'hidden-by-refine' }),
         ]),
       );
-      testStore.dispatch(
-        setFilteredMessages([createMockMessage({ id: 'visible' })]),
-      );
+      testStore.dispatch(keepOnly(['visible']));
 
       (showToast as unknown as Mock).mockClear();
       await testStore.dispatch(navigateToMessage({ messageId: 'hidden-by-refine' }));
@@ -5540,9 +5382,10 @@ describe('messageSlice', () => {
               [opts.activeTab]: {
                 threadId: opts.activeTab,
                 threadName: 'thread',
-                messages: [],
-                filteredMessages: [],
-                selectedMessages: [],
+                rows: [],
+                filteredRows: [],
+                selectedIds: [],
+                contentMatchIds: null,
                 searchCriteria: {
                   searchAfterDate: null,
                   searchBeforeDate: null,
@@ -5800,19 +5643,7 @@ describe('messageSlice', () => {
         ...initialMessageState,
         activeTab: 'thread-cap',
         threadTabs: {
-          'thread-cap': {
-            threadId: 'thread-cap',
-            threadName: 'Cap-shift thread',
-            messages: [],
-            filteredMessages: [],
-            selectedMessages: [],
-            searchCriteria: null,
-            refineCriteria: null,
-            order: initialMessageState.order,
-            isLoading: false,
-            error: null,
-            pagination: { ...initialMessageState.pagination },
-          },
+          'thread-cap': threadTab('thread-cap', [], { threadName: 'Cap-shift thread' }),
         },
       });
 
@@ -5887,7 +5718,7 @@ describe('messageSlice', () => {
           } as any,
           message: {
             ...initialMessageState,
-            messages,
+            ...loaded(messages),
             searchCriteria,
             pagination: {
               ...initialMessageState.pagination,
@@ -5923,8 +5754,10 @@ describe('messageSlice', () => {
 
       expect(result.type).toBe('message/loadAllSearchResults/fulfilled');
       // The 5-message short page in the MIDDLE must not have terminated the
-      // walk — the exact #208 bug. All three pages aggregate to 55.
-      expect(result.payload.messages).toHaveLength(55);
+      // walk, the exact #208 bug. All three pages aggregate to 55 (the
+      // rows were appended live; the payload carries only the total).
+      expect(testStore.getState().message.rows).toHaveLength(55);
+      expect(result.payload.totalResults).toBe(55);
     });
 
     it('freezes the live progress total at the initial total as cap-shift windows shrink (#221)', async () => {
@@ -5961,7 +5794,7 @@ describe('messageSlice', () => {
       );
 
       expect(result.type).toBe('message/loadAllSearchResults/fulfilled');
-      expect(result.payload.messages).toHaveLength(100); // 25 initial + 75 fresh
+      expect(testStore.getState().message.rows).toHaveLength(100); // 25 initial + 75 fresh
 
       // Every live progress reading must keep the total frozen at 100 (never
       // the shrinking 75/50/25) so "loaded" never overtakes "total" and the
@@ -6105,10 +5938,8 @@ describe('messageSlice', () => {
         expect(calledMessages.every((m: Message) => m.reactions === undefined)).toBe(true);
 
         const state = testStore.getState().message;
-        expect(state.messages).toHaveLength(3);
-        expect(state.messages.every((m) =>
-          Array.isArray(m.reactions) && m.reactions!.length > 0
-        )).toBe(true);
+        expect(state.rows).toHaveLength(3);
+        expect(state.rows.every((r) => r.hasReactions && (cached(r.id).reactions?.length ?? 0) > 0)).toBe(true);
       });
 
       it('does not enrich when REACTIONS_ENABLED is false (helper short-circuits internally)', async () => {
@@ -6131,8 +5962,8 @@ describe('messageSlice', () => {
         );
 
         const state = testStore.getState().message;
-        expect(state.messages).toHaveLength(3);
-        expect(state.messages.every((m) => m.reactions === undefined)).toBe(true);
+        expect(state.rows).toHaveLength(3);
+        expect(state.rows.every((r) => !r.hasReactions && cached(r.id).reactions === undefined)).toBe(true);
       });
     });
 
@@ -6167,10 +5998,8 @@ describe('messageSlice', () => {
 
         expect(reactionEnrichmentService.enrichMessages).toHaveBeenCalledOnce();
         const state = testStore.getState().message;
-        expect(state.messages).toHaveLength(25);
-        expect(state.messages.every((m) =>
-          Array.isArray(m.reactions) && m.reactions!.length > 0
-        )).toBe(true);
+        expect(state.rows).toHaveLength(25);
+        expect(state.rows.every((r) => r.hasReactions && (cached(r.id).reactions?.length ?? 0) > 0)).toBe(true);
       });
 
       it('does not enrich when REACTIONS_ENABLED is false (helper short-circuits internally)', async () => {
@@ -6189,8 +6018,8 @@ describe('messageSlice', () => {
         );
 
         const state = testStore.getState().message;
-        expect(state.messages).toHaveLength(25);
-        expect(state.messages.every((m) => m.reactions === undefined)).toBe(true);
+        expect(state.rows).toHaveLength(25);
+        expect(state.rows.every((r) => !r.hasReactions && cached(r.id).reactions === undefined)).toBe(true);
       });
     });
 
@@ -6229,10 +6058,8 @@ describe('messageSlice', () => {
 
         expect(reactionEnrichmentService.enrichMessages).toHaveBeenCalled();
         const state = testStore.getState().message;
-        expect(state.messages).toHaveLength(25);
-        expect(state.messages.every((m) =>
-          Array.isArray(m.reactions) && m.reactions!.length > 0
-        )).toBe(true);
+        expect(state.rows).toHaveLength(25);
+        expect(state.rows.every((r) => r.hasReactions && (cached(r.id).reactions?.length ?? 0) > 0)).toBe(true);
       });
 
       it('does not enrich when REACTIONS_ENABLED is false (helper short-circuits internally)', async () => {
@@ -6254,8 +6081,8 @@ describe('messageSlice', () => {
         );
 
         const state = testStore.getState().message;
-        expect(state.messages).toHaveLength(25);
-        expect(state.messages.every((m) => m.reactions === undefined)).toBe(true);
+        expect(state.rows).toHaveLength(25);
+        expect(state.rows.every((r) => !r.hasReactions && cached(r.id).reactions === undefined)).toBe(true);
       });
     });
 
@@ -6264,19 +6091,7 @@ describe('messageSlice', () => {
         ...initialMessageState,
         activeTab: 'thread-1',
         threadTabs: {
-          'thread-1': {
-            threadId: 'thread-1',
-            threadName: 'Thread',
-            messages: [],
-            filteredMessages: [],
-            selectedMessages: [],
-            searchCriteria: null,
-            refineCriteria: null,
-            order: initialMessageState.order,
-            isLoading: false,
-            error: null,
-            pagination: { ...initialMessageState.pagination },
-          },
+          'thread-1': threadTab('thread-1'),
         },
       });
 
@@ -6305,10 +6120,8 @@ describe('messageSlice', () => {
 
         expect(reactionEnrichmentService.enrichMessages).toHaveBeenCalled();
         const tab = testStore.getState().message.threadTabs['thread-1'];
-        expect(tab.messages).toHaveLength(5);
-        expect(tab.messages.every((m) =>
-          Array.isArray(m.reactions) && m.reactions!.length > 0
-        )).toBe(true);
+        expect(tab.rows).toHaveLength(5);
+        expect(tab.rows.every((r) => r.hasReactions && (cached(r.id, 'thread-1').reactions?.length ?? 0) > 0)).toBe(true);
       });
 
       it('does not enrich when REACTIONS_ENABLED is false (helper short-circuits internally)', async () => {
@@ -6335,8 +6148,8 @@ describe('messageSlice', () => {
         );
 
         const tab = testStore.getState().message.threadTabs['thread-1'];
-        expect(tab.messages).toHaveLength(5);
-        expect(tab.messages.every((m) => m.reactions === undefined)).toBe(true);
+        expect(tab.rows).toHaveLength(5);
+        expect(tab.rows.every((r) => !r.hasReactions && cached(r.id, 'thread-1').reactions === undefined)).toBe(true);
       });
     });
 
@@ -6506,11 +6319,11 @@ describe('messageSlice', () => {
       it('cancelLoadAll keeps state.messages intact and state.error null', () => {
         const seeded = {
           ...initialMessageState,
-          messages: createMockMessages(5),
+          ...loaded(createMockMessages(5)),
           pagination: { ...initialMessageState.pagination, isLoadingAll: true },
         };
         const next = messageReducer(seeded, cancelLoadAll());
-        expect(next.messages).toHaveLength(5);
+        expect(next.rows).toHaveLength(5);
         expect(next.pagination.isLoadingAll).toBe(false);
         expect(next.pagination.loadAllProgress).toBeNull();
         expect(next.error).toBeNull();
@@ -6595,12 +6408,12 @@ describe('messageSlice', () => {
       it('dismissLoadAllCancelled clears the cancelled flag without touching anything else', () => {
         const seeded = {
           ...initialMessageState,
-          messages: createMockMessages(3),
+          ...loaded(createMockMessages(3)),
           pagination: { ...initialMessageState.pagination, loadAllCancelled: true },
         };
         const next = messageReducer(seeded, dismissLoadAllCancelled());
         expect(next.pagination.loadAllCancelled).toBe(false);
-        expect(next.messages).toHaveLength(3);
+        expect(next.rows).toHaveLength(3);
       });
     });
 
@@ -6630,7 +6443,7 @@ describe('messageSlice', () => {
             // Capture state's message count BEFORE returning the next page.
             // After page 1 the snapshot should already be 25 — proving
             // appendLoadAllPage ran live, not at fulfilled.
-            snapshots.push(testStore.getState().message.messages.length);
+            snapshots.push(testStore.getState().message.rows.length);
             call += 1;
             if (call === 1) {
               return { success: true, data: { messages: [page1], total_results: 50 } };
@@ -6646,7 +6459,7 @@ describe('messageSlice', () => {
 
         expect(snapshots[0]).toBe(0);
         expect(snapshots[1]).toBe(25);
-        expect(testStore.getState().message.messages).toHaveLength(50);
+        expect(testStore.getState().message.rows).toHaveLength(50);
       });
 
       // #263: each Load All page used to re-sort (and copy) the whole list;
@@ -6655,14 +6468,13 @@ describe('messageSlice', () => {
       it('appendLoadAllPage keeps DESC order across pages and shares filteredMessages when no refine is active', () => {
         const at = (id: string, secondsAgo: number) => createMockMessage({ id, timestamp: new Date(Date.UTC(2026, 0, 1) - secondsAgo * 1000).toISOString() });
         const appendLoadAllPage = (payload: { messages: Message[] }) => ({ type: 'message/appendLoadAllPage', payload });
-        // getSortedMessages is an identity mock in this file, so pages arrive
-        // already in page order (as Discord sends them); the out-of-order
-        // fallback is covered in messageOrdering.test.ts against the real sort.
+        // Pages arrive in page order (as Discord sends them) and merge at
+        // one end; the out-of-order fallback is covered in messageRows tests.
         let state = messageReducer(initialMessageState, appendLoadAllPage({ messages: [at('a', 0), at('b', 10)] }));
         state = messageReducer(state, appendLoadAllPage({ messages: [at('c', 20), at('d', 30)] }));
-        expect(state.messages.map((m) => m.id)).toEqual(['a', 'b', 'c', 'd']);
-        expect(state.filteredMessages).toBe(state.messages);
-        expect(state.messages[0]).toBe(state.messages[0]);
+        expect(state.rows.map((r) => r.id)).toEqual(['a', 'b', 'c', 'd']);
+        expect(state.filteredRows).toBe(state.rows);
+        expect(getCachedMessage(MAIN_CONTAINER, 'd')).toBeDefined();
       });
 
       it('appendLoadAllPage keeps ASC order when the feed is sorted oldest first', () => {
@@ -6671,7 +6483,7 @@ describe('messageSlice', () => {
         const asc = { ...initialMessageState, order: { ...initialMessageState.order, order: SortDirection.ASCENDING } };
         let state = messageReducer(asc, appendLoadAllPage({ messages: [at('b', 10), at('a', 0)] }));
         state = messageReducer(state, appendLoadAllPage({ messages: [at('d', 30), at('c', 20)] }));
-        expect(state.messages.map((m) => m.id)).toEqual(['d', 'c', 'b', 'a']);
+        expect(state.rows.map((r) => r.id)).toEqual(['d', 'c', 'b', 'a']);
       });
 
       it('dedupes overlapping ids across appendLoadAllPage dispatches', async () => {
@@ -6699,7 +6511,7 @@ describe('messageSlice', () => {
 
         await testStore.dispatch(loadAllSearchResults({ channelId: 'ch-1', token: 'token' }));
 
-        const ids = testStore.getState().message.messages.map((m) => m.id);
+        const ids = testStore.getState().message.rows.map((r) => r.id);
         // 25 from page1 + 23 net-new from page2 = 48 unique.
         expect(ids).toHaveLength(48);
         expect(new Set(ids).size).toBe(48);
@@ -6718,7 +6530,7 @@ describe('messageSlice', () => {
         let call = 0;
         vi.mocked(discordService.getDiscordService).mockReturnValue(makeSearchService({
           fetchMessageData: vi.fn().mockImplementation(async () => {
-            snapshots.push(testStore.getState().message.messages.length);
+            snapshots.push(testStore.getState().message.rows.length);
             call += 1;
             if (call === 1) return { success: true, data: batch1 };
             return { success: true, data: batch2 };
@@ -6729,14 +6541,14 @@ describe('messageSlice', () => {
 
         expect(snapshots[0]).toBe(0);
         expect(snapshots[1]).toBe(100);
-        expect(testStore.getState().message.messages).toHaveLength(150);
+        expect(testStore.getState().message.rows).toHaveLength(150);
       });
 
-      it('routes each appended page through getSortedMessages so the live view stays sorted', async () => {
-        const { getSortedMessages } = await import('discrub-core/discrub-utils');
+      it('sorts each appended page under the active order so the live view stays sorted', async () => {
         const testStore = await buildStoreWithReactions(false, seedSearchActive());
 
-        const page = searchShapedMessages(25);
+        // The page arrives oldest first; the rows must come out newest first.
+        const page = createMockMessages(25).map((m) => ({ ...m, reactions: undefined as any }));
         let call = 0;
         vi.mocked(discordService.getDiscordService).mockReturnValue(makeSearchService({
           fetchSearchMessageData: vi.fn().mockImplementation(async () => {
@@ -6746,14 +6558,12 @@ describe('messageSlice', () => {
           }),
         } as any));
 
-        vi.mocked(getSortedMessages).mockClear();
         await testStore.dispatch(loadAllSearchResults({ channelId: 'ch-1', token: 'token' }));
 
-        // appendLoadAllPage in the reducer + the fulfilled defensive sort
-        // = at least 2 calls under the active order.
-        const orderCalls = vi.mocked(getSortedMessages).mock.calls.map((c) => c[1]);
-        expect(orderCalls.length).toBeGreaterThanOrEqual(2);
-        expect(orderCalls.every((o) => o === 'desc')).toBe(true);
+        const rows = testStore.getState().message.rows;
+        expect(rows).toHaveLength(25);
+        expect(rows[0].id).toBe('msg-25');
+        for (let i = 1; i < rows.length; i++) expect(rows[i - 1].t).toBeGreaterThanOrEqual(rows[i].t);
       });
     });
   });
@@ -7013,7 +6823,7 @@ describe('messageSlice', () => {
         );
 
         expect(result.type).toBe('message/loadAllSearchResults/fulfilled');
-        expect(store.getState().message.messages).toHaveLength(25);
+        expect(store.getState().message.rows).toHaveLength(25);
 
         const retryEntries = vi.mocked(addStatusEntry).mock.calls.filter(
           ([p]) => p.level === 'warning' && /Search Load All: Discord answered HTTP 502, retrying/.test(p.message),
@@ -7094,7 +6904,7 @@ describe('messageSlice', () => {
         const result = await pendingDispatch;
 
         expect(result.type).toBe('message/loadAllSearchResults/rejected');
-        expect(store.getState().message.messages).toHaveLength(25);
+        expect(store.getState().message.rows).toHaveLength(25);
 
         const pauseEntries = vi.mocked(addStatusEntry).mock.calls.filter(
           ([p]) => p.level === 'warning' && /Search Load All: paused after 5 failed retries/.test(p.message),

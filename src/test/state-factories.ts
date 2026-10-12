@@ -1,4 +1,8 @@
 import type { RootState } from '@/app/store';
+import { mergeAuthors, toMessageRows } from '@features/message/messageRows';
+import { MAIN_CONTAINER, cacheMessages } from '@features/message/messageCache';
+import type { Message } from 'discrub-core/types/discord-types';
+import type { MessageState } from '@features/message/messageTypes';
 import { initialAuthState } from '@features/auth/authTypes';
 import { initialUserState } from '@features/user/userTypes';
 import { initialAppState } from '@features/app/appTypes';
@@ -88,11 +92,35 @@ export function createAuthenticatedState(overrides?: Partial<RootState>): RootSt
       channels: [channel],
       selectedChannel: channel,
     },
-    message: {
-      ...initialMessageState,
-      messages,
-      filteredMessages: messages,
-    },
+    message: messageStateWith(initialMessageState, messages),
     ...overrides,
   });
+}
+
+/**
+ * A message state holding `messages` as rows, with the objects seeded
+ * into the message cache so components hydrate them at once (2.2.5
+ * WP2b). `filtered` narrows the shown rows when given.
+ */
+export function messageStateWith(
+  base: MessageState,
+  messages: Message[],
+  options: { filtered?: Message[]; container?: string } = {},
+): MessageState {
+  const container = options.container ?? MAIN_CONTAINER;
+  cacheMessages(container, messages);
+  const rows = toMessageRows(messages);
+  return {
+    ...base,
+    rows,
+    filteredRows: options.filtered ? toMessageRows(options.filtered) : rows,
+    authors: mergeAuthors(base.authors ?? {}, messages),
+  };
+}
+
+/** Rows for `messages`, with the objects seeded into the message cache (2.2.5 WP2b). */
+export function rowsOf(messages: ReadonlyArray<Message | Record<string, unknown>>, container: string = MAIN_CONTAINER) {
+  const list = messages as Message[];
+  cacheMessages(container, list);
+  return toMessageRows(list);
 }

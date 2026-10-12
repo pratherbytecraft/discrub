@@ -6,8 +6,10 @@ import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-t
 import { SortDirection } from 'discrub-core/common-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
-  selectActiveFilteredMessages,
-  selectActiveSelectedMessages,
+  selectActiveFilteredRows,
+  selectActiveSelectedIds,
+  selectActiveContainerKey,
+  selectActiveHydrationSource,
   selectActiveOrder,
   selectActivePagination,
   selectActiveTab,
@@ -22,8 +24,8 @@ import {
   toggleThreadMessageSelection,
   selectAllThreadMessages,
   deselectAllThreadMessages,
-  setSelectedMessages,
-  setThreadSelectedMessages,
+  setSelectedIds,
+  setThreadSelectedIds,
   setThreadOrder,
   fetchMoreThreadMessages,
   applyUserFilter,
@@ -38,6 +40,8 @@ import UserProfileModal from '@/components/modals/UserProfileModal';
 import AttachmentModal from '@/components/modals/AttachmentModal';
 import ReactionModal from '@/components/modals/ReactionModal';
 import { chunkMessages, messageDayKey, type MessageChunk as MessageChunkType } from '@/utils/messageChunking';
+import type { MessageRow } from '@features/message/messageRows';
+import { getCachedMessage, useHydratedMessages } from '@features/message/messageCache';
 import { createChunkSizeEstimator } from '@/utils/chunkSizeEstimator';
 import MessageChunk from './MessageChunk';
 import MessageFeedToolbar from './MessageFeedToolbar';
@@ -77,9 +81,13 @@ const MessageFeed = ({
 }: MessageFeedProps) => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
-  const messages = useAppSelector(selectActiveFilteredMessages);
+  // 2.2.5 WP2b: the store holds rows; the objects behind the chunks on
+  // screen come from the message cache and the workspace store.
+  const messages = useAppSelector(selectActiveFilteredRows);
   perfCount('MessageFeed');
-  const selectedMessages = useAppSelector(selectActiveSelectedMessages);
+  const selectedIds = useAppSelector(selectActiveSelectedIds);
+  const containerKey = useAppSelector(selectActiveContainerKey);
+  const hydrationSource = useAppSelector(selectActiveHydrationSource);
   const order = useAppSelector(selectActiveOrder);
   const token = useAppSelector(selectAuthToken);
   const selectedChannel = useAppSelector(selectSelectedChannel);
@@ -101,19 +109,12 @@ const MessageFeed = ({
   const [reactionModalOpen, setReactionModalOpen] = useState(false);
   const [selectedMessageIdForModal, setSelectedMessageIdForModal] = useState<string | null>(null);
 
-  const selectedMessageForModal = selectedMessageIdForModal
-    ? messages.find((m) => m.id === selectedMessageIdForModal) ?? null
-    : null;
-
-  const selectedIdSet = useMemo(
-    () => new Set(selectedMessages.map((m) => m.id)),
-    [selectedMessages],
-  );
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   // 2.2.1 perf: hand the chunker the previous result so a chunk whose
   // messages did not change keeps its object, and its memoised row skips
   // the render when a page is appended or a delete batch lands elsewhere.
-  const prevChunksRef = useRef<MessageChunkType[]>([]);
+  const prevChunksRef = useRef<MessageChunkType<MessageRow>[]>([]);
   const chunks = useMemo(() => {
     const next = chunkMessages(messages, { splitByDay: groupByDay }, prevChunksRef.current);
     prevChunksRef.current = next;
@@ -125,8 +126,8 @@ const MessageFeed = ({
   // callback would re-render every visible chunk).
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
-  const selectedMessagesRef = useRef(selectedMessages);
-  selectedMessagesRef.current = selectedMessages;
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
 
   // Timeline: messages per local day, read by the day headings.
   const dayCounts = useMemo(() => {
@@ -137,10 +138,10 @@ const MessageFeed = ({
   }, [messages, groupByDay]);
   const selectedDayCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    if (!groupByDay) return counts;
-    for (const m of selectedMessages) { const k = messageDayKey(m); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
+    if (!groupByDay || selectedIdSet.size === 0) return counts;
+    for (const m of messages) { if (!selectedIdSet.has(m.id)) continue; const k = messageDayKey(m); if (k) counts.set(k, (counts.get(k) ?? 0) + 1); }
     return counts;
-  }, [selectedMessages, groupByDay]);
+  }, [messages, selectedIdSet, groupByDay]);
 
   // Virtualize over chunks, not raw messages. Chunks have wildly variable
   // heights (short content vs embeds + attachments + reactions), so
@@ -174,6 +175,41 @@ const MessageFeed = ({
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
   useEffect(() => { perfCount('virtualizer identity'); }, [rowVirtualizer]);
+
+  // The objects for the chunks on screen. Keyed on the first and last
+  // visible index so a scroll that shows the same chunks asks nothing.
+  const visibleRange = virtualItems.length > 0 ? `${virtualItems[0].index}:${virtualItems[virtualItems.length - 1].index}` : '';
+  const visibleIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of virtualItems) {
+      const chunk = chunks[item.index];
+      if (chunk) for (const row of chunk.messages) ids.push(row.id);
+    }
+    return ids;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chunks, visibleRange]);
+  const hydrated = useHydratedMessages(containerKey, hydrationSource, visibleIds);
+  // A chunk of objects per row chunk, kept while its objects are the same
+  // ones, so the memoised chunk row skips renders the way it did with
+  // message arrays.
+  const hydratedChunksRef = useRef(new WeakMap<MessageChunkType<MessageRow>, MessageChunkType>());
+  const hydrateChunk = (chunk: MessageChunkType<MessageRow>): MessageChunkType | null => {
+    const objects: Message[] = [];
+    for (const row of chunk.messages) {
+      const m = hydrated.get(row.id) ?? getCachedMessage(containerKey, row.id);
+      if (!m) return null;
+      objects.push(m);
+    }
+    const held = hydratedChunksRef.current.get(chunk);
+    if (held && held.messages.length === objects.length && held.messages.every((m, i) => m === objects[i])) return held;
+    const next: MessageChunkType = { key: chunk.key, authorId: chunk.authorId, firstTimestamp: chunk.firstTimestamp, messages: objects };
+    hydratedChunksRef.current.set(chunk, next);
+    return next;
+  };
+
+  const selectedMessageForModal = selectedMessageIdForModal
+    ? hydrated.get(selectedMessageIdForModal) ?? getCachedMessage(containerKey, selectedMessageIdForModal) ?? null
+    : null;
 
   // Scroll anchor (2.2.0 layouts foundation). A layout swap or a Focus
   // toggle remounts this component; remember the first visible message on
@@ -260,9 +296,9 @@ const MessageFeed = ({
         return;
       }
       if (activeTab) {
-        dispatch(toggleThreadMessageSelection({ threadId: activeTab, message }));
+        dispatch(toggleThreadMessageSelection({ threadId: activeTab, messageId: message.id }));
       } else {
-        dispatch(toggleMessageSelection(message));
+        dispatch(toggleMessageSelection(message.id));
       }
     },
     [activeTab, dispatch],
@@ -277,17 +313,17 @@ const MessageFeed = ({
   // range without losing the pre-drag selection. Ranges are computed over
   // the `messages` array (display order), not the DOM, so virtualization
   // unmounting offscreen rows doesn't matter.
-  const dragStateRef = useRef<{ anchorId: string; baseMessages: Message[] } | null>(null);
+  const dragStateRef = useRef<{ anchorId: string; baseIds: string[] } | null>(null);
   const dragMovedRef = useRef(false);
 
   const handleSelectDragStart = useCallback(
     (message: Message) => {
       dragStateRef.current = {
         anchorId: message.id,
-        // Full message objects, not just ids: refine can hide selected
-        // messages from `messages`, and the union below must carry them
-        // through instead of silently dropping them.
-        baseMessages: selectedMessagesRef.current,
+        // Every selected id, not just the visible ones: refine can hide
+        // selected messages from `messages`, and the union below must carry
+        // them through instead of silently dropping them.
+        baseIds: selectedIdsRef.current,
       };
       dragMovedRef.current = false;
     },
@@ -310,19 +346,19 @@ const MessageFeed = ({
       const b = messages.findIndex((m) => m.id === message.id);
       if (a === -1 || b === -1) return;
       const [from, to] = a <= b ? [a, b] : [b, a];
-      const baseIds = new Set(drag.baseMessages.map((m) => m.id));
-      const visibleIds = new Set(messages.map((m) => m.id));
+      const baseIds = new Set(drag.baseIds);
+      const shown = new Set(messages.map((m) => m.id));
       const union = [
         // Visible portion in display order: pre-drag selection ∪ range.
-        ...messages.filter((m, i) => baseIds.has(m.id) || (i >= from && i <= to)),
+        ...messages.filter((m, i) => baseIds.has(m.id) || (i >= from && i <= to)).map((m) => m.id),
         // Pre-drag selections hidden by an active refine filter survive.
-        ...drag.baseMessages.filter((m) => !visibleIds.has(m.id)),
+        ...drag.baseIds.filter((id) => !shown.has(id)),
       ];
       dragMovedRef.current = true;
       if (activeTab) {
-        dispatch(setThreadSelectedMessages({ threadId: activeTab, messages: union }));
+        dispatch(setThreadSelectedIds({ threadId: activeTab, ids: union }));
       } else {
-        dispatch(setSelectedMessages(union));
+        dispatch(setSelectedIds(union));
       }
     },
     [activeTab, dispatch],
@@ -367,7 +403,7 @@ const MessageFeed = ({
   }, []);
 
   const handleToggleSelectAll = useCallback(() => {
-    const allSelected = selectedMessages.length === messages.length && messages.length > 0;
+    const allSelected = selectedIds.length === messages.length && messages.length > 0;
     if (allSelected) {
       if (activeTab) dispatch(deselectAllThreadMessages(activeTab));
       else dispatch(deselectAllMessages());
@@ -375,19 +411,19 @@ const MessageFeed = ({
       if (activeTab) dispatch(selectAllThreadMessages(activeTab));
       else dispatch(selectAllMessages());
     }
-  }, [activeTab, dispatch, messages.length, selectedMessages.length]);
+  }, [activeTab, dispatch, messages.length, selectedIds.length]);
 
   // Select day ticks every shown message from that day; a second click unticks them.
   const handleToggleDay = useCallback((dayKey: string) => {
     const messages = messagesRef.current;
-    const selectedMessages = selectedMessagesRef.current;
+    const selected = selectedIdsRef.current;
     const dayIds = new Set(messages.filter((m) => messageDayKey(m) === dayKey).map((m) => m.id));
-    const allSelected = selectedMessages.filter((m) => dayIds.has(m.id)).length === dayIds.size;
+    const allSelected = selected.filter((id) => dayIds.has(id)).length === dayIds.size;
     const next = allSelected
-      ? selectedMessages.filter((m) => !dayIds.has(m.id))
-      : [...selectedMessages.filter((m) => !dayIds.has(m.id)), ...messages.filter((m) => dayIds.has(m.id))];
-    if (activeTab) dispatch(setThreadSelectedMessages({ threadId: activeTab, messages: next }));
-    else dispatch(setSelectedMessages(next));
+      ? selected.filter((id) => !dayIds.has(id))
+      : [...selected.filter((id) => !dayIds.has(id)), ...dayIds];
+    if (activeTab) dispatch(setThreadSelectedIds({ threadId: activeTab, ids: next }));
+    else dispatch(setSelectedIds(next));
   }, [activeTab, dispatch]);
 
   const handleToggleSort = useCallback(() => {
@@ -509,7 +545,7 @@ const MessageFeed = ({
       >
         <MessageFeedToolbar
           totalCount={messages.length}
-          selectedCount={selectedMessages.length}
+          selectedCount={selectedIds.length}
           order={order.order}
           onToggleSelectAll={handleToggleSelectAll}
           onToggleSort={handleToggleSort}
@@ -544,6 +580,7 @@ const MessageFeed = ({
             {virtualItems.map((virtualRow) => {
               const chunk = chunks[virtualRow.index];
               if (!chunk) return null;
+              const shown = hydrateChunk(chunk);
               const dayKey = groupByDay ? messageDayKey(chunk.messages[0]) : '';
               const prevChunk = virtualRow.index > 0 ? chunks[virtualRow.index - 1] : undefined;
               const startsDay = !!dayKey && (!prevChunk || messageDayKey(prevChunk.messages[0]) !== dayKey);
@@ -571,8 +608,9 @@ const MessageFeed = ({
                       onToggleDay={handleToggleDay}
                     />
                   )}
+                  {shown ? (
                   <MessageChunk
-                    chunk={chunk}
+                    chunk={shown}
                     selectedIds={selectedIdSet}
                     highlightedMessageId={highlightedMessageId}
                     formattingContext={formattingContext}
@@ -590,6 +628,15 @@ const MessageFeed = ({
                     onOpenReactions={handleOpenReactions}
                     onOpenThread={onOpenThread}
                   />
+                  ) : (
+                    <Box data-testid="message-chunk-pending" sx={{ display: 'flex', gap: 1.25, px: 1.25, py: 0.75, minHeight: 56 }}>
+                      <Skeleton variant="circular" width={40} height={40} />
+                      <Box sx={{ flex: 1 }}>
+                        <Skeleton variant="text" width={120} height={16} />
+                        <Skeleton variant="text" width="60%" height={14} />
+                      </Box>
+                    </Box>
+                  )}
                 </div>
               );
             })}

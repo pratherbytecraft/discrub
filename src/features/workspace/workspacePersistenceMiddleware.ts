@@ -9,6 +9,8 @@ import {
   bulkDeleteReactionsForEmoji,
   clearRefineCriteria,
   clearThreadRefineCriteria,
+  refineApplied,
+  threadRefineApplied,
   deleteAllAttachments,
   deleteAllReactions,
   deleteAttachment,
@@ -23,16 +25,15 @@ import {
   selectAllMessages,
   selectAllThreadMessages,
   setOrder,
-  setRefineCriteria,
   setSearchCriteria,
-  setSelectedMessages,
+  setSelectedIds,
   setThreadOrder,
-  setThreadRefineCriteria,
   setThreadSearchCriteria,
-  setThreadSelectedMessages,
+  setThreadSelectedIds,
   toggleMessageSelection,
   toggleThreadMessageSelection,
 } from '@features/message/messageSlice';
+import { MAIN_CONTAINER, getCachedMessage } from '@features/message/messageCache';
 import {
   conversationSeedFromState,
   forgetConversation,
@@ -86,15 +87,17 @@ export function editPatch(message: Message): RowPatch {
   return { id: message.id, patch };
 }
 
-const reactionPatches = (state: RootState, containerId: string | null, ids: Iterable<string>): RowPatch[] => {
-  const container = containerFor(state, containerId);
-  if (!container) return [];
-  const wanted = new Set(ids);
+/**
+ * The reactions the reducer just wrote, read from the message cache
+ * (2.2.5 WP2b: Redux holds rows). A message the cache evicted is skipped;
+ * the one a user just acted on is always there.
+ */
+const reactionPatches = (containerId: string | null, ids: Iterable<string>): RowPatch[] => {
+  const key = containerId ?? MAIN_CONTAINER;
   const patches: RowPatch[] = [];
-  for (const message of container.messages) {
-    if (!wanted.has(message.id)) continue;
-    patches.push({ id: message.id, patch: { reactions: message.reactions ?? [] } });
-    if (patches.length === wanted.size) break;
+  for (const id of ids) {
+    const message = getCachedMessage(key, id);
+    if (message) patches.push({ id, patch: { reactions: message.reactions ?? [] } });
   }
   return patches;
 };
@@ -114,7 +117,7 @@ function recordFromState(state: RootState, containerId: string | null, fields: S
     record.order = container.order;
   }
   if (fields.has('selection')) {
-    record.selectedIds = container.selectedMessages.map((m) => m.id);
+    record.selectedIds = container.selectedIds;
   }
   return record;
 }
@@ -220,7 +223,7 @@ listen({
     const containerId = activeContainerId(state);
     const cid = cidFor(state, containerId);
     const { messageId } = action.payload as { messageId: string };
-    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(state, containerId, [messageId]));
+    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(containerId, [messageId]));
   },
 });
 
@@ -230,7 +233,7 @@ listen({
     const state = listenerApi.getState();
     const containerId = activeContainerId(state);
     const cid = cidFor(state, containerId);
-    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(state, containerId, action.payload.processedMessageIds));
+    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(containerId, action.payload.processedMessageIds));
   },
 });
 
@@ -241,19 +244,19 @@ listen({
     const containerId = activeContainerId(state);
     const cid = cidFor(state, containerId);
     const ids = action.payload.successfulAdds.map((s) => s.messageId);
-    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(state, containerId, ids));
+    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(containerId, ids));
   },
 });
 
 listen({
-  matcher: isAnyOf(setRefineCriteria, clearRefineCriteria, setOrder, setSearchCriteria),
+  matcher: isAnyOf(refineApplied, clearRefineCriteria, setOrder, setSearchCriteria),
   effect: (_action, listenerApi) => {
     scheduleRecord(api(listenerApi), null, 'criteria');
   },
 });
 
 listen({
-  matcher: isAnyOf(setThreadRefineCriteria, clearThreadRefineCriteria, setThreadOrder, setThreadSearchCriteria),
+  matcher: isAnyOf(threadRefineApplied, clearThreadRefineCriteria, setThreadOrder, setThreadSearchCriteria),
   effect: (action, listenerApi) => {
     const payload = action.payload as string | { threadId: string };
     const threadId = typeof payload === 'string' ? payload : payload.threadId;
@@ -262,14 +265,14 @@ listen({
 });
 
 listen({
-  matcher: isAnyOf(toggleMessageSelection, selectAllMessages, deselectAllMessages, setSelectedMessages),
+  matcher: isAnyOf(toggleMessageSelection, selectAllMessages, deselectAllMessages, setSelectedIds),
   effect: (_action, listenerApi) => {
     scheduleRecord(api(listenerApi), null, 'selection');
   },
 });
 
 listen({
-  matcher: isAnyOf(toggleThreadMessageSelection, selectAllThreadMessages, deselectAllThreadMessages, setThreadSelectedMessages),
+  matcher: isAnyOf(toggleThreadMessageSelection, selectAllThreadMessages, deselectAllThreadMessages, setThreadSelectedIds),
   effect: (action, listenerApi) => {
     const payload = action.payload as string | { threadId: string };
     const threadId = typeof payload === 'string' ? payload : payload.threadId;

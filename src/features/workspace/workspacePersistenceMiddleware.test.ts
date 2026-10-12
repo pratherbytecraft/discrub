@@ -139,12 +139,12 @@ describe('workspacePersistenceMiddleware', () => {
   it('writes the selection only when the record exists', async () => {
     const store = makeStore();
     store.dispatch(setMessages([msg('1'), msg('2')]));
-    store.dispatch(toggleMessageSelection(msg('2')));
+    store.dispatch(toggleMessageSelection('2'));
     await flushPendingRecords(api(store));
     expect(await getConversation(DEFAULT_WORKSPACE_ID, CID)).toBeNull();
 
     await writePage(DEFAULT_WORKSPACE_ID, CID, [msg('1'), msg('2')], seed);
-    store.dispatch(toggleMessageSelection(msg('1')));
+    store.dispatch(toggleMessageSelection('1'));
     await flushPendingRecords(api(store));
     expect((await getConversation(DEFAULT_WORKSPACE_ID, CID))?.selectedIds).toEqual(['2', '1']);
   });

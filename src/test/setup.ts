@@ -9,6 +9,7 @@ import '../i18n';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll } from 'vitest';
 import { installChromeMocks, cleanupChromeMocks } from './chrome-mocks';
+import { clearMessageCache } from '@features/message/messageCache';
 import { server as mswServer } from './msw/server';
 import { webcrypto } from 'node:crypto';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
@@ -123,3 +124,6 @@ global.IntersectionObserver = class IntersectionObserver {
   }
   unobserve() {}
 } as any;
+
+// 2.2.5 WP2b: the message cache is module state; no test inherits another's objects.
+afterEach(() => { clearMessageCache(); });

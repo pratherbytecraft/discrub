@@ -231,7 +231,7 @@ describe('Bulk delete batching (#183)', () => {
     }).as('getMessages');
     cy.selectChannel('general');
     cy.window().should((win) => {
-      expect((win as any).__store__.getState().message.messages, 'seeded table loaded')
+      expect((win as any).__store__.getState().message.rows, 'seeded table loaded')
         .to.have.length(MESSAGE_COUNT);
     });
     // Zero the delete/search delays (DiscrubSetting enum keys) so the
@@ -274,9 +274,9 @@ describe('Bulk delete batching (#183)', () => {
       const msgs = (state.status.entries as { message: string }[]).map((e) => e.message);
       expect(msgs, 'completion status entry').to.include(`Deleted ${MESSAGE_COUNT} messages`);
       expect(deleteCount, 'one DELETE request per selected message').to.eq(MESSAGE_COUNT);
-      expect(state.message.messages, 'messages array drained').to.have.length(0);
-      expect(state.message.filteredMessages, 'filtered array drained').to.have.length(0);
-      expect(state.message.selectedMessages, 'selection drained').to.have.length(0);
+      expect(state.message.rows, 'rows drained').to.have.length(0);
+      expect(state.message.filteredRows, 'filtered rows drained').to.have.length(0);
+      expect(state.message.selectedIds, 'selection drained').to.have.length(0);
       expect(state.message.isDeleting, 'operation completed').to.eq(false);
     });
 

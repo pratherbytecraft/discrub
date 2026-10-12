@@ -239,7 +239,7 @@ describe('Search & Filters', () => {
           messages.some((m: string) => /^Search: Discord is still indexing, retrying in 1s \(attempt 1\/5\)/.test(m)),
         ).to.be.true;
         expect(store.getState().message.pagination.mode).to.equal('search');
-        expect(store.getState().message.messages.length).to.be.greaterThan(0);
+        expect(store.getState().message.rows.length).to.be.greaterThan(0);
       });
     });
 
@@ -370,7 +370,7 @@ describe('Search & Filters', () => {
       });
       cy.window().then((win) => {
         const store = (win as any).__store__;
-        expect(store.getState().message.messages.length).to.equal(30);
+        expect(store.getState().message.rows.length).to.equal(30);
         expect(store.getState().message.pagination.hasMore).to.be.false;
       });
     });
@@ -573,7 +573,7 @@ describe('Search & Filters', () => {
           messages.some((m: string) => /^Search: Discord is still indexing, retrying in 1s \(attempt 1\/5\)/.test(m)),
         ).to.be.true;
         expect(messages.some((m: string) => /fetchNextSearchPage: /.test(m))).to.be.false;
-        expect(store.getState().message.messages.length).to.equal(30);
+        expect(store.getState().message.rows.length).to.equal(30);
         expect(store.getState().message.pagination.hasMore).to.be.false;
       });
     });
@@ -604,7 +604,7 @@ describe('Search & Filters', () => {
         expect(failure, 'Load More failure entry').to.exist;
         expect(failure.level).to.equal('error');
         expect(failure.message).to.equal('message/fetchNextSearchPage: Failed to search messages (HTTP 403)');
-        expect(store.getState().message.messages.length).to.equal(25);
+        expect(store.getState().message.rows.length).to.equal(25);
         expect(store.getState().message.pagination.hasMore).to.be.true;
       });
       // A second attempt can follow the first refusal within a frame; wait
@@ -1443,34 +1443,30 @@ describe('Search & Filters', () => {
         expect(state.message.refineCriteria.searchMessageContents).to.deep.eq(['Hello']);
       });
 
-      // Append synthetic raw messages to state.messages — this is the same
-      // append flow that fetchMoreMessages.fulfilled performs. The reducer
-      // chain on setMessages applies the active refine automatically; only
-      // the matching synthetic message should be visible afterward.
+      // Append synthetic raw messages, the same append flow the loaded-more
+      // thunks perform (2.2.5 WP2b: appendLoadAllPage merges a page into
+      // the rows). The reducer applies the active refine automatically;
+      // only the matching synthetic message should be visible afterward.
       cy.window().then((win) => {
         const store = (win as any).__store__;
-        const current = store.getState().message.messages;
         store.dispatch({
-          type: 'message/setMessages',
-          payload: [
-            ...current,
+          type: 'message/appendLoadAllPage',
+          payload: { messages: [
             { id: 'extra-1', content: 'unrelated follow-up', timestamp: '2026-01-15T10:00:00.000Z', author: { id: 'x', username: 'x', global_name: 'X' }, type: 0, attachments: [], embeds: [], reactions: [], mentions: [], pinned: false, mention_everyone: false, edited_timestamp: null, tts: false, channel_id: '801000000000000001' },
             { id: 'extra-2', content: 'Hello fellow user', timestamp: '2026-01-15T11:00:00.000Z', author: { id: 'x', username: 'x', global_name: 'X' }, type: 0, attachments: [], embeds: [], reactions: [], mentions: [], pinned: false, mention_everyone: false, edited_timestamp: null, tts: false, channel_id: '801000000000000001' },
-          ],
+          ] },
         });
       });
 
-      // Wait for the re-derived filteredMessages to settle. The unrelated
+      // Wait for the re-derived filtered rows to settle. The unrelated
       // append should be filtered out; the Hello append should be visible.
       cy.window().should((win) => {
         const state = (win as any).__store__.getState();
-        // setMessages writes to messages but not filteredMessages — that's
-        // the existing reducer's behavior. Confirm raw count grew while
-        // refine lives on (test #115 is about the loaded-more thunks
-        // re-deriving; setMessages itself is unaffected since it's a
-        // hard reset action used after channel load).
-        expect(state.message.messages.length).to.be.greaterThan(2);
+        expect(state.message.rows.length).to.be.greaterThan(2);
         expect(state.message.refineCriteria).to.not.be.null;
+        const ids = state.message.filteredRows.map((r: any) => r.id);
+        expect(ids).to.include('extra-2');
+        expect(ids).to.not.include('extra-1');
       });
     });
 

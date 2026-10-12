@@ -75,7 +75,7 @@ describe('seeds', () => {
   it('describes an open thread tab', () => {
     const base = createBaseState();
     const state = createBaseState({
-      message: { ...base.message, threadTabs: { t1: { ...base.message, threadId: 't1', threadName: 'Plans', messages: [], filteredMessages: [], selectedMessages: [], searchCriteria: null, refineCriteria: null, order: base.message.order, isLoading: false, error: null, pagination: base.message.pagination } } },
+      message: { ...base.message, threadTabs: { t1: { ...base.message, threadId: 't1', threadName: 'Plans', rows: [], filteredRows: [], selectedIds: [], contentMatchIds: null, searchCriteria: null, refineCriteria: null, order: base.message.order, isLoading: false, error: null, pagination: base.message.pagination } } },
       guild: { ...base.guild, selectedGuild: { id: '42', name: 'Guild' } as never },
     });
     expect(threadSeedFromState(state, 't1')).toEqual({ kind: 'thread', guildId: '42', name: 'Plans' });

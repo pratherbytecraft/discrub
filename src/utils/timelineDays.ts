@@ -1,5 +1,8 @@
 import type { Message } from 'discrub-core/types/discord-types';
 import { messageDayKey } from './messageChunking';
+
+/** A message or a message row (2.2.5 WP2b): the fold reads the id and the timestamp. */
+export type TimelineMessage = Pick<Message, 'id' | 'timestamp'>;
 import { extendedRange, removedFrom } from './listExtension';
 
 const DAY_MS = 86400000;
@@ -46,9 +49,9 @@ export const addDays = (key: string, n: number): string => { const d = startOfDa
  * Messages without a readable timestamp are left out of all of them.
  */
 type Newest = { id: string; ts: number };
-interface DayFold { messages: Message[]; dayCounts: Map<string, number>; newestByDay: Map<string, Newest>; total: number }
+interface DayFold { messages: TimelineMessage[]; dayCounts: Map<string, number>; newestByDay: Map<string, Newest>; total: number }
 
-const foldMessages = (fold: DayFold, messages: Message[], from: number, to: number): void => {
+const foldMessages = (fold: DayFold, messages: TimelineMessage[], from: number, to: number): void => {
   for (let i = from; i < to; i++) {
     const m = messages[i];
     const key = messageDayKey(m);
@@ -68,7 +71,7 @@ const foldMessages = (fold: DayFold, messages: Message[], from: number, to: numb
  * a copy of the last day maps instead of walking the whole list again.
  */
 let lastFold: DayFold | null = null;
-const foldFor = (messages: Message[]): DayFold => {
+const foldFor = (messages: TimelineMessage[]): DayFold => {
   const prev = lastFold;
   const ext = prev ? extendedRange(prev.messages, messages) : null;
   if (prev && ext) {
@@ -101,7 +104,7 @@ const foldFor = (messages: Message[]): DayFold => {
   return fold;
 };
 
-export const buildTimeline = (messages: Message[]): TimelineModel => {
+export const buildTimeline = (messages: TimelineMessage[]): TimelineModel => {
   const { dayCounts, newestByDay, total } = foldFor(messages);
   let firstDay = ''; let lastDay = '';
   for (const key of dayCounts.keys()) {

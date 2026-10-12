@@ -1,3 +1,4 @@
+import { messageStateWith, rowsOf } from '@/test/state-factories';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { renderWithProviders as render } from '../../test/test-utils';
@@ -32,7 +33,8 @@ describe('MessageActions', () => {
         preloadedState: {
           message: {
             ...initialMessageState,
-            selectedMessages: [createMockMessage({ id: 'a' }), createMockMessage({ id: 'b' })],
+            ...messageStateWith(initialMessageState, [createMockMessage({ id: 'a' }), createMockMessage({ id: 'b' })]),
+            selectedIds: ['a', 'b'],
           },
         } as any,
       });
@@ -45,19 +47,17 @@ describe('MessageActions', () => {
         preloadedState: {
           message: {
             ...initialMessageState,
-            selectedMessages: [createMockMessage({ id: 'main-1' })],
+            ...messageStateWith(initialMessageState, [createMockMessage({ id: 'main-1' })]),
+            selectedIds: ['main-1'],
             activeTab: 'thread-1',
             threadTabs: {
               'thread-1': {
                 threadId: 'thread-1',
                 threadName: 'Thread 1',
-                messages: [],
-                filteredMessages: [],
-                selectedMessages: [
-                  createMockMessage({ id: 't-1' }),
-                  createMockMessage({ id: 't-2' }),
-                  createMockMessage({ id: 't-3' }),
-                ],
+                rows: rowsOf([createMockMessage({ id: 't-1' }), createMockMessage({ id: 't-2' }), createMockMessage({ id: 't-3' })], 'thread-1'),
+                filteredRows: rowsOf([createMockMessage({ id: 't-1' }), createMockMessage({ id: 't-2' }), createMockMessage({ id: 't-3' })], 'thread-1'),
+                selectedIds: ['t-1', 't-2', 't-3'],
+                contentMatchIds: null,
                 searchCriteria: null,
                 refineCriteria: null,
                 order: initialMessageState.order,

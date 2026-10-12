@@ -2,22 +2,34 @@ import type { Message } from 'discrub-core/types/discord-types';
 import { extendedRange } from './listExtension';
 
 /**
+ * What the chunker reads: a Discord message or a message row (2.2.5
+ * WP2b). A row carries `authorId`, a message carries `author`.
+ */
+export interface Chunkable {
+  id: string;
+  timestamp: string;
+  type: number;
+  authorId?: string;
+  author?: { id: string } | null;
+}
+
+/**
  * Discord's heuristic for visually grouping consecutive same-author messages
  * into a single chunk. Matches the export service's constant so that the
  * live feed and exported output render with the same grouping.
  */
 export const CHUNK_WINDOW_MS = 7 * 60 * 1000;
 
-export interface MessageChunk {
+export interface MessageChunk<T extends Chunkable = Message> {
   /** Stable key derived from the first message's id. */
   key: string;
   authorId: string | null;
   /** Timestamp of the chunk's first message (used for the header label). */
   firstTimestamp: string;
-  messages: Message[];
+  messages: T[];
 }
 
-const getAuthorId = (msg: Message): string | null => msg.author?.id ?? null;
+const getAuthorId = (msg: Chunkable): string | null => msg.author?.id ?? msg.authorId ?? null;
 
 /**
  * Two adjacent messages are groupable if:
@@ -29,7 +41,7 @@ const getAuthorId = (msg: Message): string | null => msg.author?.id ?? null;
  *    absolute delta so sort direction (newest-first vs oldest-first) doesn't
  *    flip the comparison
  */
-const canGroup = (a: Message, b: Message): boolean => {
+const canGroup = (a: Chunkable, b: Chunkable): boolean => {
   const aId = getAuthorId(a);
   const bId = getAuthorId(b);
   if (!aId || !bId || aId !== bId) return false;
@@ -80,18 +92,18 @@ export const messageDayKey = (message: Pick<Message, 'timestamp'>): string => {
  * same object, so a memoised chunk row skips its render when a page is
  * appended or a batch of deletes lands elsewhere in the list.
  */
-export const chunkMessages = (
-  messages: Message[],
+export const chunkMessages = <T extends Chunkable>(
+  messages: T[],
   opts: { splitByDay?: boolean } = {},
-  prev?: MessageChunk[],
-): MessageChunk[] => {
+  prev?: MessageChunk<T>[],
+): MessageChunk<T>[] => {
   if (messages.length === 0) return [];
 
   // A page appended at one end: keep every previous chunk that cannot
   // have changed and chunk only the end chunk plus the new messages.
-  const ext = prev ? extendedRange(sourceOf.get(prev), messages) : null;
+  const ext = prev ? extendedRange(sourceFor<T>(prev), messages) : null;
   if (ext && prev && prev.length > 0) {
-    let result: MessageChunk[];
+    let result: MessageChunk<T>[];
     if (ext.at === 'tail') {
       const lastChunk = prev[prev.length - 1];
       const start = ext.from - lastChunk.messages.length;
@@ -107,7 +119,7 @@ export const chunkMessages = (
 
   // A change in the middle (2.2.2 perf, a delete flush): keep the chunks on
   // both sides of it and chunk only the stretch between them.
-  const src = prev ? sourceOf.get(prev) : undefined;
+  const src = prev ? sourceFor<T>(prev) : undefined;
   if (src && prev && prev.length > 0) {
     const spliced = rechunkChangedStretch(prev, src, messages, opts);
     if (spliced) {
@@ -129,12 +141,12 @@ export const chunkMessages = (
  * with the stretch because its neighbour may have changed. Returns null
  * when nothing can be kept, and the caller chunks the whole list.
  */
-const rechunkChangedStretch = (
-  prev: MessageChunk[],
-  src: Message[],
-  messages: Message[],
+const rechunkChangedStretch = <T extends Chunkable>(
+  prev: MessageChunk<T>[],
+  src: T[],
+  messages: T[],
   opts: { splitByDay?: boolean },
-): MessageChunk[] | null => {
+): MessageChunk<T>[] | null => {
   const shorter = Math.min(src.length, messages.length);
   let lead = 0;
   while (lead < shorter && src[lead] === messages[lead]) lead++;
@@ -174,17 +186,18 @@ const rechunkChangedStretch = (
 };
 
 /** The list each chunk array was built from, so the next call can tell an appended page apart. */
-const sourceOf = new WeakMap<MessageChunk[], Message[]>();
+const sourceOf = new WeakMap<object, unknown[]>();
+const sourceFor = <T,>(chunks: MessageChunk<T & Chunkable>[]): T[] | undefined => sourceOf.get(chunks) as T[] | undefined;
 
-const chunkRange = (
-  messages: Message[],
+const chunkRange = <T extends Chunkable>(
+  messages: T[],
   from: number,
   to: number,
   opts: { splitByDay?: boolean },
-  prevByKey: Map<string, MessageChunk> | null,
-): MessageChunk[] => {
-  const chunks: MessageChunk[] = [];
-  let current: Message[] = [messages[from]];
+  prevByKey: Map<string, MessageChunk<T>> | null,
+): MessageChunk<T>[] => {
+  const chunks: MessageChunk<T>[] = [];
+  let current: T[] = [messages[from]];
   for (let i = from + 1; i < to; i++) {
     const last = current[current.length - 1];
     const next = messages[i];
@@ -199,13 +212,13 @@ const chunkRange = (
   return chunks;
 };
 
-const sameMessages = (a: Message[], b: Message[]): boolean => {
+const sameMessages = <T,>(a: T[], b: T[]): boolean => {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
 };
 
-const toChunk = (messages: Message[], prevByKey: Map<string, MessageChunk> | null): MessageChunk => {
+const toChunk = <T extends Chunkable>(messages: T[], prevByKey: Map<string, MessageChunk<T>> | null): MessageChunk<T> => {
   const first = messages[0];
   const reusable = prevByKey?.get(first.id);
   if (reusable && sameMessages(reusable.messages, messages)) return reusable;
