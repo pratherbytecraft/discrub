@@ -93,7 +93,7 @@ describe('<OperatorShell />', () => {
     renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
     expect(screen.getByTestId('operator-run-card')).toHaveAttribute('data-state', 'discordWait');
     expect(screen.getByTestId('operator-state')).toHaveTextContent('Waiting on Discord');
-    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent(/Discord asked for a wait, resumes in \d+ s/);
+    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent(/Resumes in \d+ s, Discord asked for a wait/);
     expect(screen.queryByTestId('operator-label')).toBeNull();
     expect(screen.queryByTestId('operator-retry-now')).toBeNull();
   });

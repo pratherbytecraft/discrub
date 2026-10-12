@@ -103,6 +103,7 @@ import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
 import { IsPinnedType } from 'discrub-core/discord-enum';
 import MessageFeed from '@components/message/MessageFeed';
+import RestBreakBanner from '@components/ui/RestBreakBanner';
 import MessageActions from '@containers/ServerView/MessageActions';
 import FilterModal from '@components/search/FilterModal';
 import { countActiveFilters, countTotalFilters } from 'discrub-core/filtering';
@@ -1233,6 +1234,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
       {!isForumChannel && isLoading && (
         <MessageTableSkeleton />
       )}
+
+      {/* A rest break says so above the messages, with the time left and Skip. */}
+      <RestBreakBanner />
 
       {/* Row 49: a failed Load All keeps the loaded rows on screen and says why here. */}
       {loadAllFailed && !error && (

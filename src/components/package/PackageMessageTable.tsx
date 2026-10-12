@@ -32,6 +32,7 @@ import {
   WarningAmber as WarningIcon,
 } from '@mui/icons-material';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { listHeight, rowShift, scaledScrollOptions } from '@/utils/scaledScroll';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   applyLocalMessageEdits,
@@ -458,7 +459,9 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 72,
     overscan: 12,
+    ...scaledScrollOptions,
   });
+  const shift = rowShift(rowVirtualizer);
 
   const handleEditSave = async (content: string) => {
     if (!token || !parsed) return;
@@ -684,7 +687,7 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
         }}
       >
         <Box
-          style={{ height: rowVirtualizer.getTotalSize() }}
+          style={{ height: listHeight(rowVirtualizer.getTotalSize()) }}
           sx={{
             position: 'relative',
             width: '100%',
@@ -697,7 +700,7 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
                 key={msg.id}
                 data-index={virtualRow.index}
                 ref={rowVirtualizer.measureElement}
-                style={{ transform: `translateY(${virtualRow.start}px)` }}
+                style={{ transform: `translateY(${virtualRow.start + shift}px)` }}
                 sx={{
                   position: 'absolute',
                   top: 0,

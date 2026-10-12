@@ -28,9 +28,9 @@ describe('PauseResumeControls', () => {
         },
       }),
     });
-    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent('Rest break, resumes in 9:32');
+    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent('Resumes in 9:32, rest break');
     act(() => { vi.advanceTimersByTime(2000); });
-    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent('Rest break, resumes in 9:30');
+    expect(screen.getByTestId('operation-state-headline')).toHaveTextContent('Resumes in 9:30, rest break');
     // Resume is what skips the break.
     expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
   });
@@ -196,7 +196,7 @@ describe('PauseResumeControls', () => {
       state.app = { ...state.app, discrubPaused: true, restBreakUntil: Date.now() + 271000 };
       renderWithProviders(<PauseResumeControls label="Exporting..." />, { preloadedState: state });
       expect(screen.getByTestId('operation-state')).toHaveAttribute('data-state', 'restBreak');
-      expect(screen.getByTestId('operation-state-headline').textContent).toMatch(/^Rest break, resumes in 4:3\d$/);
+      expect(screen.getByTestId('operation-state-headline').textContent).toMatch(/^Resumes in 4:3\d, rest break$/);
       expect(screen.getByText(/Paused for 10 minutes after 45 minutes of activity/)).toBeInTheDocument();
       expect(screen.queryByText('Exporting...')).not.toBeInTheDocument();
     });

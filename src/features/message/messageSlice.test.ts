@@ -14,6 +14,7 @@ import messageReducer, {
   setMessages,
   setSelectedIds,
   refineApplied,
+  clearRefineCriteria,
   threadRefineApplied,
   toggleMessageSelection,
   selectAllMessages,
@@ -291,6 +292,18 @@ describe('messageSlice', () => {
 
         const state = store.getState().message;
         expect(state.filteredRows).toEqual([]);
+      });
+
+      it('drops selected ids the refine hides', () => {
+        store.dispatch(setMessages(mockMessages));
+        store.dispatch(selectAllMessages());
+        expect(store.getState().message.selectedIds).toHaveLength(5);
+
+        store.dispatch(keepOnly(['msg-1', 'msg-2']));
+        expect([...store.getState().message.selectedIds].sort()).toEqual(['msg-1', 'msg-2']);
+
+        store.dispatch(clearRefineCriteria());
+        expect([...store.getState().message.selectedIds].sort()).toEqual(['msg-1', 'msg-2']);
       });
     });
 

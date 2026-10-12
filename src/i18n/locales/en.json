@@ -310,13 +310,13 @@
       "operation": "Operation"
     },
     "state": {
-      "restBreak": "Rest break, resumes in {{time}}",
+      "restBreak": "Resumes in {{time}}, rest break",
       "restBreakSentence": "Paused for {{minutes}} minutes after {{active}} minutes of activity. Resume skips the break.",
       "retrying": "Retrying in {{time}}, attempt {{attempt}} of {{max}}",
       "retryingSentence": "{{answer}}. Each retry waits twice as long, then {{name}} pauses for you.",
       "retryPaused": "Paused after {{max}} failed retries",
       "retryPausedSentence": "{{answer}}. Wait a bit, then Resume to continue from {{count}} loaded.",
-      "discordWait": "Discord asked for a wait, resumes in {{time}}",
+      "discordWait": "Resumes in {{time}}, Discord asked for a wait",
       "discordWaitSentence": "Discord asks for a wait every so often. {{name}} carries on by itself.",
       "storageFull": "Browser storage is full",
       "storageFullSentence": "paused at {{count}}"
@@ -834,7 +834,7 @@
     "scope_thread": "thread",
     "scope_channel": "channel",
     "scope_dm": "conversation",
-    "currentlyLoaded": "Currently loaded: <strong>{{count}}</strong> messages",
+    "currentlyLoaded": "Currently loaded: <strong>{{count, number}}</strong> messages",
     "willFiltered": "Loading all filtered messages will:",
     "will": "Loading all messages will:",
     "bulletBatches": "Fetch messages in batches of 100 with delays to avoid rate limiting",
@@ -1146,8 +1146,8 @@
   },
   "deleteModal": {
     "title": "Delete Messages",
-    "confirm_one": "Are you sure you want to delete {{count}} message?",
-    "confirm_other": "Are you sure you want to delete {{count}} messages?",
+    "confirm_one": "Are you sure you want to delete {{count, number}} message?",
+    "confirm_other": "Are you sure you want to delete {{count, number}} messages?",
     "cannotUndo": "This action cannot be undone.",
     "cancel": "Cancel",
     "delete": "Delete"
@@ -1966,6 +1966,11 @@
   "requestsRefused": {
     "message": "Discord stopped answering requests while your connection was up ({{count}} in a row). Stopped the operation to protect your account. Wait at least an hour before starting another one.",
     "toast": "Stopped: Discord is refusing requests from this account. Wait an hour before trying again."
+  },
+  "restBreakBanner": {
+    "title": "{{name}} is on a rest break, resumes in {{time}}",
+    "line": "Discrub pauses for {{minutes}} minutes after every {{active}} minutes of activity. Long runs send fewer requests per day.",
+    "skip": "Skip break"
   },
   "restBreak": {
     "started": "Rest break: paused for {{minutes}} minutes after {{active}} minutes of activity. Click Resume to skip it.",

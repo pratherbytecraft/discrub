@@ -310,13 +310,13 @@
       "operation": "Vorgang"
     },
     "state": {
-      "restBreak": "Pause, geht weiter in {{time}}",
+      "restBreak": "Geht weiter in {{time}}, Pause",
       "restBreakSentence": "Nach {{active}} Minuten Aktivität für {{minutes}} Minuten pausiert. Fortsetzen überspringt die Pause.",
       "retrying": "Neuer Versuch in {{time}}, Versuch {{attempt}} von {{max}}",
       "retryingSentence": "{{answer}}. Jeder Versuch wartet doppelt so lange, dann pausiert {{name}} für dich.",
       "retryPaused": "Nach {{max}} fehlgeschlagenen Versuchen pausiert",
       "retryPausedSentence": "{{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen.",
-      "discordWait": "Discord bittet um eine Pause, geht weiter in {{time}}",
+      "discordWait": "Geht weiter in {{time}}, Discord bittet um eine Pause",
       "discordWaitSentence": "Discord bittet ab und zu um eine Pause. {{name}} macht danach von selbst weiter.",
       "storageFull": "Der Browserspeicher ist voll",
       "storageFullSentence": "pausiert bei {{count}}"
@@ -834,7 +834,7 @@
     "scope_thread": "Thread",
     "scope_channel": "Kanal",
     "scope_dm": "Unterhaltung",
-    "currentlyLoaded": "Derzeit geladen: <strong>{{count}}</strong> Nachrichten",
+    "currentlyLoaded": "Derzeit geladen: <strong>{{count, number}}</strong> Nachrichten",
     "willFiltered": "Alle gefilterten Nachrichten zu laden wird:",
     "will": "Alle Nachrichten zu laden wird:",
     "bulletBatches": "Nachrichten in Paketen zu 100 mit Verzögerungen laden, um Rate-Limits zu vermeiden",
@@ -1146,8 +1146,8 @@
   },
   "deleteModal": {
     "title": "Nachrichten löschen",
-    "confirm_one": "Möchtest du wirklich {{count}} Nachricht löschen?",
-    "confirm_other": "Möchtest du wirklich {{count}} Nachrichten löschen?",
+    "confirm_one": "Möchtest du wirklich {{count, number}} Nachricht löschen?",
+    "confirm_other": "Möchtest du wirklich {{count, number}} Nachrichten löschen?",
     "cannotUndo": "Diese Aktion lässt sich nicht rückgängig machen.",
     "cancel": "Abbrechen",
     "delete": "Löschen"
@@ -1966,6 +1966,11 @@
   "requestsRefused": {
     "message": "Discord hat aufgehört, Anfragen zu beantworten, obwohl deine Verbindung stand ({{count}} in Folge). Der Vorgang wurde gestoppt, um dein Konto zu schützen. Warte mindestens eine Stunde, bevor du einen neuen startest.",
     "toast": "Gestoppt: Discord lehnt Anfragen von diesem Konto ab. Warte eine Stunde, bevor du es erneut versuchst."
+  },
+  "restBreakBanner": {
+    "title": "{{name}} macht eine Pause, geht weiter in {{time}}",
+    "line": "Discrub pausiert nach jeweils {{active}} Minuten Aktivität für {{minutes}} Minuten. Lange Läufe senden so weniger Anfragen pro Tag.",
+    "skip": "Pause überspringen"
   },
   "restBreak": {
     "started": "Ruhepause: nach {{active}} Minuten Aktivität für {{minutes}} Minuten pausiert. Klicke auf Fortsetzen, um sie zu überspringen.",

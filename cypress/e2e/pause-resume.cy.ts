@@ -47,7 +47,7 @@ describe('Pause/Resume Controls', () => {
         store.dispatch({ type: 'app/setRestBreakUntil', payload: Date.now() + 10 * 60 * 1000 });
         store.dispatch({ type: 'app/setDiscrubPaused', payload: true });
       });
-      cy.get('[data-testid="operation-state-headline"]').should('be.visible').and('contain', 'Rest break, resumes in 9:5');
+      cy.get('[data-testid="operation-state-headline"]').should('be.visible').and('contain', 'Resumes in 9:5');
       cy.get('[aria-label="Resume"]').should('be.visible').click();
       cy.window().its('__store__').invoke('getState').its('app.discrubPaused').should('eq', false);
       // The hook notices the resume on its next tick, clears the marker, and logs the skip.
@@ -219,10 +219,15 @@ describe('Pause/Resume Controls', () => {
         (win as any).__store__.dispatch({ type: 'app/setDiscrubPaused', payload: true });
       });
       cy.get('[data-testid="operation-state"]').should('have.attr', 'data-state', 'restBreak');
-      cy.get('[data-testid="operation-state-headline"]').invoke('text').should('match', /^Rest break, resumes in 4:\d\d$/);
+      cy.get('[data-testid="operation-state-headline"]').invoke('text').should('match', /^Resumes in 4:\d\d, rest break$/);
       cy.contains('Resume skips the break').should('be.visible');
       cy.get('[aria-label="Resume"]').should('be.visible');
       cy.get('[aria-label="Stop"]').should('be.visible');
+      // The main area says so too, and Skip break ends the hold.
+      cy.get('[data-testid="rest-break-banner"]').should('be.visible').and('contain', 'Export is on a rest break, resumes in 4:');
+      cy.get('[data-testid="rest-break-skip"]').click();
+      cy.get('[data-testid="rest-break-banner"]').should('not.exist');
+      cy.window().its('__store__').invoke('getState').its('app.discrubPaused').should('eq', false);
     });
 
     it('shows a retry wait with the attempt, and Retry now ends the wait', () => {

@@ -44,6 +44,7 @@ import { chunkMessages, messageDayKey, type MessageChunk as MessageChunkType } f
 import type { MessageRow } from '@features/message/messageRows';
 import { getCachedMessage, useHydratedMessages } from '@features/message/messageCache';
 import { createChunkSizeEstimator } from '@/utils/chunkSizeEstimator';
+import { listHeight, rowShift, scaledScrollOptions } from '@/utils/scaledScroll';
 import MessageChunk from './MessageChunk';
 import MessageFeedToolbar from './MessageFeedToolbar';
 import MessageDayHeading from './MessageDayHeading';
@@ -186,8 +187,11 @@ const MessageFeed = ({
     estimateSize,
     overscan: 20,
     getItemKey: useCallback((index: number) => chunksRef.current[index]?.key ?? index, []),
+    // Past the browser's element height cap the list scrolls scaled (1M finding).
+    ...scaledScrollOptions,
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
+  const shift = rowShift(rowVirtualizer);
   useEffect(() => { perfCount('virtualizer identity'); }, [rowVirtualizer]);
 
   // The objects for the chunks on screen. Keyed on the first and last
@@ -599,7 +603,7 @@ const MessageFeed = ({
           <Box
             data-testid="message-feed-items"
             // The total height changes with every page; inline it adds no CSS rule each time.
-            style={{ height: rowVirtualizer.getTotalSize() }}
+            style={{ height: listHeight(rowVirtualizer.getTotalSize()) }}
             sx={{
               position: 'relative',
               width: '100%',
@@ -625,7 +629,7 @@ const MessageFeed = ({
                     top: 0,
                     left: 0,
                     width: '100%',
-                    transform: `translateY(${virtualRow.start}px)`,
+                    transform: `translateY(${virtualRow.start + shift}px)`,
                   }}
                 >
                   {startsDay && (

@@ -27,4 +27,7 @@ export const virtualizerMock = {
     scrollToOffset: vi.fn(),
     measureElement: vi.fn(),
   }),
+  // The scaled scroll helper reads these; the mock never scrolls.
+  observeElementOffset: vi.fn(),
+  elementScroll: vi.fn(),
 };

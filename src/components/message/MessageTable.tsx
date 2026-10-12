@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useRef } from 'react';
 import { Box, Checkbox, Typography, alpha, useTheme } from '@mui/material';
 import { ArrowDownward as DescIcon, ArrowUpward as AscIcon, AttachFile as AttachmentIcon } from '@mui/icons-material';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { listHeight, rowShift, scaledScrollOptions } from '@/utils/scaledScroll';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { SortDirection } from 'discrub-core/common-enum';
@@ -75,7 +76,8 @@ const MessageTable = () => {
   }, [activeTab, dispatch, order.order]);
 
   const parentRef = useRef<HTMLDivElement>(null);
-  const virtualizer = useVirtualizer({ count: messages.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW_HEIGHT, overscan: 30 });
+  const virtualizer = useVirtualizer({ count: messages.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW_HEIGHT, overscan: 30, ...scaledScrollOptions });
+  const shift = rowShift(virtualizer);
   // 2.2.5 WP2b: the rows on screen hydrate from the message cache and the
   // workspace store; a row still being read draws as a placeholder.
   const virtualItems = virtualizer.getVirtualItems();
@@ -104,13 +106,13 @@ const MessageTable = () => {
         </Box>
       </Box>
       <Box ref={parentRef} sx={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-testid="message-table-scroll">
-        <Box style={{ height: virtualizer.getTotalSize() }} sx={{ position: 'relative', minWidth: 640 }}>
+        <Box style={{ height: listHeight(virtualizer.getTotalSize()) }} sx={{ position: 'relative', minWidth: 640 }}>
           {virtualItems.map((row) => {
             const r = messages[row.index];
             const m = hydrated.get(r.id);
             if (!m) {
               return (
-                <Box key={r.id} role="row" data-testid="table-row-pending" data-message-id={r.id} sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: row.size, transform: `translateY(${row.start}px)`, display: 'grid', gridTemplateColumns: grid, alignItems: 'center', px: 1, opacity: 0.5 }}>
+                <Box key={r.id} role="row" data-testid="table-row-pending" data-message-id={r.id} sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: row.size, transform: `translateY(${row.start + shift}px)`, display: 'grid', gridTemplateColumns: grid, alignItems: 'center', px: 1, opacity: 0.5 }}>
                   <Box /><Box sx={{ height: 12, borderRadius: 1, bgcolor: alpha(theme.palette.text.primary, 0.08), mx: 1 }} /><Box sx={{ height: 12, borderRadius: 1, bgcolor: alpha(theme.palette.text.primary, 0.08), mx: 1 }} />
                 </Box>
               );
@@ -120,7 +122,7 @@ const MessageTable = () => {
                 key={m.id}
                 message={m}
                 isSelected={selectedIds.has(m.id)}
-                top={row.start}
+                top={row.start + shift}
                 height={row.size}
                 stamp={stamp}
                 standIn={standIn}

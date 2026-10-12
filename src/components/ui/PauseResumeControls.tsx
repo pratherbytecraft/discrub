@@ -44,7 +44,7 @@ const buildLabelPulse = (pulseColor: string, restColor: string) => keyframes`
  * "Rest break · resumes in m:ss", ticking once a second while an automatic
  * rest break (`useRestBreaks`) holds the operation. Empty otherwise.
  */
-const useCountdown = (until: number | null | undefined): string => {
+export const useCountdown = (until: number | null | undefined): string => {
   const restBreakUntil = until ?? null;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

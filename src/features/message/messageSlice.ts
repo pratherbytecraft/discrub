@@ -3332,6 +3332,20 @@ const refilter = (container: Container): void => {
   container.filteredRows = filtered === rows ? rows : sealed(filtered);
 };
 
+/**
+ * Drops selected ids the refine hides (W4 gate finding). A selection made
+ * before a refine otherwise stays whole under it, and Delete would act on
+ * messages the user can't see.
+ */
+const keepSelectionVisible = (container: Container): void => {
+  const selected = plain(container.selectedIds);
+  if (selected.length === 0 || container.filteredRows === container.rows) return;
+  const visible = new Set<string>();
+  for (const row of plain(container.filteredRows)) visible.add(row.id);
+  const kept = selected.filter((id) => visible.has(id));
+  if (kept.length !== selected.length) container.selectedIds = kept;
+};
+
 /** The content matches of a page under the container's refine, or null when the refine has no content part. */
 const contentMatchesOf = (container: Container, messages: Message[]): string[] | null => {
   const criteria = container.refineCriteria;
@@ -3636,6 +3650,7 @@ const messageSlice = createSlice({
       state.refineCriteria = action.payload.criteria;
       state.contentMatchIds = refineNeedsContent(action.payload.criteria) ? action.payload.contentMatchIds ?? [] : null;
       refilter(state);
+      keepSelectionVisible(state);
     },
     clearRefineCriteria: (state) => {
       state.refineCriteria = null;
@@ -3651,6 +3666,7 @@ const messageSlice = createSlice({
       tab.refineCriteria = action.payload.criteria;
       tab.contentMatchIds = refineNeedsContent(action.payload.criteria) ? action.payload.contentMatchIds ?? [] : null;
       refilter(tab);
+      keepSelectionVisible(tab);
     },
     clearThreadRefineCriteria: (state, action: PayloadAction<string>) => {
       const tab = state.threadTabs?.[action.payload];
