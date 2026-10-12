@@ -4,6 +4,7 @@ import { AlternateEmail as DmIcon, Inventory2Outlined as PackageIcon, Settings a
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setDialogOpen, setSidebarView } from '@features/app/appSlice';
+import { selectIsGuestMode } from '@features/auth/authSlice';
 import { selectGuilds, selectSelectedGuild, setSelectedGuild, fetchRoles, fetchCurrentMember } from '@features/guild/guildSlice';
 import { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
 import { clearMessages } from '@features/message/messageSlice';
@@ -51,6 +52,8 @@ const NativeRail = () => {
   const selectedGuild = useAppSelector(selectSelectedGuild);
   const sidebarView = useAppSelector(selectSidebarView);
   const token = useAppSelector(selectAuthToken);
+  // #275: a guest only has the package.
+  const isGuest = useAppSelector(selectIsGuestMode);
   const [view, setView] = [sidebarView, (v: 'server' | 'package') => dispatch(setSidebarView(v))];
 
   useLoadGuilds();
@@ -74,9 +77,11 @@ const NativeRail = () => {
       sx={{ width: RAIL_WIDTH, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, py: 1.5, overflow: 'hidden', backgroundColor: alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.25 : 0.06) }}
     >
       {/* DMs and the package sit above the servers and Settings below, all pinned. Only the servers scroll, so a long list never squeezes or hides the fixed buttons. */}
-      <RailButton label={t('sidebar.tabDms')} active={view === 'server' && !selectedGuild} onClick={() => { setView('server'); dispatch(setSelectedGuild(null)); }} testId="rail-dms" tour="dms-tab">
-        <DmIcon />
-      </RailButton>
+      {!isGuest && (
+        <RailButton label={t('sidebar.tabDms')} active={view === 'server' && !selectedGuild} onClick={() => { setView('server'); dispatch(setSelectedGuild(null)); }} testId="rail-dms" tour="dms-tab">
+          <DmIcon />
+        </RailButton>
+      )}
       <RailButton label={t('sidebar.tabPackage')} active={view === 'package'} onClick={() => setView('package')} testId="rail-package" tour="package-tab">
         <PackageIcon />
       </RailButton>
@@ -86,7 +91,7 @@ const NativeRail = () => {
         data-testid="rail-servers"
         sx={{ flex: 1, minHeight: 0, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, py: 0.25, overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
       >
-        {guilds.map((g) => (
+        {!isGuest && guilds.map((g) => (
           <RailButton key={g.id} label={g.name} active={view === 'server' && selectedGuild?.id === g.id} onClick={() => void pickGuild(g)} testId={`rail-guild-${g.id}`}>
             <GuildAvatar guild={g} size={48} />
           </RailButton>

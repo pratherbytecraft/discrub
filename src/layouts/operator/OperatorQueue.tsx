@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { Guild } from 'discrub-core/types/discord-types';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setSidebarView } from '@features/app/appSlice';
+import { selectIsGuestMode } from '@features/auth/authSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { fetchChannels, selectSelectedChannels, selectSelectedChannel, setSelectedChannel, deselectAllChannels } from '@features/channel/channelSlice';
 import { selectSelectedDms, selectSelectedDm, deselectAllDms } from '@features/dm/dmSlice';
@@ -36,6 +37,8 @@ const OperatorQueue = ({ marks, runProgress }: { marks: QueueMarks; runProgress?
   const openDm = useAppSelector(selectSelectedDm);
   const openChannel = useAppSelector(selectSelectedChannel);
   const sidebarView = useAppSelector(selectSidebarView);
+  // #275: a guest only has the package.
+  const isGuest = useAppSelector(selectIsGuestMode);
   const selectedChannels = useAppSelector(selectSelectedChannels);
   const selectedDms = useAppSelector(selectSelectedDms);
   const [filterText, setFilterText] = useState('');
@@ -74,8 +77,8 @@ const OperatorQueue = ({ marks, runProgress }: { marks: QueueMarks; runProgress?
     <Box data-testid="operator-queue" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: 'background.paper', borderRight: '1px solid', borderColor: 'divider' }}>
       <Box sx={{ p: 1.25, display: 'flex', flexDirection: 'column', gap: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
         <ToggleButtonGroup exclusive fullWidth size="small" value={segment} onChange={(_, v) => setSegment(v)} data-testid="operator-segment">
-          <ToggleButton value="servers" data-tour="servers-tab" data-testid="operator-seg-servers" sx={{ textTransform: 'none', py: 0.4 }}>{t('sidebar.tabServers')}</ToggleButton>
-          <ToggleButton value="dms" data-tour="dms-tab" data-testid="operator-seg-dms" sx={{ textTransform: 'none', py: 0.4 }}>{t('sidebar.tabDms')}</ToggleButton>
+          {!isGuest && <ToggleButton value="servers" data-tour="servers-tab" data-testid="operator-seg-servers" sx={{ textTransform: 'none', py: 0.4 }}>{t('sidebar.tabServers')}</ToggleButton>}
+          {!isGuest && <ToggleButton value="dms" data-tour="dms-tab" data-testid="operator-seg-dms" sx={{ textTransform: 'none', py: 0.4 }}>{t('sidebar.tabDms')}</ToggleButton>}
           <ToggleButton value="package" data-tour="package-tab" data-testid="operator-seg-package" sx={{ textTransform: 'none', py: 0.4 }}>{t('sidebar.tabPackage')}</ToggleButton>
         </ToggleButtonGroup>
         {segment === 'servers' && (

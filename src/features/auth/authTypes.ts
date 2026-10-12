@@ -12,6 +12,11 @@ export interface AuthState {
   isRestoring: boolean;
   /** Whether a token is currently persisted on this device (#249). */
   tokenRemembered: boolean;
+  /**
+   * #275: browsing a data package without signing in. The main layout
+   * shows with only the Package view; signing in turns it off.
+   */
+  guestMode: boolean;
 }
 
 export const initialAuthState: AuthState = {
@@ -22,6 +27,7 @@ export const initialAuthState: AuthState = {
   manuallyLoggedOut: false,
   isRestoring: false,
   tokenRemembered: false,
+  guestMode: false,
 };
 
 /**

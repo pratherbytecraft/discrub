@@ -69,7 +69,7 @@ describe('BulkExportDialog', () => {
     it('should render dialog with channel count chip', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Bulk Export Channels')).toBeInTheDocument();
       expect(screen.getByText('3 selected')).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe('BulkExportDialog', () => {
     it('should list all selected channels in the pill summary', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       // SelectedChannelsPill shows the first 3 names inline in the
       // collapsed state — enough to verify the pill rendered them.
@@ -88,7 +88,7 @@ describe('BulkExportDialog', () => {
     it('should show export button with channel count', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Export 3 Channels')).toBeInTheDocument();
     });
@@ -96,7 +96,7 @@ describe('BulkExportDialog', () => {
     it('should show three accordion sections', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Format & Output')).toBeInTheDocument();
       expect(screen.getByText('Content')).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('BulkExportDialog', () => {
     it('shows Narrow-messages section with Add filters button (#112)', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText(/Narrow messages/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Add filters' })).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe('BulkExportDialog', () => {
     it('confirm stays enabled even without filters (#112 — filters are optional for export)', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       // Empty filter state — export still runnable (unlike bulk purge
       // Messages mode, which requires a target author via filters).
@@ -125,7 +125,7 @@ describe('BulkExportDialog', () => {
     it('should show format options', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('HTML')).toBeInTheDocument();
       expect(screen.getByText('CSV')).toBeInTheDocument();
@@ -138,7 +138,7 @@ describe('BulkExportDialog', () => {
     it('should render dialog with DM count', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockDms} mode="dms" onClose={mockOnClose} />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Bulk Export DMs')).toBeInTheDocument();
       expect(screen.getByText('2 selected')).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe('BulkExportDialog', () => {
     it('should list DM recipient names', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockDms} mode="dms" onClose={mockOnClose} />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Alice')).toBeInTheDocument();
       expect(screen.getByText('Bob')).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe('BulkExportDialog', () => {
     it('should show export button with DM count', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockDms} mode="dms" onClose={mockOnClose} />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Export 2 DMs')).toBeInTheDocument();
     });
@@ -166,7 +166,7 @@ describe('BulkExportDialog', () => {
     it('should disable messages per page when Media Only format selected', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       const input = screen.getByLabelText('Messages per page');
       expect(input).not.toBeDisabled();
@@ -180,7 +180,7 @@ describe('BulkExportDialog', () => {
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
         {
           preloadedState: createBaseState({
-            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
             app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, kofiOverlayOpen: false, sidebarView: 'server' as const, task: { status: 'idle', message: '' }, settings: null },
           }),
         }
@@ -197,7 +197,7 @@ describe('BulkExportDialog', () => {
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
         {
           preloadedState: createBaseState({
-            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
             app: { discrubPaused: false, discrubCancelled: false, isMinimized: false, focusedView: false, kofiOverlayOpen: false, sidebarView: 'server' as const, task: { status: 'idle', message: '' }, settings: null },
           }),
         }
@@ -209,7 +209,7 @@ describe('BulkExportDialog', () => {
     it('channel pill stays above accordion', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       // SelectedChannelsPill (shared with BulkPurgeDialog) + format accordion both visible
       expect(screen.getByRole('button', { name: 'Selected channels' })).toBeInTheDocument();
@@ -223,7 +223,7 @@ describe('BulkExportDialog', () => {
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
         {
           preloadedState: createBaseState({
-            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
             app: {
               discrubPaused: false,
               discrubCancelled: false,
@@ -262,7 +262,7 @@ describe('BulkExportDialog', () => {
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
         {
           preloadedState: createBaseState({
-            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+            auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
             purge: {
               isPurging: true,
               purgeProgress: null,
@@ -279,7 +279,7 @@ describe('BulkExportDialog', () => {
     it('should call onClose when Cancel is clicked', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       fireEvent.click(screen.getByText('Cancel'));
       expect(mockOnClose).toHaveBeenCalled();
@@ -288,7 +288,7 @@ describe('BulkExportDialog', () => {
     it('should not render when open is false', () => {
       renderWithProviders(
         <BulkExportDialog open={false} channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.queryByText('Bulk Export Channels')).toBeNull();
     });
@@ -298,7 +298,7 @@ describe('BulkExportDialog', () => {
     it('should call onClose immediately when export is clicked (fire-and-forget)', () => {
       renderWithProviders(
         <BulkExportDialog open channels={mockChannels} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       fireEvent.click(screen.getByText('Export 3 Channels'));
       expect(mockOnClose).toHaveBeenCalled();
@@ -309,7 +309,7 @@ describe('BulkExportDialog', () => {
     it('should show singular form for 1 channel', () => {
       renderWithProviders(
         <BulkExportDialog open channels={[mockChannels[0]]} mode="channels" onClose={mockOnClose} guildId="g1" />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Export 1 Channel')).toBeInTheDocument();
       expect(screen.getByText('1 selected')).toBeInTheDocument();
@@ -318,14 +318,14 @@ describe('BulkExportDialog', () => {
     it('should show singular form for 1 DM', () => {
       renderWithProviders(
         <BulkExportDialog open channels={[mockDms[0]]} mode="dms" onClose={mockOnClose} />,
-        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false } }) }
+        { preloadedState: createBaseState({ auth: { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false } }) }
       );
       expect(screen.getByText('Export 1 DM')).toBeInTheDocument();
     });
   });
 
   describe('Selected channels pill', () => {
-    const authState = { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false };
+    const authState = { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false };
 
     it('shows the first 3 channels inline in the pill summary', () => {
       renderWithProviders(

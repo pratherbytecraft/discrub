@@ -104,7 +104,7 @@ const buildDecorator = (messages: any[]) => (Story: any) => {
       pagination: { lastMessageId: null, hasMore: false, totalCount: messages.length, isLoadingMore: false, isLoadingAll: false, loadAllProgress: null, mode: 'all' },
     },
     channel: { channels: [baseChannel], selectedChannel: baseChannel, isLoading: false, error: null },
-    auth: { token: 'fake-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+    auth: { token: 'fake-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
     app: { settings: defaultSettings, isPaused: false, isCancelled: false, currentTask: null },
   });
   return (

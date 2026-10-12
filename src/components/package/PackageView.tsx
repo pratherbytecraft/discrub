@@ -12,6 +12,8 @@ import {
   recheckLeftServers,
   resetPackage,
   resumeStoredPackage,
+  revalidatePackage,
+  selectPackageValidatedUserId,
   selectLeftServersRecheckStatus,
   selectChannelDeletedMessageCount,
   selectPackageChannel,
@@ -25,6 +27,7 @@ import {
 } from '@features/package/packageSlice';
 import { formatProvenanceTooltip } from '@features/package/packageStatusCopy';
 import { selectCurrentUser } from '@features/user/userSlice';
+import { selectIsGuestMode } from '@features/auth/authSlice';
 import { selectGuilds } from '@features/guild/guildSlice';
 import { getPackageChannelLabel, getPackageChannelCategory } from '@features/package/packageDisplayUtils';
 import ImportDialog from './ImportDialog';
@@ -59,23 +62,29 @@ const PackageView = () => {
     selectChannelGoneMessageCount(selectedChannelId ?? ''),
   );
   const currentUserId = useAppSelector(selectCurrentUser)?.id ?? null;
+  const isGuest = useAppSelector(selectIsGuestMode);
+  const validatedUserId = useAppSelector(selectPackageValidatedUserId);
+  const token = useAppSelector((s) => s.auth.token);
+  const recheckStatus = useAppSelector(selectLeftServersRecheckStatus);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Resume a previously-streamed package automatically (#162). The
-  const token = useAppSelector((s) => s.auth.token);
-  const recheckStatus = useAppSelector(selectLeftServersRecheckStatus);
   // thunk no-ops when nothing matches the authenticated user, so this
   // is safe to fire on every mount and on auth changes.
   useEffect(() => {
     if (parsed) return;
-    if (!currentUserId) return;
+    // #275: a guest resumes too, the thunk finds the stored owner itself.
+    if (!currentUserId && !isGuest) return;
     void dispatch(resumeStoredPackage());
-  }, [dispatch, parsed, currentUserId]);
+  }, [dispatch, parsed, currentUserId, isGuest]);
 
-  const leftGuilds = useMemo(() => {
-    if (!parsed || !liveGuilds) return [];
-    const live = new Set(liveGuilds.map((g) => g.id));
-    return parsed.guilds.filter((g) => !live.has(g.id));
+  // #275: a guest who signs in afterwards gets the package validated
+  // against the account, so delete and the token features switch on for
+  // the package owner.
+  useEffect(() => {
+    if (!parsed || validatedUserId === currentUserId) return;
+    void dispatch(revalidatePackage());
+  }, [dispatch, parsed, validatedUserId, currentUserId]);
 
   // #273: once per loaded package, ask Discord about every Left Servers
   // channel so a Server rejoined since the export moves back where it
@@ -85,7 +94,13 @@ const PackageView = () => {
     if (!parsed.channels.some((c) => c.isOrphan)) return;
     void dispatch(recheckLeftServers());
   }, [dispatch, parsed, token, recheckStatus]);
-  }, [parsed, liveGuilds]);
+
+  const leftGuilds = useMemo(() => {
+    // #275: a guest has no Server list, so there is nothing to compare.
+    if (!parsed || !liveGuilds || !token) return [];
+    const live = new Set(liveGuilds.map((g) => g.id));
+    return parsed.guilds.filter((g) => !live.has(g.id));
+  }, [parsed, liveGuilds, token]);
 
   const selectedChannel = useMemo(
     () => parsed?.channels.find((c) => c.id === selectedChannelId) ?? null,

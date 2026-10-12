@@ -24,10 +24,10 @@ import {
   selectAuthLoading,
   selectAuthRestoring,
   selectManuallyLoggedOut,
-  selectTokenRemembered,
-} from '@features/auth/authSlice';
+  selectTokenRemembered, enterGuestMode } from '@features/auth/authSlice';
 import { isExtensionMode, requestDiscordToken } from '@/extension/messaging';
 import ResetDiscrubButton from '@components/settings/ResetDiscrubButton';
+import { setSidebarView } from '@features/app/appSlice';
 import LanguageLink from '@components/ui/LanguageLink';
 import { isBleedingEdgeBuild, isHostedGateEnabled } from '@services/hostedGate';
 import {
@@ -499,6 +499,21 @@ const LandingPage = () => {
                 {t('landing.tryAutoAuthAgain')}
               </Button>
             )}
+
+            {/* #275: a data package can be read without a token. */}
+            <Button
+              fullWidth
+              variant="outlined"
+              size="large"
+              disabled={isLoading || !gateSatisfied}
+              data-testid="landing-browse-package"
+              onClick={() => {
+                dispatch(setSidebarView('package'));
+                dispatch(enterGuestMode());
+              }}
+            >
+              {t('landing.browsePackage')}
+            </Button>
 
             <Stack spacing={0.75} alignItems="center">
               <Link

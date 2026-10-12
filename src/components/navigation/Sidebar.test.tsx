@@ -58,7 +58,7 @@ describe('Sidebar', () => {
     it('should render Servers and DMs tabs', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByRole('tab', { name: 'Servers' })).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe('Sidebar', () => {
 
     it('opens on Package when the app is already in Package mode, and keeps that mode', () => {
       const base = createBaseState({
-        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
       });
       const { store } = renderWithProviders(<Sidebar />, { preloadedState: { ...base, app: { ...base.app, sidebarView: 'package' } } });
       expect(screen.getByRole('tab', { name: 'Package', selected: true })).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe('Sidebar', () => {
 
     it('opens on DMs when a DM is already open', () => {
       const base = createBaseState({
-        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
       });
       const dm = createMockChannel({ id: 'dm-1', type: 1, name: null as never });
       renderWithProviders(<Sidebar />, { preloadedState: { ...base, dm: { ...base.dm, selectedDm: dm } } });
@@ -86,7 +86,7 @@ describe('Sidebar', () => {
     it('should default to Servers tab', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByRole('tab', { name: 'Servers', selected: true })).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe('Sidebar', () => {
     it('should switch to DMs tab when clicked', async () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       await act(async () => {
@@ -109,7 +109,7 @@ describe('Sidebar', () => {
     it('should render search field', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByPlaceholderText('Search servers...')).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('Sidebar', () => {
     it('should change placeholder based on active tab', async () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       await act(async () => {
@@ -130,7 +130,7 @@ describe('Sidebar', () => {
     it('should change placeholder to channels when guild is selected', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { guilds, selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
           channel: { channels, selectedChannel: null, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
         }),
@@ -143,7 +143,7 @@ describe('Sidebar', () => {
     it('should show channel list when guild is selected', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { guilds, selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
           channel: { channels, selectedChannel: null, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
         }),
@@ -155,7 +155,7 @@ describe('Sidebar', () => {
     it('should show guild name in channel header', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { guilds, selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
           channel: { channels, selectedChannel: null, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
         }),
@@ -168,7 +168,7 @@ describe('Sidebar', () => {
     it('should show back button when guild is selected', () => {
       renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { guilds, selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
           channel: { channels, selectedChannel: null, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
         }),
@@ -181,7 +181,7 @@ describe('Sidebar', () => {
     it('should clear guild selection when back button is clicked', () => {
       const { store } = renderWithProviders(<Sidebar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { guilds, selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
           channel: { channels, selectedChannel: null, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
         }),
@@ -190,5 +190,20 @@ describe('Sidebar', () => {
       fireEvent.click(backButton);
       expect(store.getState().guild.selectedGuild).toBeNull();
     });
+  });
+});
+
+// #275: a guest has no token, so the sidebar offers only the Package tab.
+describe('Sidebar guest mode (#275)', () => {
+  it('shows only the Package tab, selected, and keeps the package view', () => {
+    const { store } = renderWithProviders(<Sidebar />, {
+      preloadedState: createBaseState({
+        auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: true },
+      }),
+    });
+    expect(screen.queryByRole('tab', { name: 'Servers' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'DMs' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Package', selected: true })).toBeInTheDocument();
+    expect(store.getState().app.sidebarView).toBe('package');
   });
 });

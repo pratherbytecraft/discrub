@@ -8,6 +8,7 @@ import {
   selectSettings,
   selectFocusedView,
   selectSidebarView,
+  setSidebarView,
   selectEffectiveLayout,
   selectIsPreviewing,
   setFocusedView,
@@ -58,6 +59,7 @@ import TourTooltip from '@components/welcome/TourTooltip';
 import { buildShellTourSteps } from '@components/welcome/tourSteps';
 import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { resolveShell } from '@/layouts/registry';
+import { selectIsGuestMode } from '@features/auth/authSlice';
 import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
 import AppDialogs from './AppDialogs';
 import PreviewBar from '@components/appearance/PreviewBar';
@@ -75,6 +77,11 @@ const MainLayout = () => {
   const dispatch = useAppDispatch();
   const showFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const sidebarView = useAppSelector(selectSidebarView);
+  // #275: a guest session only ever shows the package view.
+  const isGuest = useAppSelector(selectIsGuestMode);
+  useEffect(() => {
+    if (isGuest && sidebarView !== 'package') dispatch(setSidebarView('package'));
+  }, [isGuest, sidebarView, dispatch]);
   const focusedView = useAppSelector(selectFocusedView);
   // The layout setting picks the shell; anything unbuilt or unknown resolves to Classic. A live preview wins.
   const Shell = resolveShell(useAppSelector(selectEffectiveLayout));

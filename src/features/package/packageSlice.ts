@@ -7,6 +7,7 @@ import {
   clearPackageContents,
   hasStoredPackage,
   updateStoredPackageChannels,
+  findStoredPackageOwner,
 } from '@/services/packageStreamService';
 import { getDiscordService } from '@/services/discordService';
 import { getExportService } from '@/services/exportService';
@@ -63,9 +64,9 @@ import {
 } from './enrichmentCache';
 import type { RootState } from '@/app/store';
 import type {
-  PackageMessage,
   PackageChannel,
   PackageGuild,
+  PackageMessage,
   PackageValidationResult,
   ParsedPackage,
   ImportDiagnostics,
@@ -203,7 +204,6 @@ export interface PackageState {
    * when the package is re-imported or the user explicitly clicks Clear.
    */
   filterCriteria: Record<string, import('discrub-core/types/discrub-types').SearchCriteria | null>;
-}
   /**
    * #273: the Left Servers recheck runs once per loaded package when a
    * token is present (PackageView kicks it off), and again on demand from
@@ -211,15 +211,22 @@ export interface PackageState {
    * package in `parsed`.
    */
   leftServersRecheckStatus: 'idle' | 'running' | 'done';
+  /**
+   * #275: the user id `validation` was computed for (null for a guest).
+   * PackageView re-validates when the signed in user differs.
+   */
+  validatedUserId: string | null;
+}
 
 export const initialPackageState: PackageState = {
+  leftServersRecheckStatus: 'idle',
+  validatedUserId: null,
   status: 'idle',
   parsed: null,
   validation: null,
   error: null,
   selectedChannelId: null,
   loadedChannels: {},
-  leftServersRecheckStatus: 'idle',
   loadedOrder: [],
   loadingChannelId: null,
   selectedMessageIds: {},
@@ -398,13 +405,6 @@ export const clearPackageDeletedCache = createAsyncThunk<
   await Promise.all([writeDeletedCache(userId, {}), writeGoneCache(userId, {})]);
 });
 
-/** Parse a Discord data package file and validate it against the current auth. */
-export const importPackage = createAsyncThunk<
-  {
-    parsed: ParsedPackage;
-    validation: PackageValidationResult;
-    deletedMessageIds: DeletedCacheMap;
-    goneMessageIds: DeletedCacheMap;
 /**
  * #273: look every Left Servers channel up against Discord. The package
  * leaves the server off any channel the person was not in when the export
@@ -507,6 +507,14 @@ export const movePackageChannelOutOfLeftServers = createAsyncThunk<
   return { channels };
 });
 
+/** Parse a Discord data package file and validate it against the current auth. */
+export const importPackage = createAsyncThunk<
+  {
+    parsed: ParsedPackage;
+    validation: PackageValidationResult;
+    validatedUserId: string | null;
+    deletedMessageIds: DeletedCacheMap;
+    goneMessageIds: DeletedCacheMap;
   },
   File | Blob | ArrayBuffer,
   { state: RootState; rejectValue: string }
@@ -569,7 +577,7 @@ export const movePackageChannelOutOfLeftServers = createAsyncThunk<
       message: formatImportDiagnostics(parsed, diagnostics),
     }));
 
-    return { parsed, validation, deletedMessageIds, goneMessageIds };
+    return { parsed, validation, validatedUserId: authedUserId, deletedMessageIds, goneMessageIds };
   } catch (err) {
     return rejectWithValue(err instanceof Error ? err.message : 'Failed to parse package');
   }
@@ -613,6 +621,7 @@ export const resumeStoredPackage = createAsyncThunk<
   {
     parsed: ParsedPackage;
     validation: PackageValidationResult;
+    validatedUserId: string | null;
     deletedMessageIds: DeletedCacheMap;
     goneMessageIds: DeletedCacheMap;
   } | null,
@@ -621,8 +630,15 @@ export const resumeStoredPackage = createAsyncThunk<
 >('package/resume', async (_, { getState, rejectWithValue }) => {
   try {
     const authedUserId = getState().user?.currentUser?.id ?? null;
-    if (!authedUserId) return null;
-    const parsed = await resumePackageFromStorage(authedUserId);
+    // #275: a guest has no user, so the stored package is found by its
+    // own owner id and opens read-only.
+    let ownerId = authedUserId;
+    if (!ownerId) {
+      if (!getState().auth.guestMode) return null;
+      ownerId = await findStoredPackageOwner();
+      if (!ownerId) return null;
+    }
+    const parsed = await resumePackageFromStorage(ownerId);
     if (!parsed) return null;
     const validation = validatePackage(parsed, authedUserId);
     if (!validation.ok) return null;
@@ -634,10 +650,27 @@ export const resumeStoredPackage = createAsyncThunk<
       readDeletedCache(parsed.user.id),
       readGoneCache(parsed.user.id),
     ]);
-    return { parsed, validation, deletedMessageIds, goneMessageIds };
+    return { parsed, validation, validatedUserId: authedUserId, deletedMessageIds, goneMessageIds };
   } catch (err) {
     return rejectWithValue(err instanceof Error ? err.message : 'Failed to resume package');
   }
+});
+
+/**
+ * #275: run validation again for the package already in memory, for when
+ * a guest signs in afterwards. A matching user gains delete and the other
+ * token features; another user's package stays read-only with the
+ * validation notice.
+ */
+export const revalidatePackage = createAsyncThunk<
+  { validation: PackageValidationResult; validatedUserId: string | null } | null,
+  void,
+  { state: RootState }
+>('package/revalidate', async (_, { getState }) => {
+  const parsed = getState().package.parsed;
+  if (!parsed) return null;
+  const authedUserId = getState().user?.currentUser?.id ?? null;
+  return { validation: validatePackage(parsed, authedUserId), validatedUserId: authedUserId };
 });
 
 /** True iff IDB holds a stored package for the authenticated user. */
@@ -2081,8 +2114,10 @@ const packageSlice = createSlice({
       })
       .addCase(importPackage.fulfilled, (state, action) => {
         state.status = 'ready';
+        state.leftServersRecheckStatus = 'idle';
         state.parsed = action.payload.parsed;
         state.validation = action.payload.validation;
+        state.validatedUserId = action.payload.validatedUserId ?? null;
         state.error = null;
         state.selectedChannelId = null;
         state.loadedChannels = {};
@@ -2106,18 +2141,42 @@ const packageSlice = createSlice({
       .addCase(resumeStoredPackage.fulfilled, (state, action) => {
         if (!action.payload) return; // nothing to resume
         state.status = 'ready';
+        state.leftServersRecheckStatus = 'idle';
         state.parsed = action.payload.parsed;
         state.validation = action.payload.validation;
+        state.validatedUserId = action.payload.validatedUserId ?? null;
         state.error = null;
         state.selectedChannelId = null;
         state.loadedChannels = {};
         state.loadedOrder = [];
         // #236: same atomic treatment as importPackage.fulfilled —
         // deleted ids come from the payload, never a racing hydrate.
-        state.leftServersRecheckStatus = 'idle';
         state.deletedMessageIds = action.payload.deletedMessageIds;
         state.goneMessageIds = action.payload.goneMessageIds;
         state.filterCriteria = {};
+      })
+      .addCase(revalidatePackage.fulfilled, (state, action) => {
+        if (!action.payload || !state.parsed) return;
+        state.validation = action.payload.validation;
+        state.validatedUserId = action.payload.validatedUserId;
+        // A fresh user may be in different Servers now.
+        state.leftServersRecheckStatus = 'idle';
+      })
+      .addCase(recheckLeftServers.pending, (state) => {
+        state.leftServersRecheckStatus = 'running';
+      })
+      .addCase(recheckLeftServers.fulfilled, (state, action) => {
+        state.leftServersRecheckStatus = 'done';
+        if (!state.parsed) return;
+        state.parsed.channels = action.payload.channels;
+        state.parsed.guilds = action.payload.guilds;
+      })
+      .addCase(recheckLeftServers.rejected, (state) => {
+        state.leftServersRecheckStatus = 'done';
+      })
+      .addCase(movePackageChannelOutOfLeftServers.fulfilled, (state, action) => {
+        if (!state.parsed) return;
+        state.parsed.channels = action.payload.channels;
       })
       .addCase(loadPackageChannelMessages.pending, (state, action) => {
         state.loadingChannelId = action.meta.arg;
@@ -2141,7 +2200,6 @@ const packageSlice = createSlice({
         state.loadingChannelId = null;
       })
       .addCase(loadAllPackageTimestamps.pending, (state) => {
-        state.leftServersRecheckStatus = 'idle';
         state.timelineStatus = 'loading';
         state.timelineError = null;
         state.timelineTimestamps = [];
@@ -2155,22 +2213,6 @@ const packageSlice = createSlice({
         state.timelineStatus = 'error';
         state.timelineError = action.payload ?? 'Failed to build timeline';
         state.timelineProgress = null;
-      .addCase(recheckLeftServers.pending, (state) => {
-        state.leftServersRecheckStatus = 'running';
-      })
-      .addCase(recheckLeftServers.fulfilled, (state, action) => {
-        state.leftServersRecheckStatus = 'done';
-        if (!state.parsed) return;
-        state.parsed.channels = action.payload.channels;
-        state.parsed.guilds = action.payload.guilds;
-      })
-      .addCase(recheckLeftServers.rejected, (state) => {
-        state.leftServersRecheckStatus = 'done';
-      })
-      .addCase(movePackageChannelOutOfLeftServers.fulfilled, (state, action) => {
-        if (!state.parsed) return;
-        state.parsed.channels = action.payload.channels;
-      })
       })
       .addCase(deletePackageMessages.pending, (state) => {
         state.deleteStatus = 'running';
@@ -2322,6 +2364,10 @@ export const selectPackageFilterCriteria =
   (channelId: string | null) =>
   (state: RootState): import('discrub-core/types/discrub-types').SearchCriteria | null =>
     channelId ? state.package.filterCriteria?.[channelId] ?? null : null;
+export const selectPackageValidatedUserId = (state: RootState) =>
+  state.package.validatedUserId;
+export const selectLeftServersRecheckStatus = (state: RootState) =>
+  state.package.leftServersRecheckStatus;
 export const selectIsPackageReadOnly = (state: RootState) =>
   state.package.validation?.readOnly ?? true;
 export const selectTimelineStatus = (state: RootState) =>
@@ -2364,8 +2410,6 @@ export const selectChannelGoneMessageIds =
   (state: RootState): string[] =>
     state.package.goneMessageIds[channelId] ?? [];
 /** #271: how many of one channel's gone ids Discrub never actually removed. */
-export const selectLeftServersRecheckStatus = (state: RootState) =>
-  state.package.leftServersRecheckStatus;
 export const selectChannelGoneMessageCount =
   (channelId: string) =>
   (state: RootState): number =>

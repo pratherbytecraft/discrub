@@ -1,6 +1,6 @@
 import { useState, memo } from 'react';
 import {
-  AppBar, Toolbar, Avatar, Typography, IconButton, Box, Tooltip,
+  AppBar, Toolbar, Avatar, Typography, IconButton, Box, Tooltip, Button,
   Dialog, DialogContent, Menu, MenuItem, ListItemIcon, ListItemText,
   alpha, useMediaQuery, useTheme, Divider,
 } from '@mui/material';
@@ -22,7 +22,7 @@ import {
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectCurrentUser } from '@features/user/userSlice';
-import { clearToken, forgetRememberedToken } from '@features/auth/authSlice';
+import { clearToken, forgetRememberedToken, leaveGuestMode, selectIsGuestMode } from '@features/auth/authSlice';
 import { clearCurrentUser } from '@features/user/userSlice';
 import { clearGuilds, setSelectedGuild } from '@features/guild/guildSlice';
 import { clearChannels, setSelectedChannel } from '@features/channel/channelSlice';
@@ -87,6 +87,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   // is not rendered at all.
   const isWide = useMediaQuery(theme.breakpoints.up('md'));
   const currentUser = useAppSelector(selectCurrentUser);
+  // #275: a guest has no profile chip, a Sign in button sits there instead.
+  const isGuest = useAppSelector(selectIsGuestMode);
   const cachedUserMap = useAppSelector(selectCachedUserMap);
   const showKofiFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
@@ -260,6 +262,51 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
           {currentUser && <Box sx={{ position: 'absolute', inset: 0, zIndex: 2 }}><ScrublingsStage /></Box>}
         </Box>
 
+        {!currentUser && isGuest && (
+          <Box className="topbar-right" sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 }, flexShrink: 0 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              data-testid="topbar-sign-in"
+              onClick={() => dispatch(leaveGuestMode())}
+              sx={{ textTransform: 'none' }}
+            >
+              {t('topbar.guestSignIn')}
+            </Button>
+            <SectionDivider />
+            <Box data-testid="topbar-group-app" sx={GROUP_SX}>
+              <HotkeyTooltip actionId="openSettings" label={t('topbar.settings')} enterDelay={0} arrow>
+                <IconButton
+                  color="inherit"
+                  onClick={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))}
+                  aria-label={t('topbar.settings')}
+                >
+                  <SettingsIcon />
+                </IconButton>
+              </HotkeyTooltip>
+            </Box>
+            {isOverlayMode() && <SectionDivider />}
+            {isOverlayMode() && (
+              <HotkeyTooltip actionId="minimize" label={t('topbar.minimizeToDiscord')} enterDelay={0} arrow>
+                <IconButton color="inherit" onClick={handleMinimize} aria-label={t('topbar.minimizeDiscrub')}>
+                  <MinimizeIcon />
+                </IconButton>
+              </HotkeyTooltip>
+            )}
+            {isOverlayMode() && (
+              <Tooltip title={t('topbar.closeDiscrub')} enterDelay={0} arrow>
+                <IconButton
+                  color="inherit"
+                  onClick={() => isOperationRunning ? setCloseDialogOpen(true) : handleCloseConfirm()}
+                  aria-label={t('topbar.closeDiscrub')}
+                  sx={{ transition: 'background-color 200ms ease', '&:hover': { backgroundColor: 'rgba(240, 71, 71, 0.15)' } }}
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        )}
         {currentUser && (
           <Box className="topbar-right" sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.5 }, flexShrink: 1, minWidth: 0, '& > *': { flexShrink: 0 } }}>
             {/* The avatar alone opens the profile; the name is its tooltip (2.2.4). */}

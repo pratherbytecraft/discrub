@@ -45,10 +45,10 @@ import {
   type PackageChannelCategory,
 } from '@features/package/packageDisplayUtils';
 import { useTranslation } from 'react-i18next';
+import { nameIncludes } from '@utils/nameMatch';
 
 interface PackageChannelListProps {
   filterText?: string;
-import { nameIncludes } from '@utils/nameMatch';
 }
 
 /**

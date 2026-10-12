@@ -14,8 +14,7 @@ import authReducer, {
   forgetRememberedToken,
   hydrateRememberedToken,
   selectAuthRestoring,
-  selectTokenRemembered,
-} from './authSlice';
+  selectTokenRemembered, enterGuestMode, leaveGuestMode } from './authSlice';
 import {
   initialAuthState,
   REMEMBERED_TOKEN_STORAGE_KEY,
@@ -269,7 +268,7 @@ describe('authSlice', () => {
         const state2 = store.getState().auth;
 
         expect(state1).toEqual(state2);
-        expect(state2).toEqual({ ...initialAuthState, manuallyLoggedOut: true, isRestoring: false, tokenRemembered: false });
+        expect(state2).toEqual({ ...initialAuthState, manuallyLoggedOut: true, isRestoring: false, tokenRemembered: false, guestMode: false });
       });
     });
 
@@ -480,5 +479,27 @@ describe('authSlice', () => {
       store.dispatch(authenticateWithToken('test'));
       expect(selectAuthLoading(store.getState())).toBe(true);
     });
+  });
+});
+
+// #275: browsing a data package without signing in.
+describe('authSlice guest mode (#275)', () => {
+  it('enterGuestMode and leaveGuestMode flip the flag without touching the token', () => {
+    const store = createTestStore({ auth: authReducer, user: userReducer });
+    expect(store.getState().auth.guestMode).toBe(false);
+    store.dispatch(enterGuestMode());
+    expect(store.getState().auth.guestMode).toBe(true);
+    expect(store.getState().auth.isAuthenticated).toBe(false);
+    expect(store.getState().auth.token).toBeNull();
+    store.dispatch(leaveGuestMode());
+    expect(store.getState().auth.guestMode).toBe(false);
+  });
+
+  it('signing in ends the guest session', () => {
+    const store = createTestStore({ auth: authReducer, user: userReducer });
+    store.dispatch(enterGuestMode());
+    store.dispatch(setToken('tok'));
+    expect(store.getState().auth.guestMode).toBe(false);
+    expect(store.getState().auth.isAuthenticated).toBe(true);
   });
 });

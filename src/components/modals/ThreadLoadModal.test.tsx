@@ -9,7 +9,7 @@ import ThreadLoadModal, { describeThread, sortThreadsForList } from './ThreadLoa
 const render = (ui: React.ReactElement) =>
   renderWithProviders(ui, {
     preloadedState: {
-      auth: { token: 'tok', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+      auth: { token: 'tok', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
     } as any,
   });
 

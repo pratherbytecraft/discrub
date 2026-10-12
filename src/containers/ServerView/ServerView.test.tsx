@@ -102,7 +102,7 @@ describe('ServerView', () => {
     it('should show welcome panel when no channel or DM selected', () => {
       renderWithProviders(<ServerView />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByText('Welcome to Discrub')).toBeInTheDocument();
@@ -277,7 +277,7 @@ describe('ServerView', () => {
     it('shows refine dates that were set from outside the dialog, when opened through the store', async () => {
       const { store } = renderWithProviders(<ServerView variant="timeline" />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { ...createBaseState().guild, guilds: [guild], selectedGuild: guild },
           channel: { ...createBaseState().channel, channels: [channel], selectedChannel: channel },
         }),
@@ -301,7 +301,7 @@ describe('ServerView', () => {
       const channelB = createMockChannel({ id: 'ch2', name: 'other-channel' });
       const { store } = renderWithProviders(<ServerView />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { guilds: [guild], selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
           channel: { channels: [channel, channelB], selectedChannel: channel, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
         }),
@@ -331,7 +331,7 @@ describe('ServerView', () => {
       // clear on the clearMessages signal (clearSeq), not just on id change.
       const { store } = renderWithProviders(<ServerView />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           guild: { guilds: [guild], selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
           channel: { channels: [channel], selectedChannel: channel, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
         }),
@@ -359,7 +359,7 @@ describe('ServerView', () => {
   describe('Deleted-account empty-search callout (#223)', () => {
     it('shows the deleted-account explanation when an author search returns empty', async () => {
       const preloaded = createBaseState({
-        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         guild: { guilds: [guild], selectedGuild: guild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
         channel: { channels: [channel], selectedChannel: channel, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
       });

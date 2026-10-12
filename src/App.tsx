@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Box } from '@mui/material';
 import { useAppSelector, useAppDispatch } from './app/hooks';
-import { selectIsAuthenticated, selectAuthToken, hydrateRememberedToken } from '@features/auth/authSlice';
+import { selectIsAuthenticated,
+  selectIsGuestMode, selectAuthToken, hydrateRememberedToken } from '@features/auth/authSlice';
 import { loadSettings } from '@features/app/appSlice';
 import { loadCacheFromLocalStorage } from '@features/cache/cacheSlice';
 import { loadPresets } from '@features/presets/presetsSlice';
@@ -27,6 +28,7 @@ const isAuthOnly = new URLSearchParams(window.location.search).get('authOnly') =
 function App() {
   const dispatch = useAppDispatch();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const isGuest = useAppSelector(selectIsGuestMode);
   const token = useAppSelector(selectAuthToken);
   useLanguageSync();
 
@@ -85,7 +87,8 @@ function App() {
 
   return (
     <Box sx={{ height: '100%', width: '100%' }}>
-      {!isAuthenticated ? <LandingPage /> : <MainLayout />}
+      {/* #275: a guest browses a data package in the main layout without a token. */}
+      {!isAuthenticated && !isGuest ? <LandingPage /> : <MainLayout />}
     </Box>
   );
 }

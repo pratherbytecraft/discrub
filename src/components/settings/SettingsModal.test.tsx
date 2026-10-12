@@ -349,7 +349,7 @@ describe('SettingsModal', () => {
       const { storage } = await import('@/extension/storage');
       const { store } = renderWithProviders(<SettingsModal open onClose={vi.fn()} />, {
         preloadedState: createBaseState({
-          auth: { token: 't', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true },
+          auth: { token: 't', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true, guestMode: false },
         }),
       });
       fireEvent.click(screen.getByRole('tab', { name: 'Reset Discrub' }));

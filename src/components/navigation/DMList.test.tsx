@@ -74,7 +74,7 @@ describe('DMList', () => {
     it('should show loading spinner when DMs are loading', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [], selectedDm: null, selectedDms: [], isLoading: true, error: null },
         }),
       });
@@ -88,7 +88,7 @@ describe('DMList', () => {
     it('should show "No direct messages found" when no DMs exist and no token', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -98,7 +98,7 @@ describe('DMList', () => {
     it('should show filter empty state when filter matches nothing', () => {
       renderWithProviders(<DMList filterText="nobody" />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -110,7 +110,7 @@ describe('DMList', () => {
     it('should render DM recipient usernames', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient, dmWithMultiRecipients], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -121,7 +121,7 @@ describe('DMList', () => {
     it('should show "Direct Message" for DMs with no recipients', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithNoRecipients], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -131,7 +131,7 @@ describe('DMList', () => {
     it('should render "Direct Messages" header', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -141,7 +141,7 @@ describe('DMList', () => {
     it('should render avatar with CDN URL when recipient has avatar', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -154,7 +154,7 @@ describe('DMList', () => {
     it('should filter DMs by recipient name', () => {
       renderWithProviders(<DMList filterText="Alice" />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient, dmWithMultiRecipients], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -165,7 +165,7 @@ describe('DMList', () => {
     it('should filter case-insensitively', () => {
       renderWithProviders(<DMList filterText="alice" />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -195,7 +195,7 @@ describe('DMList', () => {
     it('should dispatch setSelectedDm when a DM is clicked', () => {
       const { store } = renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient, dmWithMultiRecipients], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -206,7 +206,7 @@ describe('DMList', () => {
     it('should clear channel selection on DM click', () => {
       const { store } = renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           channel: { channels: [], selectedChannel: createMockChannel(), selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
           dm: { dms: [dmWithRecipient], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
@@ -218,7 +218,7 @@ describe('DMList', () => {
     it('should mark selected DM as selected', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient, dmWithMultiRecipients], selectedDm: dmWithRecipient, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -241,7 +241,7 @@ describe('DMList', () => {
     const renderWithDms = (dms: any[]) =>
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms, selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -281,7 +281,7 @@ describe('DMList', () => {
     it('finds a NAMED group when filtering by a member name', () => {
       renderWithProviders(<DMList filterText="granddemon" />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [groupDm({ name: 'the lads' })], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -291,7 +291,7 @@ describe('DMList', () => {
     it('finds a NAMED group when filtering by a member display name', () => {
       renderWithProviders(<DMList filterText="GrandDemon" />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [groupDm({ name: 'the lads' })], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -312,7 +312,7 @@ describe('DMList', () => {
     const renderInMultiSelect = () => {
       const utils = renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms, selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -341,7 +341,7 @@ describe('DMList', () => {
     it('does not render the Copy button when nothing is selected', () => {
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient, dmWithMultiRecipients], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -354,7 +354,7 @@ describe('DMList', () => {
 
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient, dmWithMultiRecipients], selectedDm: null, selectedDms: [dmWithRecipient], isLoading: false, error: null },
         }),
       });
@@ -370,7 +370,7 @@ describe('DMList', () => {
 
       const { store } = renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dmWithRecipient, dmWithMultiRecipients], selectedDm: null, selectedDms: [dmWithRecipient], isLoading: false, error: null },
         }),
       });
@@ -394,7 +394,7 @@ describe('DMList', () => {
       const dm = createMockChannel({ id: 'dm-1', name: null, type: 1 });
       renderWithProviders(<DMList filterText="" />, {
         preloadedState: createBaseState({
-          auth: { token: 't', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 't', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dm], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -413,7 +413,7 @@ describe('DMList', () => {
       const dm = createMockChannel({ id: 'dm-1', name: null, type: 1 });
       renderWithProviders(<DMList filterText="" />, {
         preloadedState: createBaseState({
-          auth: { token: 't', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 't', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [dm], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -445,7 +445,7 @@ describe('DMList', () => {
 
     const authedState = (dms: any[]) =>
       createBaseState({
-        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         dm: { dms, selectedDm: null, selectedDms: [], isLoading: false, error: null },
       });
 
@@ -473,7 +473,7 @@ describe('DMList', () => {
       // the mount-time fetchDMs does not flip the list into its skeleton.
       renderWithProviders(<DMList />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           dm: { dms: [], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         }),
       });
@@ -752,7 +752,7 @@ describe('DMList', () => {
 
     const stateWithOrder = (order?: DmSortOrder) =>
       createBaseState({
-        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         dm: { dms: [silentDm, oldDm, newDm], selectedDm: null, selectedDms: [], isLoading: false, error: null },
         ...(order
           ? {
@@ -811,7 +811,7 @@ describe('DMList', () => {
 
     const stateWithDms = (dms: any[]) =>
       createBaseState({
-        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         dm: { dms, selectedDm: null, selectedDms: [], isLoading: false, error: null },
       });
 

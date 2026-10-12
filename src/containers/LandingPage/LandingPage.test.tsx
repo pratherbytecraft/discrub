@@ -128,7 +128,7 @@ describe('LandingPage', () => {
     it('should show auth error when present', () => {
       renderWithProviders(<LandingPage />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: false, error: 'Invalid token', manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: null, isAuthenticated: false, isLoading: false, error: 'Invalid token', manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByText('Invalid token')).toBeInTheDocument();
@@ -137,7 +137,7 @@ describe('LandingPage', () => {
     it('should show helper text about invalid token on error', () => {
       renderWithProviders(<LandingPage />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: false, error: 'Bad token', manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: null, isAuthenticated: false, isLoading: false, error: 'Bad token', manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByText(/Invalid token. Check it and try again/)).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('LandingPage', () => {
     it('should disable token input while loading', () => {
       renderWithProviders(<LandingPage />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: true, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: null, isAuthenticated: false, isLoading: true, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByLabelText(/Discord Token/)).toBeDisabled();
@@ -157,7 +157,7 @@ describe('LandingPage', () => {
     it('should show spinner instead of Sign In text while loading', () => {
       renderWithProviders(<LandingPage />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: true, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: null, isAuthenticated: false, isLoading: true, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
         }),
       });
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
@@ -238,7 +238,7 @@ describe('LandingPage', () => {
       const { storage } = await import('@/extension/storage');
       renderWithProviders(<LandingPage />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true },
+          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true, guestMode: false },
         }),
       });
       fireEvent.change(screen.getByLabelText(/Discord Token/), { target: { value: 'once' } });
@@ -253,7 +253,7 @@ describe('LandingPage', () => {
       const { storage } = await import('@/extension/storage');
       const { store } = renderWithProviders(<LandingPage />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true },
+          auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true, guestMode: false },
         }),
       });
       expect(screen.getByTestId('landing-token-remembered')).toBeInTheDocument();
@@ -270,7 +270,7 @@ describe('LandingPage', () => {
     it('shows the restoring panel while a remembered token is being validated', () => {
       renderWithProviders(<LandingPage />, {
         preloadedState: createBaseState({
-          auth: { token: null, isAuthenticated: false, isLoading: true, error: null, manuallyLoggedOut: false, isRestoring: true, tokenRemembered: true },
+          auth: { token: null, isAuthenticated: false, isLoading: true, error: null, manuallyLoggedOut: false, isRestoring: true, tokenRemembered: true, guestMode: false },
         }),
       });
       expect(screen.getByTestId('landing-restoring')).toBeInTheDocument();
@@ -367,5 +367,23 @@ describe('LandingPage', () => {
       });
       expect(screen.getByTestId('hosted-gate-key')).toBeInTheDocument();
     });
+  });
+});
+
+// #275: the landing page offers a way into the Package view without a token.
+describe('LandingPage browse a data package (#275)', () => {
+  beforeEach(async () => {
+    vi.stubEnv('VITE_DISCORD_TOKEN', '');
+    vi.stubEnv('VITE_HOSTED_GATE', '');
+    const { isExtensionMode } = await import('@/extension/messaging');
+    vi.mocked(isExtensionMode).mockReturnValue(false);
+  });
+
+  it('starts a guest session on the Package view', () => {
+    const { store } = renderWithProviders(<LandingPage />, { preloadedState: createBaseState() });
+    fireEvent.click(screen.getByTestId('landing-browse-package'));
+    expect(store.getState().auth.guestMode).toBe(true);
+    expect(store.getState().auth.isAuthenticated).toBe(false);
+    expect(store.getState().app.sidebarView).toBe('package');
   });
 });

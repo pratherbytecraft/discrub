@@ -564,6 +564,17 @@ export async function updateStoredPackageChannels(
 }
 
 /**
+ * #275: the owner id of the package in storage, for a guest resume with
+ * no signed in user. Only one package is stored at a time.
+ */
+export async function findStoredPackageOwner(): Promise<string | null> {
+  const all = await storage.package.keys();
+  const prefix = KEY_META('');
+  const metaKey = all.find((k) => k.startsWith(prefix));
+  return metaKey ? metaKey.slice(prefix.length) : null;
+}
+
+/**
  * Wipe the `pkg:*` namespace.
  *
  * - With `userId`, deletes only entries owned by that user (`pkg:meta:{u}`,

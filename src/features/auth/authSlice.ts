@@ -98,7 +98,17 @@ const authSlice = createSlice({
     setToken: (state, action: PayloadAction<string>) => {
       state.token = action.payload;
       state.isAuthenticated = true;
+      state.guestMode = false;
       state.error = null;
+    },
+    /** #275: open the main layout with only the Package view, no token. */
+    enterGuestMode: (state) => {
+      state.guestMode = true;
+      state.error = null;
+    },
+    /** #275: back to the landing page from a guest session. */
+    leaveGuestMode: (state) => {
+      state.guestMode = false;
     },
     clearToken: (state) => {
       state.token = null;
@@ -126,6 +136,7 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(authenticateWithToken.fulfilled, (state, action) => {
+        state.guestMode = false;
         state.isLoading = false;
         state.token = action.payload;
         state.isAuthenticated = true;
@@ -156,7 +167,7 @@ const authSlice = createSlice({
   },
 });
 
-export const { setToken, clearToken, setAuthError, clearManualLogout, restoreStarted } = authSlice.actions;
+export const { setToken, clearToken, setAuthError, clearManualLogout, restoreStarted, enterGuestMode, leaveGuestMode } = authSlice.actions;
 
 // Selectors
 export const selectAuth = (state: RootState) => state.auth;
@@ -167,5 +178,6 @@ export const selectAuthLoading = (state: RootState) => state.auth.isLoading;
 export const selectManuallyLoggedOut = (state: RootState) => state.auth.manuallyLoggedOut;
 export const selectAuthRestoring = (state: RootState) => state.auth.isRestoring;
 export const selectTokenRemembered = (state: RootState) => state.auth.tokenRemembered;
+export const selectIsGuestMode = (state: RootState) => state.auth.guestMode;
 
 export default authSlice.reducer;

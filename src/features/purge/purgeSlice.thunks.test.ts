@@ -1778,7 +1778,7 @@ describe('purgeSlice thunks', () => {
           cache: cacheReducer,
         },
         {
-          auth: { token: TOKEN, isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: TOKEN, isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           user: { currentUser: CURRENT_USER, isLoading: false, error: null },
           cache: { userMap, failedUserIds: [], isLoaded: true },
         },

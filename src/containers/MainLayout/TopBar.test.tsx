@@ -226,7 +226,7 @@ describe('TopBar', () => {
     it('should clear all state on logout', () => {
       const { store } = renderWithProviders(<TopBar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
           user: { currentUser, isLoading: false, error: null },
           guild: { guilds: [], selectedGuild: null, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
         }),
@@ -242,7 +242,7 @@ describe('TopBar', () => {
       const { storage } = await import('@/extension/storage');
       renderWithProviders(<TopBar />, {
         preloadedState: createBaseState({
-          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true },
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: true, guestMode: false },
           user: { currentUser, isLoading: false, error: null },
         }),
       });
@@ -626,5 +626,27 @@ describe('TopBar wide layout (md and up)', () => {
   it('keeps one tour target for the extras regardless of layout', () => {
     render();
     expect(document.querySelector('[data-tour="topbar-extras"]')).toContainElement(screen.getByLabelText('Supporter Wall'));
+  });
+});
+
+// #275: a guest has no profile chip, a Sign in button sits there instead.
+describe('TopBar guest mode (#275)', () => {
+  it('shows Sign in for a guest and leaves guest mode on click', () => {
+    const { store } = renderWithProviders(<TopBar />, {
+      preloadedState: createBaseState({
+        auth: { token: null, isAuthenticated: false, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: true },
+      }),
+    });
+    const button = screen.getByTestId('topbar-sign-in');
+    expect(button).toHaveTextContent('Sign in');
+    fireEvent.click(button);
+    expect(store.getState().auth.guestMode).toBe(false);
+  });
+
+  it('shows no Sign in button when signed in', () => {
+    renderWithProviders(<TopBar />, {
+      preloadedState: createBaseState({ user: { currentUser, isLoading: false, error: null } }),
+    });
+    expect(screen.queryByTestId('topbar-sign-in')).toBeNull();
   });
 });

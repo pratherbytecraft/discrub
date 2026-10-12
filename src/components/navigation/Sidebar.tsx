@@ -10,6 +10,7 @@ import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedGuild, setSelectedGuild } from '@features/guild/guildSlice';
 import { selectSidebarView, setSidebarView } from '@features/app/appSlice';
+import { selectIsGuestMode } from '@features/auth/authSlice';
 import ServerList from './ServerList';
 import DMList from './DMList';
 import ChannelList from './ChannelList';
@@ -51,6 +52,8 @@ const Sidebar = ({ open = false, onClose }: SidebarProps) => {
   const { t } = useTranslation();
   const selectedGuild = useAppSelector(selectSelectedGuild);
   const sidebarView = useAppSelector(selectSidebarView);
+  // #275: a guest has no token, so only the Package tab is offered.
+  const isGuest = useAppSelector(selectIsGuestMode);
   // Dev-tools gate (#153). Pill button below the channel header
   // appears only when devTools is on, the user owns the guild, and
   // no heavy operation is already running (would conflict with the
@@ -79,10 +82,15 @@ const Sidebar = ({ open = false, onClose }: SidebarProps) => {
   }, [selectedGuild, tab]);
 
   useEffect(() => {
+    // #275: a guest session stays on the Package tab.
+    if (isGuest && tab !== 2) setTab(2);
+  }, [isGuest, tab]);
+
+  useEffect(() => {
     // Keep Redux sidebarView in sync when user switches to/from Package tab.
-    const desired = tab === 2 ? 'package' : 'server';
+    const desired = tab === 2 || isGuest ? 'package' : 'server';
     if (desired !== sidebarView) dispatch(setSidebarView(desired));
-  }, [tab, sidebarView, dispatch]);
+  }, [tab, sidebarView, dispatch, isGuest]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTab(newValue);
@@ -195,9 +203,9 @@ const Sidebar = ({ open = false, onClose }: SidebarProps) => {
           },
         }}
       >
-        <Tab label={t('sidebar.tabServers')} data-tour="servers-tab" />
-        <Tab label={t('sidebar.tabDms')} data-tour="dms-tab" />
-        <Tab label={t('sidebar.tabPackage')} data-tour="package-tab" />
+        {!isGuest && <Tab value={0} label={t('sidebar.tabServers')} data-tour="servers-tab" />}
+        {!isGuest && <Tab value={1} label={t('sidebar.tabDms')} data-tour="dms-tab" />}
+        <Tab value={2} label={t('sidebar.tabPackage')} data-tour="package-tab" />
       </Tabs>
 
       <Box
