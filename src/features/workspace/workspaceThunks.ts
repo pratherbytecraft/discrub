@@ -46,6 +46,7 @@ import {
   actionsOf,
   bulkOf,
   currentWorkspaceRenamed,
+  importProgressed,
   initializeWorkspaces,
   refreshWorkspaces,
   scopeRestoreFinished,
@@ -217,7 +218,8 @@ async function openScope(wid: string, dispatchAny: Dispatch, getState: () => Roo
   const stillHere = () => selectCurrentWid(getState()) === wid && !getState().workspace?.scopeInterrupted;
 
   let cid: string | null = null;
-  if (guildId) {
+  // Row 12: a scope saved before the fix can hold the last server beside an open DM.
+  if (guildId && !(dmId && !channelId)) {
     await waitFor(() => (getState().guild?.guilds?.length ?? 0) > 0 || !!getState().guild?.error, GUILDS_TIMEOUT_MS);
     if (!stillHere() || userNavigated(getState())) return 'skipped';
     const guild = getState().guild.guilds.find((g) => g.id === guildId);
@@ -438,7 +440,9 @@ export const importWorkspaceThunk = createAsyncThunk<ImportOutcome, ImportWorksp
     const names = list.map((w) => w.name);
     let target: { wid: string; name: string; color: string };
     if (mode === 'replace' && targetWid) {
-      target = { wid: targetWid, name: manifest.name, color: manifest.color };
+      // Row 10 (owner): replacing Default keeps the name Default.
+      const here = list.find((w) => w.wid === targetWid);
+      target = { wid: targetWid, name: here?.isDefault ? here.name : manifest.name, color: manifest.color };
     } else {
       const taken = list.some((w) => w.wid === manifest.wid);
       target = {
@@ -460,9 +464,12 @@ export const importWorkspaceThunk = createAsyncThunk<ImportOutcome, ImportWorksp
     }
 
     dispatch(addStatusEntry({ level: 'info', message: t('workspace.importing', { name: target.name }) }));
+    dispatch(importProgressed({ name: target.name, messages: 0, total: manifest.messages }));
     let outcome: ImportOutcome = 'imported';
     try {
-      const installed = await importWorkspaceFile(file, target, (record) => installImportedWorkspace(record, mode === 'replace'));
+      const installed = await importWorkspaceFile(file, target, (record) => installImportedWorkspace(record, mode === 'replace'), {
+        onProgress: ({ messages, total }) => dispatch(importProgressed({ name: target.name, messages, total })),
+      });
       const message = t('workspace.imported', { name: target.name, messages: countLabel('messages', installed.messages) });
       dispatch(addStatusEntry({ level: 'success', message }));
       dispatch(showToast({ level: 'success', message }));
@@ -482,6 +489,7 @@ export const importWorkspaceThunk = createAsyncThunk<ImportOutcome, ImportWorksp
         dispatch(showToast({ level: 'error', message }));
       }
     } finally {
+      dispatch(importProgressed(null));
       if (current) {
         const record = await getWorkspace(target.wid);
         await finishSwitch(target.wid, null, record?.name ?? target.name, actionsOf(record), bulkOf(record), dispatch, getState);

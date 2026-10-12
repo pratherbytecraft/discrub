@@ -43,6 +43,8 @@ import {
   setSelection,
   updateRows,
   deleteConversationsWithPrefix,
+  getReactionDetail,
+  setReactionDetail,
   holdsWorkspaceLock,
   isQuotaExceededError,
   isWorkspaceHeldElsewhere,
@@ -277,6 +279,31 @@ describe('writePage', () => {
     }
     expect(await getConversation(WID, CID)).toEqual(before);
     expect(await countRows(WID, CID)).toBe(1);
+  });
+});
+
+describe('reaction details (row 18)', () => {
+  it('keeps a run conversation\'s reaction details until the conversation goes', async () => {
+    await writePage(WID, 'bulk:1', [msg('1', { channel_id: 'bulk:1' })], seed);
+    const map = { '1': { '👍': [{ id: 'u1', username: 'jordan' }] } };
+    expect(await getReactionDetail(WID, 'bulk:1')).toBe(null);
+    await setReactionDetail(WID, 'bulk:1', map);
+    expect(await getReactionDetail(WID, 'bulk:1')).toEqual(map);
+    await deleteConversation(WID, 'bulk:1');
+    expect(await getReactionDetail(WID, 'bulk:1')).toBe(null);
+  });
+});
+
+describe('last used (row 4)', () => {
+  it('a page write moves lastOpened when it is a minute old or more, not on every page', async () => {
+    await writePage(WID, CID, [msg('1')], seed);
+    await updateWorkspace(WID, (r) => { r.lastOpened = Date.now() - 30_000; });
+    const recent = (await getWorkspace(WID))!.lastOpened;
+    await writePage(WID, CID, [msg('2')], seed);
+    expect((await getWorkspace(WID))!.lastOpened).toBe(recent);
+    await updateWorkspace(WID, (r) => { r.lastOpened = Date.now() - 120_000; });
+    await writePage(WID, CID, [msg('3')], seed);
+    expect((await getWorkspace(WID))!.lastOpened).toBeGreaterThan(Date.now() - 5_000);
   });
 });
 

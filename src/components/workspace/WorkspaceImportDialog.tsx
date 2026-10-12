@@ -14,6 +14,8 @@ interface WorkspaceImportDialogProps {
   file: WorkspaceManifest;
   /** Free accounts: Keep both needs a second slot and opens the supporter hub. */
   locked: boolean;
+  /** A supporter at the workspace cap: Keep both needs a free slot. */
+  atCap?: boolean;
   onCancel: () => void;
   onKeepBoth: () => void;
   onReplace: () => void;
@@ -35,7 +37,7 @@ const Panel = ({ label, name, lines, testid }: { label: string; name: string; li
  * Replace. A free account importing a different workspace sees the same
  * dialog over Default, its only slot.
  */
-const WorkspaceImportDialog = ({ mode, here, file, locked, onCancel, onKeepBoth, onReplace }: WorkspaceImportDialogProps) => {
+const WorkspaceImportDialog = ({ mode, here, file, locked, atCap = false, onCancel, onKeepBoth, onReplace }: WorkspaceImportDialogProps) => {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
   const exported = new Date(file.exportedAt).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
@@ -67,7 +69,7 @@ const WorkspaceImportDialog = ({ mode, here, file, locked, onCancel, onKeepBoth,
       <DialogActions>
         <Button color="inherit" onClick={onCancel} data-testid="workspace-import-cancel">{t('common.cancel')}</Button>
         <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-          <Button variant="outlined" color="inherit" onClick={onKeepBoth} data-testid="workspace-import-keep-both" sx={{ borderColor: 'divider' }}>
+          <Button variant="outlined" color="inherit" onClick={onKeepBoth} disabled={atCap} data-testid="workspace-import-keep-both" sx={{ borderColor: 'divider' }}>
             {t('workspace.keepBoth')}
           </Button>
           {locked && <LockMark sx={{ position: 'absolute', top: -6, right: -6 }} />}

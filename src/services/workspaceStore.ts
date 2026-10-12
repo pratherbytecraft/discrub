@@ -59,6 +59,9 @@ const META_KEY = 'meta';
 
 const SNOWFLAKE_WIDTH = 20;
 
+/** Row 4: a page write moves the record's last used time at most this often. */
+const LAST_USED_STEP_MS = 60_000;
+
 /** How often `scan` reports progress and checks for a stop. */
 const SCAN_PROGRESS_EVERY = 500;
 
@@ -573,12 +576,37 @@ export function setSelection(wid: string, cid: string, ids: readonly string[]): 
   });
 }
 
+/** Drops a conversation's selection and its saved reaction details. */
 function dropSelection(tx: IDBTransaction, wid: string, cid: string): void {
   tx.objectStore(STORE_META).delete(selectionKey(wid, cid));
+  tx.objectStore(STORE_META).delete(reactionDetailKey(wid, cid));
 }
 
 function dropWorkspaceSelections(tx: IDBTransaction, wid: string): void {
   tx.objectStore(STORE_META).delete(workspaceSelectionRange(wid));
+  tx.objectStore(STORE_META).delete(IDBKeyRange.bound(['rx', wid], ['rx', wid, []]));
+}
+
+/* ─────────────────── Reaction details (2.2.5 row 18) ─────────────────── */
+
+/**
+ * Who reacted with what, as an HTML export fetched it for a run
+ * conversation, so a resumed Bulk Export writes a finished channel again
+ * without asking Discord a second time. Dropped with the conversation.
+ */
+const reactionDetailKey = (wid: string, cid: string): IDBValidKey => ['rx', wid, cid];
+
+export function getReactionDetail<T>(wid: string, cid: string): Promise<T | null> {
+  return withTx('readonly', [STORE_META], { wid, cid }, async (tx) => {
+    const value = await req<T | undefined>(tx.objectStore(STORE_META).get(reactionDetailKey(wid, cid)));
+    return value ?? null;
+  });
+}
+
+export function setReactionDetail(wid: string, cid: string, value: unknown): Promise<void> {
+  return withTx('readwrite', [STORE_META], { wid, cid }, async (tx) => {
+    tx.objectStore(STORE_META).put(value, reactionDetailKey(wid, cid));
+  });
 }
 
 /* ─────────────────── Workspaces ─────────────────── */
@@ -1082,6 +1110,8 @@ export function writePage(
     conversation.newestId = newest ? unpadSnowflake(newest) : null;
     record.conversations[cid] = conversation;
     record.bytes += bytes;
+    const now = Date.now();
+    if (now - record.lastOpened >= LAST_USED_STEP_MS) record.lastOpened = now;
     tx.objectStore(STORE_WORKSPACES).put(record);
     // Day counts already read for this conversation take the new ids.
     extendDayCounts(wid, cid, addedIds);

@@ -25,6 +25,9 @@ export const LEGACY_DEFAULT_WORKSPACE_ID = 'default';
 export const DEFAULT_WORKSPACE_NAME = 'Default';
 export const DEFAULT_WORKSPACE_COLOR = '#5865f2';
 
+/** Rows 33 and 34: supporters keep at most this many workspaces, one colour each. */
+export const MAX_WORKSPACES = 8;
+
 export type ConversationKind = 'channel' | 'dm' | 'thread';
 
 export type ActionKind = 'loadAll' | 'export' | 'purge';
@@ -145,6 +148,7 @@ export interface WorkspaceRecord {
   schema: number;
   appVersion: string;
   createdAt: number;
+  /** When the workspace was last opened or written to (row 4: a page write moves it, at most once a minute). */
   lastOpened: number;
   /** Sum of every conversation's byte estimate. */
   bytes: number;

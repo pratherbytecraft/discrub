@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  LinearProgress,
   Popover,
   Typography,
   type PopoverOrigin,
@@ -16,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import { selectHasThemes, setSupporterPanelOpen } from '@features/supporter/supporterSlice';
-import { refreshWorkspaces, selectCurrentWid, selectStorageFigures, selectWorkspaceList } from '@features/workspace/workspaceSlice';
+import { refreshWorkspaces, selectCurrentWid, selectStorageFigures, selectWorkspaceImporting, selectWorkspaceList } from '@features/workspace/workspaceSlice';
 import {
   clearConversationThunk,
   clearWorkspaceThunk,
@@ -30,6 +31,7 @@ import {
 import { showToast } from '@features/status/statusSlice';
 import { WORKSPACE_FILE_EXTENSION, WorkspaceFileError, readWorkspaceManifest, type WorkspaceManifest } from '@services/workspaceArchive';
 import type { WorkspaceSummary } from '@features/workspace/workspaceSummary';
+import { MAX_WORKSPACES } from '@features/workspace/workspaceTypes';
 import { formatDiskSize, segmentPercents, shelfBytes } from '@features/workspace/diskBarScale';
 import { useWorkspaceSwitch } from '@/hooks/useWorkspaceSwitch';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
@@ -86,7 +88,9 @@ const WorkspacesPopover = ({
   const storage = useAppSelector(selectStorageFigures);
   const currentWid = useAppSelector(selectCurrentWid);
   const supporter = useAppSelector(selectHasThemes);
-  const busy = useAppSelector(selectIsOperationRunning);
+  const importing = useAppSelector(selectWorkspaceImporting);
+  // Row 9: an import holds the popover busy like a running action.
+  const busy = useAppSelector(selectIsOperationRunning) || importing !== null;
   const { requestSwitch, dialogProps } = useWorkspaceSwitch();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -105,8 +109,11 @@ const WorkspacesPopover = ({
   const size = (w: { bytes: number }) => formatDiskSize(w.bytes);
   const messages = (count: number) => countLabel('messages', count, locale);
 
+  // Rows 33 and 34: a supporter's workspaces stop at MAX_WORKSPACES.
+  const atCap = supporter && list.length >= MAX_WORKSPACES;
   const onNew = async () => {
     if (!supporter) return openHub();
+    if (atCap) return;
     const wid = await dispatch(createNewWorkspace()).unwrap();
     setExpanded(null);
     setRenaming(wid);
@@ -154,6 +161,7 @@ const WorkspacesPopover = ({
     }
     const match = list.find((w) => w.wid === manifest.wid);
     if (match) return setPendingImport({ file, manifest, mode: 'conflict', here: match });
+    if (atCap) return void dispatch(showToast({ level: 'warning', message: t('workspace.atCapImport', { count: MAX_WORKSPACES }) }));
     if (supporter) return void dispatch(importWorkspaceThunk({ file, manifest, mode: 'new' }));
     const defaultWorkspace = list.find((w) => w.isDefault);
     if (defaultWorkspace) setPendingImport({ file, manifest, mode: 'replaceDefault', here: defaultWorkspace });
@@ -165,6 +173,7 @@ const WorkspacesPopover = ({
       setPendingImport(null);
       return openHub();
     }
+    if (atCap) return;
     setPendingImport(null);
     void dispatch(importWorkspaceThunk({ file: pending.file, manifest: pending.manifest, mode: 'new' }));
   };
@@ -216,6 +225,7 @@ const WorkspacesPopover = ({
               color="inherit"
               startIcon={<NewIcon sx={{ color: 'primary.main' }} />}
               onClick={onNew}
+              disabled={atCap || importing !== null}
               data-testid="workspace-new"
               sx={{ textTransform: 'none', py: 0.125, px: 1, fontSize: '0.75rem', borderColor: 'divider' }}
             >
@@ -230,12 +240,12 @@ const WorkspacesPopover = ({
               color="inherit"
               startIcon={<ImportIcon sx={{ color: 'primary.main' }} />}
               onClick={() => fileInput.current?.click()}
+              disabled={importing !== null}
               data-testid="workspace-import"
               sx={{ textTransform: 'none', py: 0.125, px: 1, fontSize: '0.75rem', borderColor: 'divider' }}
             >
               {t('workspace.import')}
             </Button>
-            {!supporter && <LockMark sx={{ position: 'absolute', top: -6, right: -6 }} />}
             <input
               ref={fileInput}
               type="file"
@@ -250,6 +260,19 @@ const WorkspacesPopover = ({
             />
           </Box>
         </Box>
+        {importing && (
+          <Box data-testid="workspace-import-progress" sx={{ px: 1.75, pt: 1 }}>
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mb: 0.5 }}>
+              {t('workspace.importProgress', { name: importing.name, done: importing.messages, total: importing.total })}
+            </Typography>
+            <LinearProgress variant="determinate" value={importing.total > 0 ? Math.min(100, (importing.messages / importing.total) * 100) : 0} />
+          </Box>
+        )}
+        {atCap && (
+          <Typography data-testid="workspace-at-cap" sx={{ px: 1.75, pt: 0.75, fontSize: '0.75rem', color: 'text.secondary' }}>
+            {t('workspace.atCap', { count: MAX_WORKSPACES })}
+          </Typography>
+        )}
         <Box sx={{ py: 0.5, maxHeight: LIST_MAX_H, overflowY: 'auto' }}>
           {list.map((w) => (
             <WorkspaceRow
@@ -259,6 +282,7 @@ const WorkspacesPopover = ({
               expanded={expanded === w.wid}
               renaming={renaming === w.wid}
               locked={!supporter}
+              atCap={atCap}
               busy={busy}
               onOpen={() => onOpen(w)}
               onToggle={() => setExpanded((prev) => (prev === w.wid ? null : w.wid))}
@@ -315,6 +339,7 @@ const WorkspacesPopover = ({
           here={pendingImport.here}
           file={pendingImport.manifest}
           locked={!supporter}
+          atCap={atCap}
           onCancel={() => setPendingImport(null)}
           onKeepBoth={keepBoth}
           onReplace={replace}

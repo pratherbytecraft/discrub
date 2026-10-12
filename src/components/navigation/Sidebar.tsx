@@ -92,6 +92,14 @@ const Sidebar = ({ open = false, onClose }: SidebarProps) => {
     if (desired !== sidebarView) dispatch(setSidebarView(desired));
   }, [tab, sidebarView, dispatch, isGuest]);
 
+  // Row 12: a DM opened from elsewhere (the workspace restore, a jump) shows the DMs tab.
+  const openDmId = useAppSelector((state) => (selectSelectedChannel(state) ? null : selectSelectedDm(state)?.id ?? null));
+  useEffect(() => {
+    if (openDmId && tab === 0) setTab(1);
+    // Only a newly opened DM moves the tab; switching back to Servers by hand stays.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openDmId]);
+
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTab(newValue);
   };

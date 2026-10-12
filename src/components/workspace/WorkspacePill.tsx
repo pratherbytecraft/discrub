@@ -19,13 +19,15 @@ const LOG_COLORS = { border: '#30363d', text: '#c9d1d9', icon: '#58a6ff', paper:
  * `bar` in the Workbench status bar, Native's user row and Operator's
  * queue footer, `floating` bottom left in Native on a phone.
  */
-const WorkspacePill = ({ variant }: { variant: WorkspacePillVariant }) => {
+/** `yieldRoom`: a hold line (a retry wait, a rest break) needs the row, so the pill gives way as in a bar. */
+const WorkspacePill = ({ variant, yieldRoom = false }: { variant: WorkspacePillVariant; yieldRoom?: boolean }) => {
   const { t } = useTranslation();
   const name = useAppSelector(selectCurrentWorkspaceName);
   const dot = useAppSelector(selectAnyUnfinishedWork);
   const ref = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const log = variant === 'log';
+  const keepName = log && !yieldRoom;
   return (
     <>
       <ButtonBase
@@ -55,8 +57,10 @@ const WorkspacePill = ({ variant }: { variant: WorkspacePillVariant }) => {
           fontWeight: 600,
           letterSpacing: '0.02em',
           whiteSpace: 'nowrap',
-          // Gives up room first in a crowded status row, down to the icon and chevron.
-          flexShrink: 10,
+          // Gives up room first in a crowded bar, down to the icon and chevron. In the
+          // status header the run text truncates first and the name stays (row 14),
+          // unless a hold line needs the room.
+          flexShrink: keepName ? 0 : 10,
           minWidth: 44,
           maxWidth: 200,
           overflow: 'visible',

@@ -45,6 +45,8 @@ import {
   deleteConversation,
   deleteConversationsWithPrefix,
   getConversation,
+  getReactionDetail,
+  setReactionDetail,
   writePage,
 } from '@services/workspaceStore';
 import { selectCurrentWid } from '@features/workspace/workspaceSlice';
@@ -1333,10 +1335,15 @@ async function exportUnit(o: ExportUnitOptions): Promise<UnitOutcome> {
       // Media only never fetches threads, so the main source is everything.
       await exportService.exportMediaOnly(Array.isArray(material.input) ? material.input : material.main, o.folderName, o.mediaConfig, o.onProgress, o.exportConfig, o.shouldContinue, o.zipService);
     } else {
-      // Fetch reaction user data for HTML exports only
-      const reactionMap = format === 'html'
-        ? await fetchReactionData(material.everything, o.token, getState, dispatch)
-        : undefined;
+      // Fetch reaction user data for HTML exports only. A unit written
+      // before keeps what it fetched, so a resume does not ask again (row 18).
+      let reactionMap: ExportReactionMap | undefined;
+      if (format === 'html') {
+        const runCid = bulkRunCid(unit.id);
+        const saved = o.wid ? await getReactionDetail<ExportReactionMap>(o.wid, runCid).catch(() => null) : null;
+        reactionMap = saved ?? await fetchReactionData(material.everything, o.token, getState, dispatch);
+        if (!saved && reactionMap && o.wid) await setReactionDetail(o.wid, runCid, reactionMap).catch(() => undefined);
+      }
 
       const rowErrors = createRowErrorReporter(dispatch, unit.label);
       await exportService.exportToZip(

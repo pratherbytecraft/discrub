@@ -72,6 +72,14 @@ export interface WorkspaceState {
   storage: StorageFigures | null;
   /** The Workspaces popover over the disk bar, opened from anywhere (the storage full hold, WP6a). */
   popoverOpen: boolean;
+  /** Row 9: the import under way, for the popover's progress line; null when none runs. */
+  importing: WorkspaceImportProgress | null;
+}
+
+export interface WorkspaceImportProgress {
+  name: string;
+  messages: number;
+  total: number;
 }
 
 export const initialWorkspaceState: WorkspaceState = {
@@ -91,6 +99,7 @@ export const initialWorkspaceState: WorkspaceState = {
   list: [],
   storage: null,
   popoverOpen: false,
+  importing: null,
 };
 
 /** The unfinished actions a workspace record carries. */
@@ -227,6 +236,9 @@ const workspaceSlice = createSlice({
     workspacesPopoverToggled: (state, action: PayloadAction<boolean>) => {
       state.popoverOpen = action.payload;
     },
+    importProgressed: (state, action: PayloadAction<WorkspaceImportProgress | null>) => {
+      state.importing = action.payload;
+    },
     /** Mirrors a conversation's action record; null clears it. */
     actionRecorded: (state, action: PayloadAction<{ cid: string; action: UnfinishedAction | null }>) => {
       if (action.payload.action) state.actions[action.payload.cid] = action.payload.action;
@@ -300,7 +312,9 @@ const workspaceSlice = createSlice({
   },
 });
 
-export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed, workspacesPopoverToggled } = workspaceSlice.actions;
+export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed, workspacesPopoverToggled, importProgressed } = workspaceSlice.actions;
+/** Row 9: the import under way, or null. */
+export const selectWorkspaceImporting = (state: RootState): WorkspaceImportProgress | null => state.workspace?.importing ?? null;
 
 /** The open workspace id, or null while workspaces are not ready (writes are skipped). */
 export const selectDefaultWid = (state: RootState): string | null => state.workspace?.defaultWid ?? null;

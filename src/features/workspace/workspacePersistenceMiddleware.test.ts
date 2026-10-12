@@ -24,13 +24,13 @@ import messageReducer, {
 import { RowFlag } from '@features/message/messageRows';
 import { dropCachedMessages, getCachedMessage, MAIN_CONTAINER } from '@features/message/messageCache';
 import { initialMessageState } from '@features/message/messageTypes';
-import workspaceReducer, { setCurrentWorkspace } from './workspaceSlice';
+import workspaceReducer, { setCurrentWorkspace, workspaceSwitched } from './workspaceSlice';
 import channelReducer, { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
-import dmReducer from '@features/dm/dmSlice';
-import guildReducer, { fetchGuilds } from '@features/guild/guildSlice';
+import dmReducer, { setSelectedDm } from '@features/dm/dmSlice';
+import guildReducer, { fetchGuilds, setSelectedGuild } from '@features/guild/guildSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
-import { workspacePersistenceMiddleware, flushPendingRecords, editPatch } from './workspacePersistenceMiddleware';
+import { workspacePersistenceMiddleware, flushPendingRecords, editPatch, scopeFromState } from './workspacePersistenceMiddleware';
 import { LEGACY_DEFAULT_WORKSPACE_ID } from './workspaceTypes';
 import { persistThreadTabs } from '@features/message/messagePersistence';
 import {
@@ -161,6 +161,27 @@ describe('workspacePersistenceMiddleware', () => {
     const record = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(record?.name).toBe('general');
     expect((record?.refineCriteria as { isPinned?: number } | null)?.isPinned).toBe(1);
+  });
+
+  it('a server list that arrived before the workspace opened renames it once it opens (row 15)', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1')], { ...seed, guildName: 'Sandbox Renamed' });
+    store.dispatch(setCurrentWorkspace(null));
+    store.dispatch(fetchGuilds.fulfilled([{ id: '42', name: 'Sandbox' } as never], 'r', 't'));
+    await settle();
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.guilds).toEqual({ '42': 'Sandbox Renamed' });
+    store.dispatch(workspaceSwitched({ wid: LEGACY_DEFAULT_WORKSPACE_ID, name: 'Default', actions: {} }));
+    await settle();
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.guilds).toEqual({ '42': 'Sandbox' });
+  });
+
+  it('an open DM is the scope alone, without the server still selected beside it (row 12)', () => {
+    const store = makeStore();
+    store.dispatch(setSelectedGuild({ id: '42', name: 'Sandbox' } as never));
+    expect(scopeFromState(store.getState() as never)).toMatchObject({ guildId: '42', channelId: CID, dmId: null });
+    store.dispatch(setSelectedChannel(null));
+    store.dispatch(setSelectedDm(createMockChannel({ id: '5000', name: 'group', guild_id: undefined }) as never));
+    expect(scopeFromState(store.getState() as never)).toEqual({ tab: null, guildId: null, channelId: null, dmId: '5000' });
   });
 
   it('a channel, server or DM list that arrives renames the records (ws-conv-names)', async () => {

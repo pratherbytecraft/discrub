@@ -26,6 +26,8 @@ export interface WorkspaceRowProps {
   renaming: boolean;
   /** Free accounts see Duplicate with the supporter lock. */
   locked: boolean;
+  /** A supporter at the workspace cap: Duplicate waits until one is deleted. */
+  atCap?: boolean;
   /** Clear and Delete wait while an action runs in the open workspace. */
   busy: boolean;
   onOpen: () => void;
@@ -55,6 +57,7 @@ const WorkspaceRow = ({
   expanded,
   renaming,
   locked,
+  atCap = false,
   busy,
   onOpen,
   onToggle,
@@ -198,7 +201,7 @@ const WorkspaceRow = ({
         <>
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', pt: 0.25, pb: 1, pl: 4.375, pr: 1.75 }}>
             {act(t('workspace.rename'), <RenameIcon />, onRenameStart, { testid: 'workspace-rename', disabled: !w.openable })}
-            {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', lock: locked, disabled: !w.openable })}
+            {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', lock: locked, disabled: !w.openable || atCap })}
             {act(t('workspace.export'), <ExportIcon />, onExport, { testid: 'workspace-export', disabled: !w.openable })}
             {act(t('workspace.clear'), <ClearIcon />, onClear, { testid: 'workspace-clear', disabled: (current && busy) || w.count === 0 })}
             {!w.isDefault && act(t('workspace.delete'), <DeleteIcon />, onDelete, { testid: 'workspace-delete', danger: true, disabled: (current && busy) || w.heldElsewhere })}

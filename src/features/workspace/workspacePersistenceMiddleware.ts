@@ -61,7 +61,7 @@ import { fetchChannels, setSelectedChannel } from '@features/channel/channelSlic
 import { fetchDMs, setSelectedDm } from '@features/dm/dmSlice';
 import { getDmName } from '@utils/dmListUtils';
 import type { ActionKind, BulkKind, BulkMode, ConversationSeed, NameRefresh, WorkspaceBulk, WorkspaceScope } from './workspaceTypes';
-import { actionRecorded, bulkOf, bulkRecorded, feedAnchorMoved, scopeRestoreFinished, selectCurrentWid } from './workspaceSlice';
+import { actionRecorded, bulkOf, bulkRecorded, feedAnchorMoved, initializeWorkspaces, scopeRestoreFinished, selectCurrentWid, workspaceSwitched } from './workspaceSlice';
 import { buildConfigSnapshot, bulkExportChannels, bulkExportDMs, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
 import { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
 
@@ -234,11 +234,14 @@ function actionEnded(api: PersistApi, cid: string | null): void {
 
 /** Where the user is, as the workspace row keeps it. */
 export function scopeFromState(state: RootState): WorkspaceScope {
+  const channelId = state.channel?.selectedChannel?.id ?? null;
+  const dmId = channelId ? null : state.dm?.selectedDm?.id ?? null;
+  // Row 12: an open DM leaves the last server selected; the scope is the DM alone.
   return {
     tab: null,
-    guildId: state.guild?.selectedGuild?.id ?? null,
-    channelId: state.channel?.selectedChannel?.id ?? null,
-    dmId: state.dm?.selectedDm?.id ?? null,
+    guildId: dmId ? null : state.guild?.selectedGuild?.id ?? null,
+    channelId,
+    dmId,
   };
 }
 
@@ -432,6 +435,21 @@ listen({
   actionCreator: fetchDMs.fulfilled,
   effect: (action, listenerApi) => {
     refreshNames(listenerApi, { dms: namesOf(action.payload, getDmName) });
+  },
+});
+
+// Row 15: a list that arrived while the workspace was still opening was
+// dropped above; once it is open, the lists already loaded rename it.
+// Names are keyed by id, so a list from the previous scope is still right.
+listen({
+  matcher: isAnyOf(initializeWorkspaces.fulfilled, workspaceSwitched),
+  effect: (_action, listenerApi) => {
+    const state = listenerApi.getState();
+    const names: NameRefresh = {};
+    if (state.guild?.guilds?.length) names.guilds = namesOf(state.guild.guilds);
+    if (state.channel?.channels?.length) names.channels = namesOf(state.channel.channels);
+    if (state.dm?.dms?.length) names.dms = namesOf(state.dm.dms, getDmName);
+    if (Object.keys(names).length > 0) refreshNames(listenerApi, names);
   },
 });
 

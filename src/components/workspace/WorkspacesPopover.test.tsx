@@ -38,10 +38,10 @@ const LIST = [
   ws({ wid: 'w3', name: 'Mod cleanup', color: '#faa61a', heldElsewhere: true }),
 ];
 
-function render(isSupporter: boolean) {
+function render(isSupporter: boolean, extra: { list?: WorkspaceSummary[]; importing?: { name: string; messages: number; total: number } } = {}) {
   const state = createBaseState();
   if (isSupporter) state.supporter = supporter as typeof state.supporter;
-  (state as Record<string, unknown>).workspace = { ...initialWorkspaceState, currentWid: 'default', currentName: 'Default', ready: true, list: LIST, storage: { usage: 1_600_000_000, quota: 10_737_418_240, remaining: 9_137_418_240 } };
+  (state as Record<string, unknown>).workspace = { ...initialWorkspaceState, currentWid: 'default', currentName: 'Default', ready: true, list: extra.list ?? LIST, importing: extra.importing ?? null, storage: { usage: 1_600_000_000, quota: 10_737_418_240, remaining: 9_137_418_240 } };
   return renderWithProviders(<WorkspacesPopover anchorEl={document.body} open onClose={vi.fn()} />, { preloadedState: state });
 }
 
@@ -63,12 +63,28 @@ describe('WorkspacesPopover (2.2.5 WP5)', () => {
     expect(screen.getByTestId('workspace-remaining')).toHaveTextContent('9.1 GB remaining');
   });
 
-  it('free accounts see the supporter lock on New, Import and Duplicate and the Supporter only row', () => {
+  it('free accounts see the supporter lock on New and Duplicate (not Import, row 3) and the Supporter only row', () => {
     render(false);
     expect(screen.getByTestId('workspace-supporter-only')).toHaveTextContent('Supporter only');
     fireEvent.click(screen.getByTestId('workspace-row-toggle-default'));
-    expect(screen.getAllByTestId('workspace-lock')).toHaveLength(4);
+    expect(screen.getAllByTestId('workspace-lock')).toHaveLength(3);
     expect(screen.queryByTestId('workspace-delete')).toBeNull();
+  });
+
+  it('a supporter at 8 workspaces cannot make another: New and Duplicate wait, one plain line (rows 33, 34)', () => {
+    const eight = [ws({ isDefault: true }), ...Array.from({ length: 7 }, (_, i) => ws({ wid: `w${i + 2}`, name: `Workspace ${i + 2}` }))];
+    render(true, { list: eight });
+    expect(screen.getByTestId('workspace-new')).toBeDisabled();
+    expect(screen.getByTestId('workspace-at-cap')).toHaveTextContent('8 of 8 workspaces.');
+    fireEvent.click(screen.getByTestId('workspace-row-toggle-w2'));
+    expect(screen.getByTestId('workspace-duplicate')).toBeDisabled();
+  });
+
+  it('an import under way shows its progress and holds New and Import (row 9)', () => {
+    render(true, { importing: { name: 'Raid archive', messages: 12_000, total: 50_000 } });
+    expect(screen.getByTestId('workspace-import-progress')).toHaveTextContent('Importing Raid archive: 12,000 of 50,000 messages');
+    expect(screen.getByTestId('workspace-new')).toBeDisabled();
+    expect(screen.getByTestId('workspace-import')).toBeDisabled();
   });
 
   it('supporters see no lock and Delete on workspaces other than Default', () => {

@@ -15,7 +15,7 @@ import { groupEntriesBySession, LEGACY_SESSION_ID } from '@features/status/statu
 import { storage } from '@/extension/storage';
 import { selectOperationSummary, type OperationSummary } from '@features/app/operationSelectors';
 import type { StatusLevel, StatusLogEntry } from '@features/status/statusTypes';
-import PauseResumeControls from './PauseResumeControls';
+import PauseResumeControls, { useOperationHeadline } from './PauseResumeControls';
 import OperationTip from './OperationTip';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
@@ -168,6 +168,7 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
   const entries = useAppSelector(selectStatusEntries);
   const count = useAppSelector(selectStatusCount);
   const operationSummary = useAppSelector(selectOperationSummary);
+  const holdHeadline = useOperationHeadline();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -366,11 +367,13 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
               color: '#c9d1d9',
               fontSize: '0.7rem',
               letterSpacing: '0.03em',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             {t('statusPanel.title')}
           </Typography>
-          <WorkspacePill variant="log" />
+          <WorkspacePill variant="log" yieldRoom={holdHeadline !== ''} />
           {operationSummary.isRunning && (
             <CircularProgress
               size={12}

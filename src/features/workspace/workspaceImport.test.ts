@@ -89,7 +89,7 @@ describe('importWorkspaceThunk over the open workspace', () => {
     expect(store.getState().status.toast.message).toBe('Wait for the running action to finish or stop it first.');
   });
 
-  it('replaces Default and opens it again with the file\'s unfinished work', async () => {
+  it('replaces Default, keeps the name Default (row 10), and opens it again with the file\'s unfinished work', async () => {
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '999', [createMockMessage({ id: '50', channel_id: '999' })], { kind: 'channel', guildId: '1', name: 'old' });
     const store = makeStore();
     store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
@@ -114,10 +114,11 @@ describe('importWorkspaceThunk over the open workspace', () => {
     expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '801')).toBe(2);
     const workspace = store.getState().workspace;
     expect(workspace.currentWid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
-    expect(workspace.currentName).toBe('Old raids');
+    expect(workspace.currentName).toBe('Default');
     expect(workspace.switching).toBe(false);
     expect(workspace.scopeRestoredWid).toBeNull();
     expect(Object.keys(workspace.actions)).toEqual(['801']);
-    expect(store.getState().status.toast.message).toBe('Imported Old raids with 2 messages');
+    expect(store.getState().status.toast.message).toBe('Imported Default with 2 messages');
+    expect(store.getState().workspace.importing).toBeNull();
   });
 });

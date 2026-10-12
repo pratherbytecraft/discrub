@@ -97,7 +97,8 @@ const OperatorQueue = ({ marks, runProgress }: { marks: QueueMarks; runProgress?
       </Box>
       {segment !== 'package' && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.75, borderTop: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="caption" data-testid="operator-queue-count" noWrap sx={{ color: 'text.secondary', flex: 1, minWidth: 0 }}>{countLine}</Typography>
+          {/* Row 37: the line wraps beside the pill instead of clipping. */}
+          <Typography variant="caption" data-testid="operator-queue-count" sx={{ color: 'text.secondary', flex: 1, minWidth: 0, lineHeight: 1.4 }}>{countLine}</Typography>
           <WorkspacePill variant="bar" />
         </Box>
       )}
