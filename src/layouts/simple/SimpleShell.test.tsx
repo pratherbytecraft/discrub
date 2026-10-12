@@ -25,6 +25,13 @@ const withChannel = () => {
 };
 
 describe('<SimpleShell />', () => {
+  // Row 112 (pass 2): the user chip opens the profile window, where Sign out lives.
+  it('opens the profile window from the user chip', () => {
+    renderWithProviders(<SimpleShell {...props} focusedView={false} />, { preloadedState: withChannel() });
+    fireEvent.click(screen.getByTestId('simple-user-chip'));
+    expect(screen.getByTestId('profile-logout')).toBeInTheDocument();
+  });
+
   it('renders the top bar with the picker breadcrumb and the version, the search card, the hint bar and the feed', () => {
     renderWithProviders(<SimpleShell {...props} focusedView={false} />, { preloadedState: withChannel() });
     expect(screen.getByTestId('simple-top')).toBeInTheDocument();

@@ -19,6 +19,13 @@ const withChannel = () => {
 };
 
 describe('<OperatorShell />', () => {
+  // Row 112 (pass 2): the user chip opens the profile window, where Sign out lives.
+  it('opens the profile window from the user chip', () => {
+    renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: withChannel() });
+    fireEvent.click(screen.getByTestId('operator-user-chip'));
+    expect(screen.getByTestId('profile-logout')).toBeInTheDocument();
+  });
+
   it('renders the top bar crumb, the queue with the segment, the run card, the log, the peek and recent exports', () => {
     renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: withChannel() });
     expect(screen.getByTestId('operator-crumb')).toHaveTextContent('Cypress Test Server');

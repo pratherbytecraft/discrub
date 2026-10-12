@@ -441,5 +441,6 @@ export async function dropSavedSearch(api: PersistApi, cid: string): Promise<Per
 /** Mirrors the open thread tabs into the parent conversation's record when it exists. */
 export async function persistThreadTabs(api: PersistApi, parentCid: string, state: RootState): Promise<PersistOutcome> {
   const threadTabs = Object.keys(state.message.threadTabs ?? {});
-  return persistConversation(api, parentCid, { threadTabs, activeTab: state.message.activeTab }, null);
+  // Row 127 (pass 2): a parent with only its first page has no record yet, so the seed writes one; without it the tabs were lost on reload.
+  return persistConversation(api, parentCid, { threadTabs, activeTab: state.message.activeTab }, conversationSeedFromState(state, parentCid));
 }

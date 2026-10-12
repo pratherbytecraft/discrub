@@ -9,7 +9,7 @@ import type { AppDispatch } from '@/app/store';
 import type { Message } from 'discrub-core/types/discord-types';
 import { createMockChannel, createMockDmChannel, createMockGuild, createMockMessage } from '@/test/fixtures';
 import * as discordService from '@services/discordService';
-import messageReducer, { enrichMessageUsers, fetchAllMessages, fetchMessages, resetUserLookupQueue, setActiveTab } from '@features/message/messageSlice';
+import messageReducer, { enrichMessageUsers, fetchAllMessages, fetchMessages, openThreadTab, resetUserLookupQueue, setActiveTab } from '@features/message/messageSlice';
 import { userEnrichmentService } from '@services/userEnrichmentService';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import workspaceReducer, {
@@ -18,8 +18,10 @@ import workspaceReducer, {
   selectConversationAction,
   selectHasUnfinishedWork,
   setCurrentWorkspace,
+  refreshWorkspaces,
 } from './workspaceSlice';
-import { restoreWorkspaceScope, switchWorkspace } from './workspaceThunks';
+import { duplicateWorkspaceThunk, restoreWorkspaceScope, switchWorkspace } from './workspaceThunks';
+import { openGuild } from '@features/navigation/openConversation';
 import { workspacePersistenceMiddleware, flushPendingRecords } from './workspacePersistenceMiddleware';
 import channelReducer, { setSelectedChannel } from '@features/channel/channelSlice';
 import dmReducer, { setSelectedDm } from '@features/dm/dmSlice';
@@ -472,5 +474,44 @@ describe('restoreWorkspaceScope', () => {
     store.dispatch(setActiveTab(null));
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
     expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.activeTab).toBeNull();
+  });
+
+  it('writes the parent record when the first thread tab opens on a channel with no record (pass 2, row 127)', async () => {
+    const store = makeStore();
+    await openDefault(store);
+    store.dispatch(setSelectedGuild(GUILD));
+    store.dispatch(setSelectedChannel(CHANNEL));
+    expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
+    await thunk(store)(openThreadTab({ threadId: '77', threadName: 'Bug talk', token: 'token' }));
+    store.dispatch(setActiveTab('77'));
+    await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
+    const parent = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
+    expect(parent).toMatchObject({ name: 'general', threadTabs: ['77'], activeTab: '77' });
+  });
+});
+
+describe('opening a server', () => {
+  it('closes an open DM, so its header and Load All do not stay on screen (pass 2, row 129)', async () => {
+    const store = makeStore();
+    await openDefault(store);
+    store.dispatch(setSelectedDm(createMockDmChannel({ id: '9' })));
+    await thunk(store)(openGuild({ guild: GUILD }));
+    expect(store.getState().dm.selectedDm).toBeNull();
+    expect(store.getState().guild.selectedGuild?.id).toBe('42');
+  });
+});
+
+describe('Duplicate', () => {
+  it('says it is under way and when it is done (pass 2, row 121)', async () => {
+    const store = makeStore();
+    await openDefault(store);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(1000, 5), seed);
+    await thunk(store)(refreshWorkspaces());
+    const copyWid = await thunk(store)(duplicateWorkspaceThunk({ wid: LEGACY_DEFAULT_WORKSPACE_ID })).unwrap();
+    expect(await countRows(copyWid, CID)).toBe(5);
+    const entries = store.getState().status.entries.map((e) => e.message);
+    expect(entries).toContain('Duplicating Default');
+    expect(entries).toContain('Duplicated Default as Default copy');
+    expect(store.getState().workspace.duplicating).toBeNull();
   });
 });

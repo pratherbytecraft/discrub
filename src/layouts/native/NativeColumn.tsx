@@ -6,6 +6,7 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView } from '@features/app/appSlice';
 import { selectSelectedGuild, setSelectedGuild } from '@features/guild/guildSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
+import ProfileWindow from '@components/modals/ProfileWindow';
 import ChannelList from '@components/navigation/ChannelList';
 import DMList from '@components/navigation/DMList';
 import PackageChannelList from '@components/package/PackageChannelList';
@@ -28,6 +29,8 @@ const NativeColumn = () => {
   const sidebarView = useAppSelector(selectSidebarView);
   const selectedGuild = useAppSelector(selectSelectedGuild);
   const currentUser = useAppSelector(selectCurrentUser);
+  // Row 112: the user panel opens the profile window, where Sign out lives.
+  const [profileOpen, setProfileOpen] = useState(false);
   const [filterText, setFilterText] = useState('');
   const dmMode = sidebarView === 'server' && !selectedGuild;
   const title = sidebarView === 'package' ? t('sidebar.tabPackage') : selectedGuild ? selectedGuild.name : t('sidebar.tabDms');
@@ -61,10 +64,19 @@ const NativeColumn = () => {
         {sidebarView === 'package' ? <PackageChannelList filterText={filterText} /> : dmMode ? <DMList filterText={filterText} /> : <ChannelList filterText={filterText} />}
       </Box>
       <Box data-tour="user-profile" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.25, py: 1, borderTop: '1px solid', borderColor: 'divider', backgroundColor: alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.2 : 0.04) }}>
-        <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Box
+          data-testid="native-user-panel"
+          role="button"
+          tabIndex={0}
+          aria-label={t('topbar.profile', { name: currentUser?.global_name || currentUser?.username || '' })}
+          onClick={() => setProfileOpen(true)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setProfileOpen(true); } }}
+          sx={{ minWidth: 0, flex: 1, cursor: 'pointer', borderRadius: 1, px: 0.5, mx: -0.5, '&:hover': { backgroundColor: 'action.hover' } }}
+        >
           <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{currentUser?.global_name || currentUser?.username || ''}</Typography>
           <Typography variant="caption" noWrap sx={{ color: 'text.secondary', display: 'block' }}>Discrub {__APP_VERSION__}</Typography>
         </Box>
+        <ProfileWindow open={profileOpen} onClose={() => setProfileOpen(false)} />
         <WorkspacePill variant="bar" />
         <DevToolsFlask />
       </Box>

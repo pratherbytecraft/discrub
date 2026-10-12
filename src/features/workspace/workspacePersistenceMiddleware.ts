@@ -555,6 +555,9 @@ listen({
     const state = listenerApi.getState();
     const cid = selectActiveCid(state);
     if (!cid) return;
+    // Row 123: a conversation has one action slot. An unfinished Load All
+    // keeps it; the export is not recorded, so Resume still means the Load All.
+    if (state.workspace?.actions?.[cid]?.kind === 'loadAll') return;
     exportCids.set(action.meta.requestId, cid);
     const thread = state.message.activeTab && state.message.threadTabs?.[state.message.activeTab] ? cid : null;
     const seed = thread ? threadSeedFromState(state, cid) : conversationSeedFromState(state, cid);

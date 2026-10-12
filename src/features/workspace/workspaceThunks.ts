@@ -51,6 +51,7 @@ import {
   bulkOf,
   currentWorkspaceRenamed,
   importProgressed,
+  duplicateProgressed,
   initializeWorkspaces,
   refreshWorkspaces,
   scopeRestoreFinished,
@@ -313,13 +314,22 @@ export const duplicateWorkspaceThunk = createAsyncThunk<string, { wid: string },
     const list = getState().workspace.list;
     const source = list.find((w) => w.wid === wid);
     const names = list.map((w) => w.name);
-    const copy = await duplicateWorkspace(wid, copyName(source?.name ?? wid, t('workspace.copySuffix'), names));
-    // The copy gets its own colour so the bar can tell them apart.
-    await updateWorkspace(copy.wid, (record) => {
-      record.color = nextWorkspaceColor(list.map((w) => w.color));
-    });
-    await dispatch(refreshWorkspaces());
-    return copy.wid;
+    const name = source?.name ?? wid;
+    // Row 121: a large copy takes a while in one transaction, so the popover and the log say it is under way.
+    dispatch(duplicateProgressed(name));
+    dispatch(addStatusEntry({ level: 'info', message: t('workspace.duplicating', { name }) }));
+    try {
+      const copy = await duplicateWorkspace(wid, copyName(name, t('workspace.copySuffix'), names));
+      // The copy gets its own colour so the bar can tell them apart.
+      await updateWorkspace(copy.wid, (record) => {
+        record.color = nextWorkspaceColor(list.map((w) => w.color));
+      });
+      dispatch(addStatusEntry({ level: 'success', message: t('workspace.duplicated', { name, copy: copy.name }) }));
+      return copy.wid;
+    } finally {
+      dispatch(duplicateProgressed(null));
+      await dispatch(refreshWorkspaces());
+    }
   },
 );
 

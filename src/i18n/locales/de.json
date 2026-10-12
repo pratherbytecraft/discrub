@@ -2167,6 +2167,8 @@
     "signOutButton": "Abmelden",
     "duplicateTitle": "{{name}} duplizieren",
     "duplicateBody": "Erstellt eine Kopie mit {{messages}}, etwa {{size}} mehr belegt.",
+    "duplicating": "{{name}} wird dupliziert",
+    "duplicated": "{{name}} als {{copy}} dupliziert",
     "switchStuck": "Arbeitsbereich konnte nicht gewechselt werden. Die laufende Aktion hat nicht angehalten, versuche es gleich noch einmal.",
     "busy": "Warte, bis die laufende Aktion fertig ist, oder stoppe sie zuerst.",
     "fullTitle": "Der Browserspeicher ist voll",

@@ -1,7 +1,7 @@
 import { useState, memo } from 'react';
 import {
   AppBar, Toolbar, Avatar, Typography, IconButton, Box, Tooltip, Button,
-  Dialog, DialogContent, DialogContentText, DialogTitle, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText,
+  Dialog, DialogContent, Menu, MenuItem, ListItemIcon, ListItemText,
   alpha, useMediaQuery, useTheme, Divider,
 } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
@@ -22,13 +22,10 @@ import {
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectCurrentUser } from '@features/user/userSlice';
-import { clearToken, forgetRememberedToken, leaveGuestMode, selectIsGuestMode } from '@features/auth/authSlice';
-import { clearCurrentUser } from '@features/user/userSlice';
-import { clearGuilds, setSelectedGuild } from '@features/guild/guildSlice';
-import { clearChannels, setSelectedChannel } from '@features/channel/channelSlice';
-import { clearDMs, setSelectedDm } from '@features/dm/dmSlice';
-import { clearMessages } from '@features/message/messageSlice';
-import { selectCachedUserMap } from '@features/cache/cacheSlice';
+import { leaveGuestMode, selectIsGuestMode } from '@features/auth/authSlice';
+import { setSelectedGuild } from '@features/guild/guildSlice';
+import { setSelectedChannel } from '@features/channel/channelSlice';
+import { setSelectedDm } from '@features/dm/dmSlice';
 import { selectSetting, updateSetting, setMinimized, setKofiOverlayOpen,
   setDialogOpen,
 } from '@features/app/appSlice';
@@ -47,17 +44,15 @@ import { CompatibilityPopup, CompatibilitySheet } from '@components/compatibilit
 import { InfoOutlined as CompatibilityIcon } from '@mui/icons-material';
 import { BleedingStack } from '@components/supporter/BleedingTitle';
 import { isBleedingEdgeBuild } from '@services/hostedGate';
-import UserProfileModal from '@components/modals/UserProfileModal';
+import ProfileWindow from '@components/modals/ProfileWindow';
+import SignOutConfirmDialog from '@components/modals/SignOutConfirmDialog';
+import { useSignOut } from '@/hooks/useSignOut';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import IdeasContactDialog from '@components/dialogs/IdeasContactDialog';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { selectIsMinimized } from '@features/app/appSlice';
 import { useTranslation } from 'react-i18next';
-import { clearAllWorkspaces } from '@features/workspace/workspaceThunks';
-import { refreshWorkspaces, selectWorkspaceList } from '@features/workspace/workspaceSlice';
-import { countLabel } from '@components/workspace/workspaceFormat';
-import { formatDiskSize } from '@features/workspace/diskBarScale';
 
 interface TopBarProps {
   /** Opens the navigation drawer; the hamburger only renders below `md`. */
@@ -77,7 +72,7 @@ const SectionDivider = () => (
  */
 const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const dispatch = useAppDispatch();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const theme = useTheme();
   // `md` and below: hamburger for the sidebar drawer. `sm` and below:
   // compact bar (no username/version text; Settings + Logout live in
@@ -93,7 +88,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const currentUser = useAppSelector(selectCurrentUser);
   // #275: a guest has no profile chip, a Sign in button sits there instead.
   const isGuest = useAppSelector(selectIsGuestMode);
-  const cachedUserMap = useAppSelector(selectCachedUserMap);
   const showKofiFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
   const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
   const operationSummary = useAppSelector(selectOperationSummary);
@@ -101,13 +95,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const [compatOpen, setCompatOpen] = useState(false);
   const [compatAnchor, setCompatAnchor] = useState<null | HTMLElement>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
-  const workspaces = useAppSelector(selectWorkspaceList);
-  const stored = {
-    workspaces: workspaces.length,
-    messages: workspaces.reduce((sum, w) => sum + w.count, 0),
-    bytes: workspaces.reduce((sum, w) => sum + w.bytes, 0),
-  };
+  // Row 112: the sign out flow is shared with the profile window the other layouts open.
+  const { requestSignOut: requestLogout, signOut: handleLogout, confirmOpen: signOutConfirmOpen, closeConfirm: closeSignOutConfirm, stored } = useSignOut();
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [ideasOpen, setIdeasOpen] = useState(false);
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
@@ -136,37 +125,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
         value: showKofiFeed === 'true' ? 'false' : 'true',
       }),
     );
-  };
-
-  /**
-   * Sign out clears every workspace (plan decision 9), so when any holds
-   * messages the user is asked first and sees what goes (ws-signout,
-   * owner 2026-10-14). Nothing stored, no question.
-   */
-  const requestLogout = async () => {
-    // The list follows store writes with a short delay, so read it fresh
-    // before deciding; a page loaded a moment ago still counts.
-    const result = await dispatch(refreshWorkspaces());
-    const list = refreshWorkspaces.fulfilled.match(result) ? result.payload.list : workspaces;
-    if (list.some((w) => w.count > 0)) {
-      setSignOutConfirmOpen(true);
-      return;
-    }
-    handleLogout();
-  };
-
-  const handleLogout = () => {
-    setSignOutConfirmOpen(false);
-    dispatch(clearToken());
-    // #249: a remembered token must not outlive an explicit sign-out.
-    dispatch(forgetRememberedToken());
-    dispatch(clearCurrentUser());
-    dispatch(clearGuilds());
-    dispatch(clearChannels());
-    dispatch(clearDMs());
-    dispatch(clearMessages());
-    // Messages never stay on disk after signing out (2.2.5 workspaces).
-    void dispatch(clearAllWorkspaces());
   };
 
   const handleProfileClick = () => {
@@ -622,36 +580,8 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
 
       <CompatibilitySheet open={compatOpen} onClose={() => setCompatOpen(false)} />
       <CompatibilityPopup anchor={compatAnchor} onClose={() => setCompatAnchor(null)} />
-      <UserProfileModal
-        open={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        onLogout={() => { setProfileModalOpen(false); void requestLogout(); }}
-        user={currentUser}
-        cachedUserMap={cachedUserMap}
-        guildId={null}
-      />
-
-      <Dialog open={signOutConfirmOpen} onClose={() => setSignOutConfirmOpen(false)} maxWidth="xs" fullWidth data-testid="signout-confirm">
-        <DialogTitle sx={{ pr: 5 }}>
-          {t('workspace.signOutTitle')}
-          <DialogCloseIcon onClose={() => setSignOutConfirmOpen(false)} />
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {t('workspace.signOutBody', {
-              workspaces: countLabel('workspaces', stored.workspaces, i18n.language),
-              messages: countLabel('messages', stored.messages, i18n.language),
-              size: formatDiskSize(stored.bytes),
-            })}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button color="inherit" onClick={() => setSignOutConfirmOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" color="error" onClick={handleLogout} data-testid="signout-confirm-button">
-            {t('workspace.signOutButton')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ProfileWindow open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
+      <SignOutConfirmDialog open={signOutConfirmOpen} onClose={closeSignOutConfirm} onConfirm={handleLogout} stored={stored} />
 
       <Dialog
         open={closeDialogOpen}

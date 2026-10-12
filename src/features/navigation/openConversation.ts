@@ -21,8 +21,10 @@ export const openGuild = createAsyncThunk<void, { guild: Guild }, { state: RootS
   async ({ guild }, { dispatch, getState }) => {
     const token = getState().auth.token;
     if (!token) return;
-    // Clear the previous server's state before loading the new one.
+    // Clear the previous server's state before loading the new one. An open
+    // DM goes too (row 129): its header and Load All stayed on screen otherwise.
     dispatch(setSelectedChannel(null));
+    dispatch(setSelectedDm(null));
     dispatch(clearMessages());
     dispatch(setSelectedGuild(guild));
     dispatch(addStatusEntry({ level: 'info', message: t('nav.loadingServer', { name: guild.name }) }));

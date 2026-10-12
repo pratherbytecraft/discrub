@@ -18,6 +18,13 @@ const withChannel = () => {
 };
 
 describe('<NativeShell />', () => {
+  // Row 112 (pass 2): the user panel opens the profile window, where Sign out lives.
+  it('opens the profile window from the user panel', () => {
+    renderWithProviders(<NativeShell {...props} focusedView={false} />, { preloadedState: withChannel() });
+    fireEvent.click(screen.getByTestId('native-user-panel'));
+    expect(screen.getByTestId('profile-logout')).toBeInTheDocument();
+  });
+
   it('renders the rail, the column, the head and the inspector around the feed', () => {
     renderWithProviders(<NativeShell {...props} focusedView={false} />, { preloadedState: withChannel() });
     expect(screen.getByTestId('native-rail')).toBeInTheDocument();

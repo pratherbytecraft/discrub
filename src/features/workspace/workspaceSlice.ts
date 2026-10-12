@@ -78,6 +78,8 @@ export interface WorkspaceState {
   popoverOpen: boolean;
   /** Row 9: the import under way, for the popover's progress line; null when none runs. */
   importing: WorkspaceImportProgress | null;
+  /** Row 121: the name of the workspace being duplicated, while the copy is made. */
+  duplicating: string | null;
 }
 
 export interface WorkspaceImportProgress {
@@ -104,6 +106,7 @@ export const initialWorkspaceState: WorkspaceState = {
   storage: null,
   popoverOpen: false,
   importing: null,
+  duplicating: null,
 };
 
 /** The unfinished actions a workspace record carries. */
@@ -250,6 +253,9 @@ const workspaceSlice = createSlice({
     importProgressed: (state, action: PayloadAction<WorkspaceImportProgress | null>) => {
       state.importing = action.payload;
     },
+    duplicateProgressed: (state, action: PayloadAction<string | null>) => {
+      state.duplicating = action.payload;
+    },
     /** Mirrors a conversation's action record; null clears it. */
     actionRecorded: (state, action: PayloadAction<{ cid: string; action: UnfinishedAction | null }>) => {
       if (action.payload.action) state.actions[action.payload.cid] = action.payload.action;
@@ -324,9 +330,10 @@ const workspaceSlice = createSlice({
   },
 });
 
-export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed, workspacesPopoverToggled, importProgressed } = workspaceSlice.actions;
+export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed, workspacesPopoverToggled, importProgressed, duplicateProgressed } = workspaceSlice.actions;
 /** Row 9: the import under way, or null. */
 export const selectWorkspaceImporting = (state: RootState): WorkspaceImportProgress | null => state.workspace?.importing ?? null;
+export const selectWorkspaceDuplicating = (state: RootState): string | null => state.workspace?.duplicating ?? null;
 
 /** The open workspace id, or null while workspaces are not ready (writes are skipped). */
 export const selectDefaultWid = (state: RootState): string | null => state.workspace?.defaultWid ?? null;

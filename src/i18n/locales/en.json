@@ -2167,6 +2167,8 @@
     "signOutButton": "Sign out",
     "duplicateTitle": "Duplicate {{name}}",
     "duplicateBody": "Makes a copy with its {{messages}}, about {{size}} more on disk.",
+    "duplicating": "Duplicating {{name}}",
+    "duplicated": "Duplicated {{name}} as {{copy}}",
     "switchStuck": "Could not switch workspaces. The running action did not stop, try again in a moment.",
     "busy": "Wait for the running action to finish or stop it first.",
     "fullTitle": "Browser storage is full",

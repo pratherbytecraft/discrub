@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import { selectHasThemes, setSupporterPanelOpen } from '@features/supporter/supporterSlice';
-import { refreshWorkspaces, selectCurrentWid, selectStorageFigures, selectWorkspaceImporting, selectWorkspaceList } from '@features/workspace/workspaceSlice';
+import { refreshWorkspaces, selectCurrentWid, selectStorageFigures, selectWorkspaceImporting, selectWorkspaceDuplicating, selectWorkspaceList } from '@features/workspace/workspaceSlice';
 import {
   clearConversationThunk,
   clearWorkspaceThunk,
@@ -89,8 +89,9 @@ const WorkspacesPopover = ({
   const currentWid = useAppSelector(selectCurrentWid);
   const supporter = useAppSelector(selectHasThemes);
   const importing = useAppSelector(selectWorkspaceImporting);
+  const duplicating = useAppSelector(selectWorkspaceDuplicating);
   // Row 9: an import holds the popover busy like a running action.
-  const busy = useAppSelector(selectIsOperationRunning) || importing !== null;
+  const busy = useAppSelector(selectIsOperationRunning) || importing !== null || duplicating !== null;
   const { requestSwitch, dialogProps } = useWorkspaceSwitch();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -266,6 +267,14 @@ const WorkspacesPopover = ({
               {t('workspace.importProgress', { name: importing.name, done: importing.messages, total: importing.total })}
             </Typography>
             <LinearProgress variant="determinate" value={importing.total > 0 ? Math.min(100, (importing.messages / importing.total) * 100) : 0} />
+          </Box>
+        )}
+        {duplicating && (
+          <Box data-testid="workspace-duplicate-progress" sx={{ px: 1.75, pt: 1 }}>
+            <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mb: 0.5 }}>
+              {t('workspace.duplicating', { name: duplicating })}
+            </Typography>
+            <LinearProgress />
           </Box>
         )}
         {atCap && (

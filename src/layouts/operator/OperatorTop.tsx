@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Box, IconButton, Tooltip, Typography, alpha, useMediaQuery, useTheme } from '@mui/material';
 import { Settings as SettingsIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,7 @@ import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
+import ProfileWindow from '@components/modals/ProfileWindow';
 import { selectIsSupporter } from '@features/supporter/supporterSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
 import BotsButton from '@components/welcome/BotsButton';
@@ -31,6 +33,8 @@ const OperatorTop = () => {
   const dm = useAppSelector(selectSelectedDm);
   const sidebarView = useAppSelector(selectSidebarView);
   const user = useAppSelector(selectCurrentUser);
+  // Row 112: the chip opens the profile window, where Sign out lives.
+  const [profileOpen, setProfileOpen] = useState(false);
   const isSupporter = useAppSelector(selectIsSupporter);
   const isPackage = sidebarView === 'package';
   // An open DM wins over a server that is still picked behind it: Classic keeps the server when its DMs tab opens a
@@ -61,10 +65,20 @@ const OperatorTop = () => {
       <Tooltip title={t('topbar.settings')} enterDelay={0} arrow>
         <IconButton size="small" aria-label={t('topbar.settings')} onClick={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} data-testid="operator-settings"><SettingsIcon /></IconButton>
       </Tooltip>
-      {!phone && <Box data-tour="user-profile" sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, pl: 0.5, pr: 1.25, py: 0.4, borderRadius: 4, backgroundColor: alpha(theme.palette.text.primary, 0.05) }}>
+      {!phone && <Box
+        data-tour="user-profile"
+        data-testid="operator-user-chip"
+        role="button"
+        tabIndex={0}
+        aria-label={t('topbar.profile', { name: user?.global_name || user?.username || '' })}
+        onClick={() => setProfileOpen(true)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setProfileOpen(true); } }}
+        sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, pl: 0.5, pr: 1.25, py: 0.4, borderRadius: 4, backgroundColor: alpha(theme.palette.text.primary, 0.05), cursor: 'pointer', '&:hover': { backgroundColor: alpha(theme.palette.text.primary, 0.1) } }}
+      >
         <Box component="img" alt="" src={user?.avatar ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32` : undefined} sx={{ width: 26, height: 26, borderRadius: '50%', border: '2px solid', borderColor: isSupporter ? 'cta.main' : 'transparent', backgroundColor: 'action.hover' }} />
         <Typography variant="body2" noWrap className="operator-username" sx={{ fontWeight: 500, maxWidth: 160 }}>{user?.global_name || user?.username || ''}</Typography>
       </Box>}
+      <ProfileWindow open={profileOpen} onClose={() => setProfileOpen(false)} />
     </Box>
   );
 };

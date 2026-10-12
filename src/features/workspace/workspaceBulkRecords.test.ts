@@ -10,7 +10,7 @@ import type { AppDispatch } from '@/app/store';
 import type { Channel, Guild } from 'discrub-core/types/discord-types';
 import { createMockChannel, createMockGuild } from '@/test/fixtures';
 import messageReducer, { bulkEditChannels, bulkEditChannelStarted } from '@features/message/messageSlice';
-import workspaceReducer, { selectHasUnfinishedWork, selectUnfinishedBulk, setCurrentWorkspace, initializeWorkspaces } from './workspaceSlice';
+import workspaceReducer, { actionRecorded, selectHasUnfinishedWork, selectUnfinishedBulk, setCurrentWorkspace, initializeWorkspaces } from './workspaceSlice';
 import { workspacePersistenceMiddleware, flushPendingRecords, setSuspendingForSwitch } from './workspacePersistenceMiddleware';
 import channelReducer, { setSelectedChannel } from '@features/channel/channelSlice';
 import dmReducer from '@features/dm/dmSlice';
@@ -28,6 +28,7 @@ import {
   getConversation,
   getWorkspace,
   releaseWorkspaceLock,
+  updateConversation,
   writePage,
 } from '@services/workspaceStore';
 
@@ -105,6 +106,24 @@ describe('single Export record', () => {
     await flush(store);
     expect(store.getState().workspace.actions['801']).toBeUndefined();
     expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, '801'))?.action).toBeNull();
+  });
+
+  it('leaves an unfinished Load All in place, so Resume still means the Load All (pass 2, row 123)', async () => {
+    const store = await openDefault();
+    store.dispatch(setSelectedChannel(chan('801', 'general')));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '801', [{ id: '1', timestamp: '2026-01-01T00:00:00.000Z' } as never], { kind: 'channel', guildId: '42', name: 'general' });
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, '801', (c) => {
+      c.action = { kind: 'loadAll', settings: { mode: 'plain' } };
+    });
+    store.dispatch(actionRecorded({ cid: '801', action: { cid: '801', name: 'general', kind: 'loadAll' } }));
+    const arg = { messages: [], channelName: 'general', format: 'html' as const, messagesPerPage: 1000, separateThreads: false, includeMedia: false };
+    store.dispatch(exportMessages.pending('r1', arg));
+    await flush(store);
+    expect(store.getState().workspace.actions['801']?.kind).toBe('loadAll');
+    store.dispatch(exportMessages.fulfilled({} as never, 'r1', arg));
+    await flush(store);
+    expect(store.getState().workspace.actions['801']?.kind).toBe('loadAll');
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, '801'))?.action?.kind).toBe('loadAll');
   });
 
   it('Start over drops the record', async () => {
