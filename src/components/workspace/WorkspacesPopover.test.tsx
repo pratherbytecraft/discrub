@@ -156,7 +156,10 @@ describe('WorkspacesPopover (2.2.5 WP5)', () => {
       expect(within(screen.getByTestId('workspace-import-file')).getByText('1,204,100 messages')).toBeInTheDocument();
       fireEvent.click(screen.getByTestId('workspace-import-replace'));
       await waitFor(() => expect(importWorkspaceFile).toHaveBeenCalled());
-      expect(vi.mocked(importWorkspaceFile).mock.calls[0][1]).toMatchObject({ wid: 'w2', name: 'Raid archive' });
+      // Row 117: the file is read into a staged workspace and swapped over w2 at the end.
+      const target = vi.mocked(importWorkspaceFile).mock.calls[0][1];
+      expect(target.name).toBe('Raid archive');
+      expect(target.wid).not.toBe('w2');
     });
 
     it('Keep both imports beside it under a new id and a numbered name', async () => {

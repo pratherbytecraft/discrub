@@ -14,8 +14,10 @@ import {
   WorkspaceFileError,
   exportWorkspaceFile,
   importWorkspaceFile,
+  type ImportResult,
   type WorkspaceManifest,
 } from '@services/workspaceArchive';
+import type { WorkspaceRecord } from './workspaceTypes';
 import { openChannel, openDm, openGuild } from '@features/navigation/openConversation';
 import { isMessageChannel } from '@utils/channelTypeUtils';
 import {
@@ -30,7 +32,9 @@ import {
   deleteWorkspaceDatabase,
   duplicateWorkspace,
   getWorkspace,
-  installImportedWorkspace,
+  installStagedWorkspace,
+  commitStagedWorkspace,
+  dropStagedWorkspace,
   isWorkspaceOpenable,
   releaseWorkspaceLock,
   renameWorkspace,
@@ -448,11 +452,13 @@ export const importWorkspaceThunk = createAsyncThunk<ImportOutcome, ImportWorksp
   async ({ file, manifest, mode, targetWid }, { dispatch, getState }) => {
     const list = getState().workspace.list;
     const names = list.map((w) => w.name);
+    // The workspace a replace writes over; the import itself goes into a staged record (row 117).
+    const replaceWid = mode === 'replace' && targetWid ? targetWid : null;
     let target: { wid: string; name: string; color: string };
-    if (mode === 'replace' && targetWid) {
+    if (replaceWid) {
       // Row 10 (owner): replacing Default keeps the name Default.
-      const here = list.find((w) => w.wid === targetWid);
-      target = { wid: targetWid, name: here?.isDefault ? here.name : manifest.name, color: manifest.color };
+      const here = list.find((w) => w.wid === replaceWid);
+      target = { wid: createWorkspaceId(), name: here?.isDefault ? here.name : manifest.name, color: manifest.color };
     } else {
       const taken = list.some((w) => w.wid === manifest.wid);
       target = {
@@ -462,7 +468,7 @@ export const importWorkspaceThunk = createAsyncThunk<ImportOutcome, ImportWorksp
       };
     }
 
-    const current = getState().workspace.currentWid === target.wid;
+    const current = replaceWid !== null && getState().workspace.currentWid === replaceWid;
     if (current) {
       if (selectIsOperationRunning(getState())) {
         dispatch(showToast({ level: 'warning', message: t('workspace.busy') }));
@@ -470,39 +476,51 @@ export const importWorkspaceThunk = createAsyncThunk<ImportOutcome, ImportWorksp
       }
       await flushPendingRecords({ dispatch, getState });
       // Holds scope writes off while the record underneath is replaced.
-      dispatch(workspaceSwitchStarted({ wid: target.wid }));
+      dispatch(workspaceSwitchStarted({ wid: replaceWid }));
     }
 
     dispatch(addStatusEntry({ level: 'info', message: t('workspace.importing', { name: target.name }) }));
     dispatch(importProgressed({ name: target.name, messages: 0, total: manifest.messages }));
     let outcome: ImportOutcome = 'imported';
+    let committed: WorkspaceRecord | null = null;
     try {
-      const installed = await importWorkspaceFile(file, target, (record) => installImportedWorkspace(record, mode === 'replace'), {
-        onProgress: ({ messages, total }) => dispatch(importProgressed({ name: target.name, messages, total })),
-      });
-      const message = t('workspace.imported', { name: target.name, messages: countLabel('messages', installed.messages) });
-      dispatch(addStatusEntry({ level: 'success', message }));
-      dispatch(showToast({ level: 'success', message }));
-    } catch (error) {
-      if (error instanceof WorkspaceQuotaError) {
+      let installed: ImportResult;
+      try {
+        installed = await importWorkspaceFile(file, target, installStagedWorkspace, {
+          onProgress: ({ messages, total }) => dispatch(importProgressed({ name: target.name, messages, total })),
+        });
+      } catch (error) {
+        // Storage full keeps what was read, as before; anything else leaves the old workspace as it was.
+        if (!(error instanceof WorkspaceQuotaError)) throw error;
         outcome = 'stopped';
+        installed = { record: await getWorkspace(target.wid) as WorkspaceRecord, messages: 0 };
         const message = t('workspace.importStoppedFull', { name: target.name });
         dispatch(addStatusEntry({ level: 'warning', message }));
         dispatch(showToast({ level: 'warning', message }));
-      } else {
-        outcome = 'failed';
-        console.error('[workspace] import failed', error);
-        const message = error instanceof WorkspaceFileError && error.reason === 'needsUpdate'
-          ? t('workspace.needsVersionFile', { version: error.appVersion })
-          : t('workspace.importFailed');
-        dispatch(addStatusEntry({ level: 'error', message }));
-        dispatch(showToast({ level: 'error', message }));
       }
+      committed = await commitStagedWorkspace(target.wid, replaceWid);
+      if (outcome === 'imported') {
+        const message = t('workspace.imported', { name: target.name, messages: countLabel('messages', installed.messages) });
+        dispatch(addStatusEntry({ level: 'success', message }));
+        dispatch(showToast({ level: 'success', message }));
+      }
+    } catch (error) {
+      outcome = 'failed';
+      console.error('[workspace] import failed', error);
+      await dropStagedWorkspace(target.wid).catch((dropError) => console.error('[workspace] could not drop the staged import', dropError));
+      const message = error instanceof WorkspaceFileError && error.reason === 'needsUpdate'
+        ? t('workspace.needsVersionFile', { version: error.appVersion })
+        : t('workspace.importFailed');
+      dispatch(addStatusEntry({ level: 'error', message }));
+      dispatch(showToast({ level: 'error', message }));
     } finally {
       dispatch(importProgressed(null));
-      if (current) {
-        const record = await getWorkspace(target.wid);
-        await finishSwitch(target.wid, null, record?.name ?? target.name, actionsOf(record), bulkOf(record), dispatch, getState);
+      if (current && replaceWid) {
+        // The replaced workspace is gone on success, so the open one becomes the import; on failure it stays as it was.
+        const wid = committed?.wid ?? replaceWid;
+        if (committed) await acquireWorkspaceLock(wid);
+        const record = committed ?? await getWorkspace(replaceWid);
+        await finishSwitch(wid, committed ? replaceWid : null, record?.name ?? target.name, actionsOf(record), bulkOf(record), dispatch, getState);
       }
       await dispatch(refreshWorkspaces());
     }

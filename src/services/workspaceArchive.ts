@@ -9,6 +9,9 @@
  *   authors.json                           the record's author map
  *   conversations/<cid>/<0001>.ndjson.gz   one message per line, 5,000 per part
  *
+ * Files are read by the central directory (zipDirectoryReader, row 117),
+ * never by scanning an entry's bytes for its end.
+ *
  * No token and no media. Parts are gzipped on the page (fflate's sync
  * gzip; its async one starts a blob worker the Firefox extension refuses)
  * because the zip writer has no zip64: compressed, a workspace at the
@@ -23,7 +26,8 @@ import type { WorkspaceAuthor, WorkspaceRecord } from '@features/workspace/works
 import { WORKSPACE_SCHEMA_VERSION } from '@features/workspace/workspaceTypes';
 import { StreamingZipService } from './streamingZipService';
 import { urlSafeFileName } from './downloadWriter';
-import { readPackageEntries, type PackageZipSource } from './packageZipReader';
+import type { PackageZipSource } from './packageZipReader';
+import { ZipDirectoryError, readZipEntries } from './zipDirectoryReader';
 import { getWorkspace, isRunCid, plainCidOf, readWindow, writePage } from './workspaceStore';
 
 export const WORKSPACE_FILE_EXTENSION = 'discrub-workspace';
@@ -172,7 +176,7 @@ export function checkManifest(manifest: Partial<WorkspaceManifest> | null): Work
 export async function readWorkspaceManifest(source: PackageZipSource): Promise<WorkspaceManifest> {
   let manifest: Partial<WorkspaceManifest> | null = null;
   try {
-    await readPackageEntries(source, {
+    await readZipEntries(source, {
       want: (path) => path === MANIFEST,
       onEntry: (path, bytes) => {
         manifest = parseJson<Partial<WorkspaceManifest>>(bytes, path);
@@ -205,9 +209,10 @@ export interface ImportResult {
 
 /**
  * Reads the whole file into `target`. The record is installed when it is
- * read (`install`, which also drops the old rows on a replace), then each
- * part is written as a page. A failed page write rejects; the workspace
- * keeps what was written.
+ * read (`install`), then each part is written as a page. A failed page
+ * write rejects; the workspace keeps what was written. The import thunk
+ * installs into a staged workspace and swaps it in at the end, so a
+ * failure never costs the workspace being replaced (row 117).
  */
 export async function importWorkspaceFile(
   source: PackageZipSource,
@@ -239,39 +244,44 @@ export async function importWorkspaceFile(
     return installed;
   };
 
-  await readPackageEntries(source, {
-    want: (path) => path === MANIFEST || path === RECORD || path === AUTHORS || PART_PATH.test(path),
-    onEntry: async (path, bytes) => {
-      if (path === MANIFEST) {
-        manifest = checkManifest(parseJson<Partial<WorkspaceManifest>>(bytes, path));
-        return;
-      }
-      if (path === RECORD) {
-        record = parseJson<WorkspaceRecord>(bytes, path);
-        return;
-      }
-      if (path === AUTHORS) {
-        authors = parseJson<Record<string, WorkspaceAuthor>>(bytes, path);
-        return;
-      }
-      const match = PART_PATH.exec(path);
-      if (!match) return;
-      const cid = match[1];
-      const workspace = await ensureInstalled();
-      if (!workspace.conversations[cid]) return;
-      let text: string;
-      try {
-        text = strFromU8(gunzipSync(bytes));
-      } catch {
-        throw new WorkspaceFileError('broken', `${path} could not be read`);
-      }
-      const page = text.split('\n').filter(Boolean).map((line) => JSON.parse(line) as Message);
-      if (page.length === 0) return;
-      await writePage(workspace.wid, cid, page);
-      messages += page.length;
-      options.onProgress?.({ messages, total: manifest?.messages ?? messages });
-    },
-  });
+  try {
+    await readZipEntries(source, {
+      want: (path) => path === MANIFEST || path === RECORD || path === AUTHORS || PART_PATH.test(path),
+      onEntry: async (path, bytes) => {
+        if (path === MANIFEST) {
+          manifest = checkManifest(parseJson<Partial<WorkspaceManifest>>(bytes, path));
+          return;
+        }
+        if (path === RECORD) {
+          record = parseJson<WorkspaceRecord>(bytes, path);
+          return;
+        }
+        if (path === AUTHORS) {
+          authors = parseJson<Record<string, WorkspaceAuthor>>(bytes, path);
+          return;
+        }
+        const match = PART_PATH.exec(path);
+        if (!match) return;
+        const cid = match[1];
+        const workspace = await ensureInstalled();
+        if (!workspace.conversations[cid]) return;
+        let text: string;
+        try {
+          text = strFromU8(gunzipSync(bytes));
+        } catch {
+          throw new WorkspaceFileError('broken', `${path} could not be read`);
+        }
+        const page = text.split('\n').filter(Boolean).map((line) => JSON.parse(line) as Message);
+        if (page.length === 0) return;
+        await writePage(workspace.wid, cid, page);
+        messages += page.length;
+        options.onProgress?.({ messages, total: manifest?.messages ?? messages });
+      },
+    });
+  } catch (error) {
+    if (error instanceof ZipDirectoryError) throw new WorkspaceFileError('broken', error.message);
+    throw error;
+  }
 
   // A workspace with no rows has no parts; install it anyway.
   const done = await ensureInstalled();

@@ -16,6 +16,10 @@ import {
   deleteWorkspaceDatabase,
   getWorkspace,
   installImportedWorkspace,
+  installStagedWorkspace,
+  commitStagedWorkspace,
+  dropStagedWorkspaces,
+  getMeta,
   listWorkspaces,
   readWindow,
   updateWorkspace,
@@ -78,6 +82,17 @@ async function seedRaidArchive(): Promise<string> {
 const fileBytes = (name: string) => Uint8Array.from(files.get(name)!);
 // fflate's zipSync checks leaves with a realm-sensitive instanceof; re-wrap through the global Uint8Array.
 const u8 = (text: string): Uint8Array => new Uint8Array(strToU8(text));
+
+const crcTable = new Uint32Array(256).map((_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+const crc32 = (bytes: Uint8Array): number => {
+  let c = 0xffffffff;
+  for (const b of bytes) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+};
 
 describe('workspace files', () => {
   it('writes the manifest, record, authors and gzipped parts of every conversation', async () => {
@@ -151,20 +166,68 @@ describe('workspace files', () => {
     expect((await getWorkspace('imported'))!.conversations['search:100'].pagination.mode).toBe('search');
   });
 
-  it('replace drops the rows that were there and keeps the place in the order', async () => {
+  it('a staged replace drops the rows that were there and takes the place in the order (row 117)', async () => {
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '999', [msg('999', '50')], seedOf('old'));
     const wid = await seedRaidArchive();
     await exportWorkspaceFile(wid);
     await importWorkspaceFile(
       fileBytes('Raid_archive.discrub-workspace'),
-      { wid: LEGACY_DEFAULT_WORKSPACE_ID, name: 'Raid: archive', color: '#3ba55d' },
-      (record) => installImportedWorkspace(record, true),
+      { wid: 'staged', name: 'Default', color: '#3ba55d' },
+      installStagedWorkspace,
     );
-    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(0);
-    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '100')).toBe(7);
-    const record = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
-    expect(Object.keys(record!.conversations).sort()).toEqual(['100', '200']);
+    // Until the commit the old workspace is whole and the import is out of sight.
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(1);
     expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID, wid]);
+    expect((await getWorkspace('staged'))?.staging).toBe(true);
+
+    const committed = await commitStagedWorkspace('staged', LEGACY_DEFAULT_WORKSPACE_ID);
+    expect(committed.staging).toBeUndefined();
+    expect(await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID)).toBeNull();
+    expect(await countRows('staged', '100')).toBe(7);
+    expect(Object.keys(committed.conversations).sort()).toEqual(['100', '200']);
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual(['staged', wid]);
+    expect(await getMeta()).toMatchObject({ defaultWid: 'staged', lastWid: 'staged' });
+  });
+
+  it('a staged import that never finished goes on boot (row 120)', async () => {
+    const wid = await seedRaidArchive();
+    await exportWorkspaceFile(wid);
+    await importWorkspaceFile(fileBytes('Raid_archive.discrub-workspace'), { wid: 'staged', name: 'Raid copy', color: '#3ba55d' }, installStagedWorkspace);
+    expect(await countRows('staged', '100')).toBe(7);
+    expect(await dropStagedWorkspaces()).toBe(1);
+    expect(await getWorkspace('staged')).toBeNull();
+    expect(await countRows('staged', '100')).toBe(0);
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID, wid]);
+    expect(await dropStagedWorkspaces()).toBe(0);
+  });
+
+  it('reads a part whose gzip holds the data descriptor marker in full (row 117)', async () => {
+    // The gzip trailer is crc32 then size, both little endian. A part of
+    // exactly 0x0807 bytes whose crc32 starts 0x4b50 puts PK 07 08 in the
+    // file, the bytes fflate's streaming reader took for the entry's end.
+    const SIZE = 0x0807;
+    const base = createMockMessage({ id: '1', channel_id: '100', content: '' });
+    const bare = JSON.stringify(base).length;
+    let content = '';
+    for (let n = 0; ; n++) {
+      const stamp = String(n).padStart(8, '0');
+      content = stamp + 'x'.repeat(SIZE - bare - stamp.length);
+      const line = strToU8(JSON.stringify({ ...base, content }));
+      if (line.length !== SIZE) throw new Error(`line is ${line.length} bytes`);
+      if (crc32(line) >>> 16 === 0x4b50) break;
+    }
+    const raid = await createWorkspace({ name: 'Marker', color: '#3ba55d' });
+    await writePage(raid.wid, '100', [{ ...base, content }], seedOf('general'));
+    await exportWorkspaceFile(raid.wid);
+    const bytes = fileBytes('Marker.discrub-workspace');
+    const marker = [0x50, 0x4b, 0x07, 0x08];
+    const hits = [...bytes.keys()].filter((i) => marker.every((b, k) => bytes[i + k] === b));
+    // Three real footers (manifest, record, authors) plus the one inside the part, before the part's own footer.
+    expect(hits.length).toBe(5);
+
+    const result = await importWorkspaceFile(bytes, { wid: 'imported', name: 'Marker copy', color: '#faa61a' }, installStagedWorkspace);
+    expect(result.messages).toBe(1);
+    expect((await readWindow('imported', '100', { limit: 1 }))[0].content).toBe(content);
   });
 
   it('never installs over a workspace without replace', async () => {

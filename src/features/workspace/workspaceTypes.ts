@@ -158,6 +158,8 @@ export interface WorkspaceRecord {
   authors: Record<string, WorkspaceAuthor>;
   /** Server names by guild id, written with each conversation and refreshed from the server list. */
   guilds: Record<string, string>;
+  /** An import still being read (row 117): kept out of the list and dropped on boot when it never finished. */
+  staging?: boolean;
 }
 
 export interface WorkspaceMeta {

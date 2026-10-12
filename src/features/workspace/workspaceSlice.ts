@@ -1,9 +1,11 @@
 import { createAction, createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '@/app/store';
 import { addStatusEntry, showToast } from '@features/status/statusSlice';
+import { takeSkipScopeRestore } from './scopeRestoreFlag';
 import { t } from '@/i18n';
 import {
   acquireWorkspaceLock,
+  dropStagedWorkspaces,
   ensureDefaultWorkspace,
   getMeta,
   getWorkspace,
@@ -156,6 +158,10 @@ export const initializeWorkspaces = createAsyncThunk<BootResult, void, { rejectV
     try {
       const defaultRecord = await ensureDefaultWorkspace();
       const defaultWid = defaultRecord.wid;
+      // Row 120: an import cut by a closed tab left a staged record; it goes with its rows.
+      if (await dropStagedWorkspaces()) dispatch(addStatusEntry({ level: 'info', message: t('workspace.importDropped') }));
+      const skipScope = await takeSkipScopeRestore();
+      if (skipScope) dispatch(addStatusEntry({ level: 'info', message: t('workspace.scopeSkipped') }));
       const meta = await getMeta();
       let wid = meta.lastWid ?? defaultWid;
       let record = await getWorkspace(wid);

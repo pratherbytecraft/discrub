@@ -638,7 +638,7 @@ export function listWorkspaces(): Promise<WorkspaceRecord[]> {
       readMeta(tx),
     ]);
     const rank = new Map(meta.order.map((wid, i) => [wid, i]));
-    return records.map(withGuilds).sort((a, b) => {
+    return records.filter((r) => !r.staging).map(withGuilds).sort((a, b) => {
       const ra = rank.get(a.wid);
       const rb = rank.get(b.wid);
       if (ra !== undefined && rb !== undefined) return ra - rb;
@@ -879,6 +879,85 @@ export function installImportedWorkspace(record: WorkspaceRecord, replace: boole
     }
     return installed;
   });
+}
+
+/**
+ * Puts an import's record in place under a fresh id, flagged as staging
+ * (row 117): out of the list and the order until `commitStagedWorkspace`
+ * swaps it in. The row figures start at zero as with `installImportedWorkspace`.
+ */
+export function installStagedWorkspace(record: WorkspaceRecord): Promise<WorkspaceRecord> {
+  const installed: WorkspaceRecord = withGuilds(structuredClone(record));
+  installed.staging = true;
+  installed.bytes = 0;
+  for (const conversation of Object.values(installed.conversations)) {
+    conversation.count = 0;
+    conversation.bytes = 0;
+    conversation.oldestId = null;
+    conversation.newestId = null;
+  }
+  return withTx('readwrite', [STORE_WORKSPACES], { wid: installed.wid, cid: null }, async (tx) => {
+    const existing = await req<WorkspaceRecord | undefined>(tx.objectStore(STORE_WORKSPACES).get(installed.wid));
+    if (existing) throw new WorkspaceStoreError(`Workspace ${installed.wid} already exists`);
+    tx.objectStore(STORE_WORKSPACES).put(installed);
+    return installed;
+  });
+}
+
+/**
+ * Makes a staged import a real workspace. With `replaceWid` the workspace
+ * it replaces goes in the same transaction, and the import takes its
+ * place in the order, as Default when it was Default, and as the last
+ * opened workspace when it was. Without, the import is appended.
+ */
+export function commitStagedWorkspace(wid: string, replaceWid: string | null): Promise<WorkspaceRecord> {
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
+    const record = await readWorkspace(tx, wid);
+    if (!record.staging) throw new WorkspaceStoreError(`Workspace ${wid} is not a staged import`);
+    delete record.staging;
+    tx.objectStore(STORE_WORKSPACES).put(record);
+    const meta = await readMeta(tx);
+    let order = meta.order.filter((w) => w !== wid);
+    let { defaultWid, lastWid } = meta;
+    if (replaceWid && replaceWid !== wid) {
+      forgetWorkspaceDayCounts(replaceWid);
+      deleteRowRange(tx, workspaceRange(replaceWid));
+      tx.objectStore(STORE_AUTHORS).delete(authorsRange(replaceWid));
+      dropWorkspaceSelections(tx, replaceWid);
+      tx.objectStore(STORE_WORKSPACES).delete(replaceWid);
+      const slot = order.indexOf(replaceWid);
+      order = slot >= 0 ? order.map((w) => (w === replaceWid ? wid : w)) : [...order, wid];
+      if (defaultWid === replaceWid) defaultWid = wid;
+      if (lastWid === replaceWid) lastWid = wid;
+    } else {
+      order = [...order, wid];
+    }
+    tx.objectStore(STORE_META).put({ ...meta, order, defaultWid, lastWid }, META_KEY);
+    return record;
+  });
+}
+
+/** Drops a staged import and its rows; a wid with no record is nothing to do. */
+export function dropStagedWorkspace(wid: string): Promise<void> {
+  return withTx('readwrite', [...ROW_STORES, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
+    forgetWorkspaceDayCounts(wid);
+    deleteRowRange(tx, workspaceRange(wid));
+    tx.objectStore(STORE_AUTHORS).delete(authorsRange(wid));
+    dropWorkspaceSelections(tx, wid);
+    tx.objectStore(STORE_WORKSPACES).delete(wid);
+    const meta = await readMeta(tx);
+    if (meta.order.includes(wid)) tx.objectStore(STORE_META).put({ ...meta, order: meta.order.filter((w) => w !== wid) }, META_KEY);
+  });
+}
+
+/** Boot (row 120): every import that never finished goes, with its rows. Answers how many went. */
+export async function dropStagedWorkspaces(): Promise<number> {
+  const staged = await withTx('readonly', [STORE_WORKSPACES], { wid: '', cid: null }, async (tx) => {
+    const records = await req<WorkspaceRecord[]>(tx.objectStore(STORE_WORKSPACES).getAll());
+    return records.filter((r) => r.staging).map((r) => r.wid);
+  });
+  for (const wid of staged) await dropStagedWorkspace(wid);
+  return staged.length;
 }
 
 /** A fresh workspace id, for an import kept beside the workspace it matches. */

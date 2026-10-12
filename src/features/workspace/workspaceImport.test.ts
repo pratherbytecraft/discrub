@@ -20,7 +20,7 @@ import devReducer from '@features/dev/devSlice';
 import cacheReducer from '@features/cache/cacheSlice';
 import authReducer from '@features/auth/authSlice';
 import userReducer from '@features/user/userSlice';
-import workspaceReducer, { refreshWorkspaces, setCurrentWorkspace } from './workspaceSlice';
+import workspaceReducer, { initializeWorkspaces, refreshWorkspaces, setCurrentWorkspace } from './workspaceSlice';
 import { importName, importWorkspaceThunk } from './workspaceThunks';
 import { LEGACY_DEFAULT_WORKSPACE_ID } from './workspaceTypes';
 import type { WorkspaceManifest } from '@services/workspaceArchive';
@@ -28,7 +28,10 @@ import {
   acquireWorkspaceLock,
   countRows,
   deleteWorkspaceDatabase,
+  getMeta,
   getWorkspace,
+  installStagedWorkspace,
+  listWorkspaces,
   releaseWorkspaceLock,
   updateConversation,
   writePage,
@@ -102,6 +105,9 @@ describe('importWorkspaceThunk over the open workspace', () => {
         wid: target.wid,
         name: target.name,
       });
+      // Row 117: the import goes into a staged record beside the old one, which is still whole.
+      expect(target.wid).not.toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+      expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(1);
       await writePage(target.wid, '801', [createMockMessage({ id: '1', channel_id: '801' }), createMockMessage({ id: '2', channel_id: '801' })], { kind: 'channel', guildId: '42', name: 'general' });
       await updateConversation(target.wid, '801', (c) => {
         c.action = { kind: 'loadAll', settings: null } as never;
@@ -110,15 +116,58 @@ describe('importWorkspaceThunk over the open workspace', () => {
     });
     const outcome = await thunk(store)(importWorkspaceThunk({ file: new Blob(), manifest, mode: 'replace', targetWid: LEGACY_DEFAULT_WORKSPACE_ID })).unwrap();
     expect(outcome).toBe('imported');
-    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(0);
-    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '801')).toBe(2);
     const workspace = store.getState().workspace;
-    expect(workspace.currentWid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    const wid = workspace.currentWid!;
+    expect(wid).not.toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    expect(await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID)).toBeNull();
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(0);
+    expect(await countRows(wid, '801')).toBe(2);
+    expect(await getMeta()).toMatchObject({ defaultWid: wid, lastWid: wid });
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([wid]);
     expect(workspace.currentName).toBe('Default');
     expect(workspace.switching).toBe(false);
     expect(workspace.scopeRestoredWid).toBeNull();
     expect(Object.keys(workspace.actions)).toEqual(['801']);
     expect(store.getState().status.toast.message).toBe('Imported Default with 2 messages');
     expect(store.getState().workspace.importing).toBeNull();
+    expect(workspace.list.map((w) => w.wid)).toEqual([wid]);
+    releaseWorkspaceLock(wid);
+  });
+
+  it('a file that cannot be read leaves the replaced workspace as it was (row 117)', async () => {
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '999', [createMockMessage({ id: '50', channel_id: '999' })], { kind: 'channel', guildId: '1', name: 'old' });
+    const store = makeStore();
+    store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
+    await thunk(store)(refreshWorkspaces());
+    vi.spyOn(archive, 'importWorkspaceFile').mockImplementation(async (_source, target, install) => {
+      const record = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
+      await install({ ...record!, conversations: {}, wid: target.wid, name: target.name });
+      await writePage(target.wid, '801', [createMockMessage({ id: '1', channel_id: '801' })], { kind: 'channel', guildId: '42', name: 'general' });
+      throw new archive.WorkspaceFileError('broken', 'conversations/801/0002.ndjson.gz could not be read');
+    });
+    const outcome = await thunk(store)(importWorkspaceThunk({ file: new Blob(), manifest, mode: 'replace', targetWid: LEGACY_DEFAULT_WORKSPACE_ID })).unwrap();
+    expect(outcome).toBe('failed');
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(1);
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID]);
+    const staged = vi.mocked(archive.importWorkspaceFile).mock.calls[0][1].wid;
+    expect(await getWorkspace(staged)).toBeNull();
+    expect(await countRows(staged, '801')).toBe(0);
+    const workspace = store.getState().workspace;
+    expect(workspace.currentWid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    expect(workspace.switching).toBe(false);
+    expect(store.getState().status.toast.message).toBe('Could not read this workspace file');
+  });
+
+  it('boot drops an import that never finished (row 120)', async () => {
+    const record = (await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))!;
+    await installStagedWorkspace({ ...record, wid: 'staged', name: 'Half read' });
+    await writePage('staged', '801', [createMockMessage({ id: '1', channel_id: '801' })], { kind: 'channel', guildId: '42', name: 'general' });
+    releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
+    const store = makeStore();
+    await thunk(store)(initializeWorkspaces());
+    expect(await getWorkspace('staged')).toBeNull();
+    expect(await countRows('staged', '801')).toBe(0);
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID]);
+    expect(store.getState().status.entries.map((e) => e.message)).toContain('An import that did not finish was removed.');
   });
 });
