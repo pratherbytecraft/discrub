@@ -1413,30 +1413,34 @@ export function scan(
     const rows = tx.objectStore(STORE_ROWS);
     const range = conversationRange(wid, cid);
     const total = await req(rows.count(range));
+    // A batch per request: a cursor step is a round trip to the browser
+    // process, which made a 250K walk take minutes.
     return new Promise<ScanResult>((resolve, reject) => {
       const ids: string[] = [];
       let seen = 0;
-      const request = rows.openCursor(range);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (!cursor) {
+      const next = (afterId: string | null) => {
+        const window = afterId === null ? range : IDBKeyRange.bound([wid, cid, afterId], [wid, cid, []], true);
+        const request = rows.getAll(window, SCAN_PROGRESS_EVERY);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const batch = request.result as StoredRow[];
+          for (const row of batch) {
+            if (predicate(row.message)) ids.push(row.message.id);
+          }
+          seen += batch.length;
           options.onProgress?.(seen, total);
-          resolve({ ids, seen, total, complete: true });
-          return;
-        }
-        const row = cursor.value as StoredRow;
-        seen++;
-        if (predicate(row.message)) ids.push(row.message.id);
-        if (seen % SCAN_PROGRESS_EVERY === 0) {
-          options.onProgress?.(seen, total);
+          if (batch.length < SCAN_PROGRESS_EVERY) {
+            resolve({ ids, seen, total, complete: true });
+            return;
+          }
           if (options.shouldStop?.()) {
             resolve({ ids, seen, total, complete: false });
             return;
           }
-        }
-        cursor.continue();
+          next(batch[batch.length - 1].id);
+        };
       };
+      next(null);
     });
   });
 }

@@ -1776,6 +1776,7 @@
       "discoveringThreads_one": "Discovering threads across {{count}} channel...",
       "discoveringThreads_other": "Discovering threads across {{count}} channels...",
       "scanningThreads": "Scanning threads in #{{name}} ({{index}}/{{total}})",
+      "scanningMessages": "Checking {{count, number}} saved messages against the filter",
       "archivedThreadsFailed": "Could not fetch archived threads for #{{name}}",
       "privateThreadsFailed": "Could not fetch private threads for #{{name}}",
       "foundThreads_one": "Found {{count}} thread to include in purge",

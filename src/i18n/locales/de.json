@@ -1776,6 +1776,7 @@
       "discoveringThreads_one": "Threads in {{count}} Kanal werden gesucht...",
       "discoveringThreads_other": "Threads in {{count}} Kanälen werden gesucht...",
       "scanningThreads": "Threads in #{{name}} werden geprüft ({{index}}/{{total}})",
+      "scanningMessages": "{{count, number}} gespeicherte Nachrichten werden mit dem Filter abgeglichen",
       "archivedThreadsFailed": "Archivierte Threads für #{{name}} konnten nicht geladen werden",
       "privateThreadsFailed": "Private Threads für #{{name}} konnten nicht geladen werden",
       "foundThreads_one": "{{count}} Thread für die Bereinigung gefunden",
