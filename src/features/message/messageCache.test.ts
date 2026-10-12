@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import type { Message } from 'discrub-core/types/discord-types';
 import { createMockMessage } from '@/test/fixtures';
 import {
@@ -126,13 +126,54 @@ describe('messageCache', () => {
     });
   });
 
-  it('useHydratedAll answers from the cache without a workspace and follows cache changes', async () => {
+  it('useHydratedAll answers from the cache without a workspace', async () => {
     cacheMessages(MAIN_CONTAINER, [msg('1'), msg('2')]);
     const ids = ['1', '2'];
     const { result } = renderHook(() => useHydratedAll(MAIN_CONTAINER, noStore, ids, true));
     await waitFor(() => expect(result.current.messages.map((m) => m.content)).toEqual(['1', '2']));
-    act(() => { replaceCachedMessage(MAIN_CONTAINER, msg('1', 'edited')); });
-    await waitFor(() => expect(result.current.messages[0].content).toBe('edited'));
+  });
+
+  // 2.2.5 W1: it used to hydrate again on every cache change, and each
+  // hydrate changes the cache, so a list longer than the cache never settled.
+  it('useHydratedAll settles once on a list longer than the cache', async () => {
+    await ensureTestDefaultWorkspace();
+    const source = { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'long' };
+    const ids = Array.from({ length: 25 }, (_, i) => String(100 + i));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'long', ids.map((id) => msg(id)), { kind: 'channel', guildId: null, name: 'long' });
+    setMessageCacheCapacity(10);
+    const { result } = renderHook(() => useHydratedAll(MAIN_CONTAINER, source, ids, true));
+    await waitFor(() => expect(result.current.messages).toHaveLength(25));
+    const version = messageCacheVersion();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(messageCacheVersion()).toBe(version);
+    expect(result.current.loading).toBe(false);
+    await deleteWorkspaceDatabase();
+  });
+
+  it('useHydratedMessages shows a read larger than half the cache', async () => {
+    await ensureTestDefaultWorkspace();
+    const source = { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'long' };
+    const ids = Array.from({ length: 30 }, (_, i) => String(100 + i));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'long', ids.map((id) => msg(id)), { kind: 'channel', guildId: null, name: 'long' });
+    setMessageCacheCapacity(10);
+    const { result } = renderHook(() => useHydratedMessages(MAIN_CONTAINER, source, ids));
+    await waitFor(() => expect(result.current.size).toBe(30));
+    expect(cachedMessageCount()).toBe(0);
+    await deleteWorkspaceDatabase();
+  });
+
+  it('hydrateMessages answers every id past the cache size and leaves the cache alone', async () => {
+    await ensureTestDefaultWorkspace();
+    const source = { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'long' };
+    const ids = Array.from({ length: 1200 }, (_, i) => String(1000 + i));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'long', ids.map((id) => msg(id)), { kind: 'channel', guildId: null, name: 'long' });
+    setMessageCacheCapacity(1000);
+    cacheMessages(MAIN_CONTAINER, [msg('on-screen')]);
+    const out = await hydrateMessages(MAIN_CONTAINER, source, ids);
+    expect(out.map((m) => m.id)).toEqual(ids);
+    expect(getCachedMessage(MAIN_CONTAINER, 'on-screen')).toBeDefined();
+    expect(cachedMessageCount()).toBe(1);
+    await deleteWorkspaceDatabase();
   });
 
   it('useHydratedAll is empty and idle while disabled', () => {

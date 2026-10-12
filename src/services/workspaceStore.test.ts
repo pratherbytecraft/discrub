@@ -31,7 +31,11 @@ import {
   getConversation,
   getMessages,
   getMeta,
+  getSelection,
   getWorkspace,
+  setSelection,
+  updateRows,
+  deleteConversationsWithPrefix,
   holdsWorkspaceLock,
   isQuotaExceededError,
   isWorkspaceHeldElsewhere,
@@ -441,6 +445,55 @@ describe('duplicateWorkspace', () => {
     expect((await readWindow(copy.wid, CID)).map((m) => m.id)).toEqual(['1', '2']);
     expect(await countRows(WID, CID)).toBe(2);
     expect((await getMeta()).order).toEqual([WID, copy.wid]);
+  });
+});
+
+describe('updateRows and selections (2.2.5 W1)', () => {
+  it('updateRows rewrites stored messages in place and answers the ones that changed', async () => {
+    await writePage(WID, CID, [msg('1', { reactions: [{ count: 1, me: true, emoji: { name: 'x' } }] as never }), msg('2')], seed);
+    const changed = await updateRows(WID, CID, ['1', '2', '404'], (m) => (m.reactions?.length ? { ...m, reactions: [] } : m));
+    expect(changed.map((m) => m.id)).toEqual(['1']);
+    const [one, two] = await getMessages(WID, CID, ['1', '2']);
+    expect(one?.reactions).toEqual([]);
+    expect(two?.content).toBe('message 2');
+    expect(await updateRows(WID, CID, [], (m) => m)).toEqual([]);
+  });
+
+  it('keeps a selection per conversation and clears it with the conversation', async () => {
+    await writePage(WID, CID, [msg('1')], seed);
+    await writePage(WID, '2000', [msg('5')], seed);
+    await setSelection(WID, CID, ['1']);
+    await setSelection(WID, '2000', ['5']);
+    expect(await getSelection(WID, CID)).toEqual(['1']);
+    await clearConversation(WID, CID);
+    expect(await getSelection(WID, CID)).toBeNull();
+    expect(await getSelection(WID, '2000')).toEqual(['5']);
+    await deleteConversation(WID, '2000');
+    expect(await getSelection(WID, '2000')).toBeNull();
+  });
+
+  it('drops selections with run conversations, a cleared workspace and a deleted one, and copies them with a duplicate', async () => {
+    await writePage(WID, 'run:1', [msg('1')], seed);
+    await setSelection(WID, 'run:1', ['1']);
+    await deleteConversationsWithPrefix(WID, 'run:');
+    expect(await getSelection(WID, 'run:1')).toBeNull();
+
+    await writePage(WID, CID, [msg('1')], seed);
+    await setSelection(WID, CID, ['1']);
+    const copy = await duplicateWorkspace(WID, 'copy', 1);
+    expect(await getSelection(copy.wid, CID)).toEqual(['1']);
+    await clearWorkspaceMessages(WID);
+    expect(await getSelection(WID, CID)).toBeNull();
+    expect(await getSelection(copy.wid, CID)).toEqual(['1']);
+    await deleteWorkspace(copy.wid);
+    expect(await getSelection(copy.wid, CID)).toBeNull();
+    // The meta record is untouched by the selection keys.
+    expect((await getMeta()).order).toEqual([WID]);
+  });
+
+  it('new records carry no selection field', async () => {
+    await writePage(WID, CID, [msg('1')], seed);
+    expect((await getConversation(WID, CID))?.selectedIds).toBeUndefined();
   });
 });
 

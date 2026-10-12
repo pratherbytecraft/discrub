@@ -17,7 +17,11 @@ import messageReducer, {
   deleteReaction,
   setMessages,
   clearSavedSearch,
+  bulkDeleteAllReactions,
+  selectAllMessages,
 } from '@features/message/messageSlice';
+import { RowFlag } from '@features/message/messageRows';
+import { dropCachedMessages, getCachedMessage, MAIN_CONTAINER } from '@features/message/messageCache';
 import { initialMessageState } from '@features/message/messageTypes';
 import workspaceReducer, { setCurrentWorkspace } from './workspaceSlice';
 import channelReducer, { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
@@ -33,6 +37,7 @@ import {
   deleteWorkspaceDatabase,
   getConversation,
   getMessages,
+  getSelection,
   getWorkspace,
   searchCid,
   updateConversation,
@@ -128,6 +133,24 @@ describe('workspacePersistenceMiddleware', () => {
     expect(one?.reactions?.[0]?.count).toBe(1);
   });
 
+  // 2.2.5 W1: the change used to be read back from the cache, so a message
+  // the cache had evicted kept its old reactions on disk and on its row.
+  it('changes a message the cache evicted on disk and brings its row up to date', async () => {
+    const store = makeStore();
+    const mine = createMockReaction({ count: 1, me: true, emoji: { id: undefined, name: '👍' } as never });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1', { reactions: [mine] }), msg('2')], seed);
+    store.dispatch(setMessages([msg('1', { reactions: [mine] }), msg('2')]));
+    dropCachedMessages(MAIN_CONTAINER, ['1']);
+    store.dispatch(bulkDeleteAllReactions.fulfilled({ messageId: '1' } as never, 'req', { messageId: '1', channelId: CID, token: 't' } as never));
+    await settle();
+    const [one] = await getMessages(LEGACY_DEFAULT_WORKSPACE_ID, CID, ['1']);
+    expect(one?.reactions).toEqual([]);
+    const row = store.getState().message.rows.find((r) => r.id === '1');
+    expect(row?.hasReactions).toBe(false);
+    expect((row?.flags ?? 0) & RowFlag.MY_REACTION).toBe(0);
+    expect(getCachedMessage(MAIN_CONTAINER, '1')).toBeUndefined();
+  });
+
   it('writes criteria and sort to the record after the debounce, seeding it', async () => {
     const store = makeStore();
     store.dispatch(setMessages([msg('1', { pinned: true }), msg('2')]));
@@ -149,17 +172,31 @@ describe('workspacePersistenceMiddleware', () => {
     expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.guilds).toEqual({ '42': 'Sandbox' });
   });
 
-  it('writes the selection only when the record exists', async () => {
+  it('writes the selection under its own key only when the record exists', async () => {
     const store = makeStore();
     store.dispatch(setMessages([msg('1'), msg('2')]));
     store.dispatch(toggleMessageSelection('2'));
     await flushPendingRecords(api(store));
     expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
 
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1'), msg('2')], seed);
     store.dispatch(toggleMessageSelection('1'));
     await flushPendingRecords(api(store));
-    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.selectedIds).toEqual(['2', '1']);
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toEqual(['2', '1']);
+    // 2.2.5 W1: the record no longer carries the selection.
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.selectedIds).toBeUndefined();
+  });
+
+  it('a selection change leaves the conversation record alone', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1'), msg('2')], seed);
+    const before = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
+    store.dispatch(setMessages([msg('1'), msg('2')]));
+    store.dispatch(selectAllMessages());
+    await flushPendingRecords(api(store));
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toEqual(['1', '2']);
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.conversations[CID]).toEqual(before?.conversations[CID]);
   });
 
   it('clearSavedSearch drops the search set and keeps the plain rows (fix C)', async () => {

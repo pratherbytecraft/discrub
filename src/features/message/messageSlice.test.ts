@@ -2971,6 +2971,23 @@ describe('messageSlice', () => {
       expect(mockDiscordService.deleteAllReactionsFromMessage).toHaveBeenCalledWith('token', 'ch-1', 'msg-3');
     });
 
+    // 2.2.5 W1: `processed` counts the messages with reactions, and the ids
+    // used to be cut from every message, naming the wrong ones.
+    it('reports the ids of the messages it processed, skipping those without reactions', async () => {
+      vi.mocked(discordService.getDiscordService).mockReturnValue({
+        deleteAllReactionsFromMessage: vi.fn().mockResolvedValue({ success: true }),
+      } as any);
+      const messages = [
+        { id: 'bare-1' },
+        { id: 'msg-1', reactions: [{ emoji: { id: null, name: '👍' }, count: 1 }] },
+        { id: 'bare-2', reactions: [] },
+        { id: 'msg-2', reactions: [{ emoji: { id: null, name: '🔥' }, count: 1 }] },
+      ];
+      const testStore = await createStoreWithApp();
+      const result = await testStore.dispatch(batchRemoveReactions({ channelId: 'ch-1', messages, mode: 'all', token: 'token' }));
+      expect((result.payload as { processedMessageIds: string[] }).processedMessageIds).toEqual(['msg-1', 'msg-2']);
+    });
+
     it('should call deleteAllReactionsForEmoji for each message in "emoji" mode', async () => {
       const mockDiscordService = {
         deleteAllReactionsForEmoji: vi.fn().mockResolvedValue({ success: true }),

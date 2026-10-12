@@ -74,7 +74,12 @@ export interface Conversation {
   refineCriteria: RefineCriteria | null;
   order: MessageOrder;
   pagination: ConversationPagination;
-  selectedIds: string[];
+  /**
+   * Only in records written before 2.2.5 W1. The selection now lives under
+   * its own key (`getSelection`), so a page write no longer rewrites it;
+   * a restore moves this field there and drops it.
+   */
+  selectedIds?: string[];
   scrollAnchorId: string | null;
   threadTabs: string[];
   activeTab: string | null;

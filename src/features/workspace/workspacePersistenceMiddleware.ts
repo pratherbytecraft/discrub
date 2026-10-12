@@ -40,14 +40,17 @@ import {
   toggleMessageSelection,
   toggleThreadMessageSelection,
   containerDiskCid,
+  reactionChangeOf,
+  reactionRowsSynced,
 } from '@features/message/messageSlice';
-import { MAIN_CONTAINER, getCachedMessage } from '@features/message/messageCache';
 import {
   conversationSeedFromState,
   forgetConversation,
   persistConversation,
   persistRowDeletes,
   persistRowPatches,
+  persistRowUpdates,
+  persistSelection,
   persistThreadTabs,
   threadSeedFromState,
   type PersistApi,
@@ -104,68 +107,57 @@ export function editPatch(message: Message): RowPatch {
   return { id: message.id, patch };
 }
 
-/**
- * The reactions the reducer just wrote, read from the message cache
- * (2.2.5 WP2b: Redux holds rows). A message the cache evicted is skipped;
- * the one a user just acted on is always there.
- */
-const reactionPatches = (containerId: string | null, ids: Iterable<string>): RowPatch[] => {
-  const key = containerId ?? MAIN_CONTAINER;
-  const patches: RowPatch[] = [];
-  for (const id of ids) {
-    const message = getCachedMessage(key, id);
-    if (message) patches.push({ id, patch: { reactions: message.reactions ?? [] } });
-  }
-  return patches;
-};
-
 /* ─────────────────── Debounced record rewrites ─────────────────── */
 
-type RecordJob = { timer: ReturnType<typeof setTimeout>; fields: Set<'criteria' | 'selection'>; containerId: string | null };
+type RecordJob = { timer: ReturnType<typeof setTimeout>; containerId: string | null };
 const pending = new Map<string, RecordJob>();
+/** 2.2.5 W1: selection writes, apart from the record, keyed by store cid. */
+const pendingSelections = new Map<string, RecordJob>();
 
-function recordFromState(state: RootState, containerId: string | null, fields: Set<'criteria' | 'selection'>): Partial<Conversation> | null {
+function recordFromState(state: RootState, containerId: string | null): Partial<Conversation> | null {
   const container = containerFor(state, containerId);
   if (!container) return null;
-  const record: Partial<Conversation> = {};
-  if (fields.has('criteria')) {
-    record.searchCriteria = container.searchCriteria;
-    record.refineCriteria = container.refineCriteria;
-    record.order = container.order;
-  }
-  if (fields.has('selection')) {
-    record.selectedIds = container.selectedIds;
-  }
-  return record;
+  return {
+    searchCriteria: container.searchCriteria,
+    refineCriteria: container.refineCriteria,
+    order: container.order,
+  };
 }
 
-function scheduleRecord(api: PersistApi, containerId: string | null, field: 'criteria' | 'selection'): void {
-  const state = api.getState();
-  const cid = cidFor(state, containerId);
+function schedule(jobs: Map<string, RecordJob>, api: PersistApi, containerId: string | null, flush: (cid: string, containerId: string | null) => Promise<unknown>): void {
+  const cid = cidFor(api.getState(), containerId);
   if (!cid) return;
-  const existing = pending.get(cid);
-  if (existing) {
-    existing.fields.add(field);
-    clearTimeout(existing.timer);
-  }
-  const fields = existing?.fields ?? new Set<'criteria' | 'selection'>([field]);
+  const existing = jobs.get(cid);
+  if (existing) clearTimeout(existing.timer);
   const timer = setTimeout(() => {
-    pending.delete(cid);
-    void flushRecord(api, cid, containerId, fields);
+    jobs.delete(cid);
+    void flush(cid, containerId);
   }, RECORD_DEBOUNCE_MS);
-  pending.set(cid, { timer, fields, containerId });
+  jobs.set(cid, { timer, containerId });
 }
 
-async function flushRecord(api: PersistApi, cid: string, containerId: string | null, fields: Set<'criteria' | 'selection'>): Promise<void> {
+function scheduleRecord(api: PersistApi, containerId: string | null): void {
+  schedule(pending, api, containerId, (cid, id) => flushRecord(api, cid, id));
+}
+
+function scheduleSelection(api: PersistApi, containerId: string | null): void {
+  schedule(pendingSelections, api, containerId, (cid, id) => flushSelection(api, cid, id));
+}
+
+async function flushRecord(api: PersistApi, cid: string, containerId: string | null): Promise<void> {
   const state = api.getState();
-  const record = recordFromState(state, containerId, fields);
+  const record = recordFromState(state, containerId);
   if (!record) return;
-  // A filter, refine or sort writes the record (plan section 4.2); a
-  // selection alone only updates a record that already exists.
-  const seed = fields.has('criteria')
-    ? containerId === null ? conversationSeedFromState(state, cid) : threadSeedFromState(state, cid)
-    : null;
+  // A filter, refine or sort writes the record (plan section 4.2).
+  const seed = containerId === null ? conversationSeedFromState(state, cid) : threadSeedFromState(state, cid);
   await persistConversation(api, cid, record, seed);
+}
+
+/** A selection only lands for a conversation that is already saved. */
+async function flushSelection(api: PersistApi, cid: string, containerId: string | null): Promise<void> {
+  const container = containerFor(api.getState(), containerId);
+  if (!container) return;
+  await persistSelection(api, cid, container.selectedIds);
 }
 
 /** Tests, a switch and unload: write every pending record now. */
@@ -174,7 +166,13 @@ export async function flushPendingRecords(api: PersistApi): Promise<void> {
   pending.clear();
   for (const [cid, job] of jobs) {
     clearTimeout(job.timer);
-    await flushRecord(api, cid, job.containerId, job.fields);
+    await flushRecord(api, cid, job.containerId);
+  }
+  const selections = [...pendingSelections.entries()];
+  pendingSelections.clear();
+  for (const [cid, job] of selections) {
+    clearTimeout(job.timer);
+    await flushSelection(api, cid, job.containerId);
   }
   await recordChain;
 }
@@ -302,40 +300,29 @@ listen({
   },
 });
 
+/**
+ * 2.2.5 W1: a reaction change is applied to the stored messages with the
+ * same update the reducer ran on the cached ones, so a message the cache
+ * evicted is changed on disk too, and its row comes back current.
+ */
 listen({
   matcher: isAnyOf(
     deleteReaction.fulfilled,
     deleteAllReactions.fulfilled,
     bulkDeleteAllReactions.fulfilled,
     bulkDeleteReactionsForEmoji.fulfilled,
+    batchRemoveReactions.fulfilled,
+    batchAddReactions.fulfilled,
   ),
   effect: async (action, listenerApi) => {
+    const change = reactionChangeOf(action);
+    if (!change) return;
     const state = listenerApi.getState();
     const containerId = activeContainerId(state);
     const cid = cidFor(state, containerId);
-    const { messageId } = action.payload as { messageId: string };
-    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(containerId, [messageId]));
-  },
-});
-
-listen({
-  actionCreator: batchRemoveReactions.fulfilled,
-  effect: async (action, listenerApi) => {
-    const state = listenerApi.getState();
-    const containerId = activeContainerId(state);
-    const cid = cidFor(state, containerId);
-    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(containerId, action.payload.processedMessageIds));
-  },
-});
-
-listen({
-  actionCreator: batchAddReactions.fulfilled,
-  effect: async (action, listenerApi) => {
-    const state = listenerApi.getState();
-    const containerId = activeContainerId(state);
-    const cid = cidFor(state, containerId);
-    const ids = action.payload.successfulAdds.map((s) => s.messageId);
-    if (cid) await persistRowPatches(api(listenerApi), cid, reactionPatches(containerId, ids));
+    if (!cid) return;
+    const changed = await persistRowUpdates(api(listenerApi), cid, change.ids, change.update);
+    if (changed.length > 0) listenerApi.dispatch(reactionRowsSynced({ containerId, messages: changed }));
   },
 });
 
@@ -347,7 +334,7 @@ listen({
     // conversation's restore and wrote the default sort over its record
     // (row 11).
     if (setSearchCriteria.match(action) && action.payload === null) return;
-    scheduleRecord(api(listenerApi), null, 'criteria');
+    scheduleRecord(api(listenerApi), null);
   },
 });
 
@@ -357,14 +344,14 @@ listen({
     if (setThreadSearchCriteria.match(action) && action.payload.criteria === null) return;
     const payload = action.payload as string | { threadId: string };
     const threadId = typeof payload === 'string' ? payload : payload.threadId;
-    scheduleRecord(api(listenerApi), threadId, 'criteria');
+    scheduleRecord(api(listenerApi), threadId);
   },
 });
 
 listen({
   matcher: isAnyOf(toggleMessageSelection, selectAllMessages, deselectAllMessages, setSelectedIds),
   effect: (_action, listenerApi) => {
-    scheduleRecord(api(listenerApi), null, 'selection');
+    scheduleSelection(api(listenerApi), null);
   },
 });
 
@@ -373,7 +360,7 @@ listen({
   effect: (action, listenerApi) => {
     const payload = action.payload as string | { threadId: string };
     const threadId = typeof payload === 'string' ? payload : payload.threadId;
-    scheduleRecord(api(listenerApi), threadId, 'selection');
+    scheduleSelection(api(listenerApi), threadId);
   },
 });
 
@@ -381,10 +368,12 @@ listen({
   actionCreator: removeThreadTab,
   effect: async (action, listenerApi) => {
     const threadId = action.payload;
-    const job = pending.get(threadId);
-    if (job) {
-      clearTimeout(job.timer);
-      pending.delete(threadId);
+    for (const jobs of [pending, pendingSelections]) {
+      const job = jobs.get(threadId);
+      if (job) {
+        clearTimeout(job.timer);
+        jobs.delete(threadId);
+      }
     }
     const state = listenerApi.getState();
     const parent = mainCid(state);

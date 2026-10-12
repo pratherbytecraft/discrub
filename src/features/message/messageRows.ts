@@ -131,6 +131,22 @@ export const mergeAuthors = (authors: Record<string, User>, messages: Message[])
   return next ?? authors;
 };
 
+/**
+ * Merges an author map into `authors` (2.2.5 W1, a restore brings every
+ * author at once). Same rules and identity as `mergeAuthors`.
+ */
+export const mergeAuthorMap = (authors: Record<string, User>, incoming: Record<string, User>): Record<string, User> => {
+  let next: Record<string, User> | null = null;
+  for (const id of Object.keys(incoming)) {
+    const author = incoming[id];
+    const held = (next ?? authors)[id];
+    if (held && sameAuthorFields(held, author)) continue;
+    if (!next) next = { ...authors };
+    next[id] = author;
+  }
+  return next ?? authors;
+};
+
 /* ─────────────────── Sorting ─────────────────── */
 
 export const sortRows = (rows: MessageRow[], order: SortDirection): MessageRow[] => {
@@ -157,6 +173,125 @@ export const appendSortedRows = (existing: MessageRow[], fresh: MessageRow[], or
   if (desc ? pageFirst <= last : pageFirst >= last) return existing.concat(page);
   if (desc ? pageLast >= first : pageLast <= first) return page.concat(existing);
   return sortRows(existing.concat(page), order);
+};
+
+/** Analytics reads at most this many messages until the reports walk the store (2.2.5 W1). */
+export const ANALYTICS_LIMIT = 20_000;
+
+/** The ids of the newest `limit` rows of a list sorted either way. */
+export function newestIds(rows: readonly MessageRow[], limit: number): string[] {
+  if (rows.length <= limit) return rows.map((r) => r.id);
+  const newestFirst = rows[0].t >= rows[rows.length - 1].t;
+  const slice = newestFirst ? rows.slice(0, limit) : rows.slice(rows.length - limit);
+  return slice.map((r) => r.id);
+}
+
+/* ─────────────────── Finding a row (2.2.5 W1) ─────────────────── */
+
+const DISCORD_EPOCH = 1420070400000;
+
+/** A snowflake's time in epoch milliseconds, NaN for an id that is not one. */
+export const snowflakeTime = (id: string): number => {
+  if (!/^\d+$/.test(id)) return NaN;
+  try {
+    return Number(BigInt(id) >> 22n) + DISCORD_EPOCH;
+  } catch {
+    return NaN;
+  }
+};
+
+/**
+ * The index of the row with `id` in a list sorted by `t` (either way),
+ * searched by its time `t`, or -1 when no row with that time has the id.
+ * O(log n) plus the rows sharing that millisecond.
+ */
+export const findRowByTime = (rows: readonly MessageRow[], id: string, t: number): number => {
+  const n = rows.length;
+  if (n === 0 || Number.isNaN(t)) return -1;
+  const desc = n > 1 && rows[0].t > rows[n - 1].t;
+  let lo = 0;
+  let hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const v = rows[mid].t;
+    if (desc ? v > t : v < t) lo = mid + 1;
+    else hi = mid;
+  }
+  for (let i = lo; i < n && rows[i].t === t; i++) if (rows[i].id === id) return i;
+  return -1;
+};
+
+/**
+ * The index of the row with `id`: by `t` when given, then by the time in
+ * the snowflake, then a walk (test ids, a row whose time is missing).
+ */
+export const locateRow = (rows: readonly MessageRow[], id: string, t?: number): number => {
+  if (t !== undefined) {
+    const at = findRowByTime(rows, id, t);
+    if (at >= 0) return at;
+  }
+  const fromId = snowflakeTime(id);
+  if (fromId !== t) {
+    const at = findRowByTime(rows, id, fromId);
+    if (at >= 0) return at;
+  }
+  for (let i = 0; i < rows.length; i++) if (rows[i].id === id) return i;
+  return -1;
+};
+
+/** Above this many changes a walk over the list beats finding each row. */
+const LOCATE_LIMIT = 64;
+
+/**
+ * `rows` with `change` applied to the rows named in `changes` (id to the
+ * row's time when known). The same array when nothing changed; otherwise
+ * one copy. A few changes are found by time, many by one walk.
+ */
+export const updateRowsById = (
+  rows: MessageRow[],
+  changes: ReadonlyMap<string, number | undefined>,
+  change: (row: MessageRow) => MessageRow,
+): MessageRow[] => {
+  if (changes.size === 0 || rows.length === 0) return rows;
+  let next: MessageRow[] | null = null;
+  if (changes.size > LOCATE_LIMIT) {
+    for (let i = 0; i < rows.length; i++) {
+      if (!changes.has(rows[i].id)) continue;
+      const row = change(rows[i]);
+      if (row === rows[i]) continue;
+      if (!next) next = rows.slice();
+      next[i] = row;
+    }
+    return next ?? rows;
+  }
+  for (const [id, t] of changes) {
+    const at = locateRow(rows, id, t);
+    if (at < 0) continue;
+    const row = change((next ?? rows)[at]);
+    if (row === (next ?? rows)[at]) continue;
+    if (!next) next = rows.slice();
+    next[at] = row;
+  }
+  return next ?? rows;
+};
+
+/** `rows` without the rows named in `ids` (id to time when known). The same array when none is there. */
+export const removeRowsById = (rows: MessageRow[], ids: ReadonlyMap<string, number | undefined>): MessageRow[] => {
+  if (ids.size === 0 || rows.length === 0) return rows;
+  if (ids.size > LOCATE_LIMIT) {
+    const out = rows.filter((r) => !ids.has(r.id));
+    return out.length === rows.length ? rows : out;
+  }
+  const at: number[] = [];
+  for (const [id, t] of ids) {
+    const i = locateRow(rows, id, t);
+    if (i >= 0) at.push(i);
+  }
+  if (at.length === 0) return rows;
+  at.sort((a, b) => b - a);
+  const next = rows.slice();
+  for (const i of at) next.splice(i, 1);
+  return next;
 };
 
 /* ─────────────────── Refine ─────────────────── */

@@ -41,6 +41,40 @@ describe('MessageActions', () => {
       expect(screen.getByText('2 selected')).toBeInTheDocument();
     });
 
+    // 2.2.5 W1: the buttons used to wait for every selected object, and past
+    // the cache size the read never settled, so they stayed disabled.
+    it('enables the buttons for a 25,000 message selection from the rows alone', () => {
+      const { selectedMessages: _omit, ...rest } = defaultProps;
+      const messages = Array.from({ length: 25_000 }, (_, i) => createMockMessage({
+        id: String(i + 1),
+        author: { id: 'me', username: 'me' } as any,
+        reactions: i === 7 ? [{ count: 1, me: true, emoji: { name: 'x' } }] as any : [],
+      }));
+      const state = messageStateWith(initialMessageState, messages);
+      render(<MessageActions {...rest} currentUserId="me" onBatchRemoveReactions={vi.fn()} onBatchAddReactions={vi.fn()} />, {
+        preloadedState: { message: { ...initialMessageState, ...state, selectedIds: messages.map((m) => m.id) } } as any,
+      });
+      expect(screen.getByText('25,000 selected')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Add Reactions' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Remove Reactions' })).toBeEnabled();
+    });
+
+    it('gates delete and reaction removal on the selected rows', () => {
+      const { selectedMessages: _omit, ...rest } = defaultProps;
+      const messages = [
+        createMockMessage({ id: 'a', author: { id: 'other', username: 'o' } as any, reactions: [{ count: 2, me: false, emoji: { name: 'x' } }] as any }),
+        createMockMessage({ id: 'b', author: { id: 'me', username: 'me' } as any }),
+      ];
+      render(<MessageActions {...rest} currentUserId="me" canManageMessages={false} onBatchRemoveReactions={vi.fn()} />, {
+        preloadedState: { message: { ...initialMessageState, ...messageStateWith(initialMessageState, messages), selectedIds: ['a', 'b'] } } as any,
+      });
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Remove Reactions' })).toBeDisabled();
+    });
+
     it('reads the active thread tab selection when a thread tab is open', () => {
       const { selectedMessages: _omit, ...rest } = defaultProps;
       render(<MessageActions {...rest} />, {

@@ -345,7 +345,6 @@ export function newConversation(cid: string, seed: ConversationSeed): Conversati
       searchOffset: 0,
       searchBeforeDate: null,
     },
-    selectedIds: [],
     scrollAnchorId: null,
     threadTabs: [],
     activeTab: null,
@@ -434,6 +433,42 @@ export function setWorkspaceOrder(order: string[]): Promise<void> {
     const meta = await readMeta(tx);
     tx.objectStore(STORE_META).put({ ...meta, order: [...order] }, META_KEY);
   });
+}
+
+/* ─────────────────── Selection (2.2.5 W1) ─────────────────── */
+
+/**
+ * A conversation's selected ids live under their own key in the meta
+ * store, apart from the workspace record, so a page write or a criteria
+ * change does not rewrite a large selection, and a click does not
+ * rewrite the record.
+ */
+const selectionKey = (wid: string, cid: string): IDBValidKey => ['sel', wid, cid];
+const workspaceSelectionRange = (wid: string): IDBKeyRange => IDBKeyRange.bound(['sel', wid], ['sel', wid, []]);
+
+/** The saved selection, or null when none was saved. */
+export function getSelection(wid: string, cid: string): Promise<string[] | null> {
+  return withTx('readonly', [STORE_META], { wid, cid }, async (tx) => {
+    const ids = await req<string[] | undefined>(tx.objectStore(STORE_META).get(selectionKey(wid, cid)));
+    return ids ?? null;
+  });
+}
+
+/** Saves the selection; an empty one removes the key. */
+export function setSelection(wid: string, cid: string, ids: readonly string[]): Promise<void> {
+  return withTx('readwrite', [STORE_META], { wid, cid }, async (tx) => {
+    const store = tx.objectStore(STORE_META);
+    if (ids.length === 0) store.delete(selectionKey(wid, cid));
+    else store.put([...ids], selectionKey(wid, cid));
+  });
+}
+
+function dropSelection(tx: IDBTransaction, wid: string, cid: string): void {
+  tx.objectStore(STORE_META).delete(selectionKey(wid, cid));
+}
+
+function dropWorkspaceSelections(tx: IDBTransaction, wid: string): void {
+  tx.objectStore(STORE_META).delete(workspaceSelectionRange(wid));
 }
 
 /* ─────────────────── Workspaces ─────────────────── */
@@ -563,6 +598,7 @@ export function deleteWorkspace(wid: string): Promise<void> {
     if (wid === meta.defaultWid) throw new WorkspaceStoreError('The Default workspace cannot be deleted');
     tx.objectStore(STORE_ROWS).delete(workspaceRange(wid));
     tx.objectStore(STORE_WORKSPACES).delete(wid);
+    dropWorkspaceSelections(tx, wid);
     tx.objectStore(STORE_META).put(
       {
         ...meta,
@@ -576,8 +612,9 @@ export function deleteWorkspace(wid: string): Promise<void> {
 
 /** Drops every row in the workspace and zeroes each conversation's count and bytes. The records stay. */
 export function clearWorkspaceMessages(wid: string): Promise<WorkspaceRecord> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid: null }, async (tx) => {
+  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
     tx.objectStore(STORE_ROWS).delete(workspaceRange(wid));
+    dropWorkspaceSelections(tx, wid);
     const record = await readWorkspace(tx, wid);
     for (const conversation of Object.values(record.conversations)) {
       resetConversationRows(conversation);
@@ -625,8 +662,23 @@ export function duplicateWorkspace(wid: string, name: string, now = Date.now()):
         cursor.continue();
       };
     });
+    const metaStore = tx.objectStore(STORE_META);
+    await new Promise<void>((resolve, reject) => {
+      const cursorRequest = metaStore.openCursor(workspaceSelectionRange(wid));
+      cursorRequest.onerror = () => reject(cursorRequest.error);
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        const cid = (cursor.key as string[])[2];
+        if (copy.conversations[cid]) metaStore.put(cursor.value, selectionKey(copy.wid, cid));
+        cursor.continue();
+      };
+    });
     const meta = await readMeta(tx);
-    tx.objectStore(STORE_META).put({ ...meta, order: [...meta.order, copy.wid] }, META_KEY);
+    metaStore.put({ ...meta, order: [...meta.order, copy.wid] }, META_KEY);
     return copy;
   });
 }
@@ -651,7 +703,10 @@ export function installImportedWorkspace(record: WorkspaceRecord, replace: boole
   return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid: installed.wid, cid: null }, async (tx) => {
     const existing = await req<WorkspaceRecord | undefined>(tx.objectStore(STORE_WORKSPACES).get(installed.wid));
     if (existing && !replace) throw new WorkspaceStoreError(`Workspace ${installed.wid} already exists`);
-    if (existing) tx.objectStore(STORE_ROWS).delete(workspaceRange(installed.wid));
+    if (existing) {
+      tx.objectStore(STORE_ROWS).delete(workspaceRange(installed.wid));
+      dropWorkspaceSelections(tx, installed.wid);
+    }
     tx.objectStore(STORE_WORKSPACES).put(installed);
     const meta = await readMeta(tx);
     if (!meta.order.includes(installed.wid)) {
@@ -681,7 +736,7 @@ function resetConversationRows(conversation: Conversation): void {
   conversation.newestId = null;
   conversation.complete = false;
   conversation.pagination = fresh.pagination;
-  conversation.selectedIds = [];
+  delete conversation.selectedIds;
   conversation.scrollAnchorId = null;
   conversation.action = null;
   conversation.enrichment = fresh.enrichment;
@@ -720,8 +775,9 @@ export function updateConversation(
 
 /** Drops a conversation's rows; its filters and settings stay. */
 export function clearConversation(wid: string, cid: string): Promise<Conversation | null> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid }, async (tx) => {
+  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid }, async (tx) => {
     tx.objectStore(STORE_ROWS).delete(conversationRange(wid, cid));
+    dropSelection(tx, wid, cid);
     const record = await readWorkspace(tx, wid);
     const conversation = record.conversations[cid];
     if (!conversation) return null;
@@ -771,8 +827,9 @@ export function refreshConversationNames(wid: string, names: NameRefresh): Promi
 
 /** Drops a conversation's rows and its record, the thread tab close case. */
 export function deleteConversation(wid: string, cid: string): Promise<void> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid }, async (tx) => {
+  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid }, async (tx) => {
     tx.objectStore(STORE_ROWS).delete(conversationRange(wid, cid));
+    dropSelection(tx, wid, cid);
     const record = await readWorkspace(tx, wid);
     const conversation = record.conversations[cid];
     if (!conversation) return;
@@ -818,11 +875,12 @@ export function isRunCid(cid: string): boolean {
 
 /** Drops every conversation whose id starts with `prefix`, rows and records, in one transaction. */
 export function deleteConversationsWithPrefix(wid: string, prefix: string): Promise<number> {
-  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid: null }, async (tx) => {
+  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
     const record = await readWorkspace(tx, wid);
     const cids = Object.keys(record.conversations).filter((cid) => cid.startsWith(prefix));
     for (const cid of cids) {
       tx.objectStore(STORE_ROWS).delete(conversationRange(wid, cid));
+      dropSelection(tx, wid, cid);
       record.bytes = Math.max(0, record.bytes - record.conversations[cid].bytes);
       delete record.conversations[cid];
     }
@@ -911,6 +969,35 @@ export function patchRows(wid: string, cid: string, patches: RowPatch[]): Promis
       patched++;
     }
     return patched;
+  });
+}
+
+/**
+ * Rewrites stored messages in place through `update` (2.2.5 W1). The
+ * reaction changes use it so a message the cache evicted is changed on
+ * disk too. Rows that are not on disk are skipped. Returns the messages
+ * that changed, as written.
+ */
+export function updateRows(
+  wid: string,
+  cid: string,
+  ids: Iterable<string>,
+  update: (message: Message) => Message,
+): Promise<Message[]> {
+  const list = [...ids];
+  if (list.length === 0) return Promise.resolve([]);
+  return withTx('readwrite', [STORE_ROWS], { wid, cid }, async (tx) => {
+    const rows = tx.objectStore(STORE_ROWS);
+    const changed: Message[] = [];
+    for (const id of list) {
+      const row = await req<StoredRow | undefined>(rows.get([wid, cid, padSnowflake(id)]));
+      if (!row) continue;
+      const message = update(row.message);
+      if (message === row.message) continue;
+      rows.put({ ...row, authorId: message.author?.id ?? row.authorId, message });
+      changed.push(message);
+    }
+    return changed;
   });
 }
 

@@ -76,6 +76,17 @@ describe('AnalyticsModal', () => {
     spy.mockRestore();
   });
 
+  // 2.2.5 W1: until the reports walk the store, a large list is held to its newest part.
+  it('says when it covers only the newest messages', () => {
+    render([createMessage('hi')], { coveredOf: 250_000 });
+    expect(screen.getByTestId('analytics-covered')).toHaveTextContent('Analytics covers the newest 20,000 messages.');
+  });
+
+  it('says nothing about coverage when every message is there', () => {
+    render([createMessage('hi')]);
+    expect(screen.queryByTestId('analytics-covered')).toBeNull();
+  });
+
   it('opens on the Mentions report with the report title', () => {
     render([createMessage('<@111> hello')]);
     expect(screen.getByTestId('analytics-title')).toHaveTextContent('Most mentioned');

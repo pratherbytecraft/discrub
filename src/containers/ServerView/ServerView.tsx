@@ -48,6 +48,7 @@ import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import type { Channel } from 'discrub-core/types/discord-types';
 import { overlayAuthors, sameAuthorEntries, type AuthorOverlayEntry } from '@/utils/messageAuthorOverlay';
 import { getCachedMessage, useHydratedAll } from '@features/message/messageCache';
+import { ANALYTICS_LIMIT, newestIds } from '@features/message/messageRows';
 import {
   selectActiveFilteredRows,
   selectActiveContainerKey,
@@ -87,6 +88,7 @@ import {
   clearSavedSearch,
   fetchMessages,
   enrichMessageUsers,
+  takeArrivedUserIds,
   openThreadTab,
   selectThreadTabs,
   setRefineCriteria,
@@ -149,7 +151,7 @@ interface ServerViewProps {
  */
 const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) => {
   perfCount('ServerView');
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const { exportLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
@@ -246,8 +248,10 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const threadLoadOpen = dialogs.threadLoad;
   const analyticsOpen = dialogs.analytics;
   // 2.2.5 WP2b: analytics runs over the message objects, read from the
-  // cache and the workspace store while the dialog is open.
-  const analyticsIds = useMemo(() => messages.map((r) => r.id), [messages]);
+  // cache and the workspace store while the dialog is open. 2.2.5 W1: held
+  // to the newest ANALYTICS_LIMIT messages until the reports walk the store
+  // (W4), so a large conversation is not read into memory whole.
+  const analyticsIds = useMemo(() => newestIds(messages, ANALYTICS_LIMIT), [messages]);
   const { messages: analyticsMessages, loading: analyticsLoading } = useHydratedAll(containerKey, hydrationSource, analyticsIds, analyticsOpen);
   const openDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: true })), [dispatch]);
   const closeDialog = useCallback((dialog: FeedDialog) => dispatch(setDialogOpen({ dialog, open: false })), [dispatch]);
@@ -473,8 +477,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   // Trigger user enrichment when main channel messages change. 2.2.1 perf:
   // a list that only shrank (a delete flush) holds no author the last pass
   // did not see, so it is skipped. 2.2.5 fix A: only ids this view has not
-  // handed over yet go to the lookup queue, so a Load All page sends its
-  // new authors rather than every author so far.
+  // handed over yet go to the lookup queue. 2.2.5 W1: the ids come from the
+  // pages that arrived (takeArrivedUserIds), not a walk over every row.
   const enrichedLengthRef = useRef(0);
   const handedIdsRef = useRef<{ guildId: string | null; ids: Set<string> }>({ guildId: null, ids: new Set() });
   useEffect(() => {
@@ -484,7 +488,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     // lookups it had queued.
     if (mainMessages.length === 0) handedIdsRef.current = { guildId: null, ids: new Set() };
     if (!grew) return;
-    if (mainMessages.length > 0 && token && settings) {
+    const arrived = takeArrivedUserIds();
+    if (arrived.length > 0 && token && settings) {
       const shouldEnrich =
         settings[DiscrubSetting.DISPLAY_NAME_LOOKUP] === 'true' ||
         settings[DiscrubSetting.SERVER_NICKNAME_LOOKUP] === 'true';
@@ -494,21 +499,16 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
         if (handedIdsRef.current.guildId !== guildId) handedIdsRef.current = { guildId, ids: new Set() };
         const handed = handedIdsRef.current.ids;
         const fresh: string[] = [];
-        const take = (id: string) => {
-          if (handed.has(id)) return;
+        for (const id of arrived) {
+          if (handed.has(id)) continue;
           handed.add(id);
           fresh.push(id);
-        };
-        for (const row of mainMessages) {
-          if (row.authorId) take(row.authorId);
-          if (row.mentionIds) for (const id of row.mentionIds) take(id);
         }
         if (fresh.length > 0) {
           dispatch(enrichMessageUsers({ userIds: fresh, guildId, token }));
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional trigger set
   }, [mainMessages.length, token, settings, selectedGuild?.id, dispatch]);
 
   // Fetch the guild's custom emojis for the bulk-add-reactions picker (#202).
@@ -953,9 +953,11 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
               <Typography variant="body2" color="text.secondary" noWrap>
                 {(() => {
+                  // 2.2.5 W1 (finding 8): counts print with the locale's separator.
+                  const n = (value: number) => value.toLocaleString(i18n.language);
                   if (isForumChannel) {
                     const total = forumThreadsTotalResults || forumThreads.length;
-                    return `${total} post${total !== 1 ? 's' : ''}`;
+                    return `${n(total)} post${total !== 1 ? 's' : ''}`;
                   }
                   // Three counts to keep separate when a local refine is on
                   // top of a server search:
@@ -977,12 +979,12 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
                     const remaining = Math.max(0, displayTotal - loaded);
                     if (isRefined) {
                       return pagination.hasMore
-                        ? `${visible} visible · ${loaded} of ${displayTotal} matches loaded`
-                        : `${visible} visible · ${displayTotal} matches loaded`;
+                        ? `${n(visible)} visible · ${n(loaded)} of ${n(displayTotal)} matches loaded`
+                        : `${n(visible)} visible · ${n(displayTotal)} matches loaded`;
                     }
                     return pagination.hasMore
-                      ? `${loaded} of ${displayTotal} matches loaded (${remaining} remaining)`
-                      : `${displayTotal} match${displayTotal !== 1 ? 'es' : ''}`;
+                      ? `${n(loaded)} of ${n(displayTotal)} matches loaded (${n(remaining)} remaining)`
+                      : `${n(displayTotal)} match${displayTotal !== 1 ? 'es' : ''}`;
                   }
 
                   // Paginated (no server search). Channel total is unknown,
@@ -991,10 +993,10 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
                   // narrowed the visible set down.
                   if (isRefined) {
                     return pagination.hasMore
-                      ? `${visible} visible · ${loaded} loaded · scroll for more`
-                      : `${visible} visible · ${loaded} loaded`;
+                      ? `${n(visible)} visible · ${n(loaded)} loaded · scroll for more`
+                      : `${n(visible)} visible · ${n(loaded)} loaded`;
                   }
-                  return `${loaded} message${loaded !== 1 ? 's' : ''}`;
+                  return `${n(loaded)} message${loaded !== 1 ? 's' : ''}`;
                 })()}
               </Typography>
               {!isForumChannel && pagination.mode === 'search' && (
@@ -1345,6 +1347,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
         onClose={() => closeDialog('analytics')}
         messages={analyticsMessages}
         loading={analyticsLoading}
+        coveredOf={messages.length > analyticsIds.length ? messages.length : null}
         userMap={userMap}
         containerId={activeTab ?? selectedChannel?.id ?? null}
         threadNames={analyticsThreadNames}

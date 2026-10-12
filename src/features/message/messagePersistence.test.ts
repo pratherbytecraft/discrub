@@ -9,8 +9,13 @@ import {
   countRows,
   deleteWorkspaceDatabase,
   getConversation,
+  getMessages,
+  getSelection,
+  setSelection,
+  updateConversation,
   writePage,
 } from '@services/workspaceStore';
+import { getCachedMessage } from './messageCache';
 import * as operationLoopUtils from '@/utils/operationLoopUtils';
 import {
   conversationSeedFromState,
@@ -19,6 +24,8 @@ import {
   persistPage,
   persistRowDeletes,
   persistRowPatches,
+  persistRowUpdates,
+  persistSelection,
   resetPersistenceWarnings,
   restoreConversation,
   threadSeedFromState,
@@ -201,7 +208,8 @@ describe('records, patches and deletes', () => {
     expect(await persistRowPatches(api, CID, [{ id: '1', patch: { content: 'edited' } }])).toBe('written');
     expect(await persistRowDeletes(api, CID, ['2'])).toBe('written');
     const restored = await restoreConversation(api, CID);
-    expect(restored?.messages.map((m) => [m.id, m.content])).toEqual([['1', 'edited']]);
+    expect(restored?.rows.map((r) => r.id)).toEqual(['1']);
+    expect(restored?.newest.map((m) => [m.id, m.content])).toEqual([['1', 'edited']]);
     expect(await persistRowPatches(api, CID, [])).toBe('skipped');
   });
 });
@@ -219,9 +227,69 @@ describe('restoreConversation', () => {
     const many = Array.from({ length: 2500 }, (_, i) => msg(String(100000 + i)));
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, many, seed);
     const restored = await restoreConversation(api, CID);
-    expect(restored?.messages).toHaveLength(2500);
-    expect(restored?.messages[0].id).toBe('100000');
-    expect(restored?.messages[2499].id).toBe('102499');
+    expect(restored?.rows).toHaveLength(2500);
+    expect(restored?.rows[0].id).toBe('100000');
+    expect(restored?.rows[2499].id).toBe('102499');
     expect(restored?.conversation.count).toBe(2500);
+    expect(restored?.cid).toBe(CID);
+    expect(restored?.wid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+  });
+
+  // 2.2.5 W1: a restore keeps rows and authors for every message but full
+  // objects for the newest window only.
+  it('keeps full objects for the newest window only, topped up from the window before', async () => {
+    const { api } = apiFor(readyState());
+    const many = Array.from({ length: 4500 }, (_, i) => msg(String(100000 + i), {
+      author: { id: `u${i % 3}`, username: `user${i % 3}` } as Message['author'],
+    }));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, many, seed);
+    const restored = await restoreConversation(api, CID);
+    expect(restored?.rows).toHaveLength(4500);
+    expect(restored?.newest).toHaveLength(2000);
+    expect(restored?.newest[0].id).toBe('102500');
+    expect(restored?.newest[1999].id).toBe('104499');
+    expect(Object.keys(restored?.authors ?? {}).sort()).toEqual(['u0', 'u1', 'u2']);
+    expect(restored?.rows[7].authorId).toBe('u1');
+  });
+
+  it('answers the saved selection from its own key', async () => {
+    const { api } = apiFor(readyState());
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1'), msg('2')], seed);
+    expect((await restoreConversation(api, CID))?.selectedIds).toEqual([]);
+    await setSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID, ['2']);
+    expect((await restoreConversation(api, CID))?.selectedIds).toEqual(['2']);
+  });
+
+  it('moves a selection saved in the record to its own key and drops the field', async () => {
+    const { api } = apiFor(readyState());
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1'), msg('2')], seed);
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => { c.selectedIds = ['1']; });
+    expect((await restoreConversation(api, CID))?.selectedIds).toEqual(['1']);
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toEqual(['1']);
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.selectedIds).toBeUndefined();
+  });
+});
+
+describe('selection and row updates (2.2.5 W1)', () => {
+  it('persistSelection writes only for a saved conversation, and an empty selection clears the key', async () => {
+    const { api } = apiFor(readyState());
+    expect(await persistSelection(api, CID, ['1'])).toBe('skipped');
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1')], seed);
+    expect(await persistSelection(api, CID, ['1'])).toBe('written');
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toEqual(['1']);
+    expect(await persistSelection(api, CID, [])).toBe('written');
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
+  });
+
+  it('persistRowUpdates changes messages the cache does not hold and answers them', async () => {
+    const { api } = apiFor(readyState());
+    const reacted = msg('1', { reactions: [{ count: 1, me: true, emoji: { name: 'x' } }] as Message['reactions'] });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [reacted, msg('2')], seed);
+    expect(getCachedMessage('main', '1')).toBeUndefined();
+    const changed = await persistRowUpdates(api, CID, ['1', '2', '9'], (m) => (m.reactions?.length ? { ...m, reactions: [] } : m));
+    expect(changed.map((m) => m.id)).toEqual(['1']);
+    const [stored] = await getMessages(LEGACY_DEFAULT_WORKSPACE_ID, CID, ['1']);
+    expect(stored?.reactions).toEqual([]);
   });
 });

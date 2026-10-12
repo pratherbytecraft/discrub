@@ -133,30 +133,44 @@ const READ_BATCH = 500;
 
 /**
  * The message objects for `ids`, in the order given, missing ones left
- * out. Cache hits are free; the rest is read from the store in batches
- * and cached on the way back.
+ * out. Cache hits are free; the rest is read from the store in batches.
+ *
+ * 2.2.5 W1: the answer is built from what was found and read, not read
+ * back from the cache, so a list longer than the cache comes back whole.
+ * Reads are cached only when the list fits in half the cache, so a large
+ * read (a whole selection, Analytics) does not evict the rows on screen.
  */
-export async function hydrateMessages(container: string, source: HydrationSource, ids: string[]): Promise<Message[]> {
+export async function hydrateMessages(container: string, source: HydrationSource, ids: readonly string[]): Promise<Message[]> {
+  const found = new Map<string, Message>();
   const missing: string[] = [];
-  for (const id of ids) if (!cache.has(keyOf(container, id))) missing.push(id);
+  for (const id of ids) {
+    const held = cache.get(keyOf(container, id));
+    if (held) found.set(id, held);
+    else missing.push(id);
+  }
+  const keep = ids.length <= capacity / 2;
   if (missing.length > 0 && source.wid && source.cid) {
     for (let at = 0; at < missing.length; at += READ_BATCH) {
       const batch = missing.slice(at, at + READ_BATCH);
-      let found: Array<Message | undefined>;
+      let read: Array<Message | undefined>;
       try {
-        found = await getMessages(source.wid, source.cid, batch);
+        read = await getMessages(source.wid, source.cid, batch);
       } catch (error) {
         console.error('[workspace] hydrate failed', error);
         break;
       }
-      const read: Message[] = [];
-      for (const message of found) if (message) read.push(message);
-      cacheMessages(container, read);
+      const page: Message[] = [];
+      for (const message of read) {
+        if (!message) continue;
+        found.set(message.id, message);
+        page.push(message);
+      }
+      if (keep) cacheMessages(container, page);
     }
   }
   const out: Message[] = [];
   for (const id of ids) {
-    const message = cache.get(keyOf(container, id));
+    const message = found.get(id);
     if (message) out.push(message);
   }
   return out;
@@ -174,19 +188,26 @@ export function cachedMessagesOf(container: string): Message[] {
  * The objects for the rows a component draws. Cached ones come back at
  * once; the rest arrive from the store a moment later and the component
  * renders again. A row whose object is not here yet draws as a skeleton.
+ *
+ * 2.2.5 W1: what the store read answers is kept here too, since a read
+ * larger than half the cache (one author posting all day makes a chunk of
+ * thousands) is not cached. The cache still wins, so an edit shows.
  */
 export function useHydratedMessages(container: string, source: HydrationSource, ids: readonly string[]): ReadonlyMap<string, Message> {
   const seen = useSyncExternalStore(subscribeToMessageCache, messageCacheVersion, messageCacheVersion);
+  const [fetched, setFetched] = useState<{ key: string; byId: ReadonlyMap<string, Message> }>(EMPTY_FETCHED);
+  const fetchedKey = `${container}|${source.cid}`;
   const map = useMemo(() => {
     const out = new Map<string, Message>();
+    const read = fetched.key === fetchedKey ? fetched.byId : null;
     for (const id of ids) {
-      const message = cache.get(keyOf(container, id));
+      const message = cache.get(keyOf(container, id)) ?? read?.get(id);
       if (message) out.set(id, message);
     }
     return out;
     // `seen` is the cache version; a change in it is a change in the answer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [container, ids, seen]);
+  }, [container, ids, seen, fetched, fetchedKey]);
 
   // Ask the store for what is missing, once per set of missing ids.
   const askedRef = useRef<string>('');
@@ -199,17 +220,32 @@ export function useHydratedMessages(container: string, source: HydrationSource, 
     askedRef.current = signature;
     // The signature stays, so ids the store does not have either are not
     // asked for again until the set of missing ids changes.
-    void hydrateMessages(container, source, missing);
-  }, [container, source.wid, source.cid, ids, map, source]);
+    void hydrateMessages(container, source, missing).then((read) => {
+      if (askedRef.current !== signature || read.length === 0) return;
+      setFetched((prev) => {
+        const byId = new Map(prev.key === fetchedKey ? prev.byId : undefined);
+        // Only what this component draws is kept.
+        const wanted = new Set(ids);
+        for (const id of byId.keys()) if (!wanted.has(id)) byId.delete(id);
+        for (const message of read) byId.set(message.id, message);
+        return { key: fetchedKey, byId };
+      });
+    });
+  }, [container, source.wid, source.cid, ids, map, source, fetchedKey]);
 
   return map;
 }
 
+const EMPTY_FETCHED = { key: '', byId: new Map<string, Message>() as ReadonlyMap<string, Message> };
+
 /**
- * Every object behind `ids`, for a modal, an export or analytics that
- * works on the whole list. Hydrates while `enabled`; `loading` is true
- * until the read is back. The list is rebuilt when the ids, the cache
- * or the source change.
+ * Every object behind `ids`, for a modal that works on a short list (the
+ * single message the Edit and Embed modals show). Hydrates while
+ * `enabled`; `loading` is true until the read is back.
+ *
+ * 2.2.5 W1: the read runs once per set of ids, not again on every cache
+ * change. Each hydrate changes the cache, so a list longer than the cache
+ * used to hydrate for ever. Whole list work reads the store in windows.
  */
 export function useHydratedAll(
   container: string,
@@ -217,14 +253,13 @@ export function useHydratedAll(
   ids: readonly string[],
   enabled: boolean,
 ): { messages: Message[]; loading: boolean } {
-  const seen = useSyncExternalStore(subscribeToMessageCache, messageCacheVersion, messageCacheVersion);
-  const [state, setState] = useState<{ ids: readonly string[]; seen: number; messages: Message[]; loading: boolean }>({ ids, seen, messages: [], loading: false });
+  const [state, setState] = useState<{ messages: Message[]; loading: boolean }>(EMPTY_HYDRATION);
   const runRef = useRef(0);
   useEffect(() => {
     if (!enabled) return;
     const run = ++runRef.current;
     const settled = (messages: Message[]) => {
-      if (runRef.current === run) setState({ ids, seen, messages, loading: false });
+      if (runRef.current === run) setState({ messages, loading: false });
     };
     const cached: Message[] = [];
     let complete = true;
@@ -234,8 +269,8 @@ export function useHydratedAll(
     }
     if (complete) { settled(cached); return; }
     setState((prev) => (prev.loading ? prev : { ...prev, loading: true }));
-    void hydrateMessages(container, source, ids as string[]).then(settled, () => settled(cached));
-  }, [container, source, ids, enabled, seen]);
+    void hydrateMessages(container, source, ids).then(settled, () => settled([]));
+  }, [container, source, ids, enabled]);
   if (!enabled) return EMPTY_HYDRATION;
   return state;
 }

@@ -1,20 +1,34 @@
 import { createAction, createSlice, createAsyncThunk, createSelector, isDraft, original, PayloadAction } from '@reduxjs/toolkit';
 import type { Message, Attachment, User, Channel } from 'discrub-core/types/discord-types';
+import type { RestoredConversation } from './messagePersistence';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { ReactionType, IsPinnedType } from 'discrub-core/discord-enum';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { MessageOrder, initialMessageState, initialPaginationState, ThreadTabState, type MessageContainer, type MessageState } from './messageTypes';
 import {
   appendSortedRows,
+  mergeAuthorMap,
   mergeAuthors,
   messageMatchesContentRefine,
   refineNeedsContent,
+  removeRowsById,
+  rowPredicate,
   rowWithReactions,
   sortRows,
   toMessageRow,
   toMessageRows,
+  updateRowsById,
+  findRowByTime,
   type MessageRow,
 } from './messageRows';
+import {
+  batchAddition,
+  batchRemoval,
+  clearReactions,
+  removeEmoji,
+  removeOneReaction,
+  type ReactionUpdate,
+} from './reactionUpdates';
 import {
   MAIN_CONTAINER,
   cacheMessages,
@@ -958,7 +972,9 @@ export const batchRemoveReactions = createAsyncThunk(
       } else {
         dispatch(addStatusEntry({ level: 'info', message: t('status.msg.noMatchingReactions') }));
       }
-      return { processedMessageIds: messages.slice(0, processed).map((m) => m.id), mode, emojis };
+      // 2.2.5 W1: `processed` counts the messages with reactions, so the ids
+      // come from that list (they came from every message before).
+      return { processedMessageIds: messagesWithReactions.slice(0, processed).map((m) => m.id), mode, emojis };
     } catch (error) {
       return rejectWithValue(
         error instanceof Error ? error.message : 'Failed to batch remove reactions'
@@ -1220,6 +1236,39 @@ export const deleteAllAttachments = createAsyncThunk(
   }
 );
 
+/** What a restore hands the reducers: rows, authors and one window of objects (2.2.5 W1). */
+export interface RestoredRows {
+  rows: MessageRow[];
+  authors: Record<string, User>;
+  newest: Message[];
+  selectedIds: string[];
+}
+
+const restoredRowsOf = (restored: RestoredConversation): RestoredRows => ({
+  rows: restored.rows,
+  authors: restored.authors,
+  newest: restored.newest,
+  selectedIds: restored.selectedIds,
+});
+
+/** The content refine of a restored conversation, from a scan of its saved messages. */
+async function scanRestored(
+  dispatch: (action: unknown) => unknown,
+  restored: RestoredConversation,
+  criteria: RefineCriteria,
+): Promise<string[]> {
+  if (restored.rows.length >= SCAN_NOTICE_ROWS) {
+    dispatch(addStatusEntry({ level: 'info', message: t('status.msg.scanningMessages', { count: restored.rows.length }) }));
+  }
+  try {
+    const result = await scan(restored.wid, restored.cid, (message) => messageMatchesContentRefine(message, criteria));
+    return result.ids;
+  } catch (error) {
+    console.error('[workspace] content scan failed on restore', error);
+    return [];
+  }
+}
+
 /**
  * Fetch messages for a channel (initial load)
  */
@@ -1243,16 +1292,18 @@ export const fetchMessages = createAsyncThunk(
       // messages arrive through Start over in the Load All dialog.
       const restored = await restoreConversationOrSearch({ dispatch, getState: getState as () => RootState }, channelId);
       if (restored) {
-        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.messages.length }) }));
-        const oldest = restored.messages[0];
+        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.rows.length }) }));
         const refine = restored.conversation.refineCriteria;
+        // 2.2.5 W1: the content part of a saved refine comes from a scan of
+        // the store, not from every message held in memory.
         const contentMatchIds = refineNeedsContent(refine)
-          ? restored.messages.filter((m) => messageMatchesContentRefine(m, refine as RefineCriteria)).map((m) => m.id)
+          ? await scanRestored(dispatch, restored, refine as RefineCriteria)
           : null;
         return {
-          messages: restored.messages,
+          messages: [] as Message[],
+          restoredRows: restoredRowsOf(restored),
           hasMore: restored.conversation.pagination.hasMore,
-          lastMessageId: restored.conversation.pagination.lastMessageId ?? oldest?.id ?? null,
+          lastMessageId: restored.conversation.pagination.lastMessageId ?? restored.rows[0]?.id ?? null,
           restored: restored.conversation,
           contentMatchIds,
         };
@@ -1279,6 +1330,7 @@ export const fetchMessages = createAsyncThunk(
         messages,
         hasMore: messages.length === 100, // If we got 100, there might be more
         lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : null,
+        restoredRows: null as RestoredRows | null,
         restored: null as Conversation | null,
         contentMatchIds: null as string[] | null,
       };
@@ -2397,7 +2449,7 @@ export const openThreadTab = createAsyncThunk(
         const isSearch = restored.conversation.pagination.mode === 'search';
         dispatch(messageSlice.actions.setThreadSearchCriteria({ threadId, criteria: isSearch ? restored.conversation.searchCriteria : null }));
         dispatch(messageSlice.actions.setThreadOrder({ threadId, order: restored.conversation.order }));
-        dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: restored.messages }));
+        dispatch(messageSlice.actions.setThreadRestored({ threadId, restored: restoredRowsOf(restored) }));
         await dispatch(setThreadRefineCriteria({ threadId, criteria: restored.conversation.refineCriteria }));
         const p = restored.conversation.pagination;
         dispatch(messageSlice.actions.updateThreadPagination({
@@ -2405,13 +2457,13 @@ export const openThreadTab = createAsyncThunk(
           pagination: {
             mode: p.mode,
             hasMore: p.hasMore,
-            lastMessageId: p.lastMessageId ?? restored.messages[0]?.id ?? null,
+            lastMessageId: p.lastMessageId ?? restored.rows[0]?.id ?? null,
             totalCount: p.totalCount,
             searchOffset: p.searchOffset,
           },
         }));
         dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
-        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.messages.length }) }));
+        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.rows.length }) }));
         if (parentCid) await persistThreadTabs(api, parentCid, getState() as RootState);
         return { threadId, alreadyOpen: false };
       }
@@ -3183,11 +3235,14 @@ const reloadThreadPlain = createAsyncThunk(
     dispatch(messageSlice.actions.setThreadSearchCriteria({ threadId, criteria: null }));
     const restored = await restoreConversation(api, threadId);
     if (restored) {
-      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: restored.messages }));
+      dispatch(messageSlice.actions.setThreadRestored({ threadId, restored: restoredRowsOf(restored) }));
+      // The content part of the tab's refine is a scan of the saved rows.
+      const criteria = (getState() as RootState).message.threadTabs[threadId]?.refineCriteria ?? null;
+      if (refineNeedsContent(criteria)) await dispatch(setThreadRefineCriteria({ threadId, criteria }));
       const p = restored.conversation.pagination;
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
-        pagination: { mode: p.mode, hasMore: p.hasMore, lastMessageId: p.lastMessageId ?? restored.messages[0]?.id ?? null, totalCount: p.totalCount, searchOffset: p.searchOffset },
+        pagination: { mode: p.mode, hasMore: p.hasMore, lastMessageId: p.lastMessageId ?? restored.rows[0]?.id ?? null, totalCount: p.totalCount, searchOffset: p.searchOffset },
       }));
       return;
     }
@@ -3279,25 +3334,78 @@ const contentMatchesOf = (container: Container, messages: Message[]): string[] |
   return out;
 };
 
-const mergeContentMatches = (container: Container, messages: Message[], replace: boolean): void => {
-  const matches = contentMatchesOf(container, messages);
-  if (matches === null) {
-    if (replace) container.contentMatchIds = null;
-    return;
-  }
-  container.contentMatchIds = replace || !container.contentMatchIds ? matches : plain(container.contentMatchIds).concat(matches);
-};
-
 const recordAuthors = (state: MessageState, messages: Message[]): void => {
   const held = plainRecord(state.authors);
   const next = mergeAuthors(held, messages);
   if (next !== held) state.authors = next;
 };
 
+/* ─────────── User lookups fed per page (2.2.5 W1) ─────────── */
+
+/**
+ * The authors and mentioned users of the main conversation's rows since
+ * ServerView last asked. Each page adds its own ids here, so the lookup
+ * effect no longer walks every row each time the list grows.
+ */
+const arrivedUserIds = new Set<string>();
+
+const noteArrivedUsers = (key: string, rows: readonly MessageRow[]): void => {
+  if (key !== MAIN_CONTAINER) return;
+  for (const row of rows) {
+    if (row.authorId) arrivedUserIds.add(row.authorId);
+    if (row.mentionIds) for (const id of row.mentionIds) arrivedUserIds.add(id);
+  }
+};
+
+/** The user ids that arrived with main conversation pages since the last call. */
+export const takeArrivedUserIds = (): string[] => {
+  const ids = [...arrivedUserIds];
+  arrivedUserIds.clear();
+  return ids;
+};
+
+/* ─────────── Rows in and out ─────────── */
+
+/** Ids to their row time, for the row finders. */
+const timesOf = (messages: readonly Message[]): Map<string, number> => {
+  const out = new Map<string, number>();
+  for (const m of messages) out.set(m.id, m.timestamp ? new Date(m.timestamp).getTime() : NaN);
+  return out;
+};
+
+/** Ids to the time of their cached object when there is one. */
+const cachedTimesOf = (key: string, ids: Iterable<string>): Map<string, number | undefined> => {
+  const out = new Map<string, number | undefined>();
+  for (const id of ids) {
+    const m = getCachedMessage(key, id);
+    out.set(id, m?.timestamp ? new Date(m.timestamp).getTime() : undefined);
+  }
+  return out;
+};
+
+/** `change` applied to some rows of both lists, keeping them one array when no refine is on. */
+const changeRows = (
+  container: Container,
+  changes: ReadonlyMap<string, number | undefined>,
+  change: (row: MessageRow) => MessageRow,
+): void => {
+  const rows = plain(container.rows);
+  const filtered = plain(container.filteredRows);
+  const nextRows = updateRowsById(rows, changes, change);
+  const nextFiltered = filtered === rows ? nextRows : updateRowsById(filtered, changes, change);
+  if (nextRows !== rows) container.rows = sealed(nextRows);
+  if (nextFiltered !== filtered) container.filteredRows = sealed(nextFiltered);
+};
+
 /**
  * A page of messages replaces or joins a container. The objects go to the
  * message cache under the container's key, their authors to the author
  * map, and the rows into `rows` sorted under the container's order.
+ *
+ * 2.2.5 W1: an appended page costs the page, not the list. Its rows are
+ * checked against the list by time (a walk only meets the list at its
+ * boundary, and the store's write is the real guard), and only the new
+ * rows go through the refine, merged into `filteredRows` at their end.
  */
 const ingestPage = (
   state: MessageState,
@@ -3309,28 +3417,83 @@ const ingestPage = (
   cacheMessages(key, messages);
   recordAuthors(state, messages);
   const rows = toMessageRows(messages);
+  noteArrivedUsers(key, rows);
   if (mode === 'replace') {
     container.rows = sealed(sortRows(rows, container.order.order));
-    mergeContentMatches(container, messages, true);
-  } else {
-    const existing = plain(container.rows);
-    const existingIds = new Set(existing.map((r) => r.id));
-    const fresh = rows.filter((r) => !existingIds.has(r.id));
-    if (fresh.length === 0) return;
-    container.rows = sealed(appendSortedRows(existing, fresh, container.order.order));
-    mergeContentMatches(container, messages.filter((m) => !existingIds.has(m.id)), false);
+    container.contentMatchIds = contentMatchesOf(container, messages);
+    refilter(container);
+    return;
   }
+  const existing = plain(container.rows);
+  const fresh: MessageRow[] = [];
+  const freshIds = new Set<string>();
+  for (const row of rows) {
+    if (freshIds.has(row.id) || findRowByTime(existing, row.id, row.t) >= 0) continue;
+    if (Number.isNaN(row.t) && existing.some((r) => r.id === row.id)) continue;
+    freshIds.add(row.id);
+    fresh.push(row);
+  }
+  if (fresh.length === 0) return;
+  const order = container.order.order;
+  const filtered = plain(container.filteredRows);
+  const nextRows = sealed(appendSortedRows(existing, fresh, order));
+  container.rows = nextRows;
+  const predicate = rowPredicate(container.refineCriteria);
+  const pageMatches = contentMatchesOf(container, messages.filter((m) => freshIds.has(m.id)));
+  if (!predicate && pageMatches === null) {
+    container.filteredRows = nextRows;
+    return;
+  }
+  if (pageMatches !== null) {
+    container.contentMatchIds = plain(container.contentMatchIds ?? []).concat(pageMatches);
+  }
+  if (filtered === existing) {
+    // The two lists were one; the refine changed under them. Start over.
+    refilter(container);
+    return;
+  }
+  const matched = pageMatches === null ? null : new Set(pageMatches);
+  const kept = fresh.filter((r) => (!predicate || predicate(r)) && (!matched || matched.has(r.id)));
+  if (kept.length > 0) container.filteredRows = sealed(appendSortedRows(filtered, kept, order));
+};
+
+/**
+ * A restored conversation replaces a container (2.2.5 W1): rows and
+ * authors for every saved message, objects for the newest window only.
+ * `contentMatchIds` is the scan's answer when the refine has a content
+ * part; a thread tab gets it from its refine thunk right after.
+ */
+const ingestRestored = (
+  state: MessageState,
+  container: Container,
+  key: string,
+  restored: RestoredRows,
+  contentMatchIds: string[] | null,
+): void => {
+  cacheMessages(key, restored.newest);
+  const held = plainRecord(state.authors);
+  const authors = mergeAuthorMap(held, restored.authors);
+  if (authors !== held) state.authors = authors;
+  noteArrivedUsers(key, restored.rows);
+  container.rows = sealed(sortRows(restored.rows, container.order.order));
+  container.contentMatchIds = refineNeedsContent(container.refineCriteria) ? contentMatchIds ?? [] : null;
   refilter(container);
 };
 
 const removeRows = (container: Container, key: string, ids: Set<string>): void => {
+  const where = cachedTimesOf(key, ids);
   const rows = plain(container.rows);
   const filtered = plain(container.filteredRows);
-  const nextRows = sealed(rows.filter((r) => !ids.has(r.id)));
-  container.rows = nextRows;
+  const nextRows = removeRowsById(rows, where);
+  if (nextRows !== rows) container.rows = sealed(nextRows);
   // With no refine active the two arrays are one, keep it that way.
-  container.filteredRows = filtered === rows ? nextRows : sealed(filtered.filter((r) => !ids.has(r.id)));
-  container.selectedIds = plain(container.selectedIds).filter((id) => !ids.has(id));
+  const nextFiltered = filtered === rows ? nextRows : removeRowsById(filtered, where);
+  if (nextFiltered !== filtered) container.filteredRows = sealed(nextFiltered);
+  const selected = plain(container.selectedIds);
+  if (selected.length > 0) {
+    const kept = selected.filter((id) => !ids.has(id));
+    if (kept.length !== selected.length) container.selectedIds = kept;
+  }
   if (container.contentMatchIds) container.contentMatchIds = plain(container.contentMatchIds).filter((id) => !ids.has(id));
   dropCachedMessages(key, ids);
 };
@@ -3339,15 +3502,10 @@ const removeRows = (container: Container, key: string, ids: Set<string>): void =
 const replaceRows = (state: MessageState, container: Container, key: string, messages: Message[]): void => {
   if (messages.length === 0) return;
   const byId = new Map(messages.map((m) => [m.id, m]));
-  const swap = (rows: MessageRow[]) => rows.map((r) => {
+  changeRows(container, timesOf(messages), (r) => {
     const m = byId.get(r.id);
     return m ? { ...toMessageRow(m), t: r.t } : r;
   });
-  const rows = plain(container.rows);
-  const filtered = plain(container.filteredRows);
-  const nextRows = sealed(swap(rows));
-  container.rows = nextRows;
-  container.filteredRows = filtered === rows ? nextRows : sealed(swap(filtered));
   for (const m of messages) replaceCachedMessage(key, m);
   recordAuthors(state, messages);
   // An edit can change what a content refine matches.
@@ -3362,28 +3520,61 @@ const replaceRows = (state: MessageState, container: Container, key: string, mes
   }
 };
 
-/** Rewrites the reactions of some rows through `update`, in the cache and on the rows. */
-const patchReactions = (container: Container, key: string, ids: Iterable<string>, update: (m: Message) => Message): void => {
+/**
+ * Rewrites the reactions of some messages through `update`, in the cache
+ * and on their rows. A message the cache evicted is changed on disk by
+ * the persistence middleware, which sends its row back through
+ * `reactionRowsSynced`.
+ */
+const patchReactions = (container: Container, key: string, ids: Iterable<string>, update: ReactionUpdate): void => {
   const changed = new Map<string, Message>();
   for (const id of ids) {
     const next = updateCachedMessage(key, id, update);
     if (next) changed.set(id, next);
   }
   if (changed.size === 0) return;
-  const swap = (rows: MessageRow[]) => rows.map((r) => {
+  changeRows(container, timesOf([...changed.values()]), (r) => {
     const m = changed.get(r.id);
     return m ? rowWithReactions(r, m) : r;
   });
-  const rows = plain(container.rows);
-  const filtered = plain(container.filteredRows);
-  const nextRows = sealed(swap(rows));
-  container.rows = nextRows;
-  container.filteredRows = filtered === rows ? nextRows : sealed(swap(filtered));
 };
 
-const emojiMatches = (r: { emoji: { id?: string | null; name?: string | null } }, emoji: string): boolean => {
-  const emojiKey = r.emoji.id || r.emoji.name;
-  return emojiKey === emoji || `${r.emoji.name}:${r.emoji.id}` === emoji;
+/** A selection with one id added or taken out: one copy of the list, no proxy walk. */
+const toggledSelection = (base: string[], id: string): string[] => {
+  const index = base.indexOf(id);
+  const next = base.slice();
+  if (index >= 0) next.splice(index, 1);
+  else next.push(id);
+  return next;
+};
+
+/**
+ * The ids a reaction action changed and the change itself, or null for any
+ * other action (2.2.5 W1). The reducers apply it to the cached objects and
+ * the persistence middleware to the stored ones.
+ */
+export const reactionChangeOf = (action: { type: string; payload?: unknown }): { ids: string[]; update: ReactionUpdate } | null => {
+  if (deleteReaction.fulfilled.match(action)) {
+    return { ids: [action.payload.messageId], update: removeOneReaction(action.payload.emoji) };
+  }
+  if (deleteAllReactions.fulfilled.match(action) || bulkDeleteReactionsForEmoji.fulfilled.match(action)) {
+    return { ids: [action.payload.messageId], update: removeEmoji(action.payload.emoji) };
+  }
+  if (bulkDeleteAllReactions.fulfilled.match(action)) {
+    return { ids: [action.payload.messageId], update: clearReactions };
+  }
+  if (batchRemoveReactions.fulfilled.match(action)) {
+    const { processedMessageIds, mode, emojis } = action.payload;
+    if (processedMessageIds.length === 0) return null;
+    return { ids: processedMessageIds, update: batchRemoval(mode, emojis) };
+  }
+  if (batchAddReactions.fulfilled.match(action)) {
+    const { successfulAdds } = action.payload;
+    if (!successfulAdds.length) return null;
+    const byId = new Map(successfulAdds.map((s) => [s.messageId, s.emojis]));
+    return { ids: [...byId.keys()], update: batchAddition(byId) };
+  }
+  return null;
 };
 
 const messageSlice = createSlice({
@@ -3400,9 +3591,7 @@ const messageSlice = createSlice({
     toggleMessageSelection: (state, action: PayloadAction<string>) => {
       // #263: work on the plain array and assign a new one; a splice/push
       // on a 30K draft walks every element through a proxy.
-      const base = plain(state.selectedIds);
-      const index = base.indexOf(action.payload);
-      state.selectedIds = index >= 0 ? base.filter((_, i) => i !== index) : [...base, action.payload];
+      state.selectedIds = toggledSelection(plain(state.selectedIds), action.payload);
     },
     selectAllMessages: (state) => {
       state.selectedIds = plain(state.filteredRows).map((r) => r.id);
@@ -3497,6 +3686,7 @@ const messageSlice = createSlice({
       state.threadTabs = {};
       state.restored = null;
       state.authors = {};
+      arrivedUserIds.clear();
       evictContainer(MAIN_CONTAINER);
     },
     resetPagination: (state) => {
@@ -3595,16 +3785,37 @@ const messageSlice = createSlice({
       const tab = state.threadTabs[action.payload.threadId];
       if (tab) ingestPage(state, tab, action.payload.threadId, action.payload.messages, 'append');
     },
+    /** A thread tab restored from the workspace store (2.2.5 W1). */
+    setThreadRestored: (
+      state,
+      action: PayloadAction<{ threadId: string; restored: RestoredRows }>
+    ) => {
+      const tab = state.threadTabs[action.payload.threadId];
+      if (tab) ingestRestored(state, tab, action.payload.threadId, action.payload.restored, null);
+    },
+    /**
+     * 2.2.5 W1: the reaction fields of rows whose messages the middleware
+     * changed on disk. Covers the messages the cache had evicted, which
+     * the reducer could not change; the rest are already current.
+     */
+    reactionRowsSynced: (
+      state,
+      action: PayloadAction<{ containerId: string | null; messages: Message[] }>
+    ) => {
+      const container = resolveCapturedContainer(state, action.payload.containerId);
+      if (!container || action.payload.messages.length === 0) return;
+      const byId = new Map(action.payload.messages.map((m) => [m.id, m]));
+      changeRows(container, timesOf(action.payload.messages), (r) => {
+        const m = byId.get(r.id);
+        return m ? rowWithReactions(r, m) : r;
+      });
+    },
     toggleThreadMessageSelection: (
       state,
       action: PayloadAction<{ threadId: string; messageId: string }>
     ) => {
       const tab = state.threadTabs[action.payload.threadId];
-      if (tab) {
-        const base = plain(tab.selectedIds);
-        const index = base.indexOf(action.payload.messageId);
-        tab.selectedIds = index >= 0 ? base.filter((_, i) => i !== index) : [...base, action.payload.messageId];
-      }
+      if (tab) tab.selectedIds = toggledSelection(plain(tab.selectedIds), action.payload.messageId);
     },
     selectAllThreadMessages: (state, action: PayloadAction<string>) => {
       const tab = state.threadTabs[action.payload];
@@ -3701,21 +3912,25 @@ const messageSlice = createSlice({
           // Only a search set's record carries a live search (fix C).
           state.searchCriteria = restored.pagination.mode === 'search' ? restored.searchCriteria : null;
           state.refineCriteria = restored.refineCriteria;
-          state.contentMatchIds = refineNeedsContent(restored.refineCriteria) ? action.payload.contentMatchIds ?? [] : null;
-          ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'replace');
+          const restoredRows = action.payload.restoredRows as RestoredRows;
+          ingestRestored(state, state, MAIN_CONTAINER, restoredRows, action.payload.contentMatchIds);
           const rows = plain(state.rows);
-          const known = new Set(rows.map((r) => r.id));
-          state.selectedIds = restored.selectedIds.filter((id) => known.has(id));
+          // 2.2.5 W1: one Set over the rows, and only when something was selected.
+          const saved = restoredRows.selectedIds;
+          if (saved.length > 0) {
+            const known = new Set(rows.map((r) => r.id));
+            state.selectedIds = saved.filter((id) => known.has(id));
+          } else {
+            state.selectedIds = [];
+          }
           state.pagination.mode = restored.pagination.mode;
           state.pagination.lastMessageId = action.payload.lastMessageId;
           state.pagination.hasMore = action.payload.hasMore;
           state.pagination.totalCount = restored.pagination.totalCount;
           state.pagination.searchOffset = restored.pagination.searchOffset;
           state.pagination.isLoadingMore = false;
-          let oldestTimestamp: string | null = null;
-          for (const r of rows) {
-            if (r.timestamp && (oldestTimestamp === null || r.timestamp < oldestTimestamp)) oldestTimestamp = r.timestamp;
-          }
+          // The restore reads oldest first, so the oldest is its first row.
+          const oldestTimestamp = restoredRows.rows[0]?.timestamp ?? null;
           state.restored = { count: rows.length, oldestTimestamp };
           return;
         }
@@ -3906,37 +4121,25 @@ const messageSlice = createSlice({
         }
         state.error = payload ?? null;
       })
-      // Delete single reaction
+      // Reaction changes (2.2.5 W1: one update per action, shared with the
+      // persistence middleware through reactionChangeOf).
       .addCase(deleteReaction.fulfilled, (state, action) => {
-        const { messageId, emoji } = action.payload;
-        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => {
-          if (!m.reactions) return m;
-          const updatedReactions = m.reactions
-            .map((r) => (emojiMatches(r, emoji) ? { ...r, count: (r.count || 1) - 1 } : r))
-            .filter((r) => (r.count || 0) > 0);
-          return { ...m, reactions: updatedReactions };
-        });
+        const change = reactionChangeOf(action);
+        if (change) patchReactions(getActiveContainer(state), activeContainerKey(state), change.ids, change.update);
       })
-      // Delete all reactions of an emoji
       .addCase(deleteAllReactions.fulfilled, (state, action) => {
-        const { messageId, emoji } = action.payload;
-        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => {
-          if (!m.reactions) return m;
-          return { ...m, reactions: m.reactions.filter((r) => !emojiMatches(r, emoji)) };
-        });
+        const change = reactionChangeOf(action);
+        if (change) patchReactions(getActiveContainer(state), activeContainerKey(state), change.ids, change.update);
       })
       // Bulk delete all reactions from a message (MANAGE_MESSAGES)
       .addCase(bulkDeleteAllReactions.fulfilled, (state, action) => {
-        const { messageId } = action.payload;
-        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => ({ ...m, reactions: [] }));
+        const change = reactionChangeOf(action);
+        if (change) patchReactions(getActiveContainer(state), activeContainerKey(state), change.ids, change.update);
       })
       // Bulk delete all reactions for a specific emoji (MANAGE_MESSAGES)
       .addCase(bulkDeleteReactionsForEmoji.fulfilled, (state, action) => {
-        const { messageId, emoji } = action.payload;
-        patchReactions(getActiveContainer(state), activeContainerKey(state), [messageId], (m) => {
-          if (!m.reactions) return m;
-          return { ...m, reactions: m.reactions.filter((r) => !emojiMatches(r, emoji)) };
-        });
+        const change = reactionChangeOf(action);
+        if (change) patchReactions(getActiveContainer(state), activeContainerKey(state), change.ids, change.update);
       })
       // Batch remove reactions across multiple messages
       .addCase(batchRemoveReactions.pending, (state) => {
@@ -3947,24 +4150,8 @@ const messageSlice = createSlice({
       })
       .addCase(batchRemoveReactions.fulfilled, (state, action) => {
         state.isRemovingReactions = false;
-        const { processedMessageIds, mode, emojis } = action.payload;
-        const emojiSet = emojis ? new Set(emojis) : null;
-        patchReactions(getActiveContainer(state), activeContainerKey(state), processedMessageIds, (m) => {
-          if (!m.reactions) return m;
-          if (mode === 'all') return { ...m, reactions: [] };
-          if (mode === 'emoji' && emojiSet) {
-            return { ...m, reactions: m.reactions.filter((r) => !emojiSet.has(getEmojiKey(r.emoji))) };
-          }
-          return {
-            ...m,
-            reactions: m.reactions
-              .map((r) => {
-                if (emojiSet && !emojiSet.has(getEmojiKey(r.emoji))) return r;
-                return { ...r, count: Math.max(0, (r.count || 1) - 1), me: false };
-              })
-              .filter((r) => r.count > 0),
-          };
-        });
+        const change = reactionChangeOf(action);
+        if (change) patchReactions(getActiveContainer(state), activeContainerKey(state), change.ids, change.update);
       })
       // Batch add reactions across multiple messages (Backlog #202)
       .addCase(batchAddReactions.pending, (state) => {
@@ -3975,45 +4162,9 @@ const messageSlice = createSlice({
       })
       .addCase(batchAddReactions.fulfilled, (state, action) => {
         state.isAddingReactions = false;
-        const { successfulAdds } = action.payload;
-        if (!successfulAdds.length) return;
-        const byId = new Map(successfulAdds.map((s) => [s.messageId, s.emojis]));
         // Optimistically merge the added reactions so the feed reflects them without a refetch.
-        patchReactions(getActiveContainer(state), activeContainerKey(state), byId.keys(), (m) => {
-          const toAdd = byId.get(m.id);
-          if (!toAdd) return m;
-          let reactions = [...(m.reactions || [])];
-          for (const emoji of toAdd) {
-            const key = getEmojiKey(emoji);
-            const idx = reactions.findIndex((r) => getEmojiKey(r.emoji) === key);
-            if (idx >= 0) {
-              const r = reactions[idx];
-              // Idempotent: only bump count if this @me reaction wasn't already present.
-              if (!r.me) {
-                reactions = reactions.map((rx, i) =>
-                  i === idx ? { ...rx, count: (rx.count || 0) + 1, me: true } : rx
-                );
-              }
-            } else {
-              reactions = [
-                ...reactions,
-                {
-                  count: 1,
-                  count_details: { burst: 0, normal: 1 },
-                  me: true,
-                  me_burst: false,
-                  emoji: {
-                    id: emoji.id ?? undefined,
-                    name: emoji.name ?? undefined,
-                    animated: emoji.animated ?? undefined,
-                  },
-                  burst_colors: [],
-                },
-              ];
-            }
-          }
-          return { ...m, reactions };
-        });
+        const change = reactionChangeOf(action);
+        if (change) patchReactions(getActiveContainer(state), activeContainerKey(state), change.ids, change.update);
       })
       // Delete single attachment
       .addCase(deleteAttachment.fulfilled, (state, action) => {
@@ -4063,6 +4214,8 @@ export const {
   removeThreadTab,
   setThreadMessages,
   appendThreadMessages,
+  setThreadRestored,
+  reactionRowsSynced,
   toggleThreadMessageSelection,
   selectAllThreadMessages,
   deselectAllThreadMessages,

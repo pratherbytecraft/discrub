@@ -16,7 +16,7 @@
  * in memory, since storage must never be the reason a feature breaks.
  */
 
-import type { Message } from 'discrub-core/types/discord-types';
+import type { Message, User } from 'discrub-core/types/discord-types';
 import type { RootState } from '@/app/store';
 import type { Conversation, ConversationPagination, ConversationSeed } from '@features/workspace/workspaceTypes';
 import { selectCurrentWid, waitForWorkspaces } from '@features/workspace/workspaceSlice';
@@ -25,17 +25,21 @@ import { addStatusEntry } from '@features/status/statusSlice';
 import { waitWhilePaused, checkCancelled } from '@/utils/operationLoopUtils';
 import { getDmName } from '@/utils/dmListUtils';
 import { t } from '@/i18n';
+import { mergeAuthors, toMessageRow, type MessageRow } from './messageRows';
 import {
   WorkspaceQuotaError,
   clearConversation,
   deleteConversation,
   deleteRows,
   getConversation,
+  getSelection,
   patchRows,
   plainCidOf,
   readWindow,
   searchCid,
+  setSelection,
   updateConversation,
+  updateRows,
   writePage,
   type RowPatch,
 } from '@services/workspaceStore';
@@ -279,18 +283,78 @@ export async function clearSavedConversation(api: PersistApi, cid: string): Prom
   }
 }
 
+/**
+ * 2.2.5 W1: a reaction change applied to the stored messages of both of a
+ * conversation's sets, so a message the cache evicted changes on disk too.
+ * Answers the messages that changed in `cid`'s own set, for the rows.
+ */
+export async function persistRowUpdates(
+  api: PersistApi,
+  cid: string,
+  ids: string[],
+  update: (message: Message) => Message,
+): Promise<Message[]> {
+  const wid = selectCurrentWid(api.getState());
+  if (!wid || ids.length === 0) return [];
+  let own: Message[] = [];
+  try {
+    for (const key of bothSets(cid)) {
+      const changed = await updateRows(wid, key, ids, update);
+      if (key === cid) own = changed;
+    }
+  } catch (error) {
+    logWriteFailure(api, error);
+  }
+  return own;
+}
+
+/* ─────────────────── Selection (2.2.5 W1) ─────────────────── */
+
+/** Saves a conversation's selection under its own key. Never throws. */
+export async function persistSelection(api: PersistApi, cid: string, ids: readonly string[]): Promise<PersistOutcome> {
+  const wid = selectCurrentWid(api.getState());
+  if (!wid) return 'skipped';
+  try {
+    // Only a conversation that is saved keeps a selection (plan section 4.2).
+    const conversation = await getConversation(wid, cid);
+    if (!conversation) return 'skipped';
+    await setSelection(wid, cid, ids);
+    return 'written';
+  } catch (error) {
+    logWriteFailure(api, error);
+    return 'failed';
+  }
+}
+
 /* ─────────────────── Restore ─────────────────── */
 
 export interface RestoredConversation {
   conversation: Conversation;
-  /** Every saved message, oldest first. The reducer sorts under the record's order. */
-  messages: Message[];
+  /** The store key the rows came from: the conversation or its search set. */
+  cid: string;
+  wid: string;
+  /** One row per saved message, oldest first. The reducer sorts under the record's order. */
+  rows: MessageRow[];
+  /** The authors of every saved message, keyed by user id. */
+  authors: Record<string, User>;
+  /**
+   * The newest saved messages, oldest first, at most one restore window.
+   * Only these go to the message cache, for the first screen; the rest
+   * are read when they scroll into view.
+   */
+  newest: Message[];
+  /** The saved selection. */
+  selectedIds: string[];
 }
 
 /**
  * The saved rows and record for a conversation in the open workspace, or
  * null when there are none. Reads in windows so a large conversation does
  * not hold one transaction open for seconds.
+ *
+ * 2.2.5 W1: each window becomes rows and authors and is let go, so a
+ * restore never holds more than two windows of full messages. At 250K
+ * messages the old read kept every message in one array (about 1 GB).
  */
 export async function restoreConversation(api: PersistApi, cid: string): Promise<RestoredConversation | null> {
   // A channel clicked right after boot must not race the workspace open.
@@ -300,20 +364,54 @@ export async function restoreConversation(api: PersistApi, cid: string): Promise
   try {
     const conversation = await getConversation(wid, cid);
     if (!conversation || conversation.count === 0) return null;
-    const messages: Message[] = [];
+    const rows: MessageRow[] = [];
+    let authors: Record<string, User> = {};
+    // The last two windows, so the first screen gets a full window of
+    // objects even when the last window is short.
+    let previous: Message[] = [];
+    let newest: Message[] = [];
     let afterId: string | undefined;
     while (true) {
       const window = await readWindow(wid, cid, { afterId, limit: RESTORE_WINDOW });
-      messages.push(...window);
+      for (const message of window) rows.push(toMessageRow(message));
+      authors = mergeAuthors(authors, window);
+      if (window.length > 0) {
+        previous = newest;
+        newest = window;
+      }
       if (window.length < RESTORE_WINDOW) break;
       afterId = window[window.length - 1].id;
     }
-    if (messages.length === 0) return null;
-    return { conversation, messages };
+    if (rows.length === 0) return null;
+    if (newest.length < RESTORE_WINDOW && previous.length > 0) {
+      newest = previous.slice(newest.length).concat(newest);
+    }
+    const selectedIds = await restoreSelection(api, wid, cid, conversation);
+    return { conversation, cid, wid, rows, authors, newest, selectedIds };
   } catch (error) {
     console.error('[workspace] restore failed, fetching instead', error);
     return null;
   }
+}
+
+/**
+ * The saved selection. A record written before W1 carries it inline; it
+ * moves to its own key and the field is dropped from the record.
+ */
+async function restoreSelection(api: PersistApi, wid: string, cid: string, conversation: Conversation): Promise<string[]> {
+  const saved = await getSelection(wid, cid);
+  const legacy = conversation.selectedIds;
+  if (legacy === undefined) return saved ?? [];
+  const ids = saved ?? legacy;
+  try {
+    if (!saved && legacy.length > 0) await setSelection(wid, cid, legacy);
+    await updateConversation(wid, cid, (record) => {
+      delete record.selectedIds;
+    });
+  } catch (error) {
+    logWriteFailure(api, error);
+  }
+  return ids;
 }
 
 /**

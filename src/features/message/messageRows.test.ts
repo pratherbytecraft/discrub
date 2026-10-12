@@ -16,6 +16,14 @@ import {
   sortRows,
   toMessageRow,
   toMessageRows,
+  findRowByTime,
+  locateRow,
+  mergeAuthorMap,
+  newestIds,
+  removeRowsById,
+  snowflakeTime,
+  updateRowsById,
+  type MessageRow,
 } from './messageRows';
 
 const at = (id: string, iso: string, extra: Partial<Message> = {}): Message =>
@@ -185,5 +193,71 @@ describe('refine on rows', () => {
     const criteria = { ...base, attachmentExtensions: ['png'] };
     expect(messageMatchesContentRefine(messages[0], criteria)).toBe(true);
     expect(messageMatchesContentRefine(messages[1], criteria)).toBe(false);
+  });
+});
+
+/* ─────────── 2.2.5 W1: finding rows, newest ids, author maps ─────────── */
+
+describe('row finders (2.2.5 W1)', () => {
+  const rowsAt = (times: number[]): MessageRow[] => times.map((t, i) => ({ id: `r${i}`, timestamp: '', t, authorId: '', type: 0, flags: 0, hasReactions: false }));
+
+  it('snowflakeTime reads the time out of an id and answers NaN for anything else', () => {
+    expect(snowflakeTime('175928847299117063')).toBe(1462015105796);
+    expect(Number.isNaN(snowflakeTime('m1'))).toBe(true);
+  });
+
+  it('findRowByTime finds a row in either order, including rows that share a millisecond', () => {
+    const asc = rowsAt([1, 2, 2, 2, 5, 9]);
+    expect(findRowByTime(asc, 'r3', 2)).toBe(3);
+    expect(findRowByTime(asc, 'r5', 9)).toBe(5);
+    expect(findRowByTime(asc, 'r3', 5)).toBe(-1);
+    const desc = rowsAt([9, 5, 2, 2, 1]);
+    expect(findRowByTime(desc, 'r3', 2)).toBe(3);
+    expect(findRowByTime(desc, 'r0', 9)).toBe(0);
+    expect(findRowByTime([], 'x', 1)).toBe(-1);
+  });
+
+  it('locateRow falls back to a walk when the time is unknown or wrong', () => {
+    const rows = rowsAt([1, 2, 3]);
+    expect(locateRow(rows, 'r2')).toBe(2);
+    expect(locateRow(rows, 'r1', 99)).toBe(1);
+    expect(locateRow(rows, 'nope')).toBe(-1);
+  });
+
+  it('updateRowsById copies once and keeps the array when nothing changes', () => {
+    const rows = rowsAt([1, 2, 3]);
+    const same = updateRowsById(rows, new Map([['r1', 2]]), (r) => r);
+    expect(same).toBe(rows);
+    const next = updateRowsById(rows, new Map([['r1', 2]]), (r) => ({ ...r, hasReactions: true }));
+    expect(next).not.toBe(rows);
+    expect(next[1].hasReactions).toBe(true);
+    expect(next[0]).toBe(rows[0]);
+    const many = new Map(Array.from({ length: 100 }, (_, i) => [`r${i}`, undefined] as const));
+    expect(updateRowsById(rows, many, (r) => ({ ...r, flags: 1 })).every((r) => r.flags === 1)).toBe(true);
+  });
+
+  it('removeRowsById removes a few by time and many by a walk', () => {
+    const rows = rowsAt([1, 2, 3, 4]);
+    expect(removeRowsById(rows, new Map([['r1', 2], ['r3', undefined]])).map((r) => r.id)).toEqual(['r0', 'r2']);
+    expect(removeRowsById(rows, new Map([['zz', 1]]))).toBe(rows);
+    const many = new Map(Array.from({ length: 100 }, (_, i) => [`r${i}`, undefined] as const));
+    expect(removeRowsById(rows, many)).toEqual([]);
+  });
+
+  it('newestIds takes the newest rows of a list sorted either way', () => {
+    const desc = rowsAt([9, 8, 7, 6]);
+    expect(newestIds(desc, 2)).toEqual(['r0', 'r1']);
+    const asc = rowsAt([6, 7, 8, 9]);
+    expect(newestIds(asc, 2)).toEqual(['r2', 'r3']);
+    expect(newestIds(asc, 10)).toEqual(['r0', 'r1', 'r2', 'r3']);
+  });
+
+  it('mergeAuthorMap keeps the map when nothing changed', () => {
+    const a = createMockUser({ id: 'a', username: 'one' });
+    const held = { a };
+    expect(mergeAuthorMap(held, { a: { ...a } })).toBe(held);
+    const next = mergeAuthorMap(held, { b: createMockUser({ id: 'b' }) });
+    expect(Object.keys(next).sort()).toEqual(['a', 'b']);
+    expect(next.a).toBe(a);
   });
 });

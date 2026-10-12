@@ -38,7 +38,10 @@ import {
   readWindow,
   updateConversation,
   writePage,
+  getSelection,
+  setSelection,
 } from '@services/workspaceStore';
+import { cachedMessagesOf, MAIN_CONTAINER } from './messageCache';
 
 vi.mock('@services/discordService', () => ({ getDiscordService: vi.fn() }));
 vi.mock('@/utils/delayUtils', () => ({
@@ -140,6 +143,54 @@ describe('fetchMessages', () => {
     expect(selectRestored(store.getState() as never)).toEqual({ count: 300, oldestTimestamp: state.rows[299].timestamp });
     const statusLines = store.getState().status.entries.map((e) => e.message);
     expect(statusLines.some((line) => /Restored 300 messages/.test(line))).toBe(true);
+  });
+
+  // 2.2.5 W1: a restore builds rows window by window and caches only the
+  // newest window of objects.
+  it('restores a large conversation as rows with one window of objects in the cache', async () => {
+    const store = makeStore();
+    const saved = page(4500, 4500).map((m, i) => ({ ...m, author: { ...m.author, id: `a${i % 4}`, username: `user${i % 4}` } }));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, saved, { kind: 'channel', guildId: '42', name: 'general' });
+    await setSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID, ['4500', '1', 'gone']);
+
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+
+    const state = store.getState().message;
+    expect(state.rows).toHaveLength(4500);
+    expect(state.rows[0].id).toBe('4500');
+    expect(cachedMessagesOf(MAIN_CONTAINER)).toHaveLength(2000);
+    expect(cachedMessagesOf(MAIN_CONTAINER).some((m) => m.id === '4500')).toBe(true);
+    expect(cachedMessagesOf(MAIN_CONTAINER).some((m) => m.id === '1')).toBe(false);
+    expect(Object.keys(state.authors).sort()).toEqual(['a0', 'a1', 'a2', 'a3']);
+    expect([...state.selectedIds].sort()).toEqual(['1', '4500']);
+    expect(selectRestored(store.getState() as never)).toEqual({ count: 4500, oldestTimestamp: state.rows[4499].timestamp });
+  });
+
+  // The fake IndexedDB the unit tests run on walks a cursor in quadratic
+  // time, so the scan case stays small; Chrome scans 250K rows in seconds.
+  it('restores a saved content refine from a scan of the saved messages', async () => {
+    const store = makeStore();
+    const saved = page(300, 300).map((m, i) => ({ ...m, content: i % 10 === 0 ? 'needle here' : 'hay' }));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, saved, { kind: 'channel', guildId: '42', name: 'general' });
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => {
+      c.refineCriteria = { searchMessageContents: ['needle'] } as never;
+    });
+
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+
+    const state = store.getState().message;
+    expect(state.rows).toHaveLength(300);
+    expect(state.contentMatchIds).toHaveLength(30);
+    expect(state.filteredRows).toHaveLength(30);
+    expect(state.filteredRows.every((r) => (300 - Number(r.id)) % 10 === 0)).toBe(true);
+  });
+
+  it('a toggled selection reaches its own key after a restore', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(3, 3), { kind: 'channel', guildId: '42', name: 'general' });
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+    expect(store.getState().message.selectedIds).toEqual([]);
+    expect(await getSelection(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
   });
 
   it('clearMessages forgets the restored marker', async () => {

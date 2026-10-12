@@ -43,6 +43,7 @@ import {
 import { useAppDispatch } from '@/app/hooks';
 import { addStatusEntry } from '@features/status/statusSlice';
 import { useTranslation } from 'react-i18next';
+import { ANALYTICS_LIMIT } from '@features/message/messageRows';
 
 const REPLY_MESSAGE_TYPE = 19;
 
@@ -59,6 +60,11 @@ interface AnalyticsModalProps {
   initialReport?: ReportId;
   /** True while the message objects are still being read (2.2.5 WP2b). */
   loading?: boolean;
+  /**
+   * 2.2.5 W1: the size of the list when `messages` holds only its newest
+   * part, for the line that says so. Null when every message is here.
+   */
+  coveredOf?: number | null;
 }
 
 type SortField = 'label' | 'count';
@@ -73,7 +79,7 @@ type SortDir = 'asc' | 'desc';
  */
 const CLOSED_RESULT: ReportResult = { rows: [], empty: '' };
 
-const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadNames, initialReport = 'mentions', loading = false }: AnalyticsModalProps) => {
+const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadNames, initialReport = 'mentions', loading = false, coveredOf = null }: AnalyticsModalProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [reportId, setReportId] = useState<ReportId>(initialReport);
@@ -110,7 +116,8 @@ const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadN
   }, [result.rows, sortField, sortDir]);
 
   const total = useMemo(() => result.rows.reduce((sum, r) => sum + r.count, 0), [result.rows]);
-  const maxCount = useMemo(() => (result.rows.length > 0 ? Math.max(...result.rows.map((r) => r.count)) : 1), [result.rows]);
+  // 2.2.5 W1: a fold, since a spread past about 100K rows throws.
+  const maxCount = useMemo(() => result.rows.reduce((max, r) => (r.count > max ? r.count : max), result.rows.length > 0 ? -Infinity : 1), [result.rows]);
   const hasRows = result.rows.length > 0;
   const hasResults = hasRows || Boolean(result.stats && result.stats.messages > 0);
 
@@ -157,6 +164,11 @@ const AnalyticsModal = ({ open, onClose, messages, userMap, containerId, threadN
           <Typography variant="body2" color="text.secondary">
             {subtitle}
           </Typography>
+          {coveredOf !== null && (
+            <Typography variant="caption" color="text.secondary" data-testid="analytics-covered">
+              {t('analytics.coversNewest', { count: ANALYTICS_LIMIT })}
+            </Typography>
+          )}
         </Box>
         {isMentions && (
           <Chip
