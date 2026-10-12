@@ -1927,7 +1927,7 @@ describe('Search & Filters', () => {
       cy.selectChannel('general');
     });
 
-    it('clears applied filters when switching channels and does not resurrect them on return', () => {
+    it('starts the next conversation unfiltered, and the search comes back on return without running again', () => {
       cy.intercept('GET', `${API}/guilds/*/messages/search*`, {
         fixture: 'search-results.json',
       }).as('guildSearch');
@@ -1944,13 +1944,11 @@ describe('Search & Filters', () => {
         .should('have.value', '');
       cy.get('[role="dialog"]').contains('button', 'Cancel').click();
 
-      // Return to the original channel: criteria must not resurrect.
-      cy.selectChannel('general');
-      cy.contains('button', 'Filters').click();
-      cy.get('[role="dialog"]')
-        .find('input[placeholder="Search message content..."]')
-        .should('have.value', '');
-      cy.get('[role="dialog"]').contains('button', 'Cancel').click();
+      // Return to the original channel: the saved search comes back from the
+      // workspace with its chip (owner 2026-10-14, 2.2.5 fix C). It opens
+      // from disk, so there is no messages request to wait for.
+      cy.contains('general').click();
+      cy.get('[aria-label="Clear all filters"]').should('exist');
 
       // The original search fired exactly once; neither switch re-ran it.
       cy.get('@guildSearch.all').should('have.length', 1);

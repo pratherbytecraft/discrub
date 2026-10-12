@@ -101,10 +101,12 @@ describe('Workspace persistence (2.2.5)', () => {
       cy.contains('STATUS LOG').click();
       cy.contains('Restored 200 messages from this workspace').should('exist');
 
-      // Load All offers Resume, which asks Discord for what comes after the saved cursor.
+      // No Load All was ever cut, so the dialog reads Load All with the saved
+      // count and no resume line (fix C, row 35); it still asks Discord for
+      // what comes after the saved cursor.
       cy.contains('button', 'Load All').click();
-      cy.get('[data-testid="load-all-restored-line"]').should('contain', '200 loaded so far in this workspace');
-      cy.get('[data-testid="load-all-confirm"]').should('have.text', 'Resume').click();
+      cy.get('[data-testid="load-all-restored-line"]').should('contain', '200 loaded so far in this workspace').and('not.contain', 'Resume continues');
+      cy.get('[data-testid="load-all-confirm"]').should('have.text', 'Load All').click();
       cy.wait('@pagedMessages').its('request.url').should('include', 'before=710000000000008801');
       cy.contains('All loaded', { timeout: 15000 }).should('be.visible');
       cy.get('@pagedMessages.all').should('have.length', 3);

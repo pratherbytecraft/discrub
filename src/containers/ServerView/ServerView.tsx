@@ -170,6 +170,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const restored = useAppSelector(selectRestored);
   const token = useAppSelector(selectAuthToken);
   const pagination = useAppSelector(selectActivePagination);
+  const restoredSearchShowing = useAppSelector((state) => state.message.pagination.mode === 'search' && !!state.message.restored);
   const activeTab = useAppSelector(selectActiveTab);
   const channels = useAppSelector(selectChannels);
   const guildRoles = useAppSelector(selectRoles);
@@ -386,8 +387,14 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   // channel, channel to DM and guild switches alike; clearSeq covers the
   // id-unchanged re-click, which dispatches clearMessages. The criteria live
   // in the message slice, so the reset is a dispatch (a no-op when already null).
+  // 2.2.5 fix C: an open can bring a saved search back from the workspace
+  // before this effect runs; the reset must not wipe that search's criteria.
+  // The restored marker is cleared with the messages, so only a search this
+  // open restored is kept.
+  const restoredSearchRef = useRef(restoredSearchShowing);
+  restoredSearchRef.current = restoredSearchShowing;
   useEffect(() => {
-    dispatch(setSearchCriteria(null));
+    if (!restoredSearchRef.current) dispatch(setSearchCriteria(null));
     setPartialResultsWarnings((prev) => {
       if (!('main' in prev)) return prev;
       const next = { ...prev };
@@ -546,12 +553,12 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   };
 
   // --- Clear handlers ---
-  const handleClearServerSearch = () => {
+  const handleClearServerSearch = async () => {
     saveSearchCriteria(null);
-    // 2.2.5: the saved search rows go with the criteria (plan section 11).
-    if (pagination.mode === 'search') dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
-    // The rows of the plain view come back with the fetch the clear
-    // starts; the reducers derive the refined view from them.
+    // 2.2.5 fix C: the search set goes and the view returns to the plain
+    // rows (restored from disk, or the first page fresh) before the refine
+    // is applied again over them (plan section 11, rows 43 and 44).
+    if (pagination.mode === 'search') await dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
     if (currentRefineCriteria && countActiveFilters(currentRefineCriteria) > 0) {
       dispatchSetRefine(currentRefineCriteria);
     }
@@ -563,9 +570,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     setShowPartialResultsWarning(false);
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     saveSearchCriteria(null);
-    if (pagination.mode === 'search') dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
+    if (pagination.mode === 'search') await dispatch(clearSavedSearch({ cid: activeTab ?? currentContext?.id ?? '' }));
     dispatchClearRefine();
     setShowPartialResultsWarning(false);
   };

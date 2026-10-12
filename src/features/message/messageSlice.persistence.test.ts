@@ -12,6 +12,7 @@ import * as discordService from '@services/discordService';
 import messageReducer, {
   clearMessages,
   clearSavedMessages,
+  clearSavedSearch,
   fetchAllMessages,
   fetchMessages,
   fetchMoreMessages,
@@ -27,10 +28,12 @@ import guildReducer from '@features/guild/guildSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
 import cacheReducer from '@features/cache/cacheSlice';
+import authReducer, { setToken } from '@features/auth/authSlice';
 import { LEGACY_DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
 import {
   countRows,
   deleteWorkspaceDatabase,
+  searchCid,
   getConversation,
   readWindow,
   updateConversation,
@@ -79,9 +82,11 @@ function makeStore() {
       app: appReducer,
       status: statusReducer,
       cache: cacheReducer,
+      auth: authReducer,
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
+  store.dispatch(setToken(TOKEN));
   store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
   store.dispatch(setSelectedChannel(createMockChannel({ id: CID, name: 'general', guild_id: '42' })));
   return store;
@@ -164,20 +169,64 @@ describe('fetchMoreMessages', () => {
   });
 });
 
-describe('searchMessages', () => {
-  it('replaces the saved rows with the results and keeps the criteria', async () => {
-    const store = makeStore();
-    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(50, 50), { kind: 'channel', guildId: '42', name: 'general' });
+describe('searchMessages (2.2.5 fix C)', () => {
+  const criteria = { searchMessageContents: ['hello'], userIds: [], mentionIds: [], channelIds: [], selectedHasTypes: [], isPinned: 0, authorType: null, searchAfterDate: null, searchBeforeDate: null } as never;
+  const searchFor = (store: ReturnType<typeof makeStore>) => {
     const hits = page(9, 3);
     serviceWith({
       fetchSearchMessageData: vi.fn().mockResolvedValue({ success: true, data: { messages: hits.map((m) => [m]), total_results: 3 } }),
+      fetchMessageData: vi.fn().mockResolvedValue({ success: true, data: page(100, 100) }),
     });
-    const criteria = { searchMessageContents: ['hello'], userIds: [], mentionIds: [], channelIds: [], selectedHasTypes: [], isPinned: 0, authorType: null, searchAfterDate: null, searchBeforeDate: null } as never;
-    await store.dispatch(searchMessages({ channelId: CID, guildId: '42', token: TOKEN, searchCriteria: criteria }));
-    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(3);
-    const record = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
+    return store.dispatch(searchMessages({ channelId: CID, guildId: '42', token: TOKEN, searchCriteria: criteria }));
+  };
+
+  it('writes the results to the search set and leaves the plain rows alone', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(50, 50), { kind: 'channel', guildId: '42', name: 'general' });
+    await searchFor(store);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(50);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID))).toBe(3);
+    const record = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID));
     expect(record?.pagination).toMatchObject({ mode: 'search', totalCount: 3, searchOffset: 3, hasMore: false });
     expect((record?.searchCriteria as { searchMessageContents: string[] }).searchMessageContents).toEqual(['hello']);
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.pagination.mode).not.toBe('search');
+  });
+
+  it('an open shows the saved search, and clearing it brings back the plain rows', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(50, 50), { kind: 'channel', guildId: '42', name: 'general' });
+    await searchFor(store);
+
+    store.dispatch(clearMessages());
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+    expect(store.getState().message.rows).toHaveLength(3);
+    expect(store.getState().message.pagination.mode).toBe('search');
+    expect((store.getState().message.searchCriteria as { searchMessageContents: string[] } | null)?.searchMessageContents).toEqual(['hello']);
+
+    await store.dispatch(clearSavedSearch({ cid: CID }));
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID))).toBe(0);
+    expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID))).toBeNull();
+    expect(store.getState().message.rows).toHaveLength(50);
+    expect(store.getState().message.pagination.mode).not.toBe('search');
+    expect(store.getState().message.searchCriteria).toBeNull();
+  });
+
+  it('clearing a search on a conversation with no plain rows opens its first page fresh', async () => {
+    const store = makeStore();
+    await searchFor(store);
+    await store.dispatch(clearSavedSearch({ cid: CID }));
+    expect(store.getState().message.rows).toHaveLength(100);
+    expect(store.getState().message.pagination.mode).toBe('paginated');
+  });
+
+  it('drops a plain record an earlier 2.2.5 build left in search mode', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(9, 3), { kind: 'channel', guildId: '42', name: 'general' });
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => { c.pagination = { ...c.pagination, mode: 'search' }; });
+    serviceWith({ fetchMessageData: vi.fn().mockResolvedValue({ success: true, data: page(100, 100) }) });
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+    expect(store.getState().message.rows).toHaveLength(100);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(0);
   });
 });
 

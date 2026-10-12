@@ -39,6 +39,7 @@ import {
   setThreadSelectedIds,
   toggleMessageSelection,
   toggleThreadMessageSelection,
+  containerDiskCid,
 } from '@features/message/messageSlice';
 import { MAIN_CONTAINER, getCachedMessage } from '@features/message/messageCache';
 import {
@@ -51,7 +52,7 @@ import {
   threadSeedFromState,
   type PersistApi,
 } from '@features/message/messagePersistence';
-import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, refreshConversationNames, updateWorkspace, type RowPatch } from '@services/workspaceStore';
+import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, refreshConversationNames, searchCid, updateWorkspace, type RowPatch } from '@services/workspaceStore';
 import { fetchGuilds, setSelectedGuild } from '@features/guild/guildSlice';
 import { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
 import { fetchDMs, setSelectedDm } from '@features/dm/dmSlice';
@@ -88,8 +89,9 @@ const activeContainerId = (state: RootState): string | null => {
   return activeTab && threadTabs?.[activeTab] ? activeTab : null;
 };
 
+/** The store key of a container: its search set while it shows a search (fix C). */
 const cidFor = (state: RootState, containerId: string | null): string | null =>
-  containerId === null ? mainCid(state) : containerId;
+  containerDiskCid(state, containerId);
 
 /** The fields an edit can change. Reactions and reply parents stay as enriched. */
 const EDIT_FIELDS: Array<keyof Message> = ['content', 'edited_timestamp', 'attachments', 'embeds', 'mentions', 'flags', 'components', 'pinned'];
@@ -339,7 +341,12 @@ listen({
 
 listen({
   matcher: isAnyOf(refineApplied, clearRefineCriteria, setOrder, setSearchCriteria),
-  effect: (_action, listenerApi) => {
+  effect: (action, listenerApi) => {
+    // 2.2.5 fix C: clearing criteria writes nothing. A search clear drops the
+    // search set; the per switch reset (#226) fired before the next
+    // conversation's restore and wrote the default sort over its record
+    // (row 11).
+    if (setSearchCriteria.match(action) && action.payload === null) return;
     scheduleRecord(api(listenerApi), null, 'criteria');
   },
 });
@@ -347,6 +354,7 @@ listen({
 listen({
   matcher: isAnyOf(threadRefineApplied, clearThreadRefineCriteria, setThreadOrder, setThreadSearchCriteria),
   effect: (action, listenerApi) => {
+    if (setThreadSearchCriteria.match(action) && action.payload.criteria === null) return;
     const payload = action.payload as string | { threadId: string };
     const threadId = typeof payload === 'string' ? payload : payload.threadId;
     scheduleRecord(api(listenerApi), threadId, 'criteria');
@@ -480,7 +488,8 @@ listen({
     const state = listenerApi.getState();
     const cid = action.meta.arg.channelId ?? mainCid(state);
     if (!cid) return;
-    recordActionStart(api(listenerApi), cid, 'loadAll', conversationSeedFromState(state, cid), { mode: 'search' });
+    // A search's Load All belongs to the search set (fix C).
+    recordActionStart(api(listenerApi), searchCid(cid), 'loadAll', conversationSeedFromState(state, cid), { mode: 'search' });
   },
 });
 
@@ -504,7 +513,8 @@ listen({
   matcher: isAnyOf(loadAllSearchResults.fulfilled, loadAllSearchResults.rejected),
   effect: (action, listenerApi) => {
     const arg = argOf<{ channelId?: string }>(action);
-    actionEnded(api(listenerApi), arg.channelId ?? mainCid(listenerApi.getState()));
+    const cid = arg.channelId ?? mainCid(listenerApi.getState());
+    if (cid) actionEnded(api(listenerApi), searchCid(cid));
   },
 });
 

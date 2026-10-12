@@ -34,6 +34,8 @@ import {
   getConversation,
   getMessages,
   getWorkspace,
+  searchCid,
+  updateConversation,
   writePage,
 } from '@services/workspaceStore';
 
@@ -160,12 +162,35 @@ describe('workspacePersistenceMiddleware', () => {
     expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.selectedIds).toEqual(['2', '1']);
   });
 
-  it('clearSavedSearch drops the saved rows and returns the record to the plain path', async () => {
+  it('clearSavedSearch drops the search set and keeps the plain rows (fix C)', async () => {
     const store = makeStore();
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1')], seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID), [msg('2')], seed);
     await store.dispatch(clearSavedSearch({ cid: CID }));
-    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(0);
-    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.pagination.mode).toBe('paginated');
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(1);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID))).toBe(0);
+    expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID))).toBeNull();
+  });
+
+  it('a delete reaches the plain rows and the search set (fix C)', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1'), msg('2')], seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID), [msg('2')], seed);
+    store.dispatch(setMessages([msg('1'), msg('2')]));
+    store.dispatch(messagesRemoved({ containerId: null, ids: ['2'] }));
+    await settle();
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(1);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, searchCid(CID))).toBe(0);
+  });
+
+  it('the per switch criteria reset writes nothing, so it cannot overwrite a saved sort (row 11)', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, [msg('1')], seed);
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => { c.order = { ...c.order, order: 'asc' } as never; });
+    const before = (await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.order;
+    store.dispatch(setSearchCriteria(null));
+    await flushPendingRecords(api(store));
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.order).toEqual(before);
   });
 
   it('the per switch criteria reset does not touch the saved rows (#226)', async () => {

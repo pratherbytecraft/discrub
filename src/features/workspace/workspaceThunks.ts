@@ -21,6 +21,8 @@ import { isMessageChannel } from '@utils/channelTypeUtils';
 import {
   acquireWorkspaceLock,
   clearConversation,
+  deleteConversation,
+  searchCid,
   clearWorkspaceMessages,
   createWorkspace,
   createWorkspaceId,
@@ -329,8 +331,11 @@ export const clearConversationThunk = createAsyncThunk<void, { wid: string; cid:
   'workspace/clearConversation',
   async ({ wid, cid }, { dispatch, getState }) => {
     await clearConversation(wid, cid);
+    // Its search set goes with it (fix C).
+    await deleteConversation(wid, searchCid(cid));
     if (getState().workspace.currentWid === wid) {
       dispatch(actionRecorded({ cid, action: null }));
+      dispatch(actionRecorded({ cid: searchCid(cid), action: null }));
       await resetOpenConversations([cid], dispatch, getState);
     }
     await dispatch(refreshWorkspaces());

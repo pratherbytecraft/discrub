@@ -26,7 +26,7 @@ import {
   updateCachedMessage,
   type HydrationSource,
 } from './messageCache';
-import { countRows, scan } from '@services/workspaceStore';
+import { countRows, scan, searchCid } from '@services/workspaceStore';
 import { selectCurrentWid } from '@features/workspace/workspaceSlice';
 import { getDiscordService } from '@services/discordService';
 import type { RootState } from '@/app/store';
@@ -51,11 +51,13 @@ import { notePackageDeletions } from '@features/package/packageDeletedCache';
 import {
   clearSavedConversation,
   conversationSeedFromState,
+  dropSavedSearch,
   paginationRecord,
   persistConversation,
   persistPage,
   persistThreadTabs,
   restoreConversation,
+  restoreConversationOrSearch,
   threadSeedFromState,
 } from './messagePersistence';
 import type { Conversation } from '@features/workspace/workspaceTypes';
@@ -1239,7 +1241,7 @@ export const fetchMessages = createAsyncThunk(
       // 2.2.5: a conversation with saved rows in the open workspace comes
       // back from disk instead of a fetch (plan section 5.4). Newer
       // messages arrive through Start over in the Load All dialog.
-      const restored = await restoreConversation({ dispatch, getState: getState as () => RootState }, channelId);
+      const restored = await restoreConversationOrSearch({ dispatch, getState: getState as () => RootState }, channelId);
       if (restored) {
         dispatch(addStatusEntry({ level: 'info', message: t('status.msg.restoredFromWorkspace', { count: restored.messages.length }) }));
         const oldest = restored.messages[0];
@@ -1470,13 +1472,14 @@ export const searchMessages = createAsyncThunk(
         })
       );
 
-      // 2.2.5: a search replaces the conversation's saved rows with its
-      // results, and the record keeps the criteria and cursor so the next
-      // open shows the same results and Load All continues from them.
+      // 2.2.5 fix C: a search writes its results to the conversation's
+      // search set, beside the plain rows, which it never touches. The search
+      // record keeps the criteria and cursor so the next open shows the same
+      // results and Load All continues from them.
       if (channelId) {
         const api = { dispatch, getState: getState as () => RootState };
-        await clearSavedConversation(api, channelId);
-        await persistPage(api, channelId, messages, {
+        await dropSavedSearch(api, channelId);
+        await persistPage(api, searchCid(channelId), messages, {
           seed: conversationSeedFromState(getState() as RootState, channelId),
           record: {
             searchCriteria,
@@ -1610,7 +1613,7 @@ export const fetchNextSearchPage = createAsyncThunk(
       maybeEmitPhantomLoadStatus(dispatch, refineCriteria, messages);
 
       if (channelId) {
-        await persistPage({ dispatch, getState: getState as () => RootState }, channelId, messages, {
+        await persistPage({ dispatch, getState: getState as () => RootState }, searchCid(channelId), messages, {
           seed: conversationSeedFromState(getState() as RootState, channelId),
           record: {
             searchCriteria,
@@ -1945,7 +1948,7 @@ export const loadAllSearchResults = createAsyncThunk(
           // 2.2.5: on disk before it reaches Redux (plan section 7). A full
           // quota pauses the walk here; a cancel while paused ends it.
           if (channelId) {
-            const outcome = await persistPage({ dispatch, getState: getState as () => RootState }, channelId, page, {
+            const outcome = await persistPage({ dispatch, getState: getState as () => RootState }, searchCid(channelId), page, {
               seed: conversationSeedFromState(getState() as RootState, channelId),
               loaded: loaded,
               record: {
@@ -2016,7 +2019,7 @@ export const loadAllSearchResults = createAsyncThunk(
       );
 
       if (channelId) {
-        await persistConversation({ dispatch, getState: getState as () => RootState }, channelId, {
+        await persistConversation({ dispatch, getState: getState as () => RootState }, searchCid(channelId), {
           complete: true,
           pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: loaded, searchOffset: loaded }),
         });
@@ -2387,9 +2390,13 @@ export const openThreadTab = createAsyncThunk(
       const parentCid = state.channel?.selectedChannel?.id ?? state.dm?.selectedDm?.id ?? null;
 
       // 2.2.5: a thread with saved rows comes back from disk.
-      const restored = await restoreConversation(api, threadId);
+      const restored = await restoreConversationOrSearch(api, threadId);
       if (restored) {
-        dispatch(messageSlice.actions.setThreadSearchCriteria({ threadId, criteria: restored.conversation.searchCriteria }));
+        // A plain record's criteria are not a search (fix C); the sort comes
+        // back with the record like the main conversation's does (row 11).
+        const isSearch = restored.conversation.pagination.mode === 'search';
+        dispatch(messageSlice.actions.setThreadSearchCriteria({ threadId, criteria: isSearch ? restored.conversation.searchCriteria : null }));
+        dispatch(messageSlice.actions.setThreadOrder({ threadId, order: restored.conversation.order }));
         dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: restored.messages }));
         await dispatch(setThreadRefineCriteria({ threadId, criteria: restored.conversation.refineCriteria }));
         const p = restored.conversation.pagination;
@@ -2856,10 +2863,11 @@ export const searchThreadMessages = createAsyncThunk(
       const searchDelay = selectSearchDelay(state);
       const delayModifier = selectDelayModifier(state);
 
-      // 2.2.5: a thread search replaces the thread's saved rows.
+      // 2.2.5 fix C: a thread search writes the thread's search set; the
+      // thread's plain rows stay.
       const api = { dispatch, getState: getState as () => RootState };
       const threadSeed = threadSeedFromState(state, threadId);
-      await clearSavedConversation(api, threadId);
+      await dropSavedSearch(api, threadId);
 
       // 2.2.5 fix B: counts, not arrays; each page goes to the tab as it
       // arrives (the first replaces what the tab showed before the search).
@@ -3009,7 +3017,7 @@ export const searchThreadMessages = createAsyncThunk(
           const fetched = totalCount + batchCount;
           const total = searchResult.total_results;
 
-          const outcome = await persistPage(api, threadId, messages, {
+          const outcome = await persistPage(api, searchCid(threadId), messages, {
             seed: threadSeed,
             loaded: fetched,
             record: { searchCriteria, pagination: paginationRecord({ mode: 'search', totalCount: total, searchOffset: fetched }) },
@@ -3105,7 +3113,7 @@ export const searchThreadMessages = createAsyncThunk(
       }
       dispatch(addStatusEntry({ level: 'success', message: t('status.msg.searchComplete', { count: totalCount }) }));
       // The record write follows the status line so the log never waits on disk.
-      await persistConversation(api, threadId, {
+      await persistConversation(api, searchCid(threadId), {
         complete: true,
         searchCriteria,
         pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: totalCount, searchOffset: totalCount }),
@@ -3141,18 +3149,61 @@ export const clearSavedMessages = createAsyncThunk(
 );
 
 /**
- * Clearing a search (2.2.5): the saved search rows go and the record returns
- * to the plain path, so the next open fetches fresh instead of restoring
- * old results (plan section 11). Called by the explicit clear controls,
- * never by the per switch criteria reset in ServerView (#226).
+ * Clearing a search (2.2.5 fix C): the search set and its record go, and
+ * the view returns to the conversation's plain rows: restored from disk
+ * when the conversation has saved rows, otherwise its first page fresh
+ * (plan section 11). Called by the explicit clear controls, never by the
+ * per switch criteria reset in ServerView (#226).
  */
 export const clearSavedSearch = createAsyncThunk(
   'message/clearSavedSearch',
   async ({ cid }: { cid: string }, { dispatch, getState }) => {
     const api = { dispatch, getState: getState as () => RootState };
-    await clearSavedConversation(api, cid);
-    await persistConversation(api, cid, { pagination: paginationRecord({ mode: 'paginated' }) });
+    await dropSavedSearch(api, cid);
+    const state = getState() as RootState;
+    const token = state.auth?.token ?? null;
+    if (!token) return { cid };
+    if (state.message.threadTabs[cid]) {
+      await dispatch(reloadThreadPlain({ threadId: cid, token }));
+    } else {
+      await dispatch(fetchMessages({ channelId: cid, token }));
+    }
     return { cid };
+  },
+);
+
+/**
+ * A thread tab back on its plain rows after a search clear: the saved
+ * rows when the thread has them, otherwise its first page.
+ */
+const reloadThreadPlain = createAsyncThunk(
+  'message/reloadThreadPlain',
+  async ({ threadId, token }: { threadId: string; token: string }, { dispatch, getState }) => {
+    const api = { dispatch, getState: getState as () => RootState };
+    dispatch(messageSlice.actions.setThreadSearchCriteria({ threadId, criteria: null }));
+    const restored = await restoreConversation(api, threadId);
+    if (restored) {
+      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: restored.messages }));
+      const p = restored.conversation.pagination;
+      dispatch(messageSlice.actions.updateThreadPagination({
+        threadId,
+        pagination: { mode: p.mode, hasMore: p.hasMore, lastMessageId: p.lastMessageId ?? restored.messages[0]?.id ?? null, totalCount: p.totalCount, searchOffset: p.searchOffset },
+      }));
+      return;
+    }
+    const response = await getDiscordService().fetchMessageData(token, '', threadId);
+    const messages = response.success && response.data ? (response.data as Message[]) : [];
+    dispatch(messageSlice.actions.setThreadMessages({ threadId, messages }));
+    dispatch(messageSlice.actions.updateThreadPagination({
+      threadId,
+      pagination: {
+        mode: 'paginated',
+        hasMore: messages.length === 100,
+        lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : null,
+        totalCount: null,
+        searchOffset: 0,
+      },
+    }));
   },
 );
 
@@ -3647,7 +3698,8 @@ const messageSlice = createSlice({
           // 2.2.5: the conversation came back from the workspace store with
           // its criteria, sort, selection and cursor (plan section 5.4).
           state.order = restored.order;
-          state.searchCriteria = restored.searchCriteria;
+          // Only a search set's record carries a live search (fix C).
+          state.searchCriteria = restored.pagination.mode === 'search' ? restored.searchCriteria : null;
           state.refineCriteria = restored.refineCriteria;
           state.contentMatchIds = refineNeedsContent(restored.refineCriteria) ? action.payload.contentMatchIds ?? [] : null;
           ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'replace');
@@ -3803,6 +3855,8 @@ const messageSlice = createSlice({
         state.pagination.searchOffset = action.payload.nextOffset;
         state.pagination.lastMessageId = null;
         state.searchCriteria = action.payload.searchCriteria;
+        // A fresh search is not the restored conversation (fix C, row 45).
+        state.restored = null;
         state.error = null;
       })
       .addCase(searchMessages.rejected, (state, action) => {
@@ -4072,7 +4126,7 @@ export const setRefineCriteria = createAsyncThunk(
       return;
     }
     const contentMatchIds = await scanContentMatches(
-      getState as () => RootState, dispatch, MAIN_CONTAINER, mainCidOf(getState() as RootState), criteria as RefineCriteria,
+      getState as () => RootState, dispatch, MAIN_CONTAINER, containerDiskCid(getState() as RootState, null), criteria as RefineCriteria,
     );
     dispatch(messageSlice.actions.refineApplied({ criteria, contentMatchIds }));
   },
@@ -4085,7 +4139,7 @@ export const setThreadRefineCriteria = createAsyncThunk(
       dispatch(messageSlice.actions.threadRefineApplied({ threadId, criteria }));
       return;
     }
-    const contentMatchIds = await scanContentMatches(getState as () => RootState, dispatch, threadId, threadId, criteria as RefineCriteria);
+    const contentMatchIds = await scanContentMatches(getState as () => RootState, dispatch, threadId, containerDiskCid(getState() as RootState, threadId), criteria as RefineCriteria);
     dispatch(messageSlice.actions.threadRefineApplied({ threadId, criteria, contentMatchIds }));
   },
 );
@@ -4162,8 +4216,21 @@ export const selectActiveContainerKey = (state: RootState): string => activeCont
  */
 export const selectActiveCid = (state: RootState): string | null => {
   const { activeTab, threadTabs } = state.message;
-  if (activeTab && threadTabs[activeTab]) return activeTab;
-  return mainCidOf(state);
+  return containerDiskCid(state, activeTab && threadTabs[activeTab] ? activeTab : null);
+};
+
+/**
+ * 2.2.5 fix C: the store key a container reads and writes. A container
+ * showing a search uses its search set; otherwise the thread id, or the
+ * open channel or DM for the main container (null).
+ */
+export const containerDiskCid = (state: RootState, containerId: string | null): string | null => {
+  if (containerId !== null) {
+    const tab = state.message.threadTabs[containerId];
+    return tab?.pagination.mode === 'search' ? searchCid(containerId) : containerId;
+  }
+  const main = mainCidOf(state);
+  return main && state.message.pagination.mode === 'search' ? searchCid(main) : main;
 };
 
 /** What hydration needs: the open workspace and the active conversation id. */

@@ -782,6 +782,21 @@ export function deleteConversation(wid: string, cid: string): Promise<void> {
   });
 }
 
+/* ─────────────────── Search sets (2.2.5 fix C) ─────────────────── */
+
+/**
+ * A search keeps its results beside the conversation's plain rows, under
+ * `search:<cid>` with its own record (criteria, search pagination, action).
+ * The plain rows under `<cid>` are never touched by a search, so clearing
+ * the search returns to them. The record stays out of the popover's list
+ * but goes with the workspace into duplicates and workspace files.
+ */
+export const SEARCH_PREFIX = 'search:';
+export const searchCid = (cid: string): string => (cid.startsWith(SEARCH_PREFIX) ? cid : `${SEARCH_PREFIX}${cid}`);
+export const isSearchCid = (cid: string): boolean => cid.startsWith(SEARCH_PREFIX);
+/** The conversation a key belongs to: `search:<cid>` and `<cid>` both answer `<cid>`. */
+export const plainCidOf = (cid: string): string => (isSearchCid(cid) ? cid.slice(SEARCH_PREFIX.length) : cid);
+
 /* ─────────────────── Run conversations (2.2.5 WP6c) ─────────────────── */
 
 /**

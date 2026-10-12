@@ -23,7 +23,7 @@ import type { WorkspaceAuthor, WorkspaceRecord } from '@features/workspace/works
 import { WORKSPACE_SCHEMA_VERSION } from '@features/workspace/workspaceTypes';
 import { StreamingZipService } from './streamingZipService';
 import { readPackageEntries, type PackageZipSource } from './packageZipReader';
-import { getWorkspace, isRunCid, readWindow, writePage } from './workspaceStore';
+import { getWorkspace, isRunCid, plainCidOf, readWindow, writePage } from './workspaceStore';
 
 export const WORKSPACE_FILE_EXTENSION = 'discrub-workspace';
 export const WORKSPACE_FILE_FORMAT = 'discrub-workspace';
@@ -65,7 +65,9 @@ export function workspaceFileName(name: string): string {
 }
 
 export function manifestOf(record: WorkspaceRecord, exportedAt = Date.now()): WorkspaceManifest {
-  const conversations = Object.values(record.conversations);
+  // The file carries what the popover lists: run walks stay out, and a
+  // search set (fix C) counts with its conversation.
+  const conversations = Object.values(record.conversations).filter((c) => c.count > 0 && !isRunCid(c.cid));
   return {
     format: WORKSPACE_FILE_FORMAT,
     schema: record.schema,
@@ -75,7 +77,7 @@ export function manifestOf(record: WorkspaceRecord, exportedAt = Date.now()): Wo
     color: record.color,
     createdAt: record.createdAt,
     exportedAt,
-    conversations: conversations.filter((c) => c.count > 0).length,
+    conversations: new Set(conversations.map((c) => plainCidOf(c.cid))).size,
     messages: conversations.reduce((sum, c) => sum + c.count, 0),
     bytes: record.bytes,
   };

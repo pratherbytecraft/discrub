@@ -62,15 +62,42 @@ describe('LoadAllDialog', () => {
       });
     };
 
-    it('shows the saved count line, Resume and Start over', () => {
+    // A Load All that was cut is recorded on the conversation (row 35, fix C).
+    const cutState = () => {
+      const base = restoredState();
+      return createBaseState({
+        ...base,
+        channel: { ...base.channel, selectedChannel: createMockChannel({ id: 'cut-1', name: 'general' }) },
+        workspace: { ...initialWorkspaceState, actions: { 'cut-1': { kind: 'loadAll', settings: { mode: 'plain' } } } } as never,
+      });
+    };
+
+    it('shows the saved count line, Resume and Start over after a cut Load All', () => {
       const onStartOver = vi.fn();
-      renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={onStartOver} />, { preloadedState: restoredState() });
+      renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={onStartOver} />, { preloadedState: cutState() });
       expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent(/12,480 loaded so far in this workspace\. Resume continues from Mar 3, 2026\./);
       expect(screen.getByTestId('load-all-confirm')).toHaveTextContent('Resume');
       fireEvent.click(screen.getByTestId('load-all-start-over'));
       expect(onStartOver).toHaveBeenCalledTimes(1);
       fireEvent.click(screen.getByTestId('load-all-confirm'));
       expect(defaultProps.onConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('a restored conversation with no cut Load All reads its count, Load All and Start over (row 35)', () => {
+      renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={vi.fn()} />, { preloadedState: restoredState() });
+      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('12,480 loaded so far in this workspace.');
+      expect(screen.getByTestId('load-all-restored-line')).not.toHaveTextContent('Resume continues');
+      expect(screen.getByTestId('load-all-confirm')).toHaveTextContent('Load All');
+      expect(screen.getByTestId('load-all-start-over')).toBeInTheDocument();
+    });
+
+    it('shows no plain figures while a search is showing (row 45)', () => {
+      const base = restoredState();
+      renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={vi.fn()} />, {
+        preloadedState: createBaseState({ message: { ...base.message, pagination: { ...base.message.pagination, mode: 'search' } } }),
+      });
+      expect(screen.queryByTestId('load-all-restored-line')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('load-all-start-over')).not.toBeInTheDocument();
     });
 
     it('offers only Start over when the saved walk is complete', () => {

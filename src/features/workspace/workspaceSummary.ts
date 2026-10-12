@@ -1,5 +1,5 @@
 import type { ConversationKind, WorkspaceRecord } from './workspaceTypes';
-import { isRunCid, isWorkspaceOpenable } from '@services/workspaceStore';
+import { isRunCid, isSearchCid, isWorkspaceOpenable, plainCidOf } from '@services/workspaceStore';
 
 /** One conversation as the Workspaces popover lists it. */
 export interface ConversationSummary {
@@ -71,18 +71,33 @@ export function summarizeWorkspace(record: WorkspaceRecord, options: SummaryOpti
   const guildName = (guildId: string | null) =>
     guildId ? record.guilds?.[guildId] ?? fallbackGuilds[guildId] ?? null : null;
   // Run conversations (an export's walk, 2.2.5 WP6c) are not the user's to see or clear.
-  const conversations = Object.values(record.conversations)
-    .filter((c) => c.count > 0 && !isRunCid(c.cid))
-    .map((c) => ({
-      cid: c.cid,
+  // A search set (fix C) is part of its conversation's row: one row per
+  // conversation, its plain and search messages together.
+  const byCid = new Map<string, ConversationSummary>();
+  for (const c of Object.values(record.conversations)) {
+    if (c.count === 0 || isRunCid(c.cid)) continue;
+    const cid = plainCidOf(c.cid);
+    const row = byCid.get(cid);
+    if (row) {
+      row.count += c.count;
+      row.bytes += c.bytes;
+      if (!isSearchCid(c.cid)) {
+        row.name = c.name;
+        row.parentName = c.kind === 'thread' ? c.parentName ?? null : null;
+      }
+      continue;
+    }
+    byCid.set(cid, {
+      cid,
       kind: c.kind,
       name: c.name,
       guildName: c.kind === 'dm' ? null : guildName(c.guildId),
       parentName: c.kind === 'thread' ? c.parentName ?? null : null,
       count: c.count,
       bytes: c.bytes,
-    }))
-    .sort((a, b) => b.bytes - a.bytes || b.count - a.count);
+    });
+  }
+  const conversations = [...byCid.values()].sort((a, b) => b.bytes - a.bytes || b.count - a.count);
   return {
     wid: record.wid,
     name: record.name,

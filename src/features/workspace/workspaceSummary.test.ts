@@ -49,6 +49,17 @@ describe('workspace summaries (2.2.5 WP5)', () => {
     expect(s.count).toBe(800);
   });
 
+  it('folds a search set into its conversation row (fix C)', () => {
+    const r = record();
+    r.conversations['search:1'] = { ...newConversation('search:1', { kind: 'channel', guildId: 'g', name: 'general' }), count: 25, bytes: 250 };
+    r.conversations['search:77'] = { ...newConversation('search:77', { kind: 'channel', guildId: 'g', name: 'quiet' }), count: 5, bytes: 50 };
+    const s = summarizeWorkspace(r);
+    expect(s.conversations.map((c) => c.cid).sort()).toEqual(['1', '2', '77']);
+    expect(s.conversations.find((c) => c.cid === '1')?.count).toBe(325);
+    expect(s.conversations.find((c) => c.cid === '77')).toMatchObject({ name: 'quiet', count: 5 });
+    expect(s.count).toBe(830);
+  });
+
   it('marks a row held by another window', () => {
     expect(summarizeWorkspace(record(), { heldElsewhere: true }).heldElsewhere).toBe(true);
   });

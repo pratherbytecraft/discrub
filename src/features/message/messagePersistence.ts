@@ -32,7 +32,9 @@ import {
   deleteRows,
   getConversation,
   patchRows,
+  plainCidOf,
   readWindow,
+  searchCid,
   updateConversation,
   writePage,
   type RowPatch,
@@ -73,7 +75,9 @@ function logWriteFailure(api: PersistApi, error: unknown): void {
  * for a conversation the user already left is still written under the
  * right record only when one exists.
  */
-export function conversationSeedFromState(state: RootState, cid: string): ConversationSeed | null {
+export function conversationSeedFromState(state: RootState, key: string): ConversationSeed | null {
+  // A search set takes its conversation's seed (fix C).
+  const cid = plainCidOf(key);
   const channel = state.channel?.selectedChannel;
   if (channel && channel.id === cid) {
     const guild = state.guild?.selectedGuild;
@@ -92,7 +96,8 @@ export function conversationSeedFromState(state: RootState, cid: string): Conver
 }
 
 /** The record fields for an open thread tab. */
-export function threadSeedFromState(state: RootState, threadId: string): ConversationSeed | null {
+export function threadSeedFromState(state: RootState, key: string): ConversationSeed | null {
+  const threadId = plainCidOf(key);
   const tab = state.message?.threadTabs?.[threadId];
   if (!tab) return null;
   const guild = state.guild?.selectedGuild;
@@ -217,11 +222,18 @@ export async function persistConversation(
   }
 }
 
+/**
+ * 2.2.5 fix C: a message can sit in a conversation's plain rows and in its
+ * search set at once, so an edit or a delete reaches both. A key that is
+ * not saved is a no op in the store.
+ */
+const bothSets = (cid: string): string[] => [plainCidOf(cid), searchCid(plainCidOf(cid))];
+
 export async function persistRowPatches(api: PersistApi, cid: string, patches: RowPatch[]): Promise<PersistOutcome> {
   const wid = selectCurrentWid(api.getState());
   if (!wid || patches.length === 0) return 'skipped';
   try {
-    await patchRows(wid, cid, patches);
+    for (const key of bothSets(cid)) await patchRows(wid, key, patches);
     return 'written';
   } catch (error) {
     logWriteFailure(api, error);
@@ -233,7 +245,7 @@ export async function persistRowDeletes(api: PersistApi, cid: string, ids: strin
   const wid = selectCurrentWid(api.getState());
   if (!wid || ids.length === 0) return 'skipped';
   try {
-    await deleteRows(wid, cid, ids);
+    for (const key of bothSets(cid)) await deleteRows(wid, key, ids);
     return 'written';
   } catch (error) {
     logWriteFailure(api, error);
@@ -241,12 +253,12 @@ export async function persistRowDeletes(api: PersistApi, cid: string, ids: strin
   }
 }
 
-/** Drops a thread's rows and record when its tab closes. */
+/** Drops a thread's rows and record, and its search set, when its tab closes. */
 export async function forgetConversation(api: PersistApi, cid: string): Promise<PersistOutcome> {
   const wid = selectCurrentWid(api.getState());
   if (!wid) return 'skipped';
   try {
-    await deleteConversation(wid, cid);
+    for (const key of bothSets(cid)) await deleteConversation(wid, key);
     return 'written';
   } catch (error) {
     logWriteFailure(api, error);
@@ -301,6 +313,37 @@ export async function restoreConversation(api: PersistApi, cid: string): Promise
   } catch (error) {
     console.error('[workspace] restore failed, fetching instead', error);
     return null;
+  }
+}
+
+/**
+ * 2.2.5 fix C: what an open shows. A saved search comes back first (leaving
+ * a conversation with a search on keeps it, owner 2026-10-14), then the
+ * plain rows. A plain record left in search mode by a 2.2.5 build before
+ * the search sets holds search results under the plain key; it is dropped
+ * so the open fetches the plain first page.
+ */
+export async function restoreConversationOrSearch(api: PersistApi, cid: string): Promise<RestoredConversation | null> {
+  const search = await restoreConversation(api, searchCid(cid));
+  if (search) return search;
+  const plainSet = await restoreConversation(api, cid);
+  if (plainSet && plainSet.conversation.pagination.mode === 'search') {
+    await clearSavedConversation(api, cid);
+    return null;
+  }
+  return plainSet;
+}
+
+/** Drops a conversation's search set and its record; the plain rows stay. */
+export async function dropSavedSearch(api: PersistApi, cid: string): Promise<PersistOutcome> {
+  const wid = selectCurrentWid(api.getState());
+  if (!wid) return 'skipped';
+  try {
+    await deleteConversation(wid, searchCid(cid));
+    return 'written';
+  } catch (error) {
+    logWriteFailure(api, error);
+    return 'failed';
   }
 }
 

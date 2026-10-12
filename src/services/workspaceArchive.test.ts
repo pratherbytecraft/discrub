@@ -127,6 +127,24 @@ describe('workspace files', () => {
     expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID, wid, 'imported']);
   });
 
+  it('carries a search set beside its conversation, counted as one conversation (fix C)', async () => {
+    const wid = await seedRaidArchive();
+    await writePage(wid, 'search:100', ['3', '5'].map((id) => msg('100', id)), seedOf('general'));
+    await updateWorkspace(wid, (record) => {
+      record.conversations['search:100'].pagination = { ...record.conversations['search:100'].pagination, mode: 'search' };
+    });
+    const manifest = await exportWorkspaceFile(wid);
+    expect(manifest).toMatchObject({ conversations: 2, messages: 12 });
+    await importWorkspaceFile(
+      fileBytes('Raid_ archive.discrub-workspace'),
+      { wid: 'imported', name: 'Raid copy', color: '#faa61a' },
+      (record) => installImportedWorkspace(record, false),
+    );
+    expect(await countRows('imported', '100')).toBe(7);
+    expect(await countRows('imported', 'search:100')).toBe(2);
+    expect((await getWorkspace('imported'))!.conversations['search:100'].pagination.mode).toBe('search');
+  });
+
   it('replace drops the rows that were there and keeps the place in the order', async () => {
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '999', [msg('999', '50')], seedOf('old'));
     const wid = await seedRaidArchive();

@@ -45,7 +45,9 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
   // saved cursor (plan section 6). Thread tabs keep the plain dialog.
   const searchCriteria = useAppSelector(selectActiveSearchCriteria);
   const pagination = useAppSelector(selectActivePagination);
-  const resumable = !activeTab && restored !== null && !!onStartOver;
+  // A search shows its own set (fix C, row 45), so the plain conversation's
+  // restored figures and Start over belong to the plain view only.
+  const resumable = !activeTab && restored !== null && !!onStartOver && pagination.mode !== 'search';
   // An unfinished Load All recorded in the workspace (a thread tab too) also reads Resume.
   const unfinished = useLoadAllUnfinished();
   // Nothing left to resume once the saved walk reached the end: Start over
@@ -85,7 +87,8 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
         </DialogContentText>
         {resumable && (
           <DialogContentText sx={{ mt: 1 }} data-testid="load-all-restored-line">
-            {resumeDate && !completeOnDisk
+            {/* "Resume continues from" only when a Load All was cut (row 35). */}
+            {resumeDate && !completeOnDisk && unfinished
               ? t('loadAll.restoredLine', { count: restored.count.toLocaleString(i18n.language), date: resumeDate })
               : t('loadAll.restoredLineNoDate', { count: restored.count.toLocaleString(i18n.language) })}
           </DialogContentText>
@@ -127,7 +130,7 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
           </Button>
         ) : (
           <Button onClick={onConfirm} variant="contained" color="primary" data-testid="load-all-confirm">
-            {resumable || unfinished ? t('loadAll.resume') : t('loadAll.confirm')}
+            {unfinished ? t('loadAll.resume') : t('loadAll.confirm')}
           </Button>
         )}
       </DialogActions>
