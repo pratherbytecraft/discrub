@@ -1,5 +1,5 @@
 import type { ConversationKind, WorkspaceRecord } from './workspaceTypes';
-import { isWorkspaceOpenable } from '@services/workspaceStore';
+import { isRunCid, isWorkspaceOpenable } from '@services/workspaceStore';
 
 /** One conversation as the Workspaces popover lists it. */
 export interface ConversationSummary {
@@ -54,8 +54,9 @@ function workOf(record: WorkspaceRecord): WorkSummary | null {
 }
 
 export function summarizeWorkspace(record: WorkspaceRecord, heldElsewhere = false): WorkspaceSummary {
+  // Run conversations (an export's walk, 2.2.5 WP6c) are not the user's to see or clear.
   const conversations = Object.values(record.conversations)
-    .filter((c) => c.count > 0)
+    .filter((c) => c.count > 0 && !isRunCid(c.cid))
     .map((c) => ({ cid: c.cid, kind: c.kind, name: c.name, count: c.count, bytes: c.bytes }))
     .sort((a, b) => b.bytes - a.bytes || b.count - a.count);
   return {

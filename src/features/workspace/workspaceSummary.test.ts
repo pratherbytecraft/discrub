@@ -30,6 +30,14 @@ describe('workspace summaries (2.2.5 WP5)', () => {
     expect(summarizeWorkspace(r).work).toEqual({ kind: 'export', done: 3, total: 12 });
   });
 
+  it('leaves an export run conversation out of the list and the count (WP6c)', () => {
+    const r = record();
+    r.conversations['run:9'] = { ...newConversation('run:9', { kind: 'channel', guildId: 'g', name: 'raids' }), count: 50, bytes: 500 };
+    const s = summarizeWorkspace(r);
+    expect(s.conversations.map((c) => c.cid)).toEqual(['2', '1']);
+    expect(s.count).toBe(800);
+  });
+
   it('marks a row held by another window', () => {
     expect(summarizeWorkspace(record(), true).heldElsewhere).toBe(true);
   });

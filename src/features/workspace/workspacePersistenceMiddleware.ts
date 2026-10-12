@@ -51,13 +51,13 @@ import {
   threadSeedFromState,
   type PersistApi,
 } from '@features/message/messagePersistence';
-import { updateWorkspace, type RowPatch } from '@services/workspaceStore';
+import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, updateWorkspace, type RowPatch } from '@services/workspaceStore';
 import { setSelectedGuild } from '@features/guild/guildSlice';
 import { setSelectedChannel } from '@features/channel/channelSlice';
 import { setSelectedDm } from '@features/dm/dmSlice';
 import type { ActionKind, BulkKind, BulkMode, ConversationSeed, WorkspaceBulk, WorkspaceScope } from './workspaceTypes';
 import { actionRecorded, bulkOf, bulkRecorded, feedAnchorMoved, scopeRestoreFinished, selectCurrentWid } from './workspaceSlice';
-import { buildConfigSnapshot, bulkExportChannels, bulkExportDMs, exportMessages, setExportProgress } from '@features/export/exportSlice';
+import { buildConfigSnapshot, bulkExportChannels, bulkExportDMs, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
 import { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
 
 /**
@@ -504,6 +504,8 @@ interface BulkStart {
   guildId: string | null;
   settings: unknown;
   queue: string[];
+  /** A resumed Bulk Export keeps the units that finished (2.2.5 WP6c). */
+  keepDone?: boolean;
 }
 
 /** The last progress index written, so a progress action per message writes nothing new. */
@@ -513,8 +515,9 @@ function recordBulkStart(persistApi: PersistApi, start: BulkStart): void {
   const wid = selectCurrentWid(persistApi.getState());
   if (!wid) return;
   bulkWrittenIndex = -1;
+  const { keepDone, ...fields } = start;
   const bulk: WorkspaceBulk = {
-    ...start,
+    ...fields,
     done: [],
     inHand: start.queue[0] ?? null,
     total: start.queue.length,
@@ -523,11 +526,44 @@ function recordBulkStart(persistApi: PersistApi, start: BulkStart): void {
   persistApi.dispatch(bulkRecorded(bulkOf({ bulk } as never)));
   void chained(async () => {
     try {
-      await updateWorkspace(wid, (workspace) => {
-        workspace.bulk = bulk;
+      const record = await updateWorkspace(wid, (workspace) => {
+        const done = keepDone && workspace.bulk?.kind === bulk.kind ? workspace.bulk.done : [];
+        workspace.bulk = { ...bulk, done };
       });
+      if (keepDone && selectCurrentWid(persistApi.getState()) === wid) persistApi.dispatch(bulkRecorded(bulkOf(record)));
     } catch (error) {
       console.error('[workspace] could not record the bulk run', error);
+    }
+  });
+}
+
+/** A Bulk Export unit rendered into the zip; a resumed run skips it (2.2.5 WP6c). */
+function recordBulkUnitDone(persistApi: PersistApi, id: string): void {
+  const wid = selectCurrentWid(persistApi.getState());
+  if (!wid || persistApi.getState().workspace?.bulk?.kind !== 'bulkExport') return;
+  void chained(async () => {
+    try {
+      const record = await updateWorkspace(wid, (workspace) => {
+        const bulk = workspace.bulk;
+        if (!bulk || bulk.kind !== 'bulkExport' || bulk.done.includes(id)) return;
+        bulk.done.push(id);
+      });
+      if (selectCurrentWid(persistApi.getState()) === wid && persistApi.getState().workspace?.bulk) {
+        persistApi.dispatch(bulkRecorded(bulkOf(record)));
+      }
+    } catch (error) {
+      console.error('[workspace] could not record the finished unit', error);
+    }
+  });
+}
+
+/** The rows a Bulk Export walked into the workspace go when the run is over or forgotten. */
+export function dropBulkRunConversations(wid: string): Promise<unknown> {
+  return chained(async () => {
+    try {
+      await deleteConversationsWithPrefix(wid, BULK_RUN_PREFIX);
+    } catch (error) {
+      console.error('[workspace] could not drop the run conversations', error);
     }
   });
 }
@@ -563,6 +599,7 @@ function recordBulkAt(persistApi: PersistApi, index: number, total: number | nul
 function recordBulkEnd(persistApi: PersistApi): void {
   const wid = selectCurrentWid(persistApi.getState());
   if (!wid || isSuspendingForSwitch()) return;
+  const wasExport = persistApi.getState().workspace?.bulk?.kind === 'bulkExport';
   bulkWrittenIndex = -1;
   persistApi.dispatch(bulkRecorded(null));
   void chained(async () => {
@@ -574,6 +611,7 @@ function recordBulkEnd(persistApi: PersistApi): void {
       console.error('[workspace] could not clear the bulk run', error);
     }
   });
+  if (wasExport) void dropBulkRunConversations(wid);
 }
 
 const idsOf = (items: Array<{ id: string }>): string[] => items.map((item) => item.id);
@@ -581,7 +619,7 @@ const idsOf = (items: Array<{ id: string }>): string[] => items.map((item) => it
 listen({
   matcher: isAnyOf(bulkExportChannels.pending, bulkExportDMs.pending),
   effect: (action, listenerApi) => {
-    const arg = argOf<{ channels: Array<{ id: string }>; guildId?: string | null; searchCriteria?: unknown }>(action);
+    const arg = argOf<{ channels: Array<{ id: string }>; guildId?: string | null; searchCriteria?: unknown; resume?: boolean }>(action);
     const dms = bulkExportDMs.pending.match(action);
     recordBulkStart(api(listenerApi), {
       kind: 'bulkExport',
@@ -589,7 +627,15 @@ listen({
       guildId: dms ? null : arg.guildId ?? null,
       settings: { snapshot: buildConfigSnapshot(listenerApi.getState()), searchCriteria: arg.searchCriteria ?? null },
       queue: idsOf(arg.channels),
+      keepDone: arg.resume === true,
     });
+  },
+});
+
+listen({
+  actionCreator: bulkUnitFinished,
+  effect: (action, listenerApi) => {
+    recordBulkUnitDone(api(listenerApi), action.payload.id);
   },
 });
 

@@ -9,6 +9,7 @@ import type { Message, Guild } from 'discrub-core/types/discord-types';
 import type { ExportReactionMap } from 'discrub-core/types/discrub-types';
 import type { MediaDownloadProgress, MediaMaps, MediaConfig } from '@features/export/exportTypes';
 import type { StreamingZipService } from './streamingZipService';
+import { forEachMessage, toSource, type MessageSource } from './messageSource';
 import { IMAGE_EXTS, VIDEO_EXTS, AUDIO_EXTS } from '@/constants/mediaExtensions';
 import { t } from '@/i18n';
 
@@ -321,7 +322,7 @@ export class MediaDownloadService {
    * Download all media types for the given messages
    */
   async downloadAllMedia(
-    messages: Message[],
+    messages: Message[] | MessageSource,
     guild: Guild | null,
     entityName: string,
     zipService: StreamingZipService,
@@ -331,17 +332,19 @@ export class MediaDownloadService {
     shouldContinue?: ShouldContinueFn,
     reactionMap?: ExportReactionMap,
   ): Promise<MediaMaps> {
+    // 2.2.5 WP6c: every pass walks the source a window at a time.
+    const source = toSource(messages);
     // 1. Download avatars (message authors + reaction users)
-    await this.downloadAvatars(messages, entityName, zipService, onProgress, shouldContinue, reactionMap);
+    await this.downloadAvatars(source, entityName, zipService, onProgress, shouldContinue, reactionMap);
 
     // 2. Download attachments (filtered by mediaConfig)
-    await this.downloadAttachments(messages, entityName, zipService, onProgress, mediaConfig, artistMode, shouldContinue);
+    await this.downloadAttachments(source, entityName, zipService, onProgress, mediaConfig, artistMode, shouldContinue);
 
     // 3. Download custom emojis
-    await this.downloadEmojis(messages, entityName, zipService, onProgress, shouldContinue);
+    await this.downloadEmojis(source, entityName, zipService, onProgress, shouldContinue);
 
     // 4. Download stickers (#213)
-    await this.downloadStickers(messages, entityName, zipService, onProgress, shouldContinue);
+    await this.downloadStickers(source, entityName, zipService, onProgress, shouldContinue);
 
     // 5. Download role icons (if guild export)
     if (guild) {
@@ -357,7 +360,7 @@ export class MediaDownloadService {
    * Used for the "media only" export format
    */
   async downloadMediaOnly(
-    messages: Message[],
+    messages: Message[] | MessageSource,
     entityName: string,
     zipService: StreamingZipService,
     onProgress: (progress: MediaDownloadProgress) => void,
@@ -365,7 +368,7 @@ export class MediaDownloadService {
     artistMode?: boolean,
     shouldContinue?: ShouldContinueFn
   ): Promise<void> {
-    await this.downloadAttachments(messages, entityName, zipService, onProgress, mediaConfig, artistMode, shouldContinue);
+    await this.downloadAttachments(toSource(messages), entityName, zipService, onProgress, mediaConfig, artistMode, shouldContinue);
     this.flushMediaFailureSummary();
   }
 
@@ -373,7 +376,7 @@ export class MediaDownloadService {
    * Download user avatars from messages
    */
   private async downloadAvatars(
-    messages: Message[],
+    messages: MessageSource,
     entityName: string,
     zipService: StreamingZipService,
     onProgress: (progress: MediaDownloadProgress) => void,
@@ -382,7 +385,7 @@ export class MediaDownloadService {
   ): Promise<void> {
     // Collect unique user avatars from message authors
     const avatarSet = new Set<string>();
-    messages.forEach((msg) => {
+    await forEachMessage(messages, (msg) => {
       if (msg.author?.id && msg.author.avatar) {
         avatarSet.add(`${msg.author.id}/${msg.author.avatar}`);
       }
@@ -440,7 +443,7 @@ export class MediaDownloadService {
    * Download message attachments and embedded media
    */
   private async downloadAttachments(
-    messages: Message[],
+    messages: MessageSource,
     entityName: string,
     zipService: StreamingZipService,
     onProgress: (progress: MediaDownloadProgress) => void,
@@ -544,7 +547,7 @@ export class MediaDownloadService {
       });
     };
 
-    messages.forEach((msg, index) => {
+    await forEachMessage(messages, (msg, index) => {
       const authorName = msg.author?.username || 'unknown';
       collectMedia(msg, authorName, index, msg.timestamp);
 
@@ -652,7 +655,7 @@ export class MediaDownloadService {
    * Download custom emojis from message content
    */
   private async downloadEmojis(
-    messages: Message[],
+    messages: MessageSource,
     entityName: string,
     zipService: StreamingZipService,
     onProgress: (progress: MediaDownloadProgress) => void,
@@ -662,7 +665,7 @@ export class MediaDownloadService {
     const emojiIds = new Set<string>();
     const emojiRegex = /<(a)?:(\w+):(\d+)>/g;
 
-    messages.forEach((msg) => {
+    await forEachMessage(messages, (msg) => {
       // Extract from content
       let match;
       while ((match = emojiRegex.exec(msg.content || '')) !== null) {
@@ -730,14 +733,14 @@ export class MediaDownloadService {
    * file path is deterministic and matches the exportService sticker emitter.
    */
   private async downloadStickers(
-    messages: Message[],
+    messages: MessageSource,
     entityName: string,
     zipService: StreamingZipService,
     onProgress: (progress: MediaDownloadProgress) => void,
     shouldContinue?: ShouldContinueFn
   ): Promise<void> {
     const stickers = new Map<string, { id: string; format_type: number }>();
-    messages.forEach((msg) => {
+    await forEachMessage(messages, (msg) => {
       (msg as { sticker_items?: Array<{ id: string; format_type: number }> }).sticker_items?.forEach((s) => {
         if (s.format_type !== 3) stickers.set(s.id, s); // skip Lottie
       });

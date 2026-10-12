@@ -551,6 +551,13 @@ export function duplicateWorkspace(wid: string, name: string, now = Date.now()):
       createdAt: now,
       lastOpened: now,
     };
+    // An export's run conversations belong to the run, not the copy (2.2.5 WP6c).
+    for (const cid of Object.keys(copy.conversations)) {
+      if (!isRunCid(cid)) continue;
+      copy.bytes = Math.max(0, copy.bytes - copy.conversations[cid].bytes);
+      delete copy.conversations[cid];
+    }
+    copy.bulk = null;
     tx.objectStore(STORE_WORKSPACES).put(copy);
     const rows = tx.objectStore(STORE_ROWS);
     await new Promise<void>((resolve, reject) => {
@@ -563,7 +570,7 @@ export function duplicateWorkspace(wid: string, name: string, now = Date.now()):
           return;
         }
         const row = cursor.value as StoredRow;
-        rows.put({ ...row, wid: copy.wid });
+        if (!isRunCid(row.cid)) rows.put({ ...row, wid: copy.wid });
         cursor.continue();
       };
     });
@@ -686,6 +693,40 @@ export function deleteConversation(wid: string, cid: string): Promise<void> {
     record.bytes = Math.max(0, record.bytes - conversation.bytes);
     delete record.conversations[cid];
     tx.objectStore(STORE_WORKSPACES).put(record);
+  });
+}
+
+/* ─────────────────── Run conversations (2.2.5 WP6c) ─────────────────── */
+
+/**
+ * An export walks its channels into the workspace so it renders from disk
+ * and a resumed run skips what finished. Those rows live under run
+ * conversations, named by a prefix so they never mix with a conversation
+ * the user has open under other filters, stay out of the popover and the
+ * workspace file, and are deleted when the run ends.
+ */
+export const BULK_RUN_PREFIX = 'run:';
+export const EXPORT_RUN_PREFIX = 'export:';
+
+export const bulkRunCid = (id: string): string => `${BULK_RUN_PREFIX}${id}`;
+export const exportRunCid = (id: string): string => `${EXPORT_RUN_PREFIX}${id}`;
+
+export function isRunCid(cid: string): boolean {
+  return cid.startsWith(BULK_RUN_PREFIX) || cid.startsWith(EXPORT_RUN_PREFIX);
+}
+
+/** Drops every conversation whose id starts with `prefix`, rows and records, in one transaction. */
+export function deleteConversationsWithPrefix(wid: string, prefix: string): Promise<number> {
+  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid: null }, async (tx) => {
+    const record = await readWorkspace(tx, wid);
+    const cids = Object.keys(record.conversations).filter((cid) => cid.startsWith(prefix));
+    for (const cid of cids) {
+      tx.objectStore(STORE_ROWS).delete(conversationRange(wid, cid));
+      record.bytes = Math.max(0, record.bytes - record.conversations[cid].bytes);
+      delete record.conversations[cid];
+    }
+    if (cids.length > 0) tx.objectStore(STORE_WORKSPACES).put(record);
+    return cids.length;
   });
 }
 

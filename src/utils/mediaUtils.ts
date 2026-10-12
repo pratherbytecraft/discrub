@@ -1,5 +1,6 @@
 import type { Message, Attachment } from 'discrub-core/types/discord-types';
 import { IMAGE_EXTS, VIDEO_EXTS, AUDIO_EXTS } from '@/constants/mediaExtensions';
+import { forEachMessage, type MessageSource } from '@services/messageSource';
 
 export type MediaCategory = 'images' | 'videos' | 'audio' | 'other';
 
@@ -32,15 +33,43 @@ export function categorizeAttachment(filename: string): MediaCategory {
   return 'other';
 }
 
-export function categorizeMessageAttachments(messages: Message[]): MediaCategorySummary[] {
-  const summaryMap: Record<MediaCategory, MediaCategorySummary> = {
-    images: { category: 'images', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
-    videos: { category: 'videos', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
-    audio: { category: 'audio', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
-    other: { category: 'other', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
-  };
+type MediaSummaryMap = Record<MediaCategory, MediaCategorySummary>;
 
-  for (const msg of messages) {
+const emptySummaryMap = (): MediaSummaryMap => ({
+  images: { category: 'images', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
+  videos: { category: 'videos', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
+  audio: { category: 'audio', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
+  other: { category: 'other', count: 0, totalBytes: 0, embedCount: 0, attachments: [] },
+});
+
+// Return only categories that have content
+const summariesOf = (summaryMap: MediaSummaryMap): MediaCategorySummary[] =>
+  Object.values(summaryMap).filter((s) => s.count > 0 || s.embedCount > 0);
+
+export function categorizeMessageAttachments(messages: Message[]): MediaCategorySummary[] {
+  const summaryMap = emptySummaryMap();
+  for (const msg of messages) addMessageMedia(summaryMap, msg);
+  return summariesOf(summaryMap);
+}
+
+/** The same summary built as messages arrive, from a store walk and whatever else is in hand (2.2.5 WP6c). */
+export function createMediaSummary(): { add: (msg: Message) => void; finish: () => MediaCategorySummary[] } {
+  const summaryMap = emptySummaryMap();
+  return {
+    add: (msg) => addMessageMedia(summaryMap, msg),
+    finish: () => summariesOf(summaryMap),
+  };
+}
+
+/** The same summary over a message source, a window at a time. */
+export async function summarizeMediaFromSource(source: MessageSource): Promise<MediaCategorySummary[]> {
+  const summary = createMediaSummary();
+  await forEachMessage(source, summary.add);
+  return summary.finish();
+}
+
+function addMessageMedia(summaryMap: MediaSummaryMap, msg: Message): void {
+  {
     // Process attachments
     for (const att of msg.attachments || []) {
       const category = categorizeAttachment(att.filename || 'unknown');
@@ -62,11 +91,6 @@ export function categorizeMessageAttachments(messages: Message[]): MediaCategory
       }
     }
   }
-
-  // Return only categories that have content
-  return Object.values(summaryMap).filter(
-    (s) => s.count > 0 || s.embedCount > 0
-  );
 }
 
 export function getTotalMediaSize(summaries: MediaCategorySummary[]): number {

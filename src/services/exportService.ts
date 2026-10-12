@@ -1,4 +1,14 @@
 import { prepareExportData } from 'discrub-core/export-data-service';
+import {
+  arraySource,
+  concatSources,
+  forEachMessage,
+  isMessageSource,
+  pageCount,
+  pagesOf,
+  type MessageSource,
+  type ReadDirection,
+} from './messageSource';
 import type { Message, Guild, Channel } from 'discrub-core/types/discord-types';
 import type { ExportUserMap } from 'discrub-core/types/discrub-types';
 import { renderEmojiAsHtml } from 'discrub-core/export-utils';
@@ -95,6 +105,44 @@ import { getUserRoleColor, getUserRoleIcon } from '@/utils/roleColorUtils';
  */
 /** File-type kinds for the inline attachment icons in HTML exports. */
 type FileIconKind = 'image' | 'video' | 'audio' | 'document' | 'archive' | 'code' | 'sticker' | 'file';
+
+/**
+ * What an export renders (2.2.5 WP6c): the channel's own messages and,
+ * when threads are exported apart, each thread with its messages. The
+ * bulk and single export thunks build one over the workspace store;
+ * callers with messages in hand pass an array and get one from
+ * {@link sourceSetOf}.
+ */
+export interface ExportSourceSet {
+  main: MessageSource;
+  threads: Array<{ thread: Channel; source: MessageSource }>;
+}
+
+export function isExportSourceSet(value: unknown): value is ExportSourceSet {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && isMessageSource((value as ExportSourceSet).main);
+}
+
+/**
+ * Splits messages in hand the way discrub-core's `prepareExportData`
+ * does: a thread is exported when a message starts it or belongs to it,
+ * its messages are the ones posted in it, and the rest stay on the main
+ * pages. Without thread separation everything is main.
+ */
+export function sourceSetOf(messages: Message[], threads: Channel[], separateThreads: boolean): ExportSourceSet {
+  if (!separateThreads || threads.length === 0) return { main: arraySource(messages), threads: [] };
+  const referenced = new Set<string>();
+  for (const message of messages) {
+    const started = (message as { thread?: { id?: string } }).thread?.id;
+    if (started) referenced.add(started);
+    if (message.channel_id) referenced.add(message.channel_id);
+  }
+  const used = threads.filter((thread) => referenced.has(thread.id));
+  const threadIds = new Set(used.map((thread) => thread.id));
+  return {
+    main: arraySource(messages.filter((message) => !threadIds.has(message.channel_id))),
+    threads: used.map((thread) => ({ thread, source: arraySource(messages.filter((message) => message.channel_id === thread.id)) })),
+  };
+}
 
 export function generatePlainTextReadme(options: {
   isBulk: boolean;
@@ -242,7 +290,7 @@ class ExportService {
    * Export media files only (no HTML/CSV/JSON content)
    */
   async exportMediaOnly(
-    messages: Message[],
+    messages: Message[] | MessageSource,
     channelName: string,
     mediaConfig?: MediaConfig,
     onProgress?: (progress: MediaDownloadProgress | number) => void,
@@ -291,10 +339,16 @@ class ExportService {
   }
 
   /**
-   * Export messages to ZIP file with optional media download
+   * Export messages to ZIP file with optional media download.
+   *
+   * 2.2.5 WP6c: `messages` is either the messages in hand (a data package,
+   * a stopped run's pages, tests) or an {@link ExportSourceSet} that reads
+   * the channel and each thread from the workspace store a window at a
+   * time. Every pass below walks windows, so a channel of any size
+   * renders with flat memory.
    */
   async exportToZip(
-    messages: Message[],
+    messages: Message[] | ExportSourceSet,
     channelName: string,
     exportFormat: 'html' | 'csv' | 'json' | 'text',
     messagesPerPage: number,
@@ -320,18 +374,10 @@ class ExportService {
     const zipService = externalZipService ?? new StreamingZipService(sanitizedName, zipOptions);
     const ownsZip = !externalZipService;
 
-    // Sort messages based on exportConfig.sortOrder before pagination
-    const sortedMessages = [...messages];
-    if (exportConfig?.sortOrder === 'ascending') {
-      sortedMessages.sort((a, b) =>
-        new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
-      );
-    } else {
-      // Default 'descending' - newest first
-      sortedMessages.sort((a, b) =>
-        new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
-      );
-    }
+    // The order the pages are written in; the store reads in time order either way.
+    const direction: ReadDirection = exportConfig?.sortOrder === 'ascending' ? 'asc' : 'desc';
+    const set = isExportSourceSet(messages) ? messages : sourceSetOf(messages, threads ?? [], separateThreads ?? false);
+    const everything = concatSources([set.main, ...set.threads.map((entry) => entry.source)]);
 
     try {
       let mediaMaps: MediaMaps | null = null;
@@ -341,7 +387,7 @@ class ExportService {
         const mediaService = new MediaDownloadService();
 
         mediaMaps = await mediaService.downloadAllMedia(
-          sortedMessages,
+          everything,
           guild,
           sanitizedName,
           zipService,
@@ -360,146 +406,102 @@ class ExportService {
       // Check cancel between phases
       if (shouldContinue) await shouldContinue();
 
-      // Phase 2: Generate HTML/CSV/JSON with local paths
-      const exportData = prepareExportData({
-        messages: sortedMessages,
-        messagesPerPage,
-        entityName: sanitizedName,
-        entityMainDirectory: sanitizedName,
-        format: exportFormat,
-        threads: threads || [],
-        separateThreads: separateThreads || false,
-      });
-
-      const threadPages = exportData.threadExports.reduce((sum, te) => sum + te.pages.length, 0);
-      const totalPages = exportData.totalPages + threadPages;
+      // Phase 2: Generate HTML/CSV/JSON with local paths, a page at a time
+      const threadExports = set.threads.filter((entry) => entry.source.count > 0);
+      const mainPageCount = pageCount(set.main.count, messagesPerPage);
+      const totalPages = mainPageCount + threadExports.reduce((sum, entry) => sum + pageCount(entry.source.count, messagesPerPage), 0);
       let processedPages = 0;
 
       // Build formatting context once (needed for HTML, shared between main pages and threads)
       let formattingContext: HtmlFormattingContext | null = null;
       if (exportFormat === 'html') {
-        formattingContext = this.buildFormattingContext(
-          messages, guild, cachedUserMap, guildId, mediaMaps, sanitizedName, guildRoles
+        formattingContext = await this.buildFormattingContext(
+          everything, guild, cachedUserMap, guildId, mediaMaps, sanitizedName, guildRoles
         );
       }
 
-      // Generate files based on format
-      if (exportFormat === 'json') {
-        for (const page of exportData.mainPages) {
-          if (shouldContinue) await shouldContinue();
-          const parts = this.buildJSONPageParts(page.messages, onRowError);
-          const filename = `${sanitizedName}-page-${page.pageNumber}.json`;
-          const blob = new Blob(parts, { type: 'application/json' });
-          await zipService.addFile(blob, `${sanitizedName}/${filename}`);
-          processedPages++;
+      const pageLabel = exportFormat === 'json' ? 'Generated JSON page'
+        : exportFormat === 'csv' ? 'Generated CSV page'
+        : exportFormat === 'text' ? 'Generated text page'
+        : 'Generating HTML page';
 
-          if (typeof onProgress === 'function') {
-            onProgress({
-              stage: 'html',
-              current: processedPages,
-              total: totalPages,
-              message: `Generated JSON page ${processedPages}/${totalPages}`,
-            });
-          }
+      // #185 Bug B: each per-message row stays its own Blob part; Blob
+      // stitches them together without ever allocating one mega-string
+      // that could cross V8's ~512MB cap.
+      const buildPage = (
+        pageMessages: Message[],
+        title: string,
+        pageNumber: number,
+        pageTotal: number,
+        relativeRoot: string | undefined,
+        backLinkPage: number | undefined,
+      ): { parts: string[]; mimeType: string; ext: string } => {
+        if (exportFormat === 'json') {
+          return { parts: this.buildJSONPageParts(pageMessages, onRowError), mimeType: 'application/json', ext: 'json' };
         }
-      } else if (exportFormat === 'csv') {
-        for (const page of exportData.mainPages) {
-          if (shouldContinue) await shouldContinue();
-          const parts = this.buildCSVPageParts(page.messages, cachedUserMap, guildId, exportConfig, onRowError);
-          const filename = `${sanitizedName}-page-${page.pageNumber}.csv`;
-          const blob = new Blob(parts, { type: 'text/csv' });
-          await zipService.addFile(blob, `${sanitizedName}/${filename}`);
-          processedPages++;
-
-          if (typeof onProgress === 'function') {
-            onProgress({
-              stage: 'html',
-              current: processedPages,
-              total: totalPages,
-              message: `Generated CSV page ${processedPages}/${totalPages}`,
-            });
-          }
+        if (exportFormat === 'csv') {
+          return { parts: this.buildCSVPageParts(pageMessages, cachedUserMap, guildId, exportConfig, onRowError), mimeType: 'text/csv', ext: 'csv' };
         }
-      } else if (exportFormat === 'text') {
-        for (const page of exportData.mainPages) {
-          if (shouldContinue) await shouldContinue();
-          const parts = this.buildTextPageParts(page.messages, {
+        if (exportFormat === 'text') {
+          const parts = this.buildTextPageParts(pageMessages, {
             cachedUserMap,
             guildId,
             exportConfig,
             mediaMaps,
             textOptions: textOpts,
           }, onRowError);
-          const filename = `${sanitizedName}-page-${page.pageNumber}.txt`;
-          const blob = new Blob(parts, { type: 'text/plain;charset=utf-8' });
-          await zipService.addFile(blob, `${sanitizedName}/${filename}`);
-          processedPages++;
-
-          if (typeof onProgress === 'function') {
-            onProgress({
-              stage: 'html',
-              current: processedPages,
-              total: totalPages,
-              message: `Generated text page ${processedPages}/${totalPages}`,
-            });
-          }
+          return { parts, mimeType: 'text/plain;charset=utf-8', ext: 'txt' };
         }
-      } else {
-        // HTML - multiple pages
-        for (const page of exportData.mainPages) {
-          if (shouldContinue) await shouldContinue();
-          // #185 Bug B: parts-array variant. Each per-message HTML row
-          // stays its own Blob part; Blob stitches them together
-          // without ever allocating one mega-string that could cross
-          // V8's ~512MB cap.
-          const pageParts = this.generateHTMLPageParts(
-            page.messages,
-            channelName,
-            page.pageNumber,
-            totalPages,
-            mediaMaps,
-            sanitizedName,
-            formattingContext!,
-            exportConfig,
-            undefined,
-            reactionMap,
-            cachedUserMap,
-            guildId,
-            undefined, // backLinkPage
-            onRowError,
-          );
+        const parts = this.generateHTMLPageParts(
+          pageMessages,
+          title,
+          pageNumber,
+          pageTotal,
+          mediaMaps,
+          sanitizedName,
+          formattingContext!,
+          exportConfig,
+          relativeRoot,
+          reactionMap,
+          cachedUserMap,
+          guildId,
+          backLinkPage,
+          onRowError,
+        );
+        return { parts, mimeType: 'text/html', ext: 'html' };
+      };
 
-          const filename = `${sanitizedName}-page-${page.pageNumber}.html`;
-
-          const blob = new Blob(pageParts, { type: 'text/html' });
-          await zipService.addFile(blob, `${sanitizedName}/${filename}`);
-
-          processedPages++;
-
-          if (typeof onProgress === 'function') {
-            onProgress({
-              stage: 'html',
-              current: processedPages,
-              total: totalPages,
-              message: `Generating HTML page ${processedPages}/${totalPages}`,
-            });
-          }
-        }
-      }
-
-      // Build map of threadId → main page number (for "Back to" links)
+      // Map of threadId → main page number (for "Back to" links), filled as the main pages go by.
       const threadStarterPageMap: Record<string, number> = {};
-      for (const page of exportData.mainPages) {
+      // The single page Discord shell wraps page 1 itself, so that page is kept when it is the only one.
+      const wantsFirstPage = exportFormat === 'html' && exportConfig?.exportTemplate === 'discord' && !externalZipService && threadExports.length === 0 && totalPages === 1;
+      let firstPage: Message[] | null = null;
+
+      for await (const page of pagesOf(set.main, messagesPerPage, direction)) {
+        if (shouldContinue) await shouldContinue();
         for (const msg of page.messages) {
           const thread = (msg as any).thread;
-          if (thread?.id) {
-            threadStarterPageMap[thread.id] = page.pageNumber;
-          }
+          if (thread?.id) threadStarterPageMap[thread.id] = page.pageNumber;
+        }
+        if (wantsFirstPage && page.pageNumber === 1) firstPage = page.messages;
+
+        const { parts, mimeType, ext } = buildPage(page.messages, channelName, page.pageNumber, totalPages, undefined, undefined);
+        const blob = new Blob(parts, { type: mimeType });
+        await zipService.addFile(blob, `${sanitizedName}/${sanitizedName}-page-${page.pageNumber}.${ext}`);
+        processedPages++;
+
+        if (typeof onProgress === 'function') {
+          onProgress({
+            stage: 'html',
+            current: processedPages,
+            total: totalPages,
+            message: `${pageLabel} ${processedPages}/${totalPages}`,
+          });
         }
       }
 
       // Phase 2b: Generate thread files if separateThreads is enabled
-      for (const threadExport of exportData.threadExports) {
+      for (const [index, threadExport] of threadExports.entries()) {
         // #175: pass the thread id as the dedupe suffix so channels with
         // many auto-spawned threads (Needle-bot promotes every message
         // into a thread) can't collide on sanitization. Without this,
@@ -509,77 +511,22 @@ class ExportService {
           threadExport.thread.name || `thread-${threadExport.thread.id}`,
           threadExport.thread.id,
         );
-        const threadTotalPages = threadExport.pages.length;
+        const threadTotalPages = pageCount(threadExport.source.count, messagesPerPage);
 
-        for (const page of threadExport.pages) {
+        for await (const page of pagesOf(threadExport.source, messagesPerPage, direction)) {
           if (shouldContinue) await shouldContinue();
 
-          let parts: string[];
-          let filename: string;
-          let mimeType: string;
-
-          if (exportFormat === 'json') {
-            parts = this.buildJSONPageParts(page.messages, onRowError);
-            filename = threadTotalPages > 1
-              ? `${threadName}-page-${page.pageNumber}.json`
-              : `${threadName}.json`;
-            mimeType = 'application/json';
-          } else if (exportFormat === 'csv') {
-            parts = this.buildCSVPageParts(page.messages, cachedUserMap, guildId, exportConfig, onRowError);
-            filename = threadTotalPages > 1
-              ? `${threadName}-page-${page.pageNumber}.csv`
-              : `${threadName}.csv`;
-            mimeType = 'text/csv';
-          } else if (exportFormat === 'text') {
-            parts = this.buildTextPageParts(page.messages, {
-              cachedUserMap,
-              guildId,
-              exportConfig,
-              mediaMaps,
-              textOptions: textOpts,
-            }, onRowError);
-            filename = threadTotalPages > 1
-              ? `${threadName}-page-${page.pageNumber}.txt`
-              : `${threadName}.txt`;
-            mimeType = 'text/plain;charset=utf-8';
-          } else {
-            // #185 Bug B: same parts-array path as the main-page loop above.
-            const threadParts = this.generateHTMLPageParts(
-              page.messages,
-              threadExport.thread.name || `Thread ${threadExport.thread.id}`,
-              page.pageNumber,
-              threadTotalPages,
-              mediaMaps,
-              sanitizedName,
-              formattingContext!,
-              exportConfig,
-              '../',
-              reactionMap,
-              cachedUserMap,
-              guildId,
-              threadStarterPageMap[threadExport.thread.id],
-              onRowError,
-            );
-            filename = threadTotalPages > 1
-              ? `${threadName}-page-${page.pageNumber}.html`
-              : `${threadName}.html`;
-            // Add the thread blob directly here so we don't fall through to
-            // the generic Blob below (which assumes a single `content` string).
-            const blob = new Blob(threadParts, { type: 'text/html' });
-            await zipService.addFile(blob, `${sanitizedName}/threads/${filename}`);
-            processedPages++;
-
-            if (typeof onProgress === 'function') {
-              onProgress({
-                stage: 'html',
-                current: processedPages,
-                total: totalPages,
-                message: `Generating thread ${threadExport.threadNumber}/${threadExport.totalThreads} page ${page.pageNumber}/${threadTotalPages}`,
-              });
-            }
-            continue;
-          }
-
+          const { parts, mimeType, ext } = buildPage(
+            page.messages,
+            threadExport.thread.name || `Thread ${threadExport.thread.id}`,
+            page.pageNumber,
+            threadTotalPages,
+            '../',
+            threadStarterPageMap[threadExport.thread.id],
+          );
+          const filename = threadTotalPages > 1
+            ? `${threadName}-page-${page.pageNumber}.${ext}`
+            : `${threadName}.${ext}`;
           const blob = new Blob(parts, { type: mimeType });
           await zipService.addFile(blob, `${sanitizedName}/threads/${filename}`);
           processedPages++;
@@ -589,7 +536,7 @@ class ExportService {
               stage: 'html',
               current: processedPages,
               total: totalPages,
-              message: `Generating thread ${threadExport.threadNumber}/${threadExport.totalThreads} page ${page.pageNumber}/${threadTotalPages}`,
+              message: `Generating thread ${index + 1}/${threadExports.length} page ${page.pageNumber}/${threadTotalPages}`,
             });
           }
         }
@@ -607,7 +554,7 @@ class ExportService {
         }];
 
         // Add thread channels to sidebar
-        for (const threadExport of exportData.threadExports) {
+        for (const threadExport of threadExports) {
           // #175: same dedupe-by-id strategy as the Phase 2b loop — the
           // shell's sidebar links must resolve to the same on-disk
           // filenames that got written.
@@ -638,14 +585,11 @@ class ExportService {
           themeSet: this.exportThemeSet,
         };
 
-        // For single-channel: read the first page content and wrap it
-        void `${sanitizedName}-page-1.html`; // reserved for future single-page shell
-
         // Use iframe-based approach — shell references the page files
-        const shellHtml = shellChannels.length === 1 && totalPages === 1
+        const shellHtml = shellChannels.length === 1 && firstPage
           ? generateDiscordShellSingle(
               this.generateHTMLPage(
-                exportData.mainPages[0].messages,
+                firstPage,
                 channelName, 1, 1, mediaMaps, sanitizedName,
                 formattingContext!, exportConfig, undefined, reactionMap,
                 cachedUserMap, guildId,
@@ -840,15 +784,15 @@ class ExportService {
   /**
    * Build formatting context from messages and guild data
    */
-  private buildFormattingContext(
-    messages: Message[],
+  private async buildFormattingContext(
+    messages: MessageSource,
     guild: Guild | null,
     cachedUserMap: ExportUserMap,
     guildId: string | null,
     mediaMaps?: MediaMaps | null,
     sanitizedName?: string,
     externalGuildRoles?: any[],
-  ): HtmlFormattingContext {
+  ): Promise<HtmlFormattingContext> {
     // Build userMap from cached data and message authors
     const userMap: Record<string, { userName?: string; displayName?: string; nick?: string }> = {};
 
@@ -864,7 +808,7 @@ class ExportService {
     });
 
     // Overlay message author data and mentioned user data
-    messages.forEach((msg) => {
+    await forEachMessage(messages, (msg) => {
       if (msg.author) {
         userMap[msg.author.id] = {
           ...userMap[msg.author.id],

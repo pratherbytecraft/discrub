@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import type { RootState } from '@/app/store';
-import { getConversation, getWorkspace, updateConversation, updateWorkspace } from '@services/workspaceStore';
+import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, getConversation, getWorkspace, updateConversation, updateWorkspace } from '@services/workspaceStore';
 import type { ConversationAction, WorkspaceBulk } from './workspaceTypes';
 import { actionRecorded, bulkRecorded, selectCurrentWid } from './workspaceSlice';
 
@@ -43,6 +43,8 @@ export const discardBulkRecord = createAsyncThunk<void, void, { state: RootState
       await updateWorkspace(wid, (workspace) => {
         workspace.bulk = null;
       });
+      // 2.2.5 WP6c: the rows a Bulk Export walked into the workspace go with it.
+      await deleteConversationsWithPrefix(wid, BULK_RUN_PREFIX);
     } catch (error) {
       console.error('[workspace] could not drop the bulk run', error);
     }

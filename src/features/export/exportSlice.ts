@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createAction, PayloadAction } from '@reduxjs/toolkit';
 import type { Message, Channel } from 'discrub-core/types/discord-types';
 import { getThreadsFromMessages } from 'discrub-core/discrub-utils';
 import { initialExportState, resolveMaxZipPartBytes } from './exportTypes';
@@ -32,6 +32,26 @@ import { waitWhilePaused, checkCancelled, cancellableDelay, createShouldContinue
 import { iterateSearchMessagesRedux, nextMilestone } from '@/utils/searchPagination';
 import { addStatusEntry, showOperationTip } from '@features/status/statusSlice';
 import { t } from '@/i18n';
+import { arraySource, collectMessages, concatSources, forEachMessage, storeSourceOf, toSource, type MessageSource } from '@services/messageSource';
+import type { ExportSourceSet } from '@services/exportService';
+import type { ShouldContinueFn } from '@services/mediaDownloadService';
+import { arraySink, storeSink, type PageSink } from './pageSink';
+import {
+  BULK_RUN_PREFIX,
+  EXPORT_RUN_PREFIX,
+  bulkRunCid,
+  exportRunCid,
+  countRows,
+  deleteConversation,
+  deleteConversationsWithPrefix,
+  getConversation,
+  writePage,
+} from '@services/workspaceStore';
+import { selectCurrentWid } from '@features/workspace/workspaceSlice';
+import { readBulkRecord } from '@features/workspace/resumeRecords';
+import { conversationSeedFromState, threadSeedFromState } from '@features/message/messagePersistence';
+import { hydrateMessages } from '@features/message/messageCache';
+import type { ConversationKind, ConversationSeed } from '@features/workspace/workspaceTypes';
 
 // #207 Arm B: a blank criteria so applyPreset can merge a restored date range
 // into the export window even when none was set yet.
@@ -109,7 +129,7 @@ export function createReactionProgressLogger(dispatch: ExportDispatch) {
  * Returns the ExportReactionMap or undefined if disabled/unavailable.
  */
 async function fetchReactionData(
-  messages: Message[],
+  messages: Message[] | MessageSource,
   token: string,
   getState: () => RootState,
   dispatch: ExportDispatch,
@@ -117,7 +137,8 @@ async function fetchReactionData(
   const settings = selectSettings(getState());
   if (settings?.[DiscrubSetting.REACTIONS_ENABLED] !== 'true') return undefined;
 
-  const messagesWithReactions = messages.filter((m) => m.reactions && m.reactions.length > 0);
+  // 2.2.5 WP6c: one walk over the windows keeps only the messages that have reactions.
+  const messagesWithReactions = await collectMessages(toSource(messages), (m) => !!m.reactions && m.reactions.length > 0);
   if (messagesWithReactions.length === 0) return undefined;
 
   const totalReactors = messagesWithReactions.reduce(
@@ -351,8 +372,21 @@ function recordRecentExport(
  * Export slice - manages export state and operations
  */
 
+/** The conversation in the workspace store a single export reads (2.2.5 WP6c). */
+export interface ExportStoreRef {
+  wid: string;
+  cid: string;
+  /** The Redux container the rows came from, 'main' or the thread id, for the first page backfill. */
+  container: string;
+  /** The ids on screen, the refined list. */
+  ids: string[];
+}
+
 interface ExportMessagesParams {
-  messages: Message[];
+  /** Messages in hand, for a session without a workspace. */
+  messages?: Message[];
+  /** The conversation to export from the workspace store a window at a time. */
+  store?: ExportStoreRef;
   channelName: string;
   format: ExportFormat;
   messagesPerPage: number;
@@ -426,15 +460,26 @@ export const exportMessages = createAsyncThunk<
 >(
   'export/exportMessages',
   async (params, { rejectWithValue, dispatch, getState }) => {
-    const { messages, channelName, format, messagesPerPage, separateThreads, includeMedia, guildId, mediaConfig, exportConfig } = params;
+    const { channelName, format, messagesPerPage, separateThreads, includeMedia, guildId, mediaConfig, exportConfig } = params;
+
+    // 2.2.5 WP6c: the store a window at a time, or the messages in hand.
+    const wid = params.store?.wid ?? null;
+    const opened = params.store
+      ? await openExportSource(params.store, getState)
+      : { source: arraySource(params.messages ?? []), messages: params.messages ?? [] };
+    const main = opened.source;
+    const count = main.count;
 
     dispatch(showOperationTip(t('status.export.queued')));
     dispatch(addStatusEntry({
       level: 'info',
-      message: t('status.export.starting', { format: format.toUpperCase(), count: messages.length, name: channelName }),
+      message: t('status.export.starting', { format: format.toUpperCase(), count, name: channelName }),
     }));
 
     const shouldContinue = createShouldContinue(getState);
+    const onStorageFull = storageFullOnce(dispatch as ExportDispatch);
+    // Thread pages of a run that never finished.
+    if (wid) await deleteConversationsWithPrefix(wid, EXPORT_RUN_PREFIX).catch(() => undefined);
 
     try {
       const exportService = getExportService();
@@ -448,7 +493,7 @@ export const exportMessages = createAsyncThunk<
       if (format === 'media') {
         // Media-only export — download attachments into ZIP, no content files
         await exportService.exportMediaOnly(
-          messages,
+          opened.messages ?? main,
           channelName,
           mediaConfig,
           (progress) => {
@@ -462,26 +507,27 @@ export const exportMessages = createAsyncThunk<
           buildZipOptions(getState, dispatch)
         );
       } else {
-        // Extract thread Channel objects from messages for thread separation
-        const threads = separateThreads ? getThreadsFromMessages(messages, []) : [];
-
-        // Fetch thread reply messages if separateThreads is enabled.
-        // Single-channel export receives messages pre-filtered by the
-        // in-table search; thread fetches stay on the list endpoint
-        // (unfiltered — existing behavior).
-        let allMessages = messages;
-        if (separateThreads && threads.length > 0) {
-          const token = selectAuthToken(getState());
-          if (token) {
+        // Thread reply messages if separateThreads is enabled. Single-channel
+        // export receives messages pre-filtered by the in-table search;
+        // thread fetches stay on the list endpoint (unfiltered — existing
+        // behavior). Their pages go to run conversations in the workspace.
+        let threads: Channel[] = [];
+        let threadMaterials: ThreadMaterial[] = [];
+        if (separateThreads) {
+          const starters = await collectMessages(main, isThreadStarter);
+          threads = getThreadsFromMessages(starters, []);
+          const token = threads.length > 0 ? selectAuthToken(getState()) : null;
+          if (token && threads.length > 0) {
             const searchDelay = selectSearchDelay(getState());
             const delayModifier = selectDelayModifier(getState());
-            const threadMsgs = await fetchThreadMessages(
-              messages, null, token, getState, dispatch,
+            threadMaterials = await fetchThreadMessages(
+              starters, null, token, getState, dispatch,
               searchDelay, delayModifier, null,
+              (thread) => sinkFor(wid, exportRunCid(thread.id), { kind: 'thread', guildId: guildId ?? null, name: thread.name || thread.id }, onStorageFull),
             );
-            allMessages = [...messages, ...threadMsgs];
           }
         }
+        const material = materialOf(main, opened.messages, threadMaterials.map(threadSourceOf));
 
         // Fetch reaction user data for HTML exports (other formats use counts only)
         let reactionMap: ExportReactionMap | undefined;
@@ -489,7 +535,7 @@ export const exportMessages = createAsyncThunk<
           try {
             const token = selectAuthToken(getState());
             if (token) {
-              reactionMap = await fetchReactionData(allMessages, token, getState, dispatch as ExportDispatch);
+              reactionMap = await fetchReactionData(material.everything, token, getState, dispatch as ExportDispatch);
             }
           } catch {
             // Non-fatal — continue without reaction data
@@ -508,7 +554,7 @@ export const exportMessages = createAsyncThunk<
         // Standard export with optional media
         const rowErrors = createRowErrorReporter(dispatch as ExportDispatch);
         await exportService.exportToZip(
-          allMessages,
+          material.input,
           channelName,
           format,
           messagesPerPage,
@@ -539,7 +585,7 @@ export const exportMessages = createAsyncThunk<
 
       dispatch(addStatusEntry({
         level: 'success',
-        message: t('status.export.completed', { name: channelName, count: messages.length }),
+        message: t('status.export.completed', { name: channelName, count }),
       }));
 
       // Record recent export history
@@ -562,7 +608,7 @@ export const exportMessages = createAsyncThunk<
           guildRoles = selectRoles(getState()) || [];
         } catch { /* guild slice may not be available in tests */ }
         const kept = await keepStoppedMessages({
-          messages, folderName: channelName, label: channelName, format, messagesPerPage,
+          messages: opened.messages ?? main, folderName: channelName, label: channelName, format, messagesPerPage,
           selectedGuild, cachedUserMap: selectCachedUserMap(getState()), guildId: guildId || null,
           mediaConfig, exportConfig, guildRoles, textOptions: getState().export.textOptions,
           zipOptions: buildZipOptions(getState, dispatch), dispatch: dispatch as ExportDispatch,
@@ -580,6 +626,8 @@ export const exportMessages = createAsyncThunk<
         message: t('status.export.failedOn', { name: channelName, error: errorMsg }),
       }));
       return rejectWithValue(errorMsg);
+    } finally {
+      if (wid) await deleteConversationsWithPrefix(wid, EXPORT_RUN_PREFIX).catch(() => undefined);
     }
   }
 );
@@ -623,8 +671,9 @@ async function fetchAllChannelMessages(
   searchDelay: number,
   delayModifier: number,
   searchCriteria: SearchCriteria | null | undefined,
-  logContext?: { channelLabel: string; silent?: boolean },
-): Promise<Message[]> {
+  logContext: { channelLabel: string; silent?: boolean } | undefined,
+  sink: PageSink,
+): Promise<PageSink> {
   const discordService = getDiscordService();
 
   if (hasAnyFilter(searchCriteria)) {
@@ -764,7 +813,7 @@ async function fetchAllChannelMessages(
     // needs the same enrichment so type-19 replies in the export render
     // with their referenced_message intact instead of the "Original
     // message was deleted" fallback.
-    return await replyEnrichmentService.enrichMessages(
+    const enriched = await replyEnrichmentService.enrichMessages(
       reactionEnriched,
       token,
       settings,
@@ -779,12 +828,13 @@ async function fetchAllChannelMessages(
         })),
       },
     );
+    await sink.add(enriched);
+    return sink;
   }
 
   // Unfiltered path — list endpoint.
   const label = logContext?.channelLabel ?? channelId;
   const silent = logContext?.silent === true;
-  let allMessages: Message[] = [];
   let lastMessageId = '';
   let hasMore = true;
   // 500-step cadence (#167) — busy channels can pull tens of thousands of
@@ -827,10 +877,10 @@ async function fetchAllChannelMessages(
     if (!response.success || !response.data) {
       if (isTransientApiFailure(response)) {
         dispatch(setDiscrubPaused(true));
-        dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: allMessages.length }));
+        dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: sink.count }));
         dispatch(addStatusEntry({
           level: 'warning',
-          message: t('status.export.loadPaused', { label, answer: describeAnswer(response), count: allMessages.length.toLocaleString() }),
+          message: t('status.export.loadPaused', { label, answer: describeAnswer(response), count: sink.count.toLocaleString() }),
         }));
         continue;
       }
@@ -838,14 +888,15 @@ async function fetchAllChannelMessages(
     }
 
     const messages = response.data as Message[];
-    allMessages = [...allMessages, ...messages];
+    // 2.2.5 WP6c: the page goes to the sink (the workspace store, or memory) and is not kept here.
+    await sink.add(messages);
 
-    if (!silent && allMessages.length >= nextLogBoundary) {
+    if (!silent && sink.count >= nextLogBoundary) {
       dispatch(addStatusEntry({
         level: 'info',
-        message: t('status.export.loadedFrom', { count: allMessages.length.toLocaleString(), label }),
+        message: t('status.export.loadedFrom', { count: sink.count.toLocaleString(), label }),
       }));
-      nextLogBoundary = allMessages.length + 500 - (allMessages.length % 500);
+      nextLogBoundary = sink.count + 500 - (sink.count % 500);
     }
 
     if (messages.length < 100) {
@@ -861,20 +912,57 @@ async function fetchAllChannelMessages(
   if (!silent) {
     dispatch(addStatusEntry({
       level: 'success',
-      message: t('status.export.loadedFromCount', { count: allMessages.length, label }),
+      message: t('status.export.loadedFromCount', { count: sink.count, label }),
     }));
   }
 
-  return allMessages;
+  return sink;
+}
+
+/** A thread an export writes apart, with the sink its messages went to (2.2.5 WP6c). */
+interface ThreadMaterial {
+  thread: Channel;
+  sink: PageSink;
+}
+
+/** A thread with its messages, from a sink or from the store. */
+interface ThreadSource {
+  thread: Channel;
+  source: MessageSource;
+  inMemory: Message[] | null;
+}
+
+const threadSourceOf = (material: ThreadMaterial): ThreadSource => ({
+  thread: material.thread,
+  source: material.sink.source(),
+  inMemory: material.sink.inMemory(),
+});
+
+const isThreadStarter = (message: Message): boolean => !!(message as { thread?: { id?: string } }).thread?.id;
+
+/** A sink for a run conversation when a workspace is open, memory otherwise. */
+function sinkFor(wid: string | null, cid: string, seed: ConversationSeed, onStorageFull: () => void): PageSink {
+  return wid ? storeSink({ wid, cid, seed, onStorageFull }) : arraySink();
+}
+
+/** The first storage full warning of a run; the rest of the run carries on in memory. */
+function storageFullOnce(dispatch: ExportDispatch): () => void {
+  let warned = false;
+  return () => {
+    if (warned) return;
+    warned = true;
+    dispatch(addStatusEntry({ level: 'warning', message: t('status.export.storageFullInMemory') }));
+  };
 }
 
 /**
  * Fetch messages from all threads found in the given messages.
  * Thread replies live in separate channels; this fetches them so they
- * can be included in thread-separated exports.
+ * can be included in thread-separated exports. Each thread's pages go
+ * to the sink `sinkFor` hands out for it.
  */
 async function fetchThreadMessages(
-  messages: Message[],
+  messages: Message[] | MessageSource,
   guildId: string | null,
   token: string,
   getState: () => RootState,
@@ -882,11 +970,13 @@ async function fetchThreadMessages(
   searchDelay: number,
   delayModifier: number,
   searchCriteria: SearchCriteria | null | undefined,
-): Promise<Message[]> {
-  const threads = getThreadsFromMessages(messages, []);
+  sinkForThread: (thread: Channel) => PageSink,
+): Promise<ThreadMaterial[]> {
+  const starters = await collectMessages(toSource(messages), isThreadStarter);
+  const threads = getThreadsFromMessages(starters, []);
   if (threads.length === 0) return [];
 
-  let threadMessages: Message[] = [];
+  const out: ThreadMaterial[] = [];
 
   for (const [index, thread] of threads.entries()) {
     await waitWhilePaused(getState);
@@ -906,7 +996,8 @@ async function fetchThreadMessages(
       message: t('status.export.fetchingThread', { name: threadName }),
     }));
 
-    const msgs = await fetchAllChannelMessages(
+    const sink = sinkForThread(thread);
+    await fetchAllChannelMessages(
       thread.id,
       guildId,
       token,
@@ -918,12 +1009,13 @@ async function fetchThreadMessages(
       // Threads usually have few matches and the wrapping entry above
       // already identifies the thread; keep detailed logging quiet.
       { channelLabel: `thread "${threadName}"`, silent: true },
+      sink,
     );
-
-    threadMessages = [...threadMessages, ...msgs];
+    if (!checkCancelled(getState)) await sink.complete();
+    out.push({ thread, sink });
   }
 
-  return threadMessages;
+  return out;
 }
 
 // #238: forum-family channel types have no message stream of their own —
@@ -1013,7 +1105,7 @@ async function fetchAllForumThreads(
  * Returns true when a page was written.
  */
 async function keepStoppedMessages(opts: {
-  messages: Message[];
+  messages: Message[] | MessageSource;
   folderName: string;
   label: string;
   format: ExportFormat;
@@ -1030,7 +1122,8 @@ async function keepStoppedMessages(opts: {
   dispatch: ExportDispatch;
 }): Promise<boolean> {
   const { messages, format, label, dispatch } = opts;
-  if (messages.length === 0) return false;
+  const source = toSource(messages);
+  if (source.count === 0) return false;
   if (format === 'media') {
     dispatch(addStatusEntry({
       level: 'warning',
@@ -1040,7 +1133,7 @@ async function keepStoppedMessages(opts: {
   }
   try {
     await getExportService().exportToZip(
-      messages, opts.folderName, format, opts.messagesPerPage, false,
+      Array.isArray(messages) ? messages : { main: messages, threads: [] }, opts.folderName, format, opts.messagesPerPage, false,
       opts.selectedGuild ?? null, opts.cachedUserMap, opts.guildId, undefined, opts.mediaConfig, opts.exportConfig,
       undefined, opts.zipService, false, [], undefined, opts.guildRoles, opts.textOptions, opts.zipOptions, undefined,
     );
@@ -1052,19 +1145,212 @@ async function keepStoppedMessages(opts: {
     return false;
   }
   let oldest = Number.POSITIVE_INFINITY;
-  for (const m of messages) {
+  await forEachMessage(source, (m) => {
     const ts = new Date(m.timestamp || 0).getTime();
     if (ts > 0 && ts < oldest) oldest = ts;
-  }
+  });
   dispatch(addStatusEntry({
     level: 'warning',
     message: t('status.export.stoppedKept', {
       name: label,
-      count: messages.length.toLocaleString(),
+      count: source.count.toLocaleString(),
       oldest: Number.isFinite(oldest) ? new Date(oldest).toLocaleDateString() : 'unknown',
     }),
   }));
   return true;
+}
+
+/* ─────────────────── Units of a bulk export (2.2.5 WP6c) ─────────────────── */
+
+/** One channel, forum post or DM finished rendering in a bulk export; the record's done list grows by it. */
+export const bulkUnitFinished = createAction<{ id: string }>('export/bulkUnitFinished');
+
+/** What an export renders for one unit, with the array shape kept when everything is in memory. */
+interface UnitMaterial {
+  main: MessageSource;
+  /** Main plus threads, for the reaction and media passes. */
+  everything: MessageSource;
+  input: Message[] | ExportSourceSet;
+  threads: Channel[];
+  count: number;
+}
+
+function materialOf(main: MessageSource, inMemory: Message[] | null, threads: ThreadSource[]): UnitMaterial {
+  const threadChannels = threads.map((entry) => entry.thread);
+  const count = main.count + threads.reduce((sum, entry) => sum + entry.source.count, 0);
+  if (inMemory !== null && threads.every((entry) => entry.inMemory !== null)) {
+    const all = [...inMemory, ...threads.flatMap((entry) => entry.inMemory as Message[])];
+    return { main, everything: arraySource(all), input: all, threads: threadChannels, count };
+  }
+  const set: ExportSourceSet = { main, threads: threads.map((entry) => ({ thread: entry.thread, source: entry.source })) };
+  return { main, everything: concatSources([main, ...set.threads.map((entry) => entry.source)]), input: set, threads: threadChannels, count };
+}
+
+/** The threads a finished unit wrote to the workspace, found through its thread starters. */
+async function threadsOnDisk(wid: string, main: MessageSource): Promise<ThreadSource[]> {
+  const starters = await collectMessages(main, isThreadStarter);
+  const out: ThreadSource[] = [];
+  for (const thread of getThreadsFromMessages(starters, [])) {
+    const saved = await getConversation(wid, bulkRunCid(thread.id)).catch(() => null);
+    if (!saved || saved.count === 0) continue;
+    out.push({ thread, source: await storeSourceOf(wid, saved.cid), inMemory: null });
+  }
+  return out;
+}
+
+/**
+ * Opens the conversation a single export reads from the store. A first
+ * page is not written until something happens in the conversation (plan
+ * section 4.2), so the export writes it first from the message cache.
+ * If the store cannot serve the export, the messages are read into memory.
+ */
+async function openExportSource(ref: ExportStoreRef, getState: () => RootState): Promise<{ source: MessageSource; messages: Message[] | null }> {
+  const state = getState();
+  const container = ref.container === 'main' ? state.message : state.message.threadTabs?.[ref.container];
+  const allIds = container?.rows.map((row) => row.id) ?? ref.ids;
+  try {
+    const onDisk = await countRows(ref.wid, ref.cid);
+    if (onDisk < allIds.length) {
+      const objects = await hydrateMessages(ref.container, { wid: ref.wid, cid: ref.cid }, allIds);
+      const seed = ref.container === 'main' ? conversationSeedFromState(state, ref.cid) : threadSeedFromState(state, ref.cid);
+      await writePage(ref.wid, ref.cid, objects, seed ?? undefined);
+    }
+    return { source: await storeSourceOf(ref.wid, ref.cid, new Set(ref.ids)), messages: null };
+  } catch (error) {
+    console.error('[workspace] export reads from memory, the store could not serve it', error);
+    const objects = await hydrateMessages(ref.container, { wid: ref.wid, cid: ref.cid }, ref.ids);
+    return { source: arraySource(objects), messages: objects };
+  }
+}
+
+interface ExportUnitOptions {
+  unit: { id: string; name: string; label: string; kind: ConversationKind; guildId: string | null };
+  folderName: string;
+  format: ExportFormat;
+  messagesPerPage: number;
+  separateThreads: boolean;
+  includeMedia: boolean;
+  mediaConfig?: MediaConfig;
+  exportConfig?: ExportConfig;
+  searchCriteria: SearchCriteria | null | undefined;
+  token: string;
+  getState: () => RootState;
+  dispatch: ExportDispatch;
+  searchDelay: number;
+  delayModifier: number;
+  selectedGuild: any;
+  cachedUserMap: any;
+  guildId: string | null;
+  guildRoles: any[];
+  textOptions: any;
+  zipService: StreamingZipService;
+  shouldContinue: ShouldContinueFn;
+  onProgress: (progress: number | MediaDownloadProgress) => void;
+  /** The open workspace; null keeps the unit in memory. */
+  wid: string | null;
+  /** The unit finished in the run being resumed, so it renders from the workspace with no fetch. */
+  resumeDone: boolean;
+  onStorageFull: () => void;
+}
+
+/**
+ * Walks one unit into its run conversation (or memory) and gathers its
+ * threads. A unit the resumed run already finished is read back from the
+ * workspace instead of fetched; threads and reactions still fetch.
+ */
+async function gatherUnit(o: ExportUnitOptions, onSink: (sink: PageSink) => void): Promise<UnitMaterial> {
+  const { unit, wid, getState, dispatch } = o;
+  const wantThreads = o.separateThreads && o.format !== 'media';
+  if (wid && o.resumeDone) {
+    const saved = await getConversation(wid, bulkRunCid(unit.id)).catch(() => null);
+    if (saved?.complete) {
+      const main = await storeSourceOf(wid, saved.cid);
+      const threads = wantThreads ? await threadsOnDisk(wid, main) : [];
+      dispatch(addStatusEntry({ level: 'info', message: t('status.export.bulkFromWorkspace', { name: unit.name }) }));
+      return materialOf(main, null, threads);
+    }
+  }
+  // A unit the earlier run was in the middle of starts over.
+  if (wid) await deleteConversation(wid, bulkRunCid(unit.id)).catch(() => undefined);
+  const sink = sinkFor(wid, bulkRunCid(unit.id), { kind: unit.kind, guildId: unit.guildId, name: unit.name }, o.onStorageFull);
+  onSink(sink);
+  await fetchAllChannelMessages(
+    unit.id, unit.guildId, o.token, getState, dispatch, o.searchDelay, o.delayModifier, o.searchCriteria,
+    { channelLabel: unit.label }, sink,
+  );
+  let threads: ThreadSource[] = [];
+  if (wantThreads && !checkCancelled(getState)) {
+    const materials = await fetchThreadMessages(
+      sink.source(), unit.guildId, o.token, getState, dispatch, o.searchDelay, o.delayModifier, o.searchCriteria,
+      (thread) => sinkFor(wid, bulkRunCid(thread.id), { kind: 'thread', guildId: unit.guildId, name: thread.name || thread.id }, o.onStorageFull),
+    );
+    threads = materials.map(threadSourceOf);
+  }
+  if (!checkCancelled(getState)) await sink.complete();
+  return materialOf(sink.source(), sink.inMemory(), threads);
+}
+
+type UnitOutcome = 'exported' | 'empty' | 'kept' | 'stopped';
+
+/** Fetches and renders one unit of a bulk export into the shared zip. A Stop keeps what was pulled (#276). */
+async function exportUnit(o: ExportUnitOptions): Promise<UnitOutcome> {
+  const { unit, format, getState, dispatch } = o;
+  let inHand: PageSink | null = null;
+  const keepStopped = async (): Promise<UnitOutcome> => {
+    if (!inHand) return 'stopped';
+    const kept = await keepStoppedMessages({
+      messages: inHand.inMemory() ?? inHand.source(), folderName: o.folderName, label: unit.label, format, messagesPerPage: o.messagesPerPage,
+      selectedGuild: o.selectedGuild, cachedUserMap: o.cachedUserMap, guildId: o.guildId, mediaConfig: o.mediaConfig, exportConfig: o.exportConfig,
+      guildRoles: o.guildRoles, textOptions: o.textOptions, zipService: o.zipService, dispatch,
+    });
+    return kept ? 'kept' : 'stopped';
+  };
+  try {
+    const material = await gatherUnit(o, (sink) => {
+      inHand = sink;
+    });
+    if (checkCancelled(getState)) return keepStopped();
+
+    if (material.main.count === 0) {
+      dispatch(addStatusEntry({
+        level: 'warning',
+        message: o.searchCriteria
+          ? `Bulk export: No messages match the filters in ${unit.name}, skipping`
+          : `Bulk export: No messages in ${unit.name}, skipping`,
+      }));
+      return 'empty';
+    }
+
+    const exportService = getExportService();
+    if (format === 'media') {
+      // Media only never fetches threads, so the main source is everything.
+      await exportService.exportMediaOnly(Array.isArray(material.input) ? material.input : material.main, o.folderName, o.mediaConfig, o.onProgress, o.exportConfig, o.shouldContinue, o.zipService);
+    } else {
+      // Fetch reaction user data for HTML exports only
+      const reactionMap = format === 'html'
+        ? await fetchReactionData(material.everything, o.token, getState, dispatch)
+        : undefined;
+
+      const rowErrors = createRowErrorReporter(dispatch, unit.label);
+      await exportService.exportToZip(
+        material.input, o.folderName, format, o.messagesPerPage, o.includeMedia,
+        o.selectedGuild, o.cachedUserMap, o.guildId, o.onProgress, o.mediaConfig, o.exportConfig, o.shouldContinue, o.zipService,
+        o.separateThreads, material.threads, reactionMap, o.guildRoles, o.textOptions,
+        undefined, // zipOptions — bulk zip is externally owned
+        rowErrors.onRowError,
+      );
+      rowErrors.flush();
+    }
+
+    dispatch(addStatusEntry({
+      level: 'success',
+      message: t('status.export.bulkCompleted', { name: unit.name, count: material.count }),
+    }));
+    return 'exported';
+  } catch (error) {
+    if (error instanceof CancelledError) return keepStopped();
+    throw error;
+  }
 }
 
 interface BulkExportParams {
@@ -1081,6 +1367,8 @@ interface BulkExportParams {
   // every message via the list endpoint (existing behavior). Any filter
   // set → route through Discord's search endpoint for that channel.
   searchCriteria?: SearchCriteria | null;
+  /** 2.2.5 WP6c: the run picks up its record; units that finished render from the workspace. */
+  resume?: boolean;
 }
 
 /**
@@ -1106,6 +1394,13 @@ export const bulkExportChannels = createAsyncThunk<
     const searchDelay = selectSearchDelay(initialState);
     const delayModifier = selectDelayModifier(initialState);
     const cachedUserMap = selectCachedUserMap(initialState);
+
+    // 2.2.5 WP6c: each unit's pages go to a run conversation in the open
+    // workspace, and a resumed run renders the units that finished from there.
+    const wid = selectCurrentWid(initialState);
+    const doneUnits = new Set<string>(wid && params.resume ? (await readBulkRecord(initialState))?.done ?? [] : []);
+    if (wid && !params.resume) await deleteConversationsWithPrefix(wid, BULK_RUN_PREFIX).catch(() => undefined);
+    const onStorageFull = storageFullOnce(dispatch as ExportDispatch);
 
     // Get guild roles for role colors in HTML exports + the selected guild
     // for role-icon downloads (#171). Without selectedGuild,
@@ -1210,104 +1505,32 @@ export const bulkExportChannels = createAsyncThunk<
           message: t('status.export.bulkStartingChannel', { index: i + 1, total: expandedChannels.length, name: channelName }),
         }));
 
-        // #276: whatever was pulled for this channel before Stop gets
-        // written, so a stopped run still downloads a zip with its messages.
-        let fetched: Message[] = [];
-        const keepStopped = async () => {
-          const kept = await keepStoppedMessages({
-            messages: fetched, folderName, label: `#${channelName}`, format, messagesPerPage,
-            selectedGuild, cachedUserMap, guildId: guildId || null, mediaConfig, exportConfig,
-            guildRoles, textOptions: initialState.export.textOptions, zipService, dispatch: dispatch as ExportDispatch,
-          });
-          if (kept) exportedChannels.push({ id: channel.id, name: channelName, filename: `${folderName}/${folderName}-page-1.html` });
+        const onProgress = (progress: number | MediaDownloadProgress) => {
+          if (typeof progress === 'number') return;
+          dispatch(setExportProgress({ ...progress, bulk: bulkContext }));
+          logMediaProgress(progress, dispatch as ExportDispatch, ` in #${channelName}`);
         };
 
         try {
-          // Fetch all messages for this channel
-          const messages = await fetchAllChannelMessages(
-            channel.id,
-            guildId || null,
-            token,
-            getState,
-            dispatch,
-            searchDelay,
-            delayModifier,
-            searchCriteria,
-            { channelLabel: `#${channelName}` },
-          );
-          fetched = messages;
-
-          if (checkCancelled(getState)) {
-            await keepStopped();
-            break;
-          }
-
-          if (messages.length === 0) {
-            dispatch(addStatusEntry({
-              level: 'warning',
-              message: searchCriteria
-                ? `Bulk export: No messages match the filters in ${channelName}, skipping`
-                : `Bulk export: No messages in ${channelName}, skipping`,
-            }));
-            continue;
-          }
-
-          // Export this channel's messages into the shared zip
-          const exportService = getExportService();
-
-          const onProgress = (progress: number | MediaDownloadProgress) => {
-            if (typeof progress === 'number') return;
-            dispatch(setExportProgress({ ...progress, bulk: bulkContext }));
-            logMediaProgress(progress, dispatch as ExportDispatch, ` in #${channelName}`);
-          };
-
-          // Fetch thread reply messages if separateThreads is enabled
-          let allMessages = messages;
-          if (separateThreads && format !== 'media') {
-            const threadMsgs = await fetchThreadMessages(
-              messages, guildId || null, token, getState, dispatch,
-              searchDelay, delayModifier, searchCriteria,
-            );
-            if (threadMsgs.length > 0) allMessages = [...messages, ...threadMsgs];
-          }
-
-          if (format === 'media') {
-            await exportService.exportMediaOnly(messages, folderName, mediaConfig, onProgress, exportConfig, shouldContinue, zipService);
-          } else {
-            const threads = separateThreads ? getThreadsFromMessages(messages, []) : [];
-
-            // Fetch reaction user data for HTML exports only
-            const reactionMap = format === 'html'
-              ? await fetchReactionData(allMessages, token, getState, dispatch as ExportDispatch)
-              : undefined;
-
-            const rowErrors = createRowErrorReporter(dispatch as ExportDispatch, `#${channelName}`);
-            await exportService.exportToZip(
-              allMessages, folderName, format, messagesPerPage, includeMedia,
-              selectedGuild, cachedUserMap, guildId || null, onProgress, mediaConfig, exportConfig, shouldContinue, zipService,
-              separateThreads, threads, reactionMap, guildRoles, initialState.export.textOptions,
-              undefined, // zipOptions — bulk zip is externally owned
-              rowErrors.onRowError,
-            );
-            rowErrors.flush();
-          }
-
-          const sanitized = folderName;
-          exportedChannels.push({
-            id: channel.id,
-            name: channelName,
-            filename: `${sanitized}/${sanitized}-page-1.html`,
+          const outcome = await exportUnit({
+            unit: { id: channel.id, name: channelName, label: `#${channelName}`, kind: 'channel', guildId: guildId || null },
+            folderName, format, messagesPerPage, separateThreads, includeMedia, mediaConfig, exportConfig, searchCriteria,
+            token, getState, dispatch: dispatch as ExportDispatch, searchDelay, delayModifier,
+            selectedGuild, cachedUserMap, guildId: guildId || null, guildRoles, textOptions: initialState.export.textOptions,
+            zipService, shouldContinue, onProgress, wid, resumeDone: doneUnits.has(channel.id), onStorageFull,
           });
-
-          dispatch(addStatusEntry({
-            level: 'success',
-            message: t('status.export.bulkCompleted', { name: channelName, count: allMessages.length }),
-          }));
-        } catch (error) {
-          if (error instanceof CancelledError) {
-            await keepStopped();
-            break;
+          if (outcome === 'empty') continue;
+          if (outcome === 'kept' || outcome === 'exported') {
+            exportedChannels.push({
+              id: channel.id,
+              name: channelName,
+              filename: `${folderName}/${folderName}-page-1.html`,
+            });
           }
+          if (outcome !== 'exported') break;
+          dispatch(bulkUnitFinished({ id: channel.id }));
+        } catch (error) {
+          if (error instanceof CancelledError) break;
           const errorMsg = error instanceof Error ? error.message : t('status.export.unknownError');
           errors.push(`${channelName}: ${errorMsg}`);
           dispatch(addStatusEntry({
@@ -1459,6 +1682,13 @@ export const bulkExportDMs = createAsyncThunk<
     const delayModifier = selectDelayModifier(initialState);
     const cachedUserMap = selectCachedUserMap(initialState);
 
+    // 2.2.5 WP6c: each unit's pages go to a run conversation in the open
+    // workspace, and a resumed run renders the units that finished from there.
+    const wid = selectCurrentWid(initialState);
+    const doneUnits = new Set<string>(wid && params.resume ? (await readBulkRecord(initialState))?.done ?? [] : []);
+    if (wid && !params.resume) await deleteConversationsWithPrefix(wid, BULK_RUN_PREFIX).catch(() => undefined);
+    const onStorageFull = storageFullOnce(dispatch as ExportDispatch);
+
     const zipService = new StreamingZipService('bulk-export', buildZipOptions(getState, dispatch));
     const exportedDMs: { id: string; name: string; filename: string }[] = [];
 
@@ -1494,101 +1724,32 @@ export const bulkExportDMs = createAsyncThunk<
           message: t('status.export.bulkStartingDm', { index: i + 1, total: channels.length, name: dmName }),
         }));
 
-        // #276: whatever was pulled for this DM before Stop gets written.
-        let fetched: Message[] = [];
-        const keepStopped = async () => {
-          const kept = await keepStoppedMessages({
-            messages: fetched, folderName, label: `DM with ${dmName}`, format, messagesPerPage,
-            selectedGuild: null, cachedUserMap, guildId: null, mediaConfig, exportConfig,
-            guildRoles: [], textOptions: initialState.export.textOptions, zipService, dispatch: dispatch as ExportDispatch,
-          });
-          if (kept) exportedDMs.push({ id: dm.id, name: dmName, filename: `${folderName}/${folderName}-page-1.html` });
+        const onProgress = (progress: number | MediaDownloadProgress) => {
+          if (typeof progress === 'number') return;
+          dispatch(setExportProgress({ ...progress, bulk: bulkContext }));
+          logMediaProgress(progress, dispatch as ExportDispatch, ` in DM with ${dmName}`);
         };
 
         try {
-          const messages = await fetchAllChannelMessages(
-            dm.id,
-            null, // DMs have no guild
-            token,
-            getState,
-            dispatch,
-            searchDelay,
-            delayModifier,
-            searchCriteria,
-            { channelLabel: `DM with ${dmName}` },
-          );
-          fetched = messages;
-
-          if (checkCancelled(getState)) {
-            await keepStopped();
-            break;
-          }
-
-          if (messages.length === 0) {
-            dispatch(addStatusEntry({
-              level: 'warning',
-              message: searchCriteria
-                ? `Bulk export: No messages match the filters in ${dmName}, skipping`
-                : `Bulk export: No messages in ${dmName}, skipping`,
-            }));
-            continue;
-          }
-
-          const exportService = getExportService();
-
-          const onProgress = (progress: number | MediaDownloadProgress) => {
-            if (typeof progress === 'number') return;
-            dispatch(setExportProgress({ ...progress, bulk: bulkContext }));
-            logMediaProgress(progress, dispatch as ExportDispatch, ` in DM with ${dmName}`);
-          };
-
-          // Fetch thread reply messages if separateThreads is enabled
-          let allMessages = messages;
-          if (separateThreads && format !== 'media') {
-            const threadMsgs = await fetchThreadMessages(
-              messages, null, token, getState, dispatch,
-              searchDelay, delayModifier, searchCriteria,
-            );
-            if (threadMsgs.length > 0) allMessages = [...messages, ...threadMsgs];
-          }
-
-          if (format === 'media') {
-            await exportService.exportMediaOnly(messages, folderName, mediaConfig, onProgress, exportConfig, shouldContinue, zipService);
-          } else {
-            const threads = separateThreads ? getThreadsFromMessages(messages, []) : [];
-
-            // Fetch reaction user data for HTML exports only
-            const reactionMap = format === 'html'
-              ? await fetchReactionData(allMessages, token, getState, dispatch as ExportDispatch)
-              : undefined;
-
-            const rowErrors = createRowErrorReporter(dispatch as ExportDispatch, dmName);
-            await exportService.exportToZip(
-              allMessages, folderName, format, messagesPerPage, includeMedia,
-              null, cachedUserMap, null, onProgress, mediaConfig, exportConfig, shouldContinue, zipService,
-              separateThreads, threads, reactionMap, [], initialState.export.textOptions,
-              undefined, // zipOptions — bulk zip is externally owned
-              rowErrors.onRowError,
-            );
-            rowErrors.flush();
-          }
-
-          dispatch(addStatusEntry({
-            level: 'success',
-            message: t('status.export.bulkCompleted', { name: dmName, count: allMessages.length }),
-          }));
-
-          const sanitized = folderName;
-          exportedDMs.push({
-            id: dm.id,
-            name: dmName,
-            filename: `${sanitized}/${sanitized}-page-1.html`,
+          const outcome = await exportUnit({
+            unit: { id: dm.id, name: dmName, label: `DM with ${dmName}`, kind: 'dm', guildId: null },
+            folderName, format, messagesPerPage, separateThreads, includeMedia, mediaConfig, exportConfig, searchCriteria,
+            token, getState, dispatch: dispatch as ExportDispatch, searchDelay, delayModifier,
+            selectedGuild: null, cachedUserMap, guildId: null, guildRoles: [], textOptions: initialState.export.textOptions,
+            zipService, shouldContinue, onProgress, wid, resumeDone: doneUnits.has(dm.id), onStorageFull,
           });
-        } catch (error) {
-          if (error instanceof CancelledError) {
-            await keepStopped();
-            break;
+          if (outcome === 'empty') continue;
+          if (outcome === 'kept' || outcome === 'exported') {
+            exportedDMs.push({
+              id: dm.id,
+              name: dmName,
+              filename: `${folderName}/${folderName}-page-1.html`,
+            });
           }
+          if (outcome !== 'exported') break;
+          dispatch(bulkUnitFinished({ id: dm.id }));
+        } catch (error) {
+          if (error instanceof CancelledError) break;
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           errors.push(`${dmName}: ${errorMsg}`);
           dispatch(addStatusEntry({

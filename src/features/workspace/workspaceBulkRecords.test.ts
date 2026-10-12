@@ -16,7 +16,7 @@ import dmReducer from '@features/dm/dmSlice';
 import guildReducer from '@features/guild/guildSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
-import exportReducer, { bulkExportChannels, exportMessages, setExportProgress } from '@features/export/exportSlice';
+import exportReducer, { bulkExportChannels, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
 import purgeReducer, { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
 import type { PurgeConfig } from '@features/purge/purgeTypes';
 import { DEFAULT_WORKSPACE_ID } from './workspaceTypes';
@@ -28,6 +28,7 @@ import {
   getConversation,
   getWorkspace,
   releaseWorkspaceLock,
+  writePage,
 } from '@services/workspaceStore';
 
 vi.mock('@services/discordService', () => ({ getDiscordService: vi.fn() }));
@@ -219,5 +220,56 @@ describe('boot and lookup', () => {
 
   it('resolveQueue keeps run order and skips what is gone', () => {
     expect(resolveQueue(['c3', 'gone', 'c1'], [CHANNELS]).map((c) => c.id)).toEqual(['c3', 'c1']);
+  });
+});
+
+describe('Bulk Export run conversations (2.2.5 WP6c)', () => {
+  const arg = (resume?: boolean) => ({ channels: CHANNELS, token: 't', format: 'json' as const, messagesPerPage: 100, separateThreads: false, includeMedia: false, guildId: '42', resume });
+
+  it('a finished unit joins the done list, a resumed run keeps it and a fresh run drops it', async () => {
+    const store = await openDefault();
+    store.dispatch(bulkExportChannels.pending('e1', arg()));
+    store.dispatch(bulkUnitFinished({ id: 'c1' }));
+    store.dispatch(bulkUnitFinished({ id: 'c1' }));
+    await flush(store);
+    expect((await readBulkRecord(store.getState() as never))?.done).toEqual(['c1']);
+    expect(selectUnfinishedBulk(store.getState() as never)?.remaining).toBe(2);
+
+    store.dispatch(bulkExportChannels.pending('e2', arg(true)));
+    await flush(store);
+    expect((await readBulkRecord(store.getState() as never))?.done).toEqual(['c1']);
+
+    store.dispatch(bulkExportChannels.pending('e3', arg()));
+    await flush(store);
+    expect((await readBulkRecord(store.getState() as never))?.done).toEqual([]);
+  });
+
+  it('the run conversations go when the run ends and on Start over, other conversations stay', async () => {
+    const store = await openDefault();
+    const seed = { kind: 'channel' as const, guildId: '42', name: 'one' };
+    await writePage(DEFAULT_WORKSPACE_ID, 'run:c1', [{ id: '1', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
+    await writePage(DEFAULT_WORKSPACE_ID, 'c1', [{ id: '2', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
+    store.dispatch(bulkExportChannels.pending('e1', arg()));
+    store.dispatch(bulkExportChannels.fulfilled({ success: true }, 'e1', arg()));
+    await flush(store);
+    expect(Object.keys((await getWorkspace(DEFAULT_WORKSPACE_ID))?.conversations ?? {})).toEqual(['c1']);
+
+    await writePage(DEFAULT_WORKSPACE_ID, 'run:c2', [{ id: '3', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
+    store.dispatch(bulkExportChannels.pending('e2', arg()));
+    await flush(store);
+    await (store.dispatch as unknown as AppDispatch)(discardBulkRecord());
+    expect(Object.keys((await getWorkspace(DEFAULT_WORKSPACE_ID))?.conversations ?? {})).toEqual(['c1']);
+  });
+
+  it('a switch keeps the run conversations with the record', async () => {
+    const store = await openDefault();
+    await writePage(DEFAULT_WORKSPACE_ID, 'run:c1', [{ id: '1', timestamp: '2026-01-01T00:00:00.000Z' } as never], { kind: 'channel', guildId: '42', name: 'one' });
+    store.dispatch(bulkExportChannels.pending('e1', arg()));
+    setSuspendingForSwitch(true);
+    store.dispatch(bulkExportChannels.rejected(null, 'e1', arg()));
+    await flush(store);
+    const workspace = await getWorkspace(DEFAULT_WORKSPACE_ID);
+    expect(workspace?.bulk?.kind).toBe('bulkExport');
+    expect(Object.keys(workspace?.conversations ?? {})).toEqual(['run:c1']);
   });
 });

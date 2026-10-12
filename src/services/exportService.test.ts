@@ -56,6 +56,35 @@ describe('exportService', () => {
     vi.clearAllMocks();
   });
 
+  // 2.2.5 WP6c: exportToZip splits threads itself (sourceSetOf), so a thread
+  // is exported when a message starts it and its messages carry its channel id.
+  const withThreads = (threads: Array<{ id: string; name: string }>): { messages: Message[]; threads: any[] } => {
+    const messages: Message[] = [...mockMessages];
+    threads.forEach((thread, index) => {
+      messages.push({
+        ...mockMessages[0],
+        id: `starter-${thread.id}`,
+        timestamp: `2026-02-24T06:00:${String(index).padStart(2, '0')}.000Z`,
+        thread: { id: thread.id, name: thread.name },
+      } as any);
+      messages.push({
+        ...mockMessages[0],
+        id: `reply-${thread.id}`,
+        channel_id: thread.id,
+        timestamp: `2026-02-24T07:00:${String(index).padStart(2, '0')}.000Z`,
+        content: `in ${thread.name}`,
+      } as any);
+    });
+    return { messages, threads };
+  };
+
+  const blobText = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsText(blob);
+  });
+
   describe('singleton pattern', () => {
     it('should return same instance', () => {
       const instance1 = getExportService();
@@ -644,20 +673,8 @@ describe('exportService', () => {
         expect(blob.type).toMatch(/^text\/plain/);
       });
 
-      it('emits .txt thread files when prepareExportData returns thread exports', async () => {
-        const exportDataMod = await import('discrub-core/export-data-service');
-        vi.mocked(exportDataMod.prepareExportData).mockReturnValueOnce({
-          mainPages: [{ messages: [], pageNumber: 1, filePath: '' }],
-          threadExports: [
-            {
-              thread: { id: 't-1', name: 'My Thread' },
-              pages: [{ messages: [], pageNumber: 1, filePath: '' }],
-              threadNumber: 1,
-              totalThreads: 1,
-            },
-          ],
-          totalPages: 1,
-        } as any);
+      it('emits .txt thread files for the threads exported apart', async () => {
+        const fixture = withThreads([{ id: 't-1', name: 'My Thread' }]);
 
         const { StreamingZipService } = await import('./streamingZipService');
         const mockAddFile = vi.fn().mockResolvedValue(undefined);
@@ -668,7 +685,7 @@ describe('exportService', () => {
         }));
 
         await service.exportToZip(
-          mockMessages,
+          fixture.messages,
           'test-channel',
           'text',
           100,
@@ -682,6 +699,7 @@ describe('exportService', () => {
           undefined,
           undefined,
           true,
+          fixture.threads,
         );
 
         const filenames = mockAddFile.mock.calls.map((c: any[]) => c[1] as string);
@@ -695,25 +713,7 @@ describe('exportService', () => {
       // land in the ZIP under distinct paths. Pre-fix this threw JSZip
       // "File already exists" mid-export and aborted the whole channel.
       it('produces distinct ZIP paths when thread names collide on sanitization (#175)', async () => {
-        const exportDataMod = await import('discrub-core/export-data-service');
-        vi.mocked(exportDataMod.prepareExportData).mockReturnValueOnce({
-          mainPages: [{ messages: [], pageNumber: 1, filePath: '' }],
-          threadExports: [
-            {
-              thread: { id: 'thread-1', name: 'GT3 RS' },
-              pages: [{ messages: [], pageNumber: 1, filePath: '' }],
-              threadNumber: 1,
-              totalThreads: 2,
-            },
-            {
-              thread: { id: 'thread-2', name: 'GT3 RS!' },
-              pages: [{ messages: [], pageNumber: 1, filePath: '' }],
-              threadNumber: 2,
-              totalThreads: 2,
-            },
-          ],
-          totalPages: 1,
-        } as any);
+        const fixture = withThreads([{ id: 'thread-1', name: 'GT3 RS' }, { id: 'thread-2', name: 'GT3 RS!' }]);
 
         const { StreamingZipService } = await import('./streamingZipService');
         const mockAddFile = vi.fn().mockResolvedValue(undefined);
@@ -724,7 +724,7 @@ describe('exportService', () => {
         }));
 
         await service.exportToZip(
-          mockMessages,
+          fixture.messages,
           'rate-my-ride-gta',
           'json',
           100,
@@ -738,6 +738,7 @@ describe('exportService', () => {
           undefined,
           undefined,
           true,
+          fixture.threads,
         );
 
         const filenames = mockAddFile.mock.calls.map((c: any[]) => c[1] as string);
@@ -755,18 +756,8 @@ describe('exportService', () => {
         // Simulate the user's scenario: Needle promotes every message
         // into its own thread, and many users post variations of the
         // same name ("GT3 RS", "gt3 rs", "GT3 RS!", "GT3 RS?", "GT3 RS!!").
-        const exportDataMod = await import('discrub-core/export-data-service');
         const collidingNames = ['GT3 RS', 'gt3 rs', 'GT3 RS!', 'GT3 RS?', 'GT3 RS!!'];
-        vi.mocked(exportDataMod.prepareExportData).mockReturnValueOnce({
-          mainPages: [{ messages: [], pageNumber: 1, filePath: '' }],
-          threadExports: collidingNames.map((name, i) => ({
-            thread: { id: `t-${i + 1}`, name },
-            pages: [{ messages: [], pageNumber: 1, filePath: '' }],
-            threadNumber: i + 1,
-            totalThreads: collidingNames.length,
-          })),
-          totalPages: 1,
-        } as any);
+        const fixture = withThreads(collidingNames.map((name, i) => ({ id: `t-${i + 1}`, name })));
 
         const { StreamingZipService } = await import('./streamingZipService');
         const mockAddFile = vi.fn().mockResolvedValue(undefined);
@@ -777,7 +768,7 @@ describe('exportService', () => {
         }));
 
         await service.exportToZip(
-          mockMessages,
+          fixture.messages,
           'rate-my-ride-gta',
           'json',
           100,
@@ -791,6 +782,7 @@ describe('exportService', () => {
           undefined,
           undefined,
           true,
+          fixture.threads,
         );
 
         const filenames = mockAddFile.mock.calls.map((c: any[]) => c[1] as string);
@@ -832,19 +824,7 @@ describe('exportService', () => {
       // pointer-events:none). Pre-fix the caller passed exportedChannelIds with
       // only the main channel, disabling every thread link.
       it('marks exported threads as clickable (not disabled) in the Discord shell (#222)', async () => {
-        const exportDataMod = await import('discrub-core/export-data-service');
-        vi.mocked(exportDataMod.prepareExportData).mockReturnValueOnce({
-          mainPages: [{ messages: mockMessages, pageNumber: 1, filePath: '' }],
-          threadExports: [
-            {
-              thread: { id: 't-1', name: 'My Thread' },
-              pages: [{ messages: [], pageNumber: 1, filePath: '' }],
-              threadNumber: 1,
-              totalThreads: 1,
-            },
-          ],
-          totalPages: 1,
-        } as any);
+        const fixture = withThreads([{ id: 't-1', name: 'My Thread' }]);
 
         const { StreamingZipService } = await import('./streamingZipService');
         const mockAddFile = vi.fn().mockResolvedValue(undefined);
@@ -855,7 +835,7 @@ describe('exportService', () => {
         }));
 
         await service.exportToZip(
-          mockMessages,
+          fixture.messages,
           'test-channel',
           'html',
           100,
@@ -866,6 +846,10 @@ describe('exportService', () => {
           undefined,
           undefined,
           { artistMode: false, sortOrder: 'descending', previewMedia: false, dateFormat: 'yyyy-MM-dd', timeFormat: 'HH:mm:ss', exportTemplate: 'discord' },
+          undefined,
+          undefined,
+          true,
+          fixture.threads,
         );
 
         const shellCall = mockAddFile.mock.calls.find((c: any[]) => String(c[1]).endsWith('shell.html'));
@@ -1438,12 +1422,13 @@ describe('exportService', () => {
         cancel: vi.fn().mockResolvedValue(undefined),
       }));
 
-      const { prepareExportData } = await import('discrub-core/export-data-service');
-      vi.mocked(prepareExportData).mockReturnValue({
-        mainPages: [{ messages: [], pageNumber: 1, filePath: '' }],
-        threadExports: [],
-        totalPages: 1,
-      } as any);
+      const { StreamingZipService: ZipCtor } = await import('./streamingZipService');
+      const mockAddFile = vi.fn().mockResolvedValue(undefined);
+      (ZipCtor as any).mockImplementation(() => ({
+        addFile: mockAddFile,
+        finalize: vi.fn().mockResolvedValue(undefined),
+        cancel: vi.fn().mockResolvedValue(undefined),
+      }));
 
       const messages: Message[] = [
         { id: '1', timestamp: '2026-06-15T14:00:00.000Z', content: 'First' } as any,
@@ -1457,15 +1442,11 @@ describe('exportService', () => {
         { artistMode: false, sortOrder: 'ascending', previewMedia: true, dateFormat: 'MM/dd/yyyy', timeFormat: 'h:mm aa' }
       );
 
-      // Verify prepareExportData received sorted messages
-      const callArgs = vi.mocked(prepareExportData).mock.calls[0][0];
-      const sortedMessages = callArgs.messages;
-      expect(new Date(sortedMessages[0].timestamp!).getTime()).toBeLessThan(
-        new Date(sortedMessages[1].timestamp!).getTime()
-      );
-      expect(new Date(sortedMessages[1].timestamp!).getTime()).toBeLessThan(
-        new Date(sortedMessages[2].timestamp!).getTime()
-      );
+      // The page holds the messages oldest first.
+      const pageCall = mockAddFile.mock.calls.find((c: any[]) => /-page-1\.json$/.test(String(c[1])));
+      expect(pageCall).toBeDefined();
+      const page = JSON.parse(await blobText(pageCall![0] as Blob)) as Array<{ id: string }>;
+      expect(page.map((m) => m.id)).toEqual(['2', '1', '3']);
     });
   });
 

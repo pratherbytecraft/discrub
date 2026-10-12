@@ -23,7 +23,7 @@ import type { WorkspaceAuthor, WorkspaceRecord } from '@features/workspace/works
 import { WORKSPACE_SCHEMA_VERSION } from '@features/workspace/workspaceTypes';
 import { StreamingZipService } from './streamingZipService';
 import { readPackageEntries, type PackageZipSource } from './packageZipReader';
-import { getWorkspace, readWindow, writePage } from './workspaceStore';
+import { getWorkspace, isRunCid, readWindow, writePage } from './workspaceStore';
 
 export const WORKSPACE_FILE_EXTENSION = 'discrub-workspace';
 export const WORKSPACE_FILE_FORMAT = 'discrub-workspace';
@@ -107,7 +107,7 @@ export async function exportWorkspaceFile(
     await zip.addFile(json(withoutAuthors), RECORD);
     await zip.addFile(json(authors), AUTHORS);
     for (const conversation of Object.values(record.conversations)) {
-      if (conversation.count === 0) continue;
+      if (conversation.count === 0 || isRunCid(conversation.cid)) continue;
       let afterId: string | undefined;
       for (let part = 1; ; part++) {
         if (options.shouldStop?.()) {

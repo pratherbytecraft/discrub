@@ -111,8 +111,8 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
   }, [open, dispatch]);
 
   // 2.2.5 WP4b: a bulk export that was running when Discrub closed comes
-  // back with its channels and settings. It runs the whole queue again into
-  // a new zip; skipping the finished channels needs export from the store (WP6).
+  // back with its channels and settings. The channels that finished render
+  // from the workspace, the rest fetch again, into a new zip (WP6c).
   const store = useAppStore();
   const bulkResume = useBulkResume('bulkExport', mode, guildId);
   const resumable = bulkResume !== null;
@@ -176,6 +176,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
       mediaConfig: (isMediaOnly || exportState.includeMedia) ? exportState.mediaConfig : undefined,
       exportConfig,
       searchCriteria: filterCriteria,
+      resume: resuming,
     };
 
     if (mode === 'channels') {

@@ -67,7 +67,7 @@ const MediaBreakdownBar = ({ summaries }: MediaBreakdownBarProps) => {
               }}
             />
             <Typography variant="caption" color="text.secondary">
-              {CATEGORY_LABELS[s.category] || s.category} ({formatBytes(s.totalBytes)})
+              {CATEGORY_LABELS[s.category] ? t(CATEGORY_LABELS[s.category]) : s.category} ({formatBytes(s.totalBytes)})
             </Typography>
           </Box>
         ))}

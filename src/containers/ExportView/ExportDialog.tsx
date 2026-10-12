@@ -24,7 +24,8 @@ import {
 } from '@features/export/exportSlice';
 import type { ExportConfig, ExportSettingsSnapshot } from '@features/export/exportTypes';
 import { selectActiveContainerKey, selectActiveFilteredRows, selectActiveHydrationSource, selectActiveTab, selectThreadTabs } from '@features/message/messageSlice';
-import { useHydratedAll } from '@features/message/messageCache';
+import { hydrateMessages, useHydratedAll } from '@features/message/messageCache';
+import { forEachMessage, storeSourceOf } from '@services/messageSource';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
@@ -36,7 +37,7 @@ import {
   selectPackageChannelMessages,
   selectParsedPackage,
 } from '@features/package/packageSlice';
-import { categorizeMessageAttachments } from '@/utils/mediaUtils';
+import { categorizeMessageAttachments, createMediaSummary, type MediaCategorySummary } from '@/utils/mediaUtils';
 import { toDiscordMessage } from '@features/package/packageMessageAdapter';
 import type { Message } from 'discrub-core/types/discord-types';
 import ExportSettingsAccordion from './ExportSettingsAccordion';
@@ -97,13 +98,20 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
   };
   const packageChannelId = isPackageContext ? exportContext.channelId : null;
 
-  // 2.2.5 WP2b: the store holds rows; the objects are read from the message
-  // cache and the workspace store while the dialog is open.
+  // 2.2.5 WP2b: the store holds rows. WP6c: with a workspace open the export
+  // reads the conversation from the store a window at a time, so the dialog
+  // hydrates the objects only when there is no workspace to read from.
   const liveRows = useAppSelector(selectActiveFilteredRows);
   const containerKey = useAppSelector(selectActiveContainerKey);
   const hydrationSource = useAppSelector(selectActiveHydrationSource);
   const liveIds = useMemo(() => liveRows.map((r) => r.id), [liveRows]);
-  const { messages: liveMessages, loading: liveLoading } = useHydratedAll(containerKey, hydrationSource, liveIds, open && !isPackageContext);
+  const storeRef = useMemo(
+    () => (!isPackageContext && hydrationSource.wid && hydrationSource.cid
+      ? { wid: hydrationSource.wid, cid: hydrationSource.cid, container: containerKey, ids: liveIds }
+      : null),
+    [isPackageContext, hydrationSource, containerKey, liveIds],
+  );
+  const { messages: liveMessages, loading: liveLoading } = useHydratedAll(containerKey, hydrationSource, liveIds, open && !isPackageContext && !storeRef);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
   const selectedGuild = useAppSelector(selectSelectedGuild);
@@ -125,7 +133,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
 
   // Unify the two data sources behind a common shape so the rest of
   // the dialog doesn't need to branch per-context.
-  const { messages, channelName, guildId } = useMemo(() => {
+  const { messages, count, channelName, guildId } = useMemo(() => {
     if (isPackageContext && parsedPackage && packageChannelId) {
       const channel = parsedPackage.channels.find((c) => c.id === packageChannelId);
       const name =
@@ -138,7 +146,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
         const live = packageEnrichedMap?.[pm.id];
         return live ?? (toDiscordMessage(pm, packageChannelId, parsedPackage.user) as Message);
       });
-      return { messages: msgs, channelName: name, guildId: channel?.guildId ?? null };
+      return { messages: msgs, count: msgs.length, channelName: name, guildId: channel?.guildId ?? null };
     }
     const currentContext = selectedChannel || selectedDm;
     const dmName = selectedDm?.recipients?.map((r) => r.username).join(', ') || t('common.directMessage');
@@ -147,10 +155,13 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
       : (currentContext?.name || dmName);
     return {
       messages: liveMessages,
+      count: storeRef ? liveIds.length : liveMessages.length,
       channelName: liveChannelName,
       guildId: selectedGuild?.id ?? null,
     };
   }, [
+    storeRef,
+    liveIds,
     isPackageContext,
     parsedPackage,
     packageChannelId,
@@ -166,7 +177,40 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
   ]);
 
   // Only while the dialog is open (2.2.2): it stays mounted, and walking every loaded message on each delete flush cost a closed dialog real time.
-  const mediaSummary = useMemo(() => (open ? categorizeMessageAttachments(messages) : []), [open, messages]);
+  // With a workspace the summary comes from a walk over the store (WP6c), so nothing is hydrated for it.
+  const inHandSummary = useMemo(() => (open && !storeRef ? categorizeMessageAttachments(messages) : []), [open, storeRef, messages]);
+  const [storeSummary, setStoreSummary] = useState<MediaCategorySummary[]>([]);
+  useEffect(() => {
+    if (!open || !storeRef) {
+      setStoreSummary([]);
+      return;
+    }
+    let live = true;
+    const ref = storeRef;
+    void (async () => {
+      const summary = createMediaSummary();
+      const seen = new Set<string>();
+      try {
+        const source = await storeSourceOf(ref.wid, ref.cid, new Set(ref.ids));
+        await forEachMessage(source, (msg) => {
+          seen.add(msg.id);
+          summary.add(msg);
+        });
+      } catch {
+        /* the cache below still covers what is on screen */
+      }
+      // A first page is not on disk until something happens in the conversation (plan section 4.2); it is in the cache.
+      const missing = ref.ids.filter((id) => !seen.has(id));
+      if (missing.length > 0) {
+        for (const msg of await hydrateMessages(ref.container, { wid: ref.wid, cid: ref.cid }, missing)) summary.add(msg);
+      }
+      if (live) setStoreSummary(summary.finish());
+    })();
+    return () => {
+      live = false;
+    };
+  }, [open, storeRef]);
+  const mediaSummary = storeRef ? storeSummary : inHandSummary;
 
   // "Rehydrate before export" toggle — package-only; only useful when
   // the channel hasn't already been rehydrated.
@@ -201,7 +245,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
   const isMediaOnly = exportState.exportFormat === 'media';
 
   const handleExport = () => {
-    if (messages.length === 0 || isOperationRunning || liveLoading) return;
+    if (count === 0 || isOperationRunning || liveLoading) return;
 
     // Build ExportConfig — dateFormat/timeFormat from settings, rest from exportState
     const exportConfig: ExportConfig = {
@@ -228,7 +272,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
     } else {
       dispatch(
         exportMessages({
-          messages,
+          ...(storeRef ? { store: storeRef } : { messages }),
           channelName,
           format: exportState.exportFormat,
           messagesPerPage: exportState.messagesPerPage,
@@ -266,7 +310,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
           )}
           <Box>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              <Trans i18nKey="export.exportingFrom" values={{ count: messages.length, name: channelName }} components={{ strong: <strong /> }} />
+              <Trans i18nKey="export.exportingFrom" values={{ count, name: channelName }} components={{ strong: <strong /> }} />
             </Typography>
           </Box>
 
@@ -337,7 +381,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
             onClick={handleExport}
             variant="contained"
             startIcon={<DownloadIcon />}
-            disabled={messages.length === 0 || isOperationRunning || liveLoading}
+            disabled={count === 0 || isOperationRunning || liveLoading}
             data-testid="export-confirm"
           >
             {resuming ? t('workspace.resume') : t('export.export')}

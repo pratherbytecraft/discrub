@@ -286,4 +286,92 @@ describe('Workspace persistence (2.2.5)', () => {
       expect(record?.bulk ?? null).to.eq(null);
     });
   });
+
+  // 2.2.5 WP6c: a Bulk Export walks each channel into the workspace and a
+  // resumed run renders the channels that finished from there.
+  it('a Bulk Export cut short by a reload skips the channel that finished and fetches the rest', () => {
+    const GENERAL = '801000000000000001';
+    const DEV_CHAT = '801000000000000002';
+    // Ids built as strings: number arithmetic past the safe integer range collapses them into one.
+    const page = (channelId: string) =>
+      Array.from({ length: 50 }, (_, i) => ({
+        id: `${channelId === GENERAL ? '715' : '716'}00000000000${String(9000 - i).padStart(4, '0')}`,
+        channel_id: channelId,
+        author: { id: '222333444555666777', username: 'alice_dev', discriminator: '0', avatar: null, global_name: 'Alice' },
+        content: `Bulk message ${i + 1}`,
+        timestamp: `2026-02-${String(1 + (i % 27)).padStart(2, '0')}T12:00:00.000Z`,
+        edited_timestamp: null, tts: false, mention_everyone: false, mentions: [], attachments: [], embeds: [], reactions: [], pinned: false, type: 0,
+      }));
+    cy.task('downloads:clean');
+    cy.window().then((win) => {
+      const store = (win as any).__store__;
+      store.dispatch({
+        type: 'app/updateAllSettings/fulfilled',
+        payload: { ...store.getState().app.settings, searchDelay2: '0', deleteDelay2: '0', delayModifier2: '0', reactionsEnabled: 'false' },
+      });
+    });
+    let generalCalls = 0;
+    let devChatCalls = 0;
+    cy.intercept('GET', '**/api/v10/channels/*/messages?*', (req) => {
+      if (req.url.includes(GENERAL)) {
+        generalCalls += 1;
+        req.reply({ statusCode: 200, body: page(GENERAL) });
+      } else {
+        devChatCalls += 1;
+        // The first dev-chat page never answers before the reload.
+        req.reply({ statusCode: 200, body: page(DEV_CHAT), delay: devChatCalls === 1 ? 30000 : 0 });
+      }
+    }).as('walk');
+
+    cy.get('[aria-label="Toggle multi-select"]').first().click();
+    cy.contains('general').click();
+    cy.contains('dev-chat').click();
+    cy.get('[data-testid="multi-select-export"]').click();
+    cy.get('[role="dialog"]').should('be.visible');
+    cy.get('[role="dialog"]').find('.MuiAccordionSummary-content').contains('Files & Media').scrollIntoView().click();
+    cy.get('[role="dialog"]').contains('label', 'Download files for offline viewing').find('input[type="checkbox"]').then(($input) => {
+      if ($input.prop('checked')) cy.wrap($input).click({ force: true });
+    });
+    cy.get('[data-testid="bulk-export-confirm"]').click();
+
+    // #general finished and its rows wait in the workspace; #dev-chat is in hand.
+    // The pill's count moves once the record on disk has #general done.
+    cy.window({ timeout: 20000 }).should((win) => {
+      expect((win as any).__store__.getState().workspace.bulk?.remaining, 'one channel left').to.eq(1);
+    });
+    hooks().then((h) => h.get('default')).should((record) => {
+      expect(record?.bulk?.kind).to.eq('bulkExport');
+      expect(record?.bulk?.done).to.deep.eq([GENERAL]);
+    });
+    countWorkspaceRows().should('eq', 50);
+
+    cy.reload();
+    cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
+    cy.selectServer('Cypress Test Server');
+    cy.get('[aria-label="Toggle multi-select"]').first().click();
+    cy.get('[data-testid="multi-select-export"]').should('have.text', 'Resume').click();
+    cy.get('[data-testid="bulk-export-resume-note"]').should('contain', '1 of 2 channels finished before Discrub closed. Resume skips them and writes a new zip.');
+    cy.get('[data-testid="bulk-export-confirm"]').should('have.text', 'Resume').click();
+
+    cy.waitForDownload(/^bulk-export\.zip$/i, 60000).then((fileName) => {
+      cy.task<{ name: string }[]>('zip:list', fileName).then((entries) => {
+        const names = entries.map((e) => e.name);
+        expect(names).to.include('general/general-page-1.html');
+        expect(names).to.include('dev_chat/dev_chat-page-1.html');
+      });
+      cy.task<string>('zip:read', { fileName, entry: 'general/general-page-1.html' }).then((html) => {
+        expect(html).to.include('Bulk message 1');
+        expect(html).to.include('Bulk message 50');
+      });
+    });
+    // #general was never asked for again; the run is over and its rows are gone.
+    cy.window().should(() => {
+      expect(generalCalls, 'general fetched once in all').to.eq(1);
+      expect(devChatCalls, 'dev-chat fetched again after the reload').to.eq(2);
+    });
+    hooks().then((h) => h.get('default')).should((record) => {
+      expect(record?.bulk ?? null).to.eq(null);
+    });
+    countWorkspaceRows().should('eq', 0);
+  });
 });

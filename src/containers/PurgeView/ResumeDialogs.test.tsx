@@ -153,16 +153,18 @@ describe('Bulk Edit resume', () => {
 });
 
 describe('Bulk Export resume', () => {
-  it('says how many finished and runs the whole queue again into a new zip', async () => {
+  it('says how many finished, skips them and runs the rest into a new zip', async () => {
     await saveBulk({ kind: 'bulkExport', done: [], inHand: null, total: 5, doneCount: 2, settings: { snapshot: null, searchCriteria: null } });
     renderWithProviders(<BulkExportDialog open onClose={vi.fn()} channels={[]} mode="channels" guildId={GUILD_ID} />, {
       preloadedState: stateWith({ kind: 'bulkExport', mode: 'channels', guildId: GUILD_ID, total: 5, doneCount: 2, remaining: 3 }),
     });
-    expect(await screen.findByTestId('bulk-export-resume-note')).toHaveTextContent('2 of 5 channels finished before Discrub closed. Resume writes a new zip.');
+    expect(await screen.findByTestId('bulk-export-resume-note')).toHaveTextContent('2 of 5 channels finished before Discrub closed. Resume skips them and writes a new zip.');
     await waitFor(() => expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Resume'));
     fireEvent.click(screen.getByTestId('bulk-export-confirm'));
     const arg = vi.mocked(bulkExportChannels).mock.calls[0][0];
     expect(arg.channels.map((c) => c.id)).toEqual(['c1', 'c2', 'c3']);
+    // The run picks up its record, so the units that finished render from the workspace (WP6c).
+    expect(arg.resume).toBe(true);
   });
 });
 
