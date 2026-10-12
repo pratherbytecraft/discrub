@@ -12,6 +12,11 @@ vi.mock('@features/status/statusSlice', () => ({
   addStatusEntry: vi.fn((payload) => ({ type: 'status/addStatusEntry', payload })),
 }));
 
+// Row 124: the error page's way out of a crash that comes back on every boot.
+const markSkipScopeRestore = vi.fn(async () => undefined);
+vi.mock('@features/workspace/scopeRestoreFlag', () => ({ markSkipScopeRestore: () => markSkipScopeRestore() }));
+vi.mock('@components/settings/ResetDiscrubButton', () => ({ default: () => <button type="button">Reset data</button> }));
+
 // Test component that throws on command
 const ThrowingComponent = ({ shouldThrow }: { shouldThrow: boolean }) => {
   if (shouldThrow) {
@@ -92,6 +97,26 @@ describe('ErrorBoundary', () => {
 
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
     expect(screen.getByText('Content renders fine')).toBeInTheDocument();
+  });
+
+  // Row 124: a crash that comes back on every reload needs a way out on the page itself.
+  it('offers Open without restoring and Reset data', async () => {
+    const reload = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, 'location', { value: { ...original, reload }, writable: true, configurable: true });
+    try {
+      render(
+        <ErrorBoundary>
+          <ThrowingComponent shouldThrow />
+        </ErrorBoundary>,
+      );
+      expect(screen.getByText('Reset data')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('error-open-without-restoring'));
+      await vi.waitFor(() => expect(reload).toHaveBeenCalled());
+      expect(markSkipScopeRestore).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'location', { value: original, writable: true, configurable: true });
+    }
   });
 
   // 2.2.1: the Ghost keeps the fallback page company, drawn without the store.

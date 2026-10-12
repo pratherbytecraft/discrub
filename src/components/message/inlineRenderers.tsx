@@ -67,7 +67,8 @@ export const InlineAttachments = memo(function InlineAttachments({
   attachments,
   onOpenGallery,
 }: InlineAttachmentsProps) {
-  if (!attachments?.length) return null;
+  // Row 124: a stored row can hold something other than a list here.
+  if (!Array.isArray(attachments) || attachments.length === 0) return null;
 
   return (
     <Stack spacing={0.75} sx={{ mt: 0.75 }}>

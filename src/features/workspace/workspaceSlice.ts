@@ -145,6 +145,8 @@ export interface BootResult {
   defaultWid: string;
   /** Set when the last workspace is open in another window. */
   heldElsewhere: string | null;
+  /** Row 124: the error page asked for this boot to skip the saved scope. */
+  skipScope?: boolean;
 }
 
 /**
@@ -182,7 +184,7 @@ export const initializeWorkspaces = createAsyncThunk<BootResult, void, { rejectV
       if (wid !== defaultWid) {
         dispatch(showToast({ level: 'info', message: t('workspace.openedToast', { name }) }));
       }
-      return { opened: { wid, name, actions: actionsOf(record), bulk: bulkOf(record) }, defaultWid, heldElsewhere: null };
+      return { opened: { wid, name, actions: actionsOf(record), bulk: bulkOf(record) }, defaultWid, heldElsewhere: null, skipScope };
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Could not open workspaces');
     }
@@ -270,6 +272,7 @@ const workspaceSlice = createSlice({
         state.ready = opened !== null;
         state.actions = opened?.actions ?? {};
         state.bulk = opened?.bulk ?? null;
+        if (action.payload.skipScope) state.scopeInterrupted = true;
       })
       .addCase(initializeWorkspaces.rejected, (state, action) => {
         state.currentWid = null;

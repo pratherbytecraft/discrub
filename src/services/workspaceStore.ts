@@ -30,6 +30,7 @@
 
 import type { Message, User } from 'discrub-core/types/discord-types';
 import { snowflakeTime, toMessageRow, type MessageRow } from '@features/message/messageRows';
+import { repairMessage } from '@features/message/messageRepair';
 import { SortDirection } from 'discrub-core/common-enum';
 import {
   DEFAULT_WORKSPACE_COLOR,
@@ -169,7 +170,9 @@ interface StoredAuthor {
  * its author. Every write of a message goes through here, so the stores
  * cannot drift.
  */
-function putMessage(tx: IDBTransaction, wid: string, cid: string, message: Message): void {
+function putMessage(tx: IDBTransaction, wid: string, cid: string, rawMessage: Message): void {
+  // Row 124: a message that cannot be shown is not written as it came in.
+  const message = repairMessage(rawMessage);
   const row = toRow(wid, cid, message);
   tx.objectStore(STORE_ROWS).put(row);
   tx.objectStore(STORE_SLIM).put({ wid, cid, id: row.id, row: toMessageRow(message) } satisfies StoredSlimRow);
@@ -1353,7 +1356,7 @@ export function readWindow(wid: string, cid: string, options: ReadWindowOptions 
   const { limit = 500, direction = 'asc' } = options;
   return withTx('readonly', [STORE_ROWS], { wid, cid }, async (tx) => {
     const found = await readValues<StoredRow>(tx.objectStore(STORE_ROWS), windowRange(wid, cid, options), limit, direction);
-    return found.map((row) => row.message);
+    return found.map((row) => repairMessage(row.message));
   });
 }
 
@@ -1470,7 +1473,7 @@ export function getMessages(wid: string, cid: string, ids: string[]): Promise<Ar
   return withTx('readonly', [STORE_ROWS], { wid, cid }, async (tx) => {
     const rows = tx.objectStore(STORE_ROWS);
     const found = await Promise.all(ids.map((id) => req<StoredRow | undefined>(rows.get([wid, cid, padSnowflake(id)]))));
-    return found.map((row) => row?.message);
+    return found.map((row) => (row ? repairMessage(row.message) : undefined));
   });
 }
 

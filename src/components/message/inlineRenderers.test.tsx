@@ -256,3 +256,11 @@ describe('InlinePoll (#213)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+// Row 124: a stored row can hold something other than a list of attachments.
+describe('InlineAttachments with a damaged row', () => {
+  it('renders nothing when attachments is not a list', () => {
+    const { container } = render(<InlineAttachments attachments={'x' as never} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});

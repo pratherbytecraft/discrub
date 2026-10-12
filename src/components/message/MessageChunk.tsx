@@ -9,6 +9,7 @@ import { isSystemMessageType } from 'discrub-core/system-messages';
 import { getDisplayName } from '@/utils/userDisplayUtils';
 import { getUserRoleColor, getUserRoleIcon } from '@/utils/roleColorUtils';
 import MessageFeedRow from './MessageFeedRow';
+import MessageRowBoundary from './MessageRowBoundary';
 import SystemMessageRow from './SystemMessageRow';
 import type { MessageChunk as MessageChunkType } from '@/utils/messageChunking';
 import { getDateLocale } from '@/i18n/dateLocale';
@@ -229,25 +230,26 @@ const MessageChunk = function MessageChunk({
         </Box>
 
         {chunk.messages.map((message, idx) => (
-          <MessageFeedRow
-            key={message.id}
-            message={message}
-            isFirstInChunk={idx === 0}
-            selected={selectedIds.has(message.id)}
-            highlighted={highlightedMessageId === message.id}
-            formattingContext={formattingContext}
-            fullUserMap={fullUserMap}
-            cachedUserMap={cachedUserMap}
-            guildId={guildId}
-            guildRoles={guildRoles}
-            settings={settings}
-            onToggleSelect={onToggleSelect}
-            onSelectDragStart={onSelectDragStart}
-            onSelectDragEnter={onSelectDragEnter}
-            onMentionClick={onMentionClick}
-            onOpenAttachments={onOpenAttachments}
-            onOpenReactions={onOpenReactions}
-          />
+          <MessageRowBoundary key={message.id} messageId={message.id}>
+            <MessageFeedRow
+              message={message}
+              isFirstInChunk={idx === 0}
+              selected={selectedIds.has(message.id)}
+              highlighted={highlightedMessageId === message.id}
+              formattingContext={formattingContext}
+              fullUserMap={fullUserMap}
+              cachedUserMap={cachedUserMap}
+              guildId={guildId}
+              guildRoles={guildRoles}
+              settings={settings}
+              onToggleSelect={onToggleSelect}
+              onSelectDragStart={onSelectDragStart}
+              onSelectDragEnter={onSelectDragEnter}
+              onMentionClick={onMentionClick}
+              onOpenAttachments={onOpenAttachments}
+              onOpenReactions={onOpenReactions}
+            />
+          </MessageRowBoundary>
         ))}
       </Box>
     </Box>

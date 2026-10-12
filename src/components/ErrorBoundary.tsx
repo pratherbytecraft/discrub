@@ -12,6 +12,9 @@ const ghostIdle = keyframes`
 `;
 import { store } from '@/app/store';
 import { addStatusEntry } from '@features/status/statusSlice';
+import { t } from '@/i18n';
+import { markSkipScopeRestore } from '@features/workspace/scopeRestoreFlag';
+import ResetDiscrubButton from '@components/settings/ResetDiscrubButton';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -50,6 +53,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     this.setState({ hasError: false, error: null });
   };
 
+  /** Row 124: reload with the saved scope skipped once, so a conversation that crashes the feed does not come straight back. */
+  handleOpenWithoutRestoring = async () => {
+    await markSkipScopeRestore().catch(() => undefined);
+    window.location.reload();
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -79,15 +88,24 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               </Box>
             </Box>
             <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              Something went wrong
+              {t('errorPage.title')}
             </Typography>
           </Box>
           <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 400 }}>
-            {this.state.error?.message || 'An unexpected error occurred.'}
+            {this.state.error?.message || t('errorPage.fallback')}
           </Typography>
-          <Button variant="contained" onClick={this.handleRecover}>
-            Try Again
-          </Button>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1.5 }}>
+            <Button variant="contained" onClick={this.handleRecover}>
+              {t('errorPage.tryAgain')}
+            </Button>
+            <Button variant="outlined" onClick={() => void this.handleOpenWithoutRestoring()} data-testid="error-open-without-restoring">
+              {t('errorPage.openWithoutRestoring')}
+            </Button>
+            <ResetDiscrubButton />
+          </Box>
+          <Typography variant="caption" sx={{ color: 'text.secondary', maxWidth: 440 }}>
+            {t('errorPage.openWithoutRestoringHint')}
+          </Typography>
         </Box>
       );
     }

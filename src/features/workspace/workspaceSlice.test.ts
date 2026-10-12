@@ -13,6 +13,7 @@ import {
   updateWorkspace,
   listWorkspaces,
 } from '@services/workspaceStore';
+import { markSkipScopeRestore } from './scopeRestoreFlag';
 
 const makeStore = () => createTestStore({ workspace: workspaceReducer });
 
@@ -44,6 +45,20 @@ describe('workspaceSlice', () => {
     expect(record?.name).toBe('Default');
     expect(await getMeta()).toMatchObject({ lastWid: wid, defaultWid: wid });
     releaseWorkspaceLock(wid!);
+  });
+
+  // Row 124: "Open without restoring" on the error page skips the saved scope on the next boot only.
+  it('boot skips the saved scope once after the error page asked for it', async () => {
+    await markSkipScopeRestore();
+    const store = makeStore();
+    await store.dispatch(initializeWorkspaces());
+    expect(store.getState().workspace.scopeInterrupted).toBe(true);
+    releaseWorkspaceLock(selectDefaultWid(store.getState())!);
+
+    const again = makeStore();
+    await again.dispatch(initializeWorkspaces());
+    expect(again.getState().workspace.scopeInterrupted).toBe(false);
+    releaseWorkspaceLock(selectDefaultWid(again.getState())!);
   });
 
   it('boot adopts a Default written under the fixed id of older builds (ws-default-id)', async () => {

@@ -530,7 +530,15 @@
       }
     }
   },
+  "errorPage": {
+    "title": "Something went wrong",
+    "fallback": "An unexpected error occurred.",
+    "tryAgain": "Try Again",
+    "openWithoutRestoring": "Open without restoring",
+    "openWithoutRestoringHint": "Open without restoring reloads Discrub without going back to the last conversation. Reset data clears everything Discrub stores in this browser."
+  },
   "resetDiscrub": {
+    "itemWorkspaces": "Workspaces and their saved messages",
     "stuck": "Stuck? Reset data",
     "button": "Reset data",
     "title": "Reset all Discrub data?",
@@ -1273,6 +1281,7 @@
   },
   "feed": {
     "unknownUser": "Unknown",
+    "rowCouldNotBeShown": "This message could not be shown.",
     "jumpToReplied": "Jump to replied-to message",
     "originalDeleted": "Original message was deleted",
     "showLess": "Show less",

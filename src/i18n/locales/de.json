@@ -530,7 +530,15 @@
       }
     }
   },
+  "errorPage": {
+    "title": "Etwas ist schiefgelaufen",
+    "fallback": "Ein unerwarteter Fehler ist aufgetreten.",
+    "tryAgain": "Erneut versuchen",
+    "openWithoutRestoring": "Ohne Wiederherstellung öffnen",
+    "openWithoutRestoringHint": "Ohne Wiederherstellung öffnen lädt Discrub neu, ohne zur letzten Unterhaltung zurückzukehren. Daten zurücksetzen löscht alles, was Discrub in diesem Browser speichert."
+  },
   "resetDiscrub": {
+    "itemWorkspaces": "Arbeitsbereiche und ihre gespeicherten Nachrichten",
     "stuck": "Hängt etwas? Daten zurücksetzen",
     "button": "Daten zurücksetzen",
     "title": "Alle Discrub-Daten zurücksetzen?",
@@ -1273,6 +1281,7 @@
   },
   "feed": {
     "unknownUser": "Unbekannt",
+    "rowCouldNotBeShown": "Diese Nachricht konnte nicht angezeigt werden.",
     "jumpToReplied": "Zur beantworteten Nachricht springen",
     "originalDeleted": "Die ursprüngliche Nachricht wurde gelöscht",
     "showLess": "Weniger anzeigen",
