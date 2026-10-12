@@ -2,12 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
 import { createAuthenticatedState } from '@/test/state-factories';
-import { createMockMessage, createMockUser } from '@/test/fixtures';
+import { createMockMessage, createMockUser, createMockDmChannel } from '@/test/fixtures';
 import { virtualizerMock } from '@/test/virtualizer-mock';
 import MessageFeed from './MessageFeed';
 import { SortDirection } from 'discrub-core/common-enum';
 
 vi.mock('@tanstack/react-virtual', () => virtualizerMock);
+
+// #277: the DM Load More test asserts which channel id reaches the service.
+const fetchSearchMessageData = vi.fn(async () => ({
+  success: true,
+  data: { messages: [], total_results: 1, threads: [] },
+}));
+vi.mock('@services/discordService', () => ({
+  getDiscordService: () => ({ fetchSearchMessageData }),
+}));
 
 const formattingContext = { userMap: {}, channelMap: {}, guildRoles: [] } as any;
 const fullUserMap = {};
@@ -767,6 +776,39 @@ describe('<MessageFeed />', () => {
       };
       renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: state });
       expect(screen.queryByTestId('message-feed-load-more')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── #277: filtered Load More in a DM ─────────────────────────────
+  // Picking a DM clears selectedChannel, so the next search page has to use
+  // the DM id. It used to send selectedChannel?.id, which was undefined in a
+  // DM, and core then asked for /channels/null.
+  describe('Load More in a DM (#277)', () => {
+    it('asks for the next search page with the DM id', async () => {
+      fetchSearchMessageData.mockClear();
+      const dm = createMockDmChannel({ id: 'dm-277' });
+      const messages = [createMockMessage({ id: 'm1', content: 'hi', channel_id: 'dm-277' })];
+      const state = stateWithMessages(messages);
+      state.channel.selectedChannel = null;
+      state.guild.selectedGuild = null;
+      state.dm.selectedDm = dm;
+      state.message.searchCriteria = { searchMessageContents: ['hi'] } as any;
+      state.message.pagination = {
+        ...state.message.pagination,
+        mode: 'search',
+        hasMore: true,
+        searchOffset: 25,
+        totalCount: 30,
+        isLoadingMore: false,
+        isLoadingAll: false,
+      };
+      renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: state });
+      fireEvent.click(screen.getByTestId('message-feed-load-more'));
+      await vi.waitFor(() => expect(fetchSearchMessageData).toHaveBeenCalledTimes(1));
+      const [, offset, channelId, guildId] = fetchSearchMessageData.mock.calls[0] as unknown[];
+      expect(offset).toBe(25);
+      expect(channelId).toBe('dm-277');
+      expect(guildId).toBeNull();
     });
   });
 

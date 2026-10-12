@@ -434,7 +434,9 @@ const MessageFeed = ({
       if (activeTab) return; // thread search pagination not yet wired — thread tabs fetch eagerly
       dispatch(
         fetchNextSearchPage({
-          channelId: selectedChannel?.id,
+          // #277: a DM clears selectedChannel, so the next page has to come
+          // from the current context (channel or DM), the way Load All does.
+          channelId: currentContext?.id,
           guildId: selectedGuild?.id,
           token,
         }),
@@ -461,7 +463,6 @@ const MessageFeed = ({
     lastMessageId,
     paginationHasMore,
     paginationMode,
-    selectedChannel?.id,
     selectedGuild?.id,
     token,
   ]);

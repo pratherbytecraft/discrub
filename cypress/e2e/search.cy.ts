@@ -320,6 +320,60 @@ describe('Search & Filters', () => {
       cy.contains('[data-testid="message-feed-row"]', 'Yes! It looks great.').should('exist');
       cy.contains('[data-testid="message-feed-row"]', "I'll take a look after lunch").should('exist');
     });
+
+    // #277: picking a DM clears selectedChannel, and Load More used to send
+    // that empty id, so core asked Discord for /channels/null and every
+    // scroll past the first page failed the same way.
+    it('Load More in a DM asks for the next page with the DM id (#277)', () => {
+      cy.window().then((win) => {
+        const store = (win as any).__store__;
+        store.dispatch({
+          type: 'app/updateAllSettings/fulfilled',
+          payload: { ...store.getState().app.settings, reactionsEnabled: 'false' },
+        });
+      });
+      const page = (offset: number, count: number, total: number) => ({
+        messages: Array.from({ length: count }, (_, i) => [{
+          id: `810000000000000${String(offset + i).padStart(3, '0')}`,
+          channel_id: '801000000000000002',
+          author: { id: '222333444555666777', username: 'alice_dev', discriminator: '0', avatar: 'alice_avatar', global_name: 'Alice' },
+          content: `DM result ${offset + i + 1}`,
+          timestamp: `2026-02-01T12:${String((offset + i) % 60).padStart(2, '0')}:00.000Z`,
+          edited_timestamp: null, tts: false, mention_everyone: false, mentions: [], attachments: [], embeds: [], reactions: [], pinned: false, type: 0,
+        }]),
+        total_results: total,
+        threads: [],
+      });
+      const urls: string[] = [];
+      cy.intercept('GET', `${API}/channels/*/messages/search*`, (req) => {
+        urls.push(req.url);
+        req.reply({ statusCode: 200, body: urls.length === 1 ? page(0, 25, 30) : page(25, 5, 30) });
+      }).as('dmPagedSearch');
+
+      searchViaModal('result');
+      cy.wait('@dmPagedSearch');
+      cy.contains('25 of 30 matches loaded').should('be.visible');
+
+      cy.get('[data-testid="message-feed-load-more"]').then(($btn) => { $btn[0].click(); });
+      cy.wait('@dmPagedSearch');
+
+      cy.contains('[data-testid="message-feed-row"]', 'DM result 30', { timeout: 10000 }).should('exist');
+      cy.then(() => {
+        expect(urls).to.have.length(2);
+        urls.forEach((url) => {
+          expect(url).not.to.include('/channels/null/');
+          expect(url).not.to.include('/channels/undefined/');
+        });
+        expect(urls[1]).to.include('offset=25');
+        const dmId = urls[0].match(/channels\/(\d+)\//)?.[1];
+        expect(urls[1]).to.include(`/channels/${dmId}/`);
+      });
+      cy.window().then((win) => {
+        const store = (win as any).__store__;
+        expect(store.getState().message.messages.length).to.equal(30);
+        expect(store.getState().message.pagination.hasMore).to.be.false;
+      });
+    });
   });
 
   // ── SEARCH API CALL COUNTS ─────────────────────────────────────
