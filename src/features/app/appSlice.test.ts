@@ -224,6 +224,13 @@ describe('appSlice', () => {
       expect(selectOperationHold(store.getState())).toMatchObject({ kind: 'retryWait' });
     });
 
+    it('resume clears a storage full hold', () => {
+      store.dispatch(setDiscrubPaused(true));
+      store.dispatch(setOperationHold({ kind: 'storageFull', loaded: 48200 }));
+      store.dispatch(setDiscrubPaused(false));
+      expect(selectOperationHold(store.getState())).toBeNull();
+    });
+
     it('resetTask clears the hold', () => {
       store.dispatch(setOperationHold({ kind: 'retryExhausted', answer: 'HTTP 502', loaded: 10 }));
       store.dispatch(resetTask());

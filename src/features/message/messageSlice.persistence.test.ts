@@ -240,7 +240,7 @@ describe('fetchAllMessages', () => {
     }
     expect(store.getState().message.rows).toHaveLength(150);
     expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(150);
-    expect(store.getState().app.operationHold).toEqual({ kind: 'storageFull', loaded: 100 });
+    expect(store.getState().app.operationHold).toEqual({ kind: 'storageFull', loaded: 0 });
     const statusLines = store.getState().status.entries.map((e) => e.message);
     expect(statusLines.some((line) => /storage is full/.test(line))).toBe(true);
   });

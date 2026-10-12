@@ -347,6 +347,9 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
             px: 1.5,
             py: 0.5,
             minHeight: 32,
+            // A long hold line shrinks its sentence instead of pushing the buttons past the edge.
+            minWidth: 0,
+            overflow: 'hidden',
             borderBottom: expanded ? '1px solid #21262d' : 'none',
             cursor: 'pointer',
             userSelect: 'none',

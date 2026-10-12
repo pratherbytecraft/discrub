@@ -68,6 +68,8 @@ export interface WorkspaceState {
   list: WorkspaceSummary[];
   /** The browser's own usage and quota, null where `estimate()` is missing. */
   storage: StorageFigures | null;
+  /** The Workspaces popover over the disk bar, opened from anywhere (the storage full hold, WP6a). */
+  popoverOpen: boolean;
 }
 
 export const initialWorkspaceState: WorkspaceState = {
@@ -85,6 +87,7 @@ export const initialWorkspaceState: WorkspaceState = {
   bulk: null,
   list: [],
   storage: null,
+  popoverOpen: false,
 };
 
 /** The unfinished actions a workspace record carries. */
@@ -214,6 +217,10 @@ const workspaceSlice = createSlice({
     currentWorkspaceRenamed: (state, action: PayloadAction<string>) => {
       state.currentName = action.payload;
     },
+    /** Opens or closes the Workspaces popover the disk bar hosts. */
+    workspacesPopoverToggled: (state, action: PayloadAction<boolean>) => {
+      state.popoverOpen = action.payload;
+    },
     /** Mirrors a conversation's action record; null clears it. */
     actionRecorded: (state, action: PayloadAction<{ cid: string; action: UnfinishedAction | null }>) => {
       if (action.payload.action) state.actions[action.payload.cid] = action.payload.action;
@@ -286,7 +293,7 @@ const workspaceSlice = createSlice({
   },
 });
 
-export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed } = workspaceSlice.actions;
+export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed, workspacesPopoverToggled } = workspaceSlice.actions;
 
 /** The open workspace id, or null while workspaces are not ready (writes are skipped). */
 export const selectCurrentWid = (state: RootState): string | null => {
@@ -307,6 +314,7 @@ export const selectHasUnfinishedWork = (state: RootState): boolean =>
   Object.keys(selectUnfinishedActions(state)).length > 0 || selectUnfinishedBulk(state) !== null;
 const noList: WorkspaceSummary[] = [];
 export const selectWorkspaceList = (state: RootState): WorkspaceSummary[] => state.workspace?.list ?? noList;
+export const selectWorkspacesPopoverOpen = (state: RootState): boolean => state.workspace?.popoverOpen ?? false;
 export const selectStorageFigures = (state: RootState): StorageFigures | null => state.workspace?.storage ?? null;
 /** The pill's dot: true when any workspace has unfinished work (plan 5.1). */
 export const selectAnyUnfinishedWork = (state: RootState): boolean =>

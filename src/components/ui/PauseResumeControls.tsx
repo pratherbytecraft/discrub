@@ -14,6 +14,7 @@ import { getTourEntry } from '@components/welcome/tourSteps';
 import { selectDiscrubPaused, setDiscrubPaused, setDiscrubCancelled, setOperationHold } from '@features/app/appSlice';
 import { selectIsHeavyOperationRunning, selectOperationSummary, type OperationStateColor } from '@features/app/operationSelectors';
 import { addStatusEntry } from '@features/status/statusSlice';
+import { workspacesPopoverToggled } from '@features/workspace/workspaceSlice';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { useTranslation } from 'react-i18next';
@@ -77,6 +78,7 @@ export const useOperationHeadline = (): string => {
   if (summary.state === 'retrying') return t('operation.state.retrying', { time: countdown, attempt: summary.hold?.attempt, max: summary.hold?.max });
   if (summary.state === 'retryPaused') return t('operation.state.retryPaused', { max: summary.hold?.max });
   if (summary.state === 'discordWait') return t('operation.state.discordWait', { time: countdown });
+  if (summary.state === 'storageFull') return t('operation.state.storageFull');
   return '';
 };
 
@@ -124,6 +126,10 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResu
     // Clearing the hold ends the retry wait early (withTransientRetry watches for it).
     dispatch(setOperationHold(null));
   };
+  const openWorkspaces = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    dispatch(workspacesPopoverToggled(true));
+  };
   const cancelOp = () => {
     dispatch(setDiscrubCancelled(true));
     dispatch(setDiscrubPaused(false));
@@ -146,7 +152,7 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResu
 
   return (
     <Box
-      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, px: 1 }}
+      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, px: 1, minWidth: 0 }}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -229,7 +235,7 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResu
       )}
 
       {inHold && !buttonsOnly && (
-        <Box data-testid="operation-state" data-state={summary.state} sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 0.5, minWidth: 0 }}>
+        <Box data-testid="operation-state" data-state={summary.state} sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 0.5, minWidth: 0, overflow: 'hidden' }}>
           <Box
             aria-hidden
             sx={{
@@ -239,19 +245,25 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResu
               '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
             }}
           >
-            {(summary.state === 'restBreak' || summary.state === 'discordWait') && <HoldIcon sx={{ fontSize: 11 }} />}
+            {(summary.state === 'restBreak' || summary.state === 'discordWait' || summary.state === 'storageFull') && <HoldIcon sx={{ fontSize: 11 }} />}
             {summary.state === 'retrying' && <RetryIcon sx={{ fontSize: 12 }} />}
             {summary.state === 'retryPaused' && <FailedIcon sx={{ fontSize: 12 }} />}
           </Box>
           <Typography variant="caption" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{summary.name}</Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
-          <Typography variant="caption" data-testid="operation-state-headline" sx={{ color: stateHex, fontWeight: 600, whiteSpace: 'nowrap' }}>{headline}</Typography>
+          <Typography variant="caption" data-testid="operation-state-headline" sx={{ color: stateHex, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{headline}</Typography>
           {summary.sentence && (
+            // On a narrow row the headline and sentence shorten with an ellipsis; the buttons stay whole.
             <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{summary.sentence}</Typography>
           )}
           {summary.state === 'retrying' && (
-            <Button size="small" onClick={retryNow} sx={{ minWidth: 0, px: 1, py: 0, fontSize: '0.7rem', color: stateHex, whiteSpace: 'nowrap' }}>
+            <Button size="small" onClick={retryNow} sx={{ minWidth: 0, flexShrink: 0, px: 1, py: 0, fontSize: '0.7rem', color: stateHex, whiteSpace: 'nowrap' }}>
               {t('pause.retryNow')}
+            </Button>
+          )}
+          {summary.state === 'storageFull' && (
+            <Button size="small" onClick={openWorkspaces} data-testid="storage-full-workspaces" sx={{ minWidth: 0, flexShrink: 0, px: 1, py: 0, fontSize: '0.7rem', color: stateHex, whiteSpace: 'nowrap' }}>
+              {t('workspace.title')}
             </Button>
           )}
         </Box>

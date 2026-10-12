@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box, Tooltip, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useAppSelector } from '@/app/hooks';
-import { selectCurrentWid, selectStorageFigures, selectWorkspaceList } from '@features/workspace/workspaceSlice';
+import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { selectCurrentWid, selectStorageFigures, selectWorkspaceList, selectWorkspacesPopoverOpen, workspacesPopoverToggled } from '@features/workspace/workspaceSlice';
 import { diskLevel, formatDiskSize, segmentPercents, shelfBytes } from '@features/workspace/diskBarScale';
 import { useWorkspaceListSync } from './useWorkspaceListSync';
 import WorkspacesPopover from './WorkspacesPopover';
@@ -15,7 +15,9 @@ const GLOW_MS = 1200;
  * Focus included (plan 5.3): one segment per workspace in its colour on
  * a 10 GB shelf that doubles when passed, amber from 80 percent of the
  * browser's allowance and red when it is full. Hover lists the sizes,
- * click opens the Workspaces popover. Also keeps the list current.
+ * click opens the Workspaces popover. The popover's open state lives in
+ * the workspace slice so the storage full hold can open it from the
+ * status row (WP6a). Also keeps the list current.
  */
 const DiskBar = () => {
   useWorkspaceListSync();
@@ -24,8 +26,10 @@ const DiskBar = () => {
   const list = useAppSelector(selectWorkspaceList);
   const storage = useAppSelector(selectStorageFigures);
   const currentWid = useAppSelector(selectCurrentWid);
+  const dispatch = useAppDispatch();
+  const open = useAppSelector(selectWorkspacesPopoverOpen);
+  const setOpen = (value: boolean) => dispatch(workspacesPopoverToggled(value));
   const ref = useRef<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState(false);
   const [glow, setGlow] = useState(false);
 
   const total = list.reduce((sum, w) => sum + w.bytes, 0);

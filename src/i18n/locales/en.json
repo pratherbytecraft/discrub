@@ -195,7 +195,8 @@
       "restBreak": "Rest break",
       "retrying": "Retrying",
       "retryPaused": "Paused after retries",
-      "discordWait": "Waiting on Discord"
+      "discordWait": "Waiting on Discord",
+      "storageFull": "Storage full"
     }
   },
   "timeline": {
@@ -317,8 +318,8 @@
       "retryPausedSentence": "{{answer}}. Wait a bit, then Resume to continue from {{count}} loaded.",
       "discordWait": "Discord asked for a wait, resumes in {{time}}",
       "discordWaitSentence": "Discord asks for a wait every so often. {{name}} carries on by itself.",
-      "storageFull": "Paused, browser storage is full",
-      "storageFullSentence": "Browser storage is full. {{name}} is paused at {{count}}. Clear room, then Resume."
+      "storageFull": "Browser storage is full",
+      "storageFullSentence": "paused at {{count}}"
     }
   },
   "landing": {
@@ -1695,6 +1696,8 @@
       "restoredFromWorkspace": "Restored {{count}} messages from this workspace",
       "storageFull": "Browser storage is full, paused at {{count}}",
       "workspaceWriteFailed": "Could not save messages to this workspace, continuing in memory",
+      "storageFullNotSaved": "Browser storage is full, messages loaded now are not saved",
+      "storageNearlyFull": "Browser storage is over 80 percent full",
       "workspaceStartOver": "Cleared the saved messages for this conversation"
     },
     "channel": {
@@ -2096,6 +2099,11 @@
     "deleteBody": "Removes the workspace and its {{messages}} ({{size}}).",
     "duplicateTitle": "Duplicate {{name}}",
     "duplicateBody": "Makes a copy with its {{messages}}, about {{size}} more on disk.",
-    "busy": "Wait for the running action to finish or stop it first."
+    "busy": "Wait for the running action to finish or stop it first.",
+    "fullTitle": "Browser storage is full",
+    "fullLoadAll": "Load All is paused at {{messages}} messages in {{conversation}}.",
+    "fullRun": "{{name}} is paused at {{messages}} messages.",
+    "fullNext": "Clear room in Workspaces, then Resume from the status bar.",
+    "nearlyFullToast": "Browser storage is over 80 percent full. Clear room in Workspaces."
   }
 }

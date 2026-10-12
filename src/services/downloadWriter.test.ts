@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('drip-fs', () => ({ createStreamingDownload: vi.fn(async () => ({ tag: 'drip' })) }));
+vi.mock('@/extension/messaging', () => ({ isExtensionMode: vi.fn(() => false) }));
 
 import { createStreamingDownload } from 'drip-fs';
-import { createBlobDownloadWriter, createDownloadWriter, isIOSSafari } from './downloadWriter';
+import { isExtensionMode } from '@/extension/messaging';
+import { createBlobDownloadWriter, createDownloadWriter, isIOSSafari, stagesThroughOpfs } from './downloadWriter';
 
 const nav = (overrides: Partial<Navigator>): Navigator =>
   ({ userAgent: '', platform: '', maxTouchPoints: 0, ...overrides }) as Navigator;
@@ -93,5 +95,99 @@ describe('createBlobDownloadWriter', () => {
     await expect(w.write(new Uint8Array([5]))).rejects.toThrow(/closed/);
     vi.useRealTimers();
     click.mockRestore();
+  });
+});
+
+describe('Firefox extension zips (WP6a)', () => {
+  const FIREFOX = 'Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0';
+  class FakeHandle {
+    createWritable() { return Promise.resolve(undefined); }
+  }
+  const originalUA = navigator.userAgent;
+  const originalStorage = Object.getOwnPropertyDescriptor(navigator, 'storage');
+  let written: number[];
+  let removed: string[];
+  let created: string[];
+  let saved: string[];
+
+  const fakeOpfs = (quota = 10e9, usage = 0) => {
+    written = [];
+    removed = [];
+    created = [];
+    saved = [];
+    const dir = {
+      getFileHandle: vi.fn(async (name: string) => {
+        created.push(name);
+        return {
+          createWritable: async () => ({
+            write: async (chunk: Uint8Array) => { written.push(chunk.byteLength); },
+            close: async () => undefined,
+            abort: async () => undefined,
+          }),
+          getFile: async () => new Blob([new Uint8Array(written.reduce((a, b) => a + b, 0))]),
+        };
+      }),
+      removeEntry: vi.fn(async (name: string) => { removed.push(name); }),
+    };
+    Object.defineProperty(navigator, 'storage', {
+      value: {
+        getDirectory: async () => ({ getDirectoryHandle: async () => dir }),
+        estimate: async () => ({ quota, usage }),
+      },
+      configurable: true,
+    });
+  };
+
+  beforeEach(() => {
+    vi.mocked(createStreamingDownload).mockReset();
+    vi.mocked(createStreamingDownload).mockResolvedValue({ tag: 'drip' } as never);
+    vi.mocked(isExtensionMode).mockReturnValue(true);
+    vi.stubGlobal('FileSystemFileHandle', FakeHandle);
+    Object.defineProperty(navigator, 'userAgent', { value: FIREFOX, configurable: true });
+    fakeOpfs();
+    URL.createObjectURL = vi.fn(() => 'blob:x');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { saved.push(this.download); });
+  });
+  afterEach(() => {
+    vi.mocked(isExtensionMode).mockReturnValue(false);
+    vi.unstubAllGlobals();
+    Object.defineProperty(navigator, 'userAgent', { value: originalUA, configurable: true });
+    if (originalStorage) Object.defineProperty(navigator, 'storage', originalStorage);
+    else delete (navigator as unknown as { storage?: unknown }).storage;
+    vi.restoreAllMocks();
+  });
+
+  it('stages through OPFS only in the Firefox extension with writable OPFS files', () => {
+    const withOpfs = (userAgent: string) => ({ userAgent, storage: { getDirectory: () => Promise.resolve() } }) as unknown as Navigator;
+    expect(stagesThroughOpfs(withOpfs(FIREFOX), true)).toBe(true);
+    expect(stagesThroughOpfs(withOpfs(FIREFOX), false)).toBe(false);
+    expect(stagesThroughOpfs(withOpfs('Mozilla/5.0 (X11; Linux) Chrome/126'), true)).toBe(false);
+    expect(stagesThroughOpfs({ userAgent: FIREFOX } as Navigator, true)).toBe(false);
+    vi.stubGlobal('FileSystemFileHandle', class {});
+    expect(stagesThroughOpfs(withOpfs(FIREFOX), true)).toBe(false);
+  });
+
+  it('writes the part to an OPFS file, saves it on close, and removes it when the next part opens', async () => {
+    const first = await createDownloadWriter('export.zip', 500_000_000);
+    expect(createStreamingDownload).not.toHaveBeenCalled();
+    await first.write(new Uint8Array(10));
+    await first.write(new Uint8Array(5));
+    expect(first.bytesWritten).toBe(15);
+    await first.close();
+    expect(saved).toEqual(['export.zip']);
+    const second = await createDownloadWriter('export_part2.zip');
+    expect(removed).toEqual([created[0]]);
+    await second.abort();
+    expect(removed).toEqual([created[0], created[1]]);
+  });
+
+  it('buffers in memory when there is no room to stage the part', async () => {
+    fakeOpfs(1_000_000, 900_000);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const w = await createDownloadWriter('x.zip', 500_000_000);
+    expect(created).toEqual([]);
+    expect(w.bytesWritten).toBe(0);
+    expect(console.warn).toHaveBeenCalled();
   });
 });

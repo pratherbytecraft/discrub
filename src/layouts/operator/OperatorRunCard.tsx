@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ChannelType } from 'discrub-core/discord-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setDialogOpen, setOperationHold } from '@features/app/appSlice';
+import { workspacesPopoverToggled } from '@features/workspace/workspaceSlice';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectSelectedChannel, selectSelectedChannels } from '@features/channel/channelSlice';
 import { selectSelectedDm, selectSelectedDms } from '@features/dm/dmSlice';
@@ -70,6 +71,7 @@ const OperatorRunCard = () => {
             <Typography variant="body2" data-testid="operation-state-headline" sx={{ color: c, fontWeight: 600, overflowWrap: 'anywhere' }}>{headline}</Typography>
             {/* Clearing the hold ends the retry wait early, as in the shared controls. */}
             {summary.state === 'retrying' && <Button size="small" data-testid="operator-retry-now" onClick={() => dispatch(setOperationHold(null))} sx={{ minWidth: 0, px: 1, py: 0, color: c, textTransform: 'none' }}>{t('pause.retryNow')}</Button>}
+            {summary.state === 'storageFull' && <Button size="small" data-testid="operator-storage-full-workspaces" onClick={() => dispatch(workspacesPopoverToggled(true))} sx={{ minWidth: 0, px: 1, py: 0, color: c, textTransform: 'none' }}>{t('workspace.title')}</Button>}
           </Box>
         )}
         {!headline && summary.label && <Typography variant="caption" data-testid="operator-label" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>{summary.label}</Typography>}

@@ -50,10 +50,12 @@ export interface PersistApi {
 const RESTORE_WINDOW = 2000;
 
 let writeFailureLogged = false;
+let notSavedLogged = false;
 
-/** Tests reset the once per session warning. */
+/** Tests reset the once per session warnings. */
 export function resetPersistenceWarnings(): void {
   writeFailureLogged = false;
+  notSavedLogged = false;
 }
 
 function logWriteFailure(api: PersistApi, error: unknown): void {
@@ -96,8 +98,8 @@ export type PersistOutcome = 'written' | 'skipped' | 'failed' | 'cancelled';
 
 /**
  * Writes one page, then merges `record` into the conversation record in a
- * second transaction (cursor, criteria, order). On a quota failure the run
- * is paused with the storageFull hold; once the user resumes, the write is
+ * second transaction (cursor, criteria, order). On a quota failure a Load
+ * All walk is paused with the storageFull hold; once the user resumes, the write is
  * tried again, and a cancel while paused answers `cancelled` so the thunk
  * can end the run. Other failures answer `failed` after one warning.
  */
@@ -108,7 +110,14 @@ export async function persistPage(
   options: {
     seed?: ConversationSeed | null;
     record?: Partial<Conversation>;
-    /** Rows loaded so far, for the hold's "paused at" figure. */
+    /**
+     * Rows loaded so far, for the hold's "paused at" figure. Only the
+     * Load All walks pass it, and only they pause on a full quota: their
+     * loops end on `cancelled` and the run shows Resume on the status
+     * row. A single page (a scroll, a search, a thread opened) carries on
+     * in memory with one warning instead of waiting where nothing can
+     * resume it.
+     */
     loaded?: number;
     /**
      * Messages already in Redux that were never written because the
@@ -145,7 +154,15 @@ export async function persistPage(
         logWriteFailure(api, error);
         return 'failed';
       }
-      const loaded = options.loaded ?? 0;
+      if (options.loaded === undefined) {
+        if (!notSavedLogged) {
+          notSavedLogged = true;
+          api.dispatch(addStatusEntry({ level: 'warning', message: t('status.msg.storageFullNotSaved') }));
+        }
+        return 'failed';
+      }
+      // The walk counts the page in hand; the hold names what is saved.
+      const loaded = Math.max(0, options.loaded - messages.length);
       api.dispatch(setDiscrubPaused(true));
       api.dispatch(setOperationHold({ kind: 'storageFull', loaded }));
       api.dispatch(addStatusEntry({ level: 'warning', message: t('status.msg.storageFull', { count: loaded }) }));

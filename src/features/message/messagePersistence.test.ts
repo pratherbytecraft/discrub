@@ -146,7 +146,7 @@ describe('persistPage', () => {
     }
     const actions = dispatch.mock.calls.map(([a]) => a as { type: string; payload?: unknown });
     expect(actions.some((a) => a.type === 'app/setDiscrubPaused' && a.payload === true)).toBe(true);
-    expect(actions.some((a) => a.type === 'app/setOperationHold' && (a.payload as { kind?: string })?.kind === 'storageFull')).toBe(true);
+    expect(actions.some((a) => a.type === 'app/setOperationHold' && (a.payload as { kind?: string; loaded?: number })?.loaded === 48199)).toBe(true);
     expect(operationLoopUtils.waitWhilePaused).toHaveBeenCalled();
     expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(1);
   });
@@ -159,10 +159,30 @@ describe('persistPage', () => {
       throw new DOMException('full', 'QuotaExceededError');
     };
     try {
-      expect(await persistPage(api, CID, [msg('1')], { seed })).toBe('cancelled');
+      expect(await persistPage(api, CID, [msg('1')], { seed, loaded: 0 })).toBe('cancelled');
     } finally {
       IDBObjectStore.prototype.put = original;
     }
+  });
+
+  it('keeps a single page in memory on a full disk with one warning, no pause', async () => {
+    const { api, dispatch } = apiFor(readyState());
+    vi.mocked(operationLoopUtils.waitWhilePaused).mockClear();
+    const original = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function put() {
+      throw new DOMException('full', 'QuotaExceededError');
+    };
+    try {
+      expect(await persistPage(api, CID, [msg('1')], { seed })).toBe('failed');
+      expect(await persistPage(api, CID, [msg('2')], { seed })).toBe('failed');
+    } finally {
+      IDBObjectStore.prototype.put = original;
+    }
+    const actions = dispatch.mock.calls.map(([a]) => a as { type: string; payload?: { message?: string } });
+    expect(actions.some((a) => a.type === 'app/setDiscrubPaused')).toBe(false);
+    expect(actions.some((a) => a.type === 'app/setOperationHold')).toBe(false);
+    expect(actions.filter((a) => a.payload?.message === 'Browser storage is full, messages loaded now are not saved')).toHaveLength(1);
+    expect(operationLoopUtils.waitWhilePaused).not.toHaveBeenCalled();
   });
 });
 

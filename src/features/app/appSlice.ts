@@ -152,8 +152,10 @@ const appSlice = createSlice({
   reducers: {
     setDiscrubPaused: (state, action: PayloadAction<boolean>) => {
       state.discrubPaused = action.payload;
-      // Resume ends a retry hold: the loop continues from where it paused.
-      if (!action.payload && state.operationHold?.kind === 'retryExhausted') state.operationHold = null;
+      // Resume ends a retry or storage full hold: the loop continues from
+      // where it paused, and a page that still does not fit holds again.
+      const kind = state.operationHold?.kind;
+      if (!action.payload && (kind === 'retryExhausted' || kind === 'storageFull')) state.operationHold = null;
     },
     setRateLimitStopped: (state, action: PayloadAction<boolean>) => {
       state.rateLimitStopped = action.payload;

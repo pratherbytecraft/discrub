@@ -65,6 +65,7 @@ import AccessEndedNotice from '@components/supporter/AccessEndedNotice';
 import AppDialogs from './AppDialogs';
 import PreviewBar from '@components/appearance/PreviewBar';
 import DiskBar from '@components/workspace/DiskBar';
+import StorageFullDialog from '@components/workspace/StorageFullDialog';
 import WorkspacePill from '@components/workspace/WorkspacePill';
 import { useWallOverlay } from '@components/donations/useWallOverlay';
 import { useTranslation } from 'react-i18next';
@@ -322,6 +323,7 @@ const MainLayout = () => {
       <PreviewBar />
       {floatingPill && <WorkspacePill variant="floating" />}
       <DiskBar />
+      <StorageFullDialog />
 
       <AnnouncementModal
         open={hasNewAnnouncement}

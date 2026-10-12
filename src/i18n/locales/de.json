@@ -195,7 +195,8 @@
       "restBreak": "Pause",
       "retrying": "Neuer Versuch",
       "retryPaused": "Nach Versuchen pausiert",
-      "discordWait": "Warten auf Discord"
+      "discordWait": "Warten auf Discord",
+      "storageFull": "Speicher voll"
     }
   },
   "timeline": {
@@ -317,8 +318,8 @@
       "retryPausedSentence": "{{answer}}. Warte kurz und klicke dann auf Fortsetzen, um bei {{count}} geladenen weiterzumachen.",
       "discordWait": "Discord bittet um eine Pause, geht weiter in {{time}}",
       "discordWaitSentence": "Discord bittet ab und zu um eine Pause. {{name}} macht danach von selbst weiter.",
-      "storageFull": "Pausiert, der Browserspeicher ist voll",
-      "storageFullSentence": "Der Browserspeicher ist voll. {{name}} ist bei {{count}} pausiert. Platz schaffen, dann Fortsetzen."
+      "storageFull": "Der Browserspeicher ist voll",
+      "storageFullSentence": "pausiert bei {{count}}"
     }
   },
   "landing": {
@@ -1695,6 +1696,8 @@
       "restoredFromWorkspace": "{{count}} Nachrichten aus diesem Arbeitsbereich wiederhergestellt",
       "storageFull": "Der Browserspeicher ist voll, pausiert bei {{count}}",
       "workspaceWriteFailed": "Nachrichten konnten nicht in diesem Arbeitsbereich gespeichert werden, es geht im Speicher weiter",
+      "storageFullNotSaved": "Der Browserspeicher ist voll, jetzt geladene Nachrichten werden nicht gespeichert",
+      "storageNearlyFull": "Der Browserspeicher ist zu über 80 Prozent voll",
       "workspaceStartOver": "Gespeicherte Nachrichten dieser Unterhaltung gelöscht"
     },
     "channel": {
@@ -2096,6 +2099,11 @@
     "deleteBody": "Entfernt den Arbeitsbereich und seine {{messages}} ({{size}}).",
     "duplicateTitle": "{{name}} duplizieren",
     "duplicateBody": "Erstellt eine Kopie mit {{messages}}, etwa {{size}} mehr belegt.",
-    "busy": "Warte, bis die laufende Aktion fertig ist, oder stoppe sie zuerst."
+    "busy": "Warte, bis die laufende Aktion fertig ist, oder stoppe sie zuerst.",
+    "fullTitle": "Der Browserspeicher ist voll",
+    "fullLoadAll": "Load All ist bei {{messages}} Nachrichten in {{conversation}} pausiert.",
+    "fullRun": "{{name}} ist bei {{messages}} Nachrichten pausiert.",
+    "fullNext": "Schaffe in Arbeitsbereiche Platz und klicke dann in der Statusleiste auf Fortsetzen.",
+    "nearlyFullToast": "Der Browserspeicher ist zu über 80 Prozent voll. Schaffe in Arbeitsbereiche Platz."
   }
 }
