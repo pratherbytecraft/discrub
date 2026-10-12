@@ -23,11 +23,13 @@ import {
   DeleteSweep as PurgeIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
-import { groupsToTypes } from '@/utils/systemMessageGroups';
+import { groupsToTypes, typesToGroups } from '@/utils/systemMessageGroups';
 import SystemMessageTypePicker from '@components/message/SystemMessageTypePicker';
 import type { Channel, Guild } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
+import { useBulkResume } from '@/hooks/useResume';
+import { discardBulkRecord, readBulkRecord, resolveQueue } from '@features/workspace/resumeRecords';
 import TourFootnote from '@components/welcome/TourFootnote';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { selectSettings } from '@features/app/appSlice';
@@ -36,7 +38,7 @@ import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { selectSelectedGuild, selectCurrentMemberRoles } from '@features/guild/guildSlice';
 import { bulkPurgeChannels, bulkPurgeDMs, purgeGuilds } from '@features/purge/purgeSlice';
-import type { PurgeMode } from '@features/purge/purgeTypes';
+import type { PurgeConfig, PurgeMode } from '@features/purge/purgeTypes';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import UserPicker from '@components/ui/UserPicker';
 import FilterModal from '@components/search/FilterModal';
@@ -79,7 +81,7 @@ const deriveUiMode = (
   return 'messages';
 };
 
-const BulkPurgeDialog = ({ open, onClose, channels, mode, guilds = [], guildId, canManageMessages = false }: BulkPurgeDialogProps) => {
+const BulkPurgeDialog = ({ open, onClose, channels: selectedChannels, mode, guilds: selectedGuilds = [], guildId, canManageMessages = false }: BulkPurgeDialogProps) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -112,6 +114,57 @@ const BulkPurgeDialog = ({ open, onClose, channels, mode, guilds = [], guildId, 
   };
 
   const currentUserId = currentUser?.id || '';
+
+  // 2.2.5 WP4b: a purge that was running when Discrub closed comes back
+  // with its settings and the channels it had not finished, whatever is
+  // selected now. Purge only finds what remains, so no cursor is needed.
+  const store = useAppStore();
+  const bulkResume = useBulkResume('bulkPurge', mode, guildId);
+  const resumable = bulkResume !== null;
+  const [resumeTargets, setResumeTargets] = useState<{ channels: Channel[]; guilds: Guild[] } | null>(null);
+  useEffect(() => {
+    if (!open || !resumable) {
+      setResumeTargets(null);
+      return;
+    }
+    let live = true;
+    void readBulkRecord(store.getState()).then((record) => {
+      if (!live || !record || record.kind !== 'bulkPurge') return;
+      const saved = record.settings as { config?: PurgeConfig; searchCriteria?: SearchCriteria | null } | undefined;
+      const config = saved?.config;
+      if (config) {
+        setUiMode(
+          config.mode === 'reactions' ? 'reactions'
+            : config.mode === 'clearReactions' ? 'clearReactions'
+              : config.deleteAttachmentsOnly ? 'attachmentsOnly' : 'messages',
+        );
+        setRetainAttachedMedia(!!config.retainAttachedMedia);
+        setPreserveMediaAndLinks(!!config.preserveMediaAndLinks);
+        setSkipArchivedThreads(!!config.skipArchivedThreads);
+        setSelectedSystemGroups(typesToGroups(config.systemMessageTypesToDelete ?? []));
+        setTargetUserIds(config.targetUserIds ?? []);
+      }
+      setFilterCriteria(saved?.searchCriteria ?? null);
+      const remaining = record.queue.filter((id) => !record.done.includes(id));
+      const state = store.getState();
+      setResumeTargets(
+        record.mode === 'servers'
+          ? { channels: [], guilds: resolveQueue(remaining, [state.guild.guilds]) }
+          : { channels: resolveQueue(remaining, [state.channel.channels, state.channel.forumThreads, state.dm.dms]), guilds: [] },
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, resumable, store]);
+  const resuming = resumeTargets !== null;
+  const channels = resumeTargets ? resumeTargets.channels : selectedChannels;
+  const guilds = resumeTargets ? resumeTargets.guilds : selectedGuilds;
+  const handleStartOver = () => {
+    void dispatch(discardBulkRecord());
+    setResumeTargets(null);
+    setFilterCriteria(null);
+  };
 
   // Initialize from settings when dialog opens
   useEffect(() => {
@@ -342,6 +395,11 @@ const BulkPurgeDialog = ({ open, onClose, channels, mode, guilds = [], guildId, 
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+          {resuming && (
+            <Typography variant="body2" data-testid="purge-resume-note">
+              {t('workspace.resumePurgeNote')}
+            </Typography>
+          )}
           <SelectedChannelsPill channels={channels} guilds={guilds} mode={isServerMode ? 'servers' : isDmMode ? 'dms' : 'channels'} />
 
           {/* Mode selection — 4 first-class modes */}
@@ -607,6 +665,11 @@ const BulkPurgeDialog = ({ open, onClose, channels, mode, guilds = [], guildId, 
             {disabledHint}
           </Typography>
         )}
+        {resuming && (
+          <Button onClick={handleStartOver} color="inherit" sx={{ mr: 'auto' }} data-testid="purge-start-over">
+            {t('workspace.startOver')}
+          </Button>
+        )}
         <Button variant="outlined" onClick={onClose}>{t('purge.cancel')}</Button>
         <Button
           onClick={handleConfirm}
@@ -614,8 +677,9 @@ const BulkPurgeDialog = ({ open, onClose, channels, mode, guilds = [], guildId, 
           color="error"
           startIcon={<PurgeIcon />}
           disabled={targetCount === 0 || hasNoTargetUsers || isOperationRunning}
+          data-testid="purge-confirm"
         >
-          {getConfirmLabel()}
+          {resuming ? t('workspace.resume') : getConfirmLabel()}
         </Button>
       </DialogActions>
 

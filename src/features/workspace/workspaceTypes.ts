@@ -88,13 +88,22 @@ export interface WorkspaceScope {
   dmId: string | null;
 }
 
+/** Which list a bulk run was started from: channels of a server, DMs, or whole servers. */
+export type BulkMode = 'channels' | 'dms' | 'servers';
+
 export interface WorkspaceBulk {
   kind: BulkKind;
+  mode: BulkMode;
   guildId: string | null;
+  /** The run's arguments as given (config, criteria, export snapshot); the dialog rebuilds itself from them. */
   settings: unknown;
+  /** Channel, DM or server ids in run order. */
   queue: string[];
   done: string[];
   inHand: string | null;
+  /** Units the run reports (a forum's posts count one by one in Bulk Export). */
+  total: number;
+  doneCount: number;
 }
 
 export interface WorkspaceAuthor {

@@ -77,3 +77,8 @@ export const toggleGroupKey = (selectedGroupKeys: string[], key: string): string
   selectedGroupKeys.includes(key)
     ? selectedGroupKeys.filter((k) => k !== key)
     : [...selectedGroupKeys, key];
+
+// 2.2.5 WP4b: the groups a saved type list came from, so a resumed purge
+// shows the same boxes checked. A group counts when all its types are there.
+export const typesToGroups = (types: string[]): string[] =>
+  SYSTEM_MESSAGE_GROUPS.filter((g) => g.types.length > 0 && g.types.every((type) => types.includes(type))).map((g) => g.key);

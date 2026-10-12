@@ -2050,6 +2050,15 @@
     "switchLoadAllLine": "Load All is at {{messages}} messages in {{conversation}}.",
     "switchNote": "Switching pauses it. Resume picks it up when you come back.",
     "stay": "Stay",
-    "switch": "Switch"
+    "switch": "Switch",
+    "resume": "Resume",
+    "startOver": "Start over",
+    "resumeExportNote": "This export was running when Discrub closed. Resume writes a new zip.",
+    "resumeBulkExportNote_one": "{{done}} of {{count}} channel finished before Discrub closed. Resume writes a new zip.",
+    "resumeBulkExportNote_other": "{{done}} of {{count}} channels finished before Discrub closed. Resume writes a new zip.",
+    "resumeBulkExportNote_dm_one": "{{done}} of {{count}} conversation finished before Discrub closed. Resume writes a new zip.",
+    "resumeBulkExportNote_dm_other": "{{done}} of {{count}} conversations finished before Discrub closed. Resume writes a new zip.",
+    "resumePurgeNote": "This purge was running when Discrub closed. Resume picks it up.",
+    "resumeEditNote": "This edit was running when Discrub closed. Resume picks it up."
   }
 }

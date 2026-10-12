@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -18,7 +18,9 @@ import type { Theme } from '@mui/material/styles';
 import { Edit as EditIcon } from '@mui/icons-material';
 import type { Channel } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
+import { useBulkResume } from '@/hooks/useResume';
+import { discardBulkRecord, readBulkRecord, resolveQueue } from '@features/workspace/resumeRecords';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
@@ -48,7 +50,7 @@ interface BulkEditDialogProps {
  * author target is locked to self — the optional FilterModal only narrows by
  * date / content, never author. Mirrors BulkPurgeDialog's shell.
  */
-const BulkEditDialog = ({ open, onClose, channels, mode, guildId }: BulkEditDialogProps) => {
+const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guildId }: BulkEditDialogProps) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -64,6 +66,40 @@ const BulkEditDialog = ({ open, onClose, channels, mode, guildId }: BulkEditDial
   // Bumped on each open so the keyed FilterModal remounts fresh (mirrors the
   // stale-typed-values fix in BulkPurgeDialog).
   const [filterModalKey, setFilterModalKey] = useState(0);
+
+  // 2.2.5 WP4b: an edit that was running when Discrub closed comes back
+  // with its text, its filter and the channels it had not finished.
+  const store = useAppStore();
+  const bulkResume = useBulkResume('bulkEdit', mode, guildId);
+  const resumable = bulkResume !== null;
+  const [resumeChannels, setResumeChannels] = useState<Channel[] | null>(null);
+  useEffect(() => {
+    if (!open || !resumable) {
+      setResumeChannels(null);
+      return;
+    }
+    let live = true;
+    void readBulkRecord(store.getState()).then((record) => {
+      if (!live || !record || record.kind !== 'bulkEdit') return;
+      const saved = record.settings as { content?: string; searchCriteria?: SearchCriteria | null } | undefined;
+      setContent(saved?.content ?? '');
+      setFilterCriteria(saved?.searchCriteria ?? null);
+      const state = store.getState();
+      const remaining = record.queue.filter((id) => !record.done.includes(id));
+      setResumeChannels(resolveQueue(remaining, [state.channel.channels, state.channel.forumThreads, state.dm.dms]));
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, resumable, store]);
+  const resuming = resumeChannels !== null;
+  const channels = resumeChannels ?? selectedChannels;
+  const handleStartOver = () => {
+    void dispatch(discardBulkRecord());
+    setResumeChannels(null);
+    setContent('');
+    setFilterCriteria(null);
+  };
 
   const isDmMode = mode === 'dms';
   const scopeContext = isDmMode ? 'dm' : 'channel';
@@ -106,6 +142,11 @@ const BulkEditDialog = ({ open, onClose, channels, mode, guildId }: BulkEditDial
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+          {resuming && (
+            <Typography variant="body2" data-testid="bulk-edit-resume-note">
+              {t('workspace.resumeEditNote')}
+            </Typography>
+          )}
           <SelectedChannelsPill channels={channels} mode={isDmMode ? 'dms' : 'channels'} />
 
           <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
@@ -147,6 +188,11 @@ const BulkEditDialog = ({ open, onClose, channels, mode, guildId }: BulkEditDial
         </Box>
       </DialogContent>
       <DialogActions>
+        {resuming && (
+          <Button onClick={handleStartOver} color="inherit" sx={{ mr: 'auto' }} data-testid="bulk-edit-start-over">
+            {t('workspace.startOver')}
+          </Button>
+        )}
         <Button variant="outlined" onClick={onClose}>{t('bulkEdit.cancel')}</Button>
         <Button
           onClick={handleConfirm}
@@ -154,8 +200,9 @@ const BulkEditDialog = ({ open, onClose, channels, mode, guildId }: BulkEditDial
           color="primary"
           startIcon={<EditIcon />}
           disabled={count === 0 || content.trim().length === 0 || isOperationRunning}
+          data-testid="bulk-edit-confirm"
         >
-          {confirmLabel}
+          {resuming ? t('workspace.resume') : confirmLabel}
         </Button>
       </DialogActions>
 

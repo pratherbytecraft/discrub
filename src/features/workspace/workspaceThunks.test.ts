@@ -363,6 +363,20 @@ describe('restoreWorkspaceScope', () => {
     expect(store.getState().guild.selectedGuild).toBeNull();
   });
 
+  it('stops when the user leaves the server view before the saved scope opened', async () => {
+    const store = makeStore();
+    await openDefault(store);
+    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+      w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
+    });
+    // The servers are not loaded yet, so the restore waits for them.
+    const restoring = thunk(store)(restoreWorkspaceScope());
+    store.dispatch(setSelectedGuild(null));
+    await store.dispatch(fetchGuilds('token'));
+    expect((await restoring).payload).toBe('skipped');
+    expect(store.getState().guild.selectedGuild).toBeNull();
+  });
+
   it('answers missing when the saved channel is gone', async () => {
     service({ fetchChannels: vi.fn().mockResolvedValue({ success: true, data: [] }) });
     const store = makeStore();

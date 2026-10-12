@@ -16,8 +16,11 @@ import type { Theme } from '@mui/material/styles';
 import {
   Download as DownloadIcon,
 } from '@mui/icons-material';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
+import { useBulkResume } from '@/hooks/useResume';
+import { discardBulkRecord, readBulkRecord, resolveQueue } from '@features/workspace/resumeRecords';
 import {
+  applyPreset,
   bulkExportChannels,
   bulkExportDMs,
   resetExport,
@@ -26,7 +29,8 @@ import {
   selectExportCriteria,
   setExportCriteria,
 } from '@features/export/exportSlice';
-import type { ExportConfig } from '@features/export/exportTypes';
+import type { ExportConfig, ExportSettingsSnapshot } from '@features/export/exportTypes';
+import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import type { Channel } from 'discrub-core/types/discord-types';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { selectSettings } from '@features/app/appSlice';
@@ -55,7 +59,7 @@ interface BulkExportDialogProps {
 /**
  * BulkExportDialog - configure and export multiple channels/DMs
  */
-const BulkExportDialog = ({ open, onClose, channels, mode, guildId }: BulkExportDialogProps) => {
+const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guildId }: BulkExportDialogProps) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { t } = useTranslation();
@@ -105,6 +109,39 @@ const BulkExportDialog = ({ open, onClose, channels, mode, guildId }: BulkExport
       setFilterModalOpen(false);
     }
   }, [open, dispatch]);
+
+  // 2.2.5 WP4b: a bulk export that was running when Discrub closed comes
+  // back with its channels and settings. It runs the whole queue again into
+  // a new zip; skipping the finished channels needs export from the store (WP6).
+  const store = useAppStore();
+  const bulkResume = useBulkResume('bulkExport', mode, guildId);
+  const resumable = bulkResume !== null;
+  const [resumeTargets, setResumeTargets] = useState<Channel[] | null>(null);
+  useEffect(() => {
+    if (!open || !resumable) {
+      setResumeTargets(null);
+      return;
+    }
+    let live = true;
+    void readBulkRecord(store.getState()).then((record) => {
+      if (!live || !record || record.kind !== 'bulkExport') return;
+      const saved = record.settings as { snapshot?: ExportSettingsSnapshot; searchCriteria?: SearchCriteria | null } | undefined;
+      if (saved?.snapshot) dispatch(applyPreset(saved.snapshot));
+      dispatch(setExportCriteria(saved?.searchCriteria ?? null));
+      const state = store.getState();
+      setResumeTargets(resolveQueue(record.queue, [state.channel.channels, state.channel.forumThreads, state.dm.dms]));
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, resumable, store, dispatch]);
+  const resuming = resumeTargets !== null;
+  const channels = resumeTargets ?? selectedTargets;
+  const handleStartOver = () => {
+    void dispatch(discardBulkRecord());
+    dispatch(setExportCriteria(null));
+    setResumeTargets(null);
+  };
 
   const filterCount = filterCriteria ? countActiveFilters(filterCriteria) : 0;
 
@@ -176,6 +213,11 @@ const BulkExportDialog = ({ open, onClose, channels, mode, guildId }: BulkExport
       </DialogTitle>
       <DialogContent sx={{ maxHeight: fullScreen ? undefined : '70vh', overflowY: 'auto' }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          {resuming && bulkResume && (
+            <Typography variant="body2" data-testid="bulk-export-resume-note">
+              {t('workspace.resumeBulkExportNote', { done: bulkResume.doneCount, count: bulkResume.total, context: mode === 'dms' ? 'dm' : undefined })}
+            </Typography>
+          )}
           <SelectedChannelsPill channels={channels} mode={mode} />
 
           <PresetSelector />
@@ -208,6 +250,11 @@ const BulkExportDialog = ({ open, onClose, channels, mode, guildId }: BulkExport
       <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 2, pt: 1.5, pb: 1 }}>
         <ExportSummaryChip />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          {resuming && (
+            <Button onClick={handleStartOver} color="inherit" sx={{ mr: 'auto' }} data-testid="bulk-export-start-over">
+              {t('workspace.startOver')}
+            </Button>
+          )}
           <Button variant="outlined" onClick={handleClose}>
             {t('export.cancel')}
           </Button>
@@ -216,8 +263,9 @@ const BulkExportDialog = ({ open, onClose, channels, mode, guildId }: BulkExport
             variant="contained"
             startIcon={<DownloadIcon />}
             disabled={channels.length === 0 || isOperationRunning}
+            data-testid="bulk-export-confirm"
           >
-            {mode === 'channels' ? t('export.exportChannels', { count: channels.length }) : t('export.exportDms', { count: channels.length })}
+            {resuming ? t('workspace.resume') : mode === 'channels' ? t('export.exportChannels', { count: channels.length }) : t('export.exportDms', { count: channels.length })}
           </Button>
         </Box>
       </DialogActions>

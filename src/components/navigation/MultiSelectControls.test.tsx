@@ -129,4 +129,11 @@ describe('MultiSelectControls (Backlog #135)', () => {
       expect(screen.getByTestId('multi-select-copy')).toBeInTheDocument();
     });
   });
+
+  // 2.2.5 WP4b: an unfinished run shows its button as Resume, even with nothing selected.
+  it('shows the actions with nothing selected when a run can resume, and that button reads Resume', () => {
+    render(<MultiSelectControls {...baseProps} active selectedCount={0} totalCount={10} resume={{ purge: true }} />);
+    expect(screen.getByTestId('multi-select-purge')).toHaveTextContent('Resume');
+    expect(screen.getByTestId('multi-select-export')).toHaveTextContent('Export');
+  });
 });

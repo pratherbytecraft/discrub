@@ -19,6 +19,7 @@ import {
 } from '@services/workspaceStore';
 import {
   actionsOf,
+  bulkOf,
   scopeRestoreFinished,
   selectCurrentWid,
   workspaceSwitchFailed,
@@ -67,7 +68,7 @@ export const switchWorkspace = createAsyncThunk<OpenedWorkspace, { wid: string }
 
     dispatch(workspaceSwitchStarted({ wid }));
     try {
-      return await finishSwitch(wid, from, record.name, actionsOf(record), dispatch, getState);
+      return await finishSwitch(wid, from, record.name, actionsOf(record), bulkOf(record), dispatch, getState);
     } catch (error) {
       releaseWorkspaceLock(wid);
       dispatch(workspaceSwitchFailed({ wid, reason: error instanceof Error ? error.message : 'switch failed' }));
@@ -81,6 +82,7 @@ async function finishSwitch(
   from: string | null,
   name: string,
   actions: OpenedWorkspace['actions'],
+  bulk: OpenedWorkspace['bulk'],
   dispatch: (action: unknown) => unknown,
   getState: () => RootState,
 ): Promise<OpenedWorkspace> {
@@ -113,7 +115,7 @@ async function finishSwitch(
   } catch (error) {
     console.error('[workspace] could not mark the workspace as last opened', error);
   }
-  const opened: OpenedWorkspace = { wid, name, actions };
+  const opened: OpenedWorkspace = { wid, name, actions, bulk };
   dispatch(workspaceSwitched(opened));
   return opened;
 }
@@ -165,12 +167,12 @@ async function openScope(wid: string, dispatchAny: Dispatch, getState: () => Roo
   const start = getState();
   const token = start.auth?.token;
   if (!token || start.auth?.guestMode) return 'skipped';
-  if (userNavigated(start)) return 'skipped';
+  if (userNavigated(start) || start.workspace?.scopeInterrupted) return 'skipped';
   const record = await getWorkspace(wid);
   if (!record) return 'missing';
   const { guildId, channelId, dmId } = record.scope;
   if (!guildId && !dmId) return 'empty';
-  const stillHere = () => selectCurrentWid(getState()) === wid;
+  const stillHere = () => selectCurrentWid(getState()) === wid && !getState().workspace?.scopeInterrupted;
 
   let cid: string | null = null;
   if (guildId) {

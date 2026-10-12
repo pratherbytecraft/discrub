@@ -2050,6 +2050,15 @@
     "switchLoadAllLine": "Alle laden steht bei {{messages}} Nachrichten in {{conversation}}.",
     "switchNote": "Beim Wechseln wird es pausiert. Fortsetzen macht dort weiter, wenn du zurückkommst.",
     "stay": "Bleiben",
-    "switch": "Wechseln"
+    "switch": "Wechseln",
+    "resume": "Fortsetzen",
+    "startOver": "Neu beginnen",
+    "resumeExportNote": "Dieser Export lief, als Discrub geschlossen wurde. Fortsetzen schreibt eine neue ZIP-Datei.",
+    "resumeBulkExportNote_one": "{{done}} von {{count}} Kanal war fertig, als Discrub geschlossen wurde. Fortsetzen schreibt eine neue ZIP-Datei.",
+    "resumeBulkExportNote_other": "{{done}} von {{count}} Kanälen waren fertig, als Discrub geschlossen wurde. Fortsetzen schreibt eine neue ZIP-Datei.",
+    "resumeBulkExportNote_dm_one": "{{done}} von {{count}} Unterhaltung war fertig, als Discrub geschlossen wurde. Fortsetzen schreibt eine neue ZIP-Datei.",
+    "resumeBulkExportNote_dm_other": "{{done}} von {{count}} Unterhaltungen waren fertig, als Discrub geschlossen wurde. Fortsetzen schreibt eine neue ZIP-Datei.",
+    "resumePurgeNote": "Diese Löschung lief, als Discrub geschlossen wurde. Fortsetzen macht dort weiter.",
+    "resumeEditNote": "Diese Bearbeitung lief, als Discrub geschlossen wurde. Fortsetzen macht dort weiter."
   }
 }

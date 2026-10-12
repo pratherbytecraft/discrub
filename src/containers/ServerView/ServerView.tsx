@@ -1,4 +1,5 @@
 import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
+import { useResumeLabels } from '@/hooks/useResume';
 import { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
 import { Box, Typography, Paper, Button, Alert, AlertTitle, Chip } from '@mui/material';
 import { Joyride } from 'react-joyride';
@@ -150,6 +151,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   perfCount('ServerView');
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
+  const { exportLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
@@ -1107,7 +1109,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
                   data-tour="export-button"
                   disabled={messages.length === 0 || isOperationRunning}
                 >
-                  {t('serverView.export')}
+                  {exportLabel}
                 </Button>
               </HotkeyTooltip>
             )}

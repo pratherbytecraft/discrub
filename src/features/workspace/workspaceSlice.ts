@@ -11,13 +11,23 @@ import {
   setLastWorkspace,
   touchWorkspace,
 } from '@services/workspaceStore';
-import { DEFAULT_WORKSPACE_ID, type ActionKind, type WorkspaceRecord } from './workspaceTypes';
+import { DEFAULT_WORKSPACE_ID, type ActionKind, type BulkKind, type BulkMode, type WorkspaceRecord } from './workspaceTypes';
 
 /** An unfinished long action recorded in a conversation of the open workspace (plan section 6). */
 export interface UnfinishedAction {
   cid: string;
   name: string;
   kind: ActionKind;
+}
+
+/** The workspace's unfinished bulk run, without its settings (those stay on disk). */
+export interface UnfinishedBulk {
+  kind: BulkKind;
+  mode: BulkMode;
+  guildId: string | null;
+  total: number;
+  doneCount: number;
+  remaining: number;
 }
 
 /**
@@ -43,8 +53,12 @@ export interface WorkspaceState {
   scopeRestoredWid: string | null;
   /** True while the saved scope is being opened; navigation is not written meanwhile. */
   restoringScope: boolean;
+  /** The user left the server view (the DMs tab) before the saved scope opened; the restore stops. */
+  scopeInterrupted: boolean;
   /** Unfinished actions in the open workspace, by conversation id. */
   actions: Record<string, UnfinishedAction>;
+  /** The open workspace's unfinished bulk run (WP4b). */
+  bulk: UnfinishedBulk | null;
 }
 
 export const initialWorkspaceState: WorkspaceState = {
@@ -57,7 +71,9 @@ export const initialWorkspaceState: WorkspaceState = {
   switching: false,
   scopeRestoredWid: null,
   restoringScope: false,
+  scopeInterrupted: false,
   actions: {},
+  bulk: null,
 };
 
 /** The unfinished actions a workspace record carries. */
@@ -72,10 +88,25 @@ export function actionsOf(record: WorkspaceRecord | null | undefined): Record<st
   return actions;
 }
 
+/** The light view of a record's bulk run. */
+export function bulkOf(record: WorkspaceRecord | null | undefined): UnfinishedBulk | null {
+  const bulk = record?.bulk;
+  if (!bulk) return null;
+  return {
+    kind: bulk.kind,
+    mode: bulk.mode ?? 'channels',
+    guildId: bulk.guildId,
+    total: bulk.total ?? bulk.queue.length,
+    doneCount: bulk.doneCount ?? bulk.done.length,
+    remaining: bulk.queue.filter((id) => !bulk.done.includes(id)).length,
+  };
+}
+
 export interface OpenedWorkspace {
   wid: string;
   name: string;
   actions: Record<string, UnfinishedAction>;
+  bulk?: UnfinishedBulk | null;
 }
 
 export interface BootResult {
@@ -114,7 +145,7 @@ export const initializeWorkspaces = createAsyncThunk<BootResult, void, { rejectV
       if (wid !== DEFAULT_WORKSPACE_ID) {
         dispatch(showToast({ level: 'info', message: t('workspace.openedToast', { name }) }));
       }
-      return { opened: { wid, name, actions: actionsOf(record) }, heldElsewhere: null };
+      return { opened: { wid, name, actions: actionsOf(record), bulk: bulkOf(record) }, heldElsewhere: null };
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Could not open workspaces');
     }
@@ -145,6 +176,10 @@ const workspaceSlice = createSlice({
     scopeRestoreFinished: (state) => {
       state.restoringScope = false;
     },
+    /** Mirrors the workspace's bulk record; null clears it. */
+    bulkRecorded: (state, action: PayloadAction<UnfinishedBulk | null>) => {
+      state.bulk = action.payload;
+    },
     /** Mirrors a conversation's action record; null clears it. */
     actionRecorded: (state, action: PayloadAction<{ cid: string; action: UnfinishedAction | null }>) => {
       if (action.payload.action) state.actions[action.payload.cid] = action.payload.action;
@@ -165,6 +200,7 @@ const workspaceSlice = createSlice({
         state.currentName = opened?.name ?? null;
         state.ready = opened !== null;
         state.actions = opened?.actions ?? {};
+        state.bulk = opened?.bulk ?? null;
       })
       .addCase(initializeWorkspaces.rejected, (state, action) => {
         state.currentWid = null;
@@ -182,8 +218,10 @@ const workspaceSlice = createSlice({
         state.ready = true;
         state.heldElsewhere = null;
         state.actions = action.payload.actions;
+        state.bulk = action.payload.bulk ?? null;
         state.scopeRestoredWid = null;
         state.restoringScope = false;
+        state.scopeInterrupted = false;
       })
       .addCase(workspaceSwitchFailed, (state) => {
         state.switching = false;
@@ -191,6 +229,15 @@ const workspaceSlice = createSlice({
       // restoreWorkspaceScope lives in workspaceThunks.ts (it reaches into
       // other slices); its pending marks the restore in the same tick, so
       // a second render cannot start it again.
+      // Clearing the server is always the user (the DMs tab, a back arrow);
+      // the restore's own steps never do it. Before the saved scope has
+      // opened, that means the user went elsewhere and the restore stops.
+      .addMatcher(
+        (action): action is { type: string; payload: unknown } => action.type === 'guild/setSelectedGuild' && (action as { payload?: unknown }).payload === null,
+        (state) => {
+          if (state.restoringScope || (state.currentWid !== null && state.scopeRestoredWid !== state.currentWid)) state.scopeInterrupted = true;
+        },
+      )
       .addMatcher(
         (action): action is { type: string } => action.type === RESTORE_SCOPE_PENDING,
         (state) => {
@@ -201,7 +248,7 @@ const workspaceSlice = createSlice({
   },
 });
 
-export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded } = workspaceSlice.actions;
+export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded } = workspaceSlice.actions;
 
 /** The open workspace id, or null while workspaces are not ready (writes are skipped). */
 export const selectCurrentWid = (state: RootState): string | null => {
@@ -216,8 +263,10 @@ export const selectWorkspaceSwitching = (state: RootState): boolean => state.wor
 export const selectScopeRestoredWid = (state: RootState): string | null => state.workspace?.scopeRestoredWid ?? null;
 const noActions: Record<string, UnfinishedAction> = {};
 export const selectUnfinishedActions = (state: RootState): Record<string, UnfinishedAction> => state.workspace?.actions ?? noActions;
+export const selectUnfinishedBulk = (state: RootState): UnfinishedBulk | null => state.workspace?.bulk ?? null;
 /** The pill's dot: true when the open workspace has unfinished work. */
-export const selectHasUnfinishedWork = (state: RootState): boolean => Object.keys(selectUnfinishedActions(state)).length > 0;
+export const selectHasUnfinishedWork = (state: RootState): boolean =>
+  Object.keys(selectUnfinishedActions(state)).length > 0 || selectUnfinishedBulk(state) !== null;
 /** The unfinished action recorded for a conversation, if any. */
 export const selectConversationAction = (cid: string | null | undefined) => (state: RootState): UnfinishedAction | null =>
   cid ? selectUnfinishedActions(state)[cid] ?? null : null;

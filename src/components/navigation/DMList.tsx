@@ -1,3 +1,4 @@
+import { useResumeLabels } from '@/hooks/useResume';
 import { useEffect, useMemo, useState, useRef, memo } from 'react';
 import {
   List,
@@ -243,6 +244,7 @@ interface DMListProps {
 const DMList = ({ filterText = '', queue }: DMListProps) => {
   perfCount('DMList');
   const dispatch = useAppDispatch();
+  const { purgeResumable, bulkExportResumable, editResumable } = useResumeLabels('dms');
   const { t } = useTranslation();
   const dms = useAppSelector(selectDMs);
   const selectedDm = useAppSelector(selectSelectedDm);
@@ -489,6 +491,7 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
         onEdit={() => setBulkEditOpen(true)}
         onCopyNames={handleCopySelectedNames}
         noun="conversations"
+        resume={{ export: bulkExportResumable, purge: purgeResumable, edit: editResumable }}
       />
 
       <Divider />

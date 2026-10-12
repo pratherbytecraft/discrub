@@ -1,3 +1,4 @@
+import { useResumeLabels } from '@/hooks/useResume';
 import { useMemo, useRef, useState, memo } from 'react';
 import {
   List,
@@ -71,6 +72,7 @@ interface ChannelListProps {
 const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
   perfCount('ChannelList');
   const dispatch = useAppDispatch();
+  const { purgeResumable, bulkExportResumable, editResumable } = useResumeLabels('channels');
   const { t } = useTranslation();
   const channels = useAppSelector(selectChannels);
   const selectedChannel = useAppSelector(selectSelectedChannel);
@@ -370,6 +372,7 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
         onEdit={() => setBulkEditOpen(true)}
         onCopyNames={handleCopySelectedNames}
         noun="channels"
+        resume={{ export: bulkExportResumable, purge: purgeResumable, edit: editResumable }}
       />
 
       <Divider />

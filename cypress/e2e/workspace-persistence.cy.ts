@@ -143,7 +143,7 @@ describe('Workspace persistence (2.2.5)', () => {
   type WorkspaceHooks = {
     switchTo: (wid: string) => Promise<unknown>;
     create: (name: string) => Promise<{ wid: string }>;
-    get: (wid: string) => Promise<{ conversations: Record<string, { name: string; action: { kind: string } | null; scrollAnchorId: string | null }> } | null>;
+    get: (wid: string) => Promise<{ conversations: Record<string, { name: string; action: { kind: string } | null; scrollAnchorId: string | null }>; bulk: { kind: string; queue: string[]; done: string[] } | null } | null>;
   };
   const hooks = () => cy.window({ log: false }).its('__workspace__') as unknown as Cypress.Chainable<WorkspaceHooks>;
 
@@ -243,6 +243,47 @@ describe('Workspace persistence (2.2.5)', () => {
         cy.contains('200 messages').should('be.visible');
         cy.get('@pagedMessages.all').should('have.length', 2);
       });
+    });
+  });
+
+  /* ─────────────── 2.2.5 WP4b: bulk run records ─────────────── */
+
+  it('a DM purge cut short by a reload reads Resume and finishes the conversations it had left', () => {
+    cy.fixture('bulk-purge-search-empty.json').then((empty) => {
+      let searches = 0;
+      cy.intercept('GET', '**/api/v10/channels/*/messages/search*', (req) => {
+        searches += 1;
+        // The first search never answers before the reload.
+        if (searches === 1) req.reply({ statusCode: 200, body: empty, delay: 30000 });
+        else req.reply({ statusCode: 200, body: empty });
+      }).as('dmSearch');
+    });
+    cy.intercept('GET', '**/api/v10/channels/*/messages?*', { statusCode: 200, body: [] }).as('finalPass');
+
+    cy.contains('button', 'DMs').click();
+    cy.wait('@getDMs');
+    cy.get('[aria-label="Toggle multi-select"]').first().click();
+    cy.contains('alice_dev').click();
+    cy.contains('bob_gamer').click();
+    cy.get('[data-testid="multi-select-purge"]').click();
+    cy.get('[data-testid="purge-confirm"]').should('not.be.disabled').click();
+    hooks().then((h) => h.get('default')).should((record) => {
+      expect(record?.bulk?.kind).to.eq('bulkPurge');
+      expect(record?.bulk?.queue).to.have.length(2);
+    });
+
+    cy.reload();
+    cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
+    cy.contains('button', 'DMs').click();
+    cy.wait('@getDMs');
+    cy.get('[aria-label="Toggle multi-select"]').first().click();
+    // Nothing is selected, the run's own button reads Resume.
+    cy.get('[data-testid="multi-select-purge"]').should('have.text', 'Resume').click();
+    cy.get('[data-testid="purge-resume-note"]').should('contain', 'This purge was running when Discrub closed.');
+    cy.get('[data-testid="purge-confirm"]').should('have.text', 'Resume').and('not.be.disabled').click();
+    cy.contains('Purge complete', { timeout: 20000 }).should('exist');
+    hooks().then((h) => h.get('default')).should((record) => {
+      expect(record?.bulk ?? null).to.eq(null);
     });
   });
 });

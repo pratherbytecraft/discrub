@@ -1,3 +1,4 @@
+import { useBulkResume } from '@/hooks/useResume';
 import { useEffect, useMemo, useRef, useState, memo } from 'react';
 import {
   List,
@@ -53,6 +54,7 @@ interface ServerListProps {
 const ServerList = ({ filterText = '' }: ServerListProps) => {
   perfCount('ServerList');
   const dispatch = useAppDispatch();
+  const serverPurgeResume = useBulkResume('bulkPurge', 'servers', null);
   const { t } = useTranslation();
   const guilds = useAppSelector(selectGuilds);
   const selectedGuild = useAppSelector(selectSelectedGuild);
@@ -186,6 +188,7 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
         onPurge={() => setServerPurgeOpen(true)}
         onCopyNames={handleCopySelectedNames}
         noun="servers"
+        resume={{ purge: serverPurgeResume !== null }}
       />
 
       <BulkPurgeDialog

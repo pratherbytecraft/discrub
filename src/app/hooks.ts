@@ -1,4 +1,5 @@
-import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux';
+import { useDispatch, useSelector, useStore, TypedUseSelectorHook } from 'react-redux';
+import type { Store } from '@reduxjs/toolkit';
 import type { RootState, AppDispatch } from './store';
 
 /**
@@ -7,3 +8,5 @@ import type { RootState, AppDispatch } from './store';
  */
 export const useAppDispatch: () => AppDispatch = useDispatch;
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+/** The store itself, for reading state inside an effect without subscribing. */
+export const useAppStore: () => Store<RootState> = useStore;

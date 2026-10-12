@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, createSelector, isDraft, original, PayloadAction } from '@reduxjs/toolkit';
+import { createAction, createSlice, createAsyncThunk, createSelector, isDraft, original, PayloadAction } from '@reduxjs/toolkit';
 import type { Message, Attachment, User, Channel } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { ReactionType, IsPinnedType } from 'discrub-core/discord-enum';
@@ -441,6 +441,9 @@ export const editMessages = createAsyncThunk(
  * `bulkPurgeChannels` — outer channel loop, per-channel search, pause/cancel
  * guards, paced delay, per-channel + summary status entries.
  */
+/** 2.2.5 WP4b: Bulk Edit has no progress state; this tells the workspace record which channel is in hand. */
+export const bulkEditChannelStarted = createAction<{ index: number; total: number }>('message/bulkEditChannelStarted');
+
 export const bulkEditChannels = createAsyncThunk<
   { edited: number; skipped: number; failed: number },
   {
@@ -484,6 +487,7 @@ export const bulkEditChannels = createAsyncThunk<
 
         const channel = channels[i];
         const channelName = channel.name || channel.id;
+        dispatch(bulkEditChannelStarted({ index: i, total: channels.length }));
 
         dispatch(addStatusEntry({
           level: 'info',

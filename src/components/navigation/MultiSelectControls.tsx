@@ -28,6 +28,12 @@ export interface MultiSelectControlsProps {
   onCopyNames: () => void;
   /** Plural noun for aria labels — e.g. "channels", "conversations". */
   noun: string;
+  /**
+   * 2.2.5 WP4b: the action an unfinished run can resume. Its button reads
+   * Resume and the actions show even with nothing selected, since the
+   * dialog brings back the run's own channels.
+   */
+  resume?: { export?: boolean; purge?: boolean; edit?: boolean };
 }
 
 /**
@@ -52,12 +58,15 @@ const MultiSelectControls = ({
   onEdit,
   onCopyNames,
   noun,
+  resume,
 }: MultiSelectControlsProps) => {
   const { t } = useTranslation();
   if (!active) return null;
 
   const toggleLabel = allSelected ? t('nav.deselectAll') : t('nav.selectAll');
-  const showActions = selectedCount > 0;
+  const resumable = !!(resume?.export || resume?.purge || resume?.edit);
+  const showActions = selectedCount > 0 || resumable;
+  const resumeLabel = t('workspace.resume');
 
   return (
     <Stack spacing={1} sx={{ px: 2, pb: 1 }}>
@@ -101,7 +110,7 @@ const MultiSelectControls = ({
                 data-testid="multi-select-export"
                 sx={{ textTransform: 'none' }}
               >
-                {t('nav.export')}
+                {resume?.export ? resumeLabel : t('nav.export')}
               </Button>
             )}
             {onEdit && (
@@ -115,7 +124,7 @@ const MultiSelectControls = ({
                 data-testid="multi-select-edit"
                 sx={{ textTransform: 'none' }}
               >
-                {t('nav.edit')}
+                {resume?.edit ? resumeLabel : t('nav.edit')}
               </Button>
             )}
             {onPurge && (
@@ -129,7 +138,7 @@ const MultiSelectControls = ({
                 data-testid="multi-select-purge"
                 sx={{ textTransform: 'none' }}
               >
-                {t('nav.purge')}
+                {resume?.purge ? resumeLabel : t('nav.purge')}
               </Button>
             )}
             <Button

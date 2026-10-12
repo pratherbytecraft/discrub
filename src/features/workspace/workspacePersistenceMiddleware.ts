@@ -26,6 +26,9 @@ import {
   fetchAllThreadMessages,
   loadAllSearchResults,
   setActiveTab,
+  bulkEditChannels,
+  bulkEditChannelStarted,
+  selectActiveCid,
   selectAllMessages,
   selectAllThreadMessages,
   setOrder,
@@ -52,8 +55,10 @@ import { updateWorkspace, type RowPatch } from '@services/workspaceStore';
 import { setSelectedGuild } from '@features/guild/guildSlice';
 import { setSelectedChannel } from '@features/channel/channelSlice';
 import { setSelectedDm } from '@features/dm/dmSlice';
-import type { ActionKind, ConversationSeed, WorkspaceScope } from './workspaceTypes';
-import { actionRecorded, feedAnchorMoved, scopeRestoreFinished, selectCurrentWid } from './workspaceSlice';
+import type { ActionKind, BulkKind, BulkMode, ConversationSeed, WorkspaceBulk, WorkspaceScope } from './workspaceTypes';
+import { actionRecorded, bulkOf, bulkRecorded, feedAnchorMoved, scopeRestoreFinished, selectCurrentWid } from './workspaceSlice';
+import { buildConfigSnapshot, bulkExportChannels, bulkExportDMs, exportMessages, setExportProgress } from '@features/export/exportSlice';
+import { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
 
 /**
  * Keeps the workspace store in step with what the reducers did to the
@@ -462,5 +467,223 @@ listen({
   matcher: isAnyOf(fetchAllThreadMessages.fulfilled, fetchAllThreadMessages.rejected),
   effect: (action, listenerApi) => {
     actionEnded(api(listenerApi), argOf<{ threadId: string }>(action).threadId);
+  },
+});
+
+/* ─────────────────── WP4b: Export and bulk records ─────────────────── */
+
+/** The conversation each running export started in, by request id, so its end clears the right record. */
+const exportCids = new Map<string, string>();
+
+listen({
+  actionCreator: exportMessages.pending,
+  effect: (action, listenerApi) => {
+    const state = listenerApi.getState();
+    const cid = selectActiveCid(state);
+    if (!cid) return;
+    exportCids.set(action.meta.requestId, cid);
+    const thread = state.message.activeTab && state.message.threadTabs?.[state.message.activeTab] ? cid : null;
+    const seed = thread ? threadSeedFromState(state, cid) : conversationSeedFromState(state, cid);
+    recordActionStart(api(listenerApi), cid, 'export', seed, { snapshot: buildConfigSnapshot(state) });
+  },
+});
+
+listen({
+  matcher: isAnyOf(exportMessages.fulfilled, exportMessages.rejected),
+  effect: (action, listenerApi) => {
+    const requestId = (action as unknown as { meta: { requestId: string } }).meta.requestId;
+    const cid = exportCids.get(requestId) ?? null;
+    exportCids.delete(requestId);
+    actionEnded(api(listenerApi), cid);
+  },
+});
+
+interface BulkStart {
+  kind: BulkKind;
+  mode: BulkMode;
+  guildId: string | null;
+  settings: unknown;
+  queue: string[];
+}
+
+/** The last progress index written, so a progress action per message writes nothing new. */
+let bulkWrittenIndex = -1;
+
+function recordBulkStart(persistApi: PersistApi, start: BulkStart): void {
+  const wid = selectCurrentWid(persistApi.getState());
+  if (!wid) return;
+  bulkWrittenIndex = -1;
+  const bulk: WorkspaceBulk = {
+    ...start,
+    done: [],
+    inHand: start.queue[0] ?? null,
+    total: start.queue.length,
+    doneCount: 0,
+  };
+  persistApi.dispatch(bulkRecorded(bulkOf({ bulk } as never)));
+  void chained(async () => {
+    try {
+      await updateWorkspace(wid, (workspace) => {
+        workspace.bulk = bulk;
+      });
+    } catch (error) {
+      console.error('[workspace] could not record the bulk run', error);
+    }
+  });
+}
+
+/** Moves the record to the unit at `index` (everything before it is done). */
+function recordBulkAt(persistApi: PersistApi, index: number, total: number | null): void {
+  const wid = selectCurrentWid(persistApi.getState());
+  if (!wid || !persistApi.getState().workspace?.bulk || index === bulkWrittenIndex) return;
+  bulkWrittenIndex = index;
+  void chained(async () => {
+    try {
+      const record = await updateWorkspace(wid, (workspace) => {
+        const bulk = workspace.bulk;
+        if (!bulk) return;
+        bulk.doneCount = index;
+        if (total !== null) bulk.total = total;
+        // Bulk Export counts a forum's posts one by one, so its index does
+        // not map onto the queue; the other runs walk the queue itself.
+        if (bulk.kind !== 'bulkExport') {
+          bulk.done = bulk.queue.slice(0, index);
+          bulk.inHand = bulk.queue[index] ?? null;
+        }
+      });
+      if (selectCurrentWid(persistApi.getState()) === wid && persistApi.getState().workspace?.bulk) {
+        persistApi.dispatch(bulkRecorded(bulkOf(record)));
+      }
+    } catch (error) {
+      console.error('[workspace] could not update the bulk run', error);
+    }
+  });
+}
+
+function recordBulkEnd(persistApi: PersistApi): void {
+  const wid = selectCurrentWid(persistApi.getState());
+  if (!wid || isSuspendingForSwitch()) return;
+  bulkWrittenIndex = -1;
+  persistApi.dispatch(bulkRecorded(null));
+  void chained(async () => {
+    try {
+      await updateWorkspace(wid, (workspace) => {
+        workspace.bulk = null;
+      });
+    } catch (error) {
+      console.error('[workspace] could not clear the bulk run', error);
+    }
+  });
+}
+
+const idsOf = (items: Array<{ id: string }>): string[] => items.map((item) => item.id);
+
+listen({
+  matcher: isAnyOf(bulkExportChannels.pending, bulkExportDMs.pending),
+  effect: (action, listenerApi) => {
+    const arg = argOf<{ channels: Array<{ id: string }>; guildId?: string | null; searchCriteria?: unknown }>(action);
+    const dms = bulkExportDMs.pending.match(action);
+    recordBulkStart(api(listenerApi), {
+      kind: 'bulkExport',
+      mode: dms ? 'dms' : 'channels',
+      guildId: dms ? null : arg.guildId ?? null,
+      settings: { snapshot: buildConfigSnapshot(listenerApi.getState()), searchCriteria: arg.searchCriteria ?? null },
+      queue: idsOf(arg.channels),
+    });
+  },
+});
+
+listen({
+  actionCreator: setExportProgress,
+  effect: (action, listenerApi) => {
+    const bulk = action.payload.bulk;
+    if (!bulk || listenerApi.getState().workspace?.bulk?.kind !== 'bulkExport') return;
+    recordBulkAt(api(listenerApi), bulk.currentIndex, bulk.totalChannels);
+  },
+});
+
+listen({
+  matcher: isAnyOf(bulkExportChannels.fulfilled, bulkExportChannels.rejected, bulkExportDMs.fulfilled, bulkExportDMs.rejected),
+  effect: (_action, listenerApi) => {
+    recordBulkEnd(api(listenerApi));
+  },
+});
+
+listen({
+  actionCreator: bulkPurgeChannels.pending,
+  effect: (action, listenerApi) => {
+    const arg = action.meta.arg;
+    recordBulkStart(api(listenerApi), {
+      kind: 'bulkPurge',
+      mode: arg.guildId ? 'channels' : 'dms',
+      guildId: arg.guildId ?? null,
+      settings: { config: arg.config, searchCriteria: arg.searchCriteria ?? null },
+      queue: idsOf(arg.channels),
+    });
+  },
+});
+
+listen({
+  actionCreator: purgeGuilds.pending,
+  effect: (action, listenerApi) => {
+    const arg = action.meta.arg;
+    recordBulkStart(api(listenerApi), {
+      kind: 'bulkPurge',
+      mode: 'servers',
+      guildId: null,
+      settings: { config: arg.config, searchCriteria: arg.searchCriteria ?? null },
+      queue: idsOf(arg.guilds),
+    });
+  },
+});
+
+listen({
+  actionCreator: setPurgeProgress,
+  effect: (action, listenerApi) => {
+    const bulk = action.payload.bulk;
+    const record = listenerApi.getState().workspace?.bulk;
+    if (!bulk || record?.kind !== 'bulkPurge') return;
+    const index = record.mode === 'servers' ? bulk.server?.index ?? 0 : bulk.currentIndex;
+    recordBulkAt(api(listenerApi), index, null);
+  },
+});
+
+listen({
+  matcher: isAnyOf(bulkPurgeChannels.fulfilled, bulkPurgeChannels.rejected, purgeGuilds.fulfilled, purgeGuilds.rejected),
+  effect: (action, listenerApi) => {
+    // A server run purges each server's channels inside one purgeGuilds; only its own end counts.
+    if (bulkPurgeChannels.fulfilled.match(action) || bulkPurgeChannels.rejected.match(action)) {
+      if (listenerApi.getState().workspace?.bulk?.mode === 'servers') return;
+    }
+    recordBulkEnd(api(listenerApi));
+  },
+});
+
+listen({
+  actionCreator: bulkEditChannels.pending,
+  effect: (action, listenerApi) => {
+    const arg = action.meta.arg;
+    recordBulkStart(api(listenerApi), {
+      kind: 'bulkEdit',
+      mode: arg.guildId ? 'channels' : 'dms',
+      guildId: arg.guildId ?? null,
+      settings: { content: arg.content, searchCriteria: arg.searchCriteria ?? null },
+      queue: idsOf(arg.channels),
+    });
+  },
+});
+
+listen({
+  actionCreator: bulkEditChannelStarted,
+  effect: (action, listenerApi) => {
+    if (listenerApi.getState().workspace?.bulk?.kind !== 'bulkEdit') return;
+    recordBulkAt(api(listenerApi), action.payload.index, null);
+  },
+});
+
+listen({
+  matcher: isAnyOf(bulkEditChannels.fulfilled, bulkEditChannels.rejected),
+  effect: (_action, listenerApi) => {
+    recordBulkEnd(api(listenerApi));
   },
 });

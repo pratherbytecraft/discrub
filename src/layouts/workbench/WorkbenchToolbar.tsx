@@ -1,4 +1,5 @@
 import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
+import { useResumeLabels } from '@/hooks/useResume';
 import { memo } from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon, FilterList as FilterIcon, Forum as ThreadIcon, BarChart as AnalyticsIcon, Fullscreen as FocusIcon, FullscreenExit as ExitFocusIcon } from '@mui/icons-material';
@@ -27,6 +28,7 @@ const COMPACT = '@container (max-width: 700px)';
 const WorkbenchToolbar = () => {
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
+  const { exportLabel, bulkExportLabel, purgeLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -48,8 +50,8 @@ const WorkbenchToolbar = () => {
       {hasContext ? (
         <>
           {!isForum && btn(loadAllLabel, <LoadAllIcon />, () => open('loadAll'), 'wb-load-all', { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained' })}
-          {btn(t('serverView.export'), <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), 'wb-export', { disabled: running || (!isForum && messages.length === 0), tour: 'export-button' })}
-          {!isForum && btn(t('native.purge'), <PurgeIcon />, () => open('purge'), 'wb-purge', { disabled: running, color: 'error' })}
+          {btn(isForum ? bulkExportLabel : exportLabel, <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), 'wb-export', { disabled: running || (!isForum && messages.length === 0), tour: 'export-button' })}
+          {!isForum && btn(purgeLabel, <PurgeIcon />, () => open('purge'), 'wb-purge', { disabled: running, color: 'error' })}
           {!isForum && btn(t('serverView.filters'), <FilterIcon />, () => open('filters'), 'wb-filters', { tour: 'search-filters' })}
           {channel && btn(t('serverView.loadThread'), <ThreadIcon />, () => open('threadLoad'), 'wb-load-thread', { disabled: running })}
           {!isForum && btn(t('serverView.analytics'), <AnalyticsIcon />, () => open('analytics'), 'wb-analytics', { disabled: messages.length === 0, tour: 'analytics-button' })}

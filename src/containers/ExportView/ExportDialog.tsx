@@ -12,14 +12,17 @@ import {
   Typography,
 } from '@mui/material';
 import { Download as DownloadIcon } from '@mui/icons-material';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
+import { useConversationResume } from '@/hooks/useResume';
+import { discardConversationAction, readConversationAction } from '@features/workspace/resumeRecords';
 import {
+  applyPreset,
   exportMessages,
   resetExport,
   initializeExportFromSettings,
   selectExport,
 } from '@features/export/exportSlice';
-import type { ExportConfig } from '@features/export/exportTypes';
+import type { ExportConfig, ExportSettingsSnapshot } from '@features/export/exportTypes';
 import { selectActiveContainerKey, selectActiveFilteredRows, selectActiveHydrationSource, selectActiveTab, selectThreadTabs } from '@features/message/messageSlice';
 import { useHydratedAll } from '@features/message/messageCache';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
@@ -72,6 +75,26 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
   const dispatch = useAppDispatch();
   const isPackageContext = exportContext.source === 'package';
   const { t } = useTranslation();
+  const store = useAppStore();
+  // 2.2.5 WP4b: an export that was running when Discrub closed comes back
+  // with its settings, a note and Resume (plan section 6).
+  const exportResume = useConversationResume('export');
+  const resuming = !isPackageContext && exportResume !== null;
+  const resumeCid = exportResume?.cid ?? null;
+  useEffect(() => {
+    if (!open || !resumeCid) return;
+    let live = true;
+    void readConversationAction(store.getState(), resumeCid).then((action) => {
+      const snapshot = (action?.settings as { snapshot?: ExportSettingsSnapshot } | undefined)?.snapshot;
+      if (live && snapshot) dispatch(applyPreset(snapshot));
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, resumeCid, store, dispatch]);
+  const handleStartOver = () => {
+    if (resumeCid) void dispatch(discardConversationAction({ cid: resumeCid }));
+  };
   const packageChannelId = isPackageContext ? exportContext.channelId : null;
 
   // 2.2.5 WP2b: the store holds rows; the objects are read from the message
@@ -236,6 +259,11 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
       </DialogTitle>
       <DialogContent sx={{ maxHeight: fullScreen ? undefined : '70vh', overflowY: 'auto' }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1 }}>
+          {resuming && (
+            <Typography variant="body2" data-testid="export-resume-note">
+              {t('workspace.resumeExportNote')}
+            </Typography>
+          )}
           <Box>
             <Typography variant="body2" color="text.secondary" gutterBottom>
               <Trans i18nKey="export.exportingFrom" values={{ count: messages.length, name: channelName }} components={{ strong: <strong /> }} />
@@ -297,6 +325,11 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
       <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 2, pt: 1.5, pb: 1 }}>
         <ExportSummaryChip />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          {resuming && (
+            <Button onClick={handleStartOver} color="inherit" sx={{ mr: 'auto' }} data-testid="export-start-over">
+              {t('workspace.startOver')}
+            </Button>
+          )}
           <Button onClick={handleClose} variant="outlined">
             {t('export.cancel')}
           </Button>
@@ -305,8 +338,9 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
             variant="contained"
             startIcon={<DownloadIcon />}
             disabled={messages.length === 0 || isOperationRunning || liveLoading}
+            data-testid="export-confirm"
           >
-            {t('export.export')}
+            {resuming ? t('workspace.resume') : t('export.export')}
           </Button>
         </Box>
       </DialogActions>

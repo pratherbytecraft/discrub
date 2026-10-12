@@ -239,7 +239,7 @@ export function logMediaProgress(
 /**
  * Build an ExportSettingsSnapshot from the current export state
  */
-function buildConfigSnapshot(state: RootState): ExportSettingsSnapshot {
+export function buildConfigSnapshot(state: RootState): ExportSettingsSnapshot {
   const exp = state.export;
   return {
     format: exp.exportFormat,
