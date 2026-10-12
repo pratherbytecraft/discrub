@@ -72,6 +72,7 @@ import {
   persistThreadTabs,
   restoreConversation,
   restoreConversationOrSearch,
+  restoreConversationSettings,
   threadSeedFromState,
 } from './messagePersistence';
 import type { Conversation } from '@features/workspace/workspaceTypes';
@@ -1340,6 +1341,8 @@ export const fetchMessages = createAsyncThunk(
       const messages = response.data as Message[];
 
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loaded', { count: messages.length }) }));
+      // Row 159: a record without rows (after Clear) still has its refine and sort.
+      const settings = await restoreConversationSettings({ dispatch, getState: getState as () => RootState }, channelId);
 
       return {
         messages,
@@ -1348,6 +1351,7 @@ export const fetchMessages = createAsyncThunk(
         restoredRows: null as RestoredRows | null,
         restored: null as Conversation | null,
         contentMatchIds: null as string[] | null,
+        settings,
       };
     } catch (error) {
       return rejectWithValue(
@@ -3978,6 +3982,12 @@ const messageSlice = createSlice({
           const oldestTimestamp = restoredRows.rows[0]?.timestamp ?? null;
           state.restored = { count: rows.length, oldestTimestamp };
           return;
+        }
+        const settings = action.payload.settings;
+        if (settings) {
+          // Set before the ingest so the first page comes in sorted and refined.
+          state.order = settings.order;
+          state.refineCriteria = settings.refineCriteria;
         }
         ingestPage(state, state, MAIN_CONTAINER, action.payload.messages, 'replace');
         state.selectedIds = [];

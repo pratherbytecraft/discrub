@@ -209,10 +209,18 @@ function recordActionStart(api: PersistApi, cid: string, kind: ActionKind, seed:
   void chained(() => persistConversation(api, cid, { action: { kind, settings } }, seed));
 }
 
+/**
+ * Row 157 (pass 3): the in memory record clears only once the stored one
+ * did. With storage full the write fails and the stored record stays, so
+ * the screen keeps showing Resume instead of losing it until a reload.
+ */
 function recordActionEnd(api: PersistApi, cid: string): void {
   if (!selectCurrentWid(api.getState())) return;
-  api.dispatch(actionRecorded({ cid, action: null }));
-  void chained(() => persistConversation(api, cid, { action: null }, null));
+  void chained(async () => {
+    const outcome = await persistConversation(api, cid, { action: null }, null);
+    if (outcome !== 'failed') api.dispatch(actionRecorded({ cid, action: null }));
+    return outcome;
+  });
 }
 
 /**

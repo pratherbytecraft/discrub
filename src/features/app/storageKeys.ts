@@ -70,6 +70,10 @@ export const defaultSettings: AppSettings = {
   [DiscrubSetting.APP_SCRUBLINGS_ENABLED]: 'true',
   [DiscrubSetting.APP_SCRUBLINGS_PICKED]: '["suds","mage"]',
   [DiscrubSetting.APP_SCRUBLINGS_POSITIONS]: '{}',
+  // discrub-core 1.0.14 keys for a Scrubling of your own; nothing reads them yet.
+  [DiscrubSetting.APP_SCRUBLINGS_AVATAR]: '{}',
+  [DiscrubSetting.APP_SCRUBLINGS_UNLOCKS]: '[]',
+  [DiscrubSetting.APP_SCRUBLINGS_COUNTERS]: '{}',
 
   // Purge Behavior
   [DiscrubSetting.PURGE_RETAIN_ATTACHED_MEDIA]: 'false',

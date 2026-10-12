@@ -556,7 +556,7 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
       expectStatusEntry('Export: Completed general');
     });
 
-    it('CSV export survives a message whose row serialization throws (ae551f5 non-HTML isolation)', () => {
+    it('CSV export writes a message whose stored timestamp is not a date, dated from its id (row 124)', () => {
       cy.task('downloads:clean');
 
       // Poison: an unparsable msg.timestamp. The CSV row builder formats
@@ -596,15 +596,17 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
           const poisonLine = page
             .split('\n')
             .find((line) => line.includes(poisonId));
-          expect(poisonLine, 'placeholder row for the poison ID').to.exist;
-          expect(poisonLine).to.contain(
+          // 2.2.5 row 124: a timestamp that is not a date is repaired from
+          // the snowflake before the export, so the row is written whole.
+          expect(poisonLine, 'row for the bad timestamp ID').to.exist;
+          expect(poisonLine).to.contain('csv poison row');
+          expect(poisonLine).to.contain('2021');
+          expect(poisonLine).not.to.contain(
             '[This message could not be rendered and was skipped]',
           );
         });
       });
 
-      expectStatusEntry(`Export: Could not render message ${poisonId}`);
-      expectStatusEntry('Invalid time value');
       expectStatusEntry('Export: Completed general');
     });
   });

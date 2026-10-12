@@ -1096,7 +1096,6 @@
     "clearAll": "Clear all",
     "cancel": "Cancel",
     "export": "Export",
-    "zipSingle": "Single zip (no limit)",
     "zipRecommended": "4 GB (recommended)",
     "saveAsPresetItem": "Save as Preset...",
     "mediaLabelEmpty": "{{label}} (0 files)",

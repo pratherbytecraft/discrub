@@ -5,6 +5,7 @@ import {
   initialExportState,
   resolveMaxZipPartBytes,
   DEFAULT_MAX_ZIP_PART_BYTES,
+  ZIP_SIZE_OPTIONS,
 } from './exportTypes';
 
 describe('resolveMaxZipPartBytes (#207 Arm A)', () => {
@@ -13,8 +14,12 @@ describe('resolveMaxZipPartBytes (#207 Arm A)', () => {
     expect(resolveMaxZipPartBytes({ maxZipPartBytes: undefined })).toBe(DEFAULT_MAX_ZIP_PART_BYTES);
   });
 
-  it('treats null as no limit (single zip)', () => {
-    expect(resolveMaxZipPartBytes({ maxZipPartBytes: null })).toBeNull();
+  it('treats null from the old single zip choice as the default', () => {
+    expect(resolveMaxZipPartBytes({ maxZipPartBytes: null })).toBe(DEFAULT_MAX_ZIP_PART_BYTES);
+  });
+
+  it('offers no single zip choice', () => {
+    expect(ZIP_SIZE_OPTIONS.every((o) => typeof o.value === 'number' && o.value > 0)).toBe(true);
   });
 
   it('passes a concrete byte value through', () => {

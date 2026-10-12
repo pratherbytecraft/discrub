@@ -346,10 +346,22 @@ async function resetOpenConversations(cids: string[] | 'all', dispatchAny: Dispa
   }
   const main = selectMainCid(getState());
   if (!main || !hit(main)) return;
+  // Row 159: the reopen clears the screen, so the thread tabs that kept
+  // their rows open again after it, in the same order, then the active one.
+  const keptTabs = Object.values(getState().message.threadTabs ?? {}).map((tab) => ({ threadId: tab.threadId, threadName: tab.threadName }));
+  const activeTab = getState().message.activeTab;
   const channel = getState().channel?.selectedChannel;
   const dm = getState().dm?.selectedDm;
   if (channel) await dispatch(openChannel({ channel }));
   else if (dm) await dispatch(openDm({ dm }));
+  else return;
+  const token = getState().auth?.token;
+  if (!token || keptTabs.length === 0 || selectMainCid(getState()) !== main) return;
+  for (const tab of keptTabs) {
+    await dispatch(openThreadTab({ ...tab, token }));
+  }
+  const tabs = getState().message.threadTabs;
+  dispatch(setActiveTab(activeTab && tabs[activeTab] ? activeTab : null));
 }
 
 /** Clears one conversation's messages; its filters and settings stay (plan section 8). */

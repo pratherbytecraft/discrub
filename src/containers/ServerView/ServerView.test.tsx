@@ -360,6 +360,60 @@ describe('ServerView', () => {
     });
   });
 
+  describe('Every loaded message deleted with more on Discord (pass 3, row 102)', () => {
+    const emptiedState = () => {
+      const preloaded = createBaseState({
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+        guild: { ...createBaseState().guild, guilds: [guild], selectedGuild: guild },
+        channel: { ...createBaseState().channel, channels: [channel], selectedChannel: channel },
+      });
+      preloaded.message = {
+        ...preloaded.message,
+        rows: [],
+        filteredRows: [],
+        pagination: { ...preloaded.message.pagination, mode: 'paginated' as const, hasMore: true, lastMessageId: '500' },
+      };
+      return preloaded;
+    };
+
+    it('fetches the next page instead of stopping on the empty message', async () => {
+      const { store } = renderWithProviders(<ServerView />, { preloadedState: emptiedState() });
+      // The mocked page is empty, so the fetch ends the list and the empty message follows.
+      await waitFor(() => expect(store.getState().message.pagination.hasMore).toBe(false));
+      expect(await screen.findByText(/No messages found/i)).toBeInTheDocument();
+    });
+
+    it('does not fetch while a refine hides rows that are still loaded', async () => {
+      const preloaded = emptiedState();
+      const row = { id: '600', t: Date.parse('2026-01-01T00:00:00Z') } as never;
+      preloaded.message = { ...preloaded.message, rows: [row], filteredRows: [] };
+      const { store } = renderWithProviders(<ServerView />, { preloadedState: preloaded });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(store.getState().message.pagination.hasMore).toBe(true);
+      expect(store.getState().message.pagination.isLoadingMore).toBe(false);
+    });
+  });
+
+  describe('Layout switch with a search showing (pass 3, row 160)', () => {
+    it('keeps the search when the view mounts again on the same conversation', async () => {
+      const { defaultCriteria } = await import('@/components/search/searchConstants');
+      const preloaded = createBaseState({
+        auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+        guild: { ...createBaseState().guild, guilds: [guild], selectedGuild: guild },
+        channel: { ...createBaseState().channel, channels: [channel], selectedChannel: channel },
+      });
+      preloaded.message = {
+        ...preloaded.message,
+        searchCriteria: { ...defaultCriteria, searchMessageContents: ['hello'] },
+        pagination: { ...preloaded.message.pagination, mode: 'search' as const },
+      };
+      const { store } = renderWithProviders(<ServerView variant="timeline" />, { preloadedState: preloaded });
+      // The mount is a layout switch, not a conversation switch.
+      expect(await screen.findByText('content: hello')).toBeInTheDocument();
+      expect(store.getState().message.searchCriteria?.searchMessageContents).toEqual(['hello']);
+    });
+  });
+
   // #223: an author-filtered search that returns nothing for a DELETED
   // account explains itself instead of a bare empty feed.
   describe('Deleted-account empty-search callout (#223)', () => {

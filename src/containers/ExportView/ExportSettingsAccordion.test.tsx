@@ -123,15 +123,23 @@ describe('ExportSettingsAccordion — text format (#184)', () => {
     expect(t.botIndicator).toBe('include');
   });
 
-  it('Max zip size defaults to 4 GB and switching to "Single zip" dispatches null (#207 Arm A)', async () => {
+  it('Max zip size defaults to 4 GB, offers no single zip, and switching dispatches the size (#207 Arm A)', async () => {
     const { store } = renderWithProviders(<ExportSettingsAccordion isBulk={false} />);
     expect(store.getState().export.maxZipPartBytes).toBe(4_000_000_000);
 
     // The select renders its current value as text; open it from there.
     fireEvent.mouseDown(screen.getByText('4 GB (recommended)'));
-    const noLimit = await screen.findByRole('option', { name: 'Single zip (no limit)' });
-    fireEvent.click(noLimit);
+    const twoGb = await screen.findByRole('option', { name: '2 GB' });
+    expect(screen.queryByRole('option', { name: /single zip/i })).toBeNull();
+    fireEvent.click(twoGb);
 
-    expect(store.getState().export.maxZipPartBytes).toBeNull();
+    expect(store.getState().export.maxZipPartBytes).toBe(2_000_000_000);
+  });
+
+  it('shows the default size when older saved state still has the single zip choice', () => {
+    renderWithProviders(<ExportSettingsAccordion isBulk={false} />, {
+      preloadedState: { export: { ...initialExportState, maxZipPartBytes: null } },
+    });
+    expect(screen.getByText('4 GB (recommended)')).toBeInTheDocument();
   });
 });

@@ -89,6 +89,8 @@ import {
   clearSavedMessages,
   clearSavedSearch,
   fetchMessages,
+  fetchMoreMessages,
+  fetchMoreThreadMessages,
   enrichMessageUsers,
   takeArrivedUserIds,
   openThreadTab,
@@ -389,6 +391,23 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   const currentContext = selectedChannel || selectedDm;
   const isDm = !!selectedDm && !selectedChannel;
+
+  // Row 102 (pass 3): deleting every loaded message swaps the feed for the
+  // empty state, which unmounts the feed's load more triggers, so with more
+  // on Discord the list stayed empty. The next page is fetched here instead,
+  // once per cursor, and the loading state shows meanwhile. A refine that
+  // hides every row leaves the rows in place, so it does not count.
+  const needsNextPage = !isForumChannel && !isLoading && !error && allMessages.length === 0
+    && pagination.mode === 'paginated' && pagination.hasMore && !!pagination.lastMessageId && !pagination.isLoadingAll;
+  const emptiedCursorRef = useRef<string | null>(null);
+  useEffect(() => {
+    const lastMessageId = pagination.lastMessageId;
+    if (!needsNextPage || pagination.isLoadingMore || !token || !lastMessageId || !currentContext) return;
+    if (emptiedCursorRef.current === lastMessageId) return;
+    emptiedCursorRef.current = lastMessageId;
+    if (activeTab) dispatch(fetchMoreThreadMessages({ threadId: activeTab, token, lastMessageId }));
+    else dispatch(fetchMoreMessages({ channelId: currentContext.id, token, lastMessageId }));
+  }, [needsNextPage, pagination.isLoadingMore, pagination.lastMessageId, token, currentContext, activeTab, dispatch]);
   const contextLabel = isDm ? 'conversation' : 'channel';
   const scopeContext = isDm ? 'dm' : 'channel';
   const hasManageMessages = useMemo(() => {
@@ -415,9 +434,17 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   // before this effect runs; the reset must not wipe that search's criteria.
   // The restored marker is cleared with the messages, so only a search this
   // open restored is kept.
+  // Row 160 (pass 3): a layout switch mounts this view again on the same
+  // conversation; that is not a switch, so the search stays. A real switch
+  // or a re-click changes the key (clearMessages already cleared the
+  // criteria then).
   const restoredSearchRef = useRef(restoredSearchShowing);
   restoredSearchRef.current = restoredSearchShowing;
+  const conversationKey = `${selectedChannel?.id ?? ''}|${selectedDm?.id ?? ''}|${clearSeq}`;
+  const mountedKeyRef = useRef(conversationKey);
   useEffect(() => {
+    if (mountedKeyRef.current === conversationKey) return;
+    mountedKeyRef.current = conversationKey;
     if (!restoredSearchRef.current) dispatch(setSearchCriteria(null));
     setPartialResultsWarnings((prev) => {
       if (!('main' in prev)) return prev;
@@ -429,7 +456,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     // conversation dispatches clearMessages (wiping the real criteria) but
     // leaves both ids alone, which used to strand stale chips + FilterModal
     // pre-fill here.
-  }, [selectedChannel?.id, selectedDm?.id, clearSeq, dispatch]);
+  }, [conversationKey, dispatch]);
 
   // Clean up the partial-results warning for closed thread tabs. Search and
   // refine criteria are per-tab in Redux and go with the tab on removeThreadTab.
@@ -1345,7 +1372,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
         />
       )}
 
-      {!isForumChannel && !isLoading && !error && messages.length === 0 && (
+      {needsNextPage && <MessageTableSkeleton />}
+
+      {!isForumChannel && !isLoading && !error && messages.length === 0 && !needsNextPage && (
         <EmptyState message={t('serverView.noMessagesFound', { context: scopeContext })} icon={<ChatBubbleOutline fontSize="inherit" />} />
       )}
 

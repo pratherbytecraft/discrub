@@ -224,8 +224,9 @@ export async function persistConversation(
     return 'written';
   } catch (error) {
     // A missing record with no seed is the normal case for a conversation
-    // nobody wrote yet (plan section 4.2); only log real failures.
-    if (!(error instanceof Error && /not found/.test(error.message))) logWriteFailure(api, error);
+    // nobody wrote yet (plan section 4.2): nothing to write, not a failure.
+    if (error instanceof Error && /not found/.test(error.message)) return 'skipped';
+    logWriteFailure(api, error);
     return 'failed';
   }
 }
@@ -383,6 +384,36 @@ export async function restoreConversation(api: PersistApi, cid: string): Promise
     return { conversation, cid, wid, rows, authors, newest, selectedIds };
   } catch (error) {
     console.error('[workspace] restore failed, fetching instead', error);
+    return null;
+  }
+}
+
+/** What a conversation record keeps once its rows are gone. */
+export interface SavedConversationSettings {
+  refineCriteria: Conversation['refineCriteria'];
+  order: Conversation['order'];
+}
+
+/**
+ * Row 159 (pass 3): the refine and sort of a record that has no rows, eg.
+ * right after Clear, which keeps the record. The open fetches a fresh first
+ * page and puts these back; without them the next write saved the empty
+ * screen over the record and they were gone for good.
+ * Null when there is no record or it still has rows (the restore covers it).
+ */
+export async function restoreConversationSettings(api: PersistApi, cid: string): Promise<SavedConversationSettings | null> {
+  await waitForWorkspaces(api.getState);
+  const wid = selectCurrentWid(api.getState());
+  if (!wid) return null;
+  try {
+    const conversation = await getConversation(wid, cid);
+    if (!conversation || conversation.count > 0) return null;
+    return {
+      refineCriteria: conversation.refineCriteria,
+      order: conversation.order,
+    };
+  } catch (error) {
+    console.error('[workspace] settings restore failed', error);
     return null;
   }
 }

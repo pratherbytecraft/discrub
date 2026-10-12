@@ -123,7 +123,7 @@ describe('Large conversation from the workspace (2.2.5 W1)', () => {
     cy.contains('25,000 messages').should('be.visible');
     cy.get('@channelMessages.all').should('have.length', 0);
     cy.contains('STATUS LOG').click();
-    cy.contains(`Restored ${TOTAL} messages from this workspace`).should('exist');
+    cy.contains(`Restored ${TOTAL.toLocaleString('en-US')} messages from this workspace`).should('exist');
   });
 
   it('Select all leaves every action ready at once', () => {

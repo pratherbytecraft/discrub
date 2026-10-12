@@ -1,5 +1,5 @@
 import type { Message, User } from 'discrub-core/types/discord-types';
-import { snowflakeTime } from './messageRows';
+import { snowflakeTime, type MessageRow } from './messageRows';
 
 /**
  * Row 124 (pass 2): a message read back from the workspace store with a
@@ -22,6 +22,19 @@ const isListField = (message: Message, field: (typeof LIST_FIELDS)[number]): boo
 const hasBadAuthor = (message: Message): boolean => typeof message.author !== 'object' || message.author === null || typeof message.author.id !== 'string';
 
 const hasBadTimestamp = (message: Message): boolean => typeof message.timestamp !== 'string' || Number.isNaN(Date.parse(message.timestamp));
+
+/**
+ * Row 153 (pass 3): the slim row of a message whose stored timestamp is
+ * not a date gets its time from the snowflake, like `repairMessage` does
+ * for the full message, so the date slot and the sort see a real time.
+ * A sound row is returned as is.
+ */
+export function repairRow(row: MessageRow): MessageRow {
+  if (typeof row.timestamp === 'string' && Number.isFinite(row.t) && !Number.isNaN(Date.parse(row.timestamp))) return row;
+  const fromId = snowflakeTime(row.id);
+  const t = Number.isFinite(fromId) ? fromId : 0;
+  return { ...row, timestamp: new Date(t).toISOString(), t };
+}
 
 export function repairMessage(message: Message): Message {
   if (typeof message !== 'object' || message === null) return message;

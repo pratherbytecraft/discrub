@@ -20,7 +20,7 @@ import workspaceReducer, {
   setCurrentWorkspace,
   refreshWorkspaces,
 } from './workspaceSlice';
-import { duplicateWorkspaceThunk, restoreWorkspaceScope, switchWorkspace } from './workspaceThunks';
+import { clearConversationThunk, duplicateWorkspaceThunk, restoreWorkspaceScope, switchWorkspace } from './workspaceThunks';
 import { openGuild } from '@features/navigation/openConversation';
 import { workspacePersistenceMiddleware, flushPendingRecords } from './workspacePersistenceMiddleware';
 import channelReducer, { setSelectedChannel } from '@features/channel/channelSlice';
@@ -54,6 +54,18 @@ import {
 } from '@services/workspaceStore';
 
 vi.mock('@services/discordService', () => ({ getDiscordService: vi.fn() }));
+// Row 157: a switch that makes conversation record writes fail, like a full disk.
+const storeFaults = vi.hoisted(() => ({ failRecordWrites: false }));
+vi.mock('@services/workspaceStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@services/workspaceStore')>();
+  return {
+    ...actual,
+    updateConversation: (async (...args: Parameters<typeof actual.updateConversation>) => {
+      if (storeFaults.failRecordWrites) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+      return actual.updateConversation(...args);
+    }) as typeof actual.updateConversation,
+  };
+});
 vi.mock('@/utils/delayUtils', () => ({
   calculateRandomDelay: vi.fn(() => ({ delayMs: 0, delaySec: 0, baseDelay: 0, modifier: 0, randomComponent: 0 })),
 }));
@@ -135,6 +147,7 @@ const until = async (predicate: () => boolean | Promise<boolean>, timeoutMs = 30
 let others: string[] = [];
 
 beforeEach(async () => {
+  storeFaults.failRecordWrites = false;
   await deleteWorkspaceDatabase();
   others = [];
   service();
@@ -332,6 +345,28 @@ describe('Load All action record', () => {
   });
 });
 
+describe('Stop while storage is full (pass 3, row 157)', () => {
+  it('keeps the Load All record on screen when the write that clears it fails', async () => {
+    const fetchMessageData = vi.fn().mockImplementation(async () => {
+      if (fetchMessageData.mock.calls.length === 2) {
+        storeFaults.failRecordWrites = true;
+        store.dispatch(setDiscrubCancelled(true));
+      }
+      return { success: true, data: page(1000 - (fetchMessageData.mock.calls.length - 1) * 100, 100) };
+    });
+    service({ fetchMessageData });
+    const store = makeStore();
+    await openDefault(store);
+    store.dispatch(setSelectedChannel(CHANNEL));
+    await store.dispatch(fetchAllMessages({ channelId: CID, token: 'token' }));
+    await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
+    // The stored record kept its action, and so does the screen.
+    storeFaults.failRecordWrites = false;
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.action?.kind).toBe('loadAll');
+    expect(selectConversationAction(CID)(store.getState() as never)?.kind).toBe('loadAll');
+  });
+});
+
 describe('scope and anchor writes', () => {
   it('writes the scope on navigation but not while the saved scope is being restored', async () => {
     const store = makeStore();
@@ -487,6 +522,45 @@ describe('restoreWorkspaceScope', () => {
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
     const parent = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(parent).toMatchObject({ name: 'general', threadTabs: ['77'], activeTab: '77' });
+  });
+});
+
+describe('Clear on the open conversation (pass 3, row 159)', () => {
+  it('keeps its refine, sort and thread tabs, also after leaving and reopening', async () => {
+    const store = makeStore();
+    await openDefault(store);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(2000, 200), seed);
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => {
+      c.refineCriteria = { pinned: true } as never;
+      c.order = { ...c.order, order: 'oldest' } as never;
+    }, seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '77', page(500, 10), { kind: 'thread', guildId: '42', name: 'Bug talk' });
+    store.dispatch(setSelectedGuild(GUILD));
+    store.dispatch(setSelectedChannel(CHANNEL));
+    await store.dispatch(fetchMessages({ channelId: CID, token: 'token' }));
+    await thunk(store)(openThreadTab({ threadId: '77', threadName: 'Bug talk', token: 'token' }));
+    store.dispatch(setActiveTab(null));
+    await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
+    const savedOrder = store.getState().message.order;
+
+    await thunk(store)(clearConversationThunk({ wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: CID }));
+
+    let message = store.getState().message;
+    expect(message.rows).toHaveLength(100);
+    expect(message.refineCriteria).toEqual({ pinned: true });
+    expect(message.order).toEqual(savedOrder);
+    expect(Object.keys(message.threadTabs)).toEqual(['77']);
+    expect(message.activeTab).toBeNull();
+    await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
+    expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toMatchObject({ count: 0, refineCriteria: { pinned: true }, threadTabs: ['77'] });
+
+    // Leave and reopen: a record with no rows still brings its refine back.
+    store.dispatch(setSelectedChannel(null));
+    store.dispatch(setSelectedChannel(CHANNEL));
+    await store.dispatch(fetchMessages({ channelId: CID, token: 'token' }));
+    message = store.getState().message;
+    expect(message.refineCriteria).toEqual({ pinned: true });
+    expect(message.order).toEqual(savedOrder);
   });
 });
 

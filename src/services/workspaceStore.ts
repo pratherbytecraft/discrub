@@ -30,7 +30,7 @@
 
 import type { Message, User } from 'discrub-core/types/discord-types';
 import { snowflakeTime, toMessageRow, type MessageRow } from '@features/message/messageRows';
-import { repairMessage } from '@features/message/messageRepair';
+import { repairMessage, repairRow } from '@features/message/messageRepair';
 import { SortDirection } from 'discrub-core/common-enum';
 import {
   DEFAULT_WORKSPACE_COLOR,
@@ -1369,7 +1369,7 @@ export function readRows(wid: string, cid: string, options: ReadWindowOptions = 
   const { limit = 500, direction = 'asc' } = options;
   return withTx('readonly', [STORE_SLIM], { wid, cid }, async (tx) => {
     const found = await readValues<StoredSlimRow>(tx.objectStore(STORE_SLIM), windowRange(wid, cid, options), limit, direction);
-    return found.map((stored) => stored.row);
+    return found.map((stored) => repairRow(stored.row));
   });
 }
 

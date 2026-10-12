@@ -79,3 +79,28 @@ describe('MessageChunk row boundary (row 124)', () => {
     expect(screen.getByTestId('message-row-failed')).toHaveTextContent('This message could not be shown.');
   });
 });
+
+describe('MessageChunk header date (pass 3, row 153)', () => {
+  it('shows the snowflake time when the stored timestamp is not a date', () => {
+    const message = { ...createMockMessage({ id: '1148080200000000000', content: 'x' }), timestamp: 'not a date' };
+    renderWithProviders(
+      <MessageChunk
+        chunk={{ key: 'k', authorId: 'u', firstTimestamp: 'not a date', messages: [message] }}
+        selectedIds={new Set()}
+        formattingContext={{} as any}
+        fullUserMap={{}}
+        cachedUserMap={{}}
+        guildId={null}
+        guildRoles={null}
+        settings={null}
+        onToggleSelect={() => {}}
+        onAuthorClick={() => {}}
+        onMentionClick={() => {}}
+        onOpenAttachments={() => {}}
+        onOpenReactions={() => {}}
+      />,
+    );
+    expect(screen.queryByText('not a date')).toBeNull();
+    expect(screen.getByText(/Sep \d+, 2023/)).toBeInTheDocument();
+  });
+});

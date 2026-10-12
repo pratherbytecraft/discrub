@@ -32,7 +32,7 @@ import {
   setTextOptions,
   selectExport,
 } from '@features/export/exportSlice';
-import { ZIP_SIZE_OPTIONS } from '@features/export/exportTypes';
+import { resolveMaxZipPartBytes, ZIP_SIZE_OPTIONS } from '@features/export/exportTypes';
 import type {
   ExportFormat,
   ExportTemplate,
@@ -49,7 +49,6 @@ import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { isExtensionMode } from '@/extension/messaging';
 import { selectSettings, updateSetting } from '@features/app/appSlice';
 const ZIP_LABEL_KEYS: Record<string, string> = {
-  'Single zip (no limit)': 'export.zipSingle',
   '4 GB (recommended)': 'export.zipRecommended',
 };
 import { useTranslation } from 'react-i18next';
@@ -219,15 +218,12 @@ const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, package
             <FormControl size="small">
               <InputLabel>{t('export.maxZipSize')}</InputLabel>
               <Select
-                value={exportState.maxZipPartBytes === null ? 'none' : String(exportState.maxZipPartBytes)}
+                value={String(resolveMaxZipPartBytes(exportState))}
                 label={t('export.maxZipSize')}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  dispatch(setMaxZipPartBytes(v === 'none' ? null : Number(v)));
-                }}
+                onChange={(e) => dispatch(setMaxZipPartBytes(Number(e.target.value)))}
               >
                 {ZIP_SIZE_OPTIONS.map((opt) => (
-                  <MenuItem key={opt.label} value={opt.value === null ? 'none' : String(opt.value)}>
+                  <MenuItem key={opt.label} value={String(opt.value)}>
                     {ZIP_LABEL_KEYS[opt.label] ? t(ZIP_LABEL_KEYS[opt.label]) : opt.label}
                   </MenuItem>
                 ))}

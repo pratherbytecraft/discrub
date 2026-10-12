@@ -27,8 +27,8 @@ describe('defaultMaxZipPartBytes', () => {
       expect(m.defaultMaxZipPartBytes()).toBe(m.SMALL_MAX_ZIP_PART_BYTES);
       expect(m.initialExportState.maxZipPartBytes).toBe(500_000_000);
       expect(m.resolveMaxZipPartBytes({})).toBe(500_000_000);
-      // Saved choices always win over the context default.
-      expect(m.resolveMaxZipPartBytes({ maxZipPartBytes: null })).toBeNull();
+      // Saved sizes win over the context default; the old single zip does not.
+      expect(m.resolveMaxZipPartBytes({ maxZipPartBytes: null })).toBe(500_000_000);
       expect(m.resolveMaxZipPartBytes({ maxZipPartBytes: 2_000_000_000 })).toBe(2_000_000_000);
     }
   });

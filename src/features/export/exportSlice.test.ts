@@ -661,15 +661,13 @@ describe('exportSlice', () => {
       expect(state.previewMedia).toBe(false);
     });
 
-    it('setMaxZipPartBytes sets the value, including null for no limit (#207 Arm A)', () => {
+    it('setMaxZipPartBytes sets the value (#207 Arm A)', () => {
       store.dispatch(setMaxZipPartBytes(1_000_000_000));
       expect(store.getState().export.maxZipPartBytes).toBe(1_000_000_000);
-      store.dispatch(setMaxZipPartBytes(null));
-      expect(store.getState().export.maxZipPartBytes).toBeNull();
     });
 
     it('applyPreset resolves an absent maxZipPartBytes to the safe default', () => {
-      store.dispatch(setMaxZipPartBytes(null)); // make sure it changes
+      store.dispatch(setMaxZipPartBytes(500_000_000)); // make sure it changes
       store.dispatch(applyPreset({
         format: 'json', messagesPerPage: 500, separateThreads: false, includeMedia: false,
         mediaConfig: { images: false, videos: false, audio: false, other: false },
@@ -679,14 +677,14 @@ describe('exportSlice', () => {
       expect(store.getState().export.maxZipPartBytes).toBe(DEFAULT_MAX_ZIP_PART_BYTES);
     });
 
-    it('applyPreset honors an explicit null maxZipPartBytes (single zip)', () => {
+    it('applyPreset turns the old single zip choice (null) into the default', () => {
       store.dispatch(applyPreset({
         format: 'json', messagesPerPage: 500, separateThreads: false, includeMedia: false,
         mediaConfig: { images: false, videos: false, audio: false, other: false },
         artistMode: false, sortOrder: 'ascending', previewMedia: false,
         maxZipPartBytes: null,
       }));
-      expect(store.getState().export.maxZipPartBytes).toBeNull();
+      expect(store.getState().export.maxZipPartBytes).toBe(DEFAULT_MAX_ZIP_PART_BYTES);
     });
 
     it('applyPreset with format=media does not auto-enable includeMedia', () => {

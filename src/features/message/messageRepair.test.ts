@@ -6,7 +6,8 @@ import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { Message } from 'discrub-core/types/discord-types';
 import { createMockMessage } from '@/test/fixtures';
-import { repairMessage, UNKNOWN_AUTHOR } from './messageRepair';
+import { repairMessage, repairRow, UNKNOWN_AUTHOR } from './messageRepair';
+import { toMessageRow } from './messageRows';
 import { createWorkspace, deleteWorkspaceDatabase, getMessages, openWorkspaceDatabase, padSnowflake, readWindow, writePage } from '@services/workspaceStore';
 
 const damaged = (): Message => ({
@@ -32,6 +33,20 @@ describe('repairMessage', () => {
     // The time comes from the snowflake, so the row keeps its place in the day.
     expect(fixed.timestamp.startsWith('2023-09-0')).toBe(true);
     expect(fixed.content).toBe('Test message');
+  });
+
+  describe('repairRow (pass 3, row 153)', () => {
+    it('returns a sound row as it is', () => {
+      const row = toMessageRow(createMockMessage({ id: '1148080200000000000' }));
+      expect(repairRow(row)).toBe(row);
+    });
+
+    it('takes the time of a row whose timestamp is not a date from the snowflake', () => {
+      const row = { ...toMessageRow(createMockMessage({ id: '1148080200000000000' })), timestamp: 'not a date', t: NaN };
+      const fixed = repairRow(row);
+      expect(fixed.timestamp.startsWith('2023-09-0')).toBe(true);
+      expect(fixed.t).toBe(Date.parse(fixed.timestamp));
+    });
   });
 
   describe('on the way out of the store', () => {

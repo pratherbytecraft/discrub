@@ -111,12 +111,15 @@ export const defaultMaxZipPartBytes = (): number =>
 
 export interface ZipSizeOption {
   label: string;
-  value: number | null;
+  value: number;
 }
 
-/** Choices for the export "Max zip size" control. `null` = single zip. */
+/**
+ * Choices for the export "Max zip size" control. There is no single zip
+ * choice: a zip past 4 GiB needs zip64, which some unzip tools cannot
+ * read, so every export splits.
+ */
 export const ZIP_SIZE_OPTIONS: ZipSizeOption[] = [
-  { label: 'Single zip (no limit)', value: null },
   { label: '4 GB (recommended)', value: 4_000_000_000 },
   { label: '2 GB', value: 2_000_000_000 },
   { label: '1 GB', value: 1_000_000_000 },
@@ -125,13 +128,14 @@ export const ZIP_SIZE_OPTIONS: ZipSizeOption[] = [
 
 /**
  * Resolve a snapshot's max-part-size to the concrete value the zip service uses.
- * `undefined` → the safe default (protects presets saved before this existed);
- * `null` → no limit (single zip).
+ * `undefined` (presets saved before this existed) and `null` (the old single
+ * zip choice, still in saved presets and resume snapshots) both get the
+ * default.
  */
 export function resolveMaxZipPartBytes(
   source: { maxZipPartBytes?: number | null }
-): number | null {
-  return source.maxZipPartBytes === undefined
+): number {
+  return source.maxZipPartBytes == null || source.maxZipPartBytes <= 0
     ? defaultMaxZipPartBytes()
     : source.maxZipPartBytes;
 }
@@ -328,7 +332,11 @@ export interface ExportState {
   previewMedia: boolean;
   exportTemplate: ExportTemplate;
   textOptions: TextFormatOptions;
-  /** Max bytes per zip part before splitting; null = single zip (#207 Arm A). */
+  /**
+   * Max bytes per zip part before splitting (#207 Arm A). null only comes
+   * from state saved when there was a single zip choice; read it through
+   * resolveMaxZipPartBytes.
+   */
   maxZipPartBytes: number | null;
   /**
    * The active export filter/date window (#207 Arm B). Lifted out of

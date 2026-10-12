@@ -283,7 +283,7 @@ export function buildConfigSnapshot(state: RootState): ExportSettingsSnapshot {
  * per-part byte limit plus status-log hooks that announce a new part file and
  * warn on any single file too large for a 32-bit zip.
  */
-function buildZipOptions(
+export function buildZipOptions(
   getState: () => RootState,
   dispatch: ExportDispatch,
 ): StreamingZipOptions {
@@ -1902,7 +1902,7 @@ const exportSlice = createSlice({
       state.previewMedia = action.payload;
     },
     // #207 Arm A: max bytes per zip part before splitting; null = single zip.
-    setMaxZipPartBytes: (state, action: PayloadAction<number | null>) => {
+    setMaxZipPartBytes: (state, action: PayloadAction<number>) => {
       state.maxZipPartBytes = action.payload;
     },
     setExportTemplate: (state, action: PayloadAction<import('./exportTypes').ExportTemplate>) => {

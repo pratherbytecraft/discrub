@@ -15,6 +15,7 @@ import type { MessageChunk as MessageChunkType } from '@/utils/messageChunking';
 import { getDateLocale } from '@/i18n/dateLocale';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
+import { snowflakeTime } from '@features/message/messageRows';
 
 interface MessageChunkProps {
   chunk: MessageChunkType;
@@ -103,16 +104,21 @@ const MessageChunk = function MessageChunk({
     : undefined;
 
   let headerTimestamp = '';
+  // Row 153 (pass 3): a stored timestamp that is not a date takes the
+  // first message's snowflake time instead of printing the raw text.
+  const parsed = Date.parse(chunk.firstTimestamp);
+  const firstId = chunk.messages[0]?.id;
+  const headerMs = Number.isNaN(parsed) && firstId ? snowflakeTime(firstId) : parsed;
   try {
     const timeFmt = settings?.timeFormat || 'h:mm aa';
     headerTimestamp = format(
-      new Date(chunk.firstTimestamp),
+      new Date(headerMs),
       // Row 98 (pass 2): the localized medium date, "Oct 10, 2026" in English and "10. Okt. 2026" in German.
       `PP ${timeFmt}`,
       { locale: getDateLocale() },
     );
   } catch {
-    headerTimestamp = chunk.firstTimestamp;
+    headerTimestamp = '';
   }
 
   // #191: a chunk can contain more than one message that spawned its own

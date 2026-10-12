@@ -22,6 +22,7 @@ import {
 import {
   applyExportThemeSetFromState,
   applyExportFooterFromState,
+  buildZipOptions,
   createRowErrorReporter,
   logMediaProgress,
   setExportProgress,
@@ -1057,16 +1058,10 @@ export const exportPackageChannel = createAsyncThunk<
       }
     };
 
-    // Surface zip-path renames in the status log (#224) — the rename itself
-    // happens inside StreamingZipService regardless of this wiring.
-    const zipOptions = {
-      onPathCollision: ({ requestedPath, finalPath }: { requestedPath: string; finalPath: string }) => {
-        dispatch(addStatusEntry({
-          level: 'warning',
-          message: t('status.export.pathCollision', { requested: requestedPath, final: finalPath }),
-        }));
-      },
-    };
+    // Same zip options as a live export: the part size limit, so a package
+    // export past 4 GiB splits too, and the status lines for new parts,
+    // oversize files and zip-path renames (#224).
+    const zipOptions = buildZipOptions(getState, dispatch as ExportDispatch);
 
     try {
       if (format === 'media') {

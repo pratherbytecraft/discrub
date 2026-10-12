@@ -196,7 +196,7 @@ describe('persistPage', () => {
 describe('records, patches and deletes', () => {
   it('persistConversation merges fields and stays quiet for a record nobody wrote', async () => {
     const { api, dispatch } = apiFor(readyState());
-    expect(await persistConversation(api, CID, { selectedIds: ['1'] })).toBe('failed');
+    expect(await persistConversation(api, CID, { selectedIds: ['1'] })).toBe('skipped');
     expect(dispatch).not.toHaveBeenCalled();
     expect(await persistConversation(api, CID, { selectedIds: ['1'] }, seed)).toBe('written');
     expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.selectedIds).toEqual(['1']);

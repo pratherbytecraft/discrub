@@ -19,6 +19,7 @@ import authReducer from '@features/auth/authSlice';
 import userReducer from '@features/user/userSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
+import exportReducer from '@features/export/exportSlice';
 import { buildFixturePackage } from '@/test/package-fixtures';
 import type { RootState } from '@/app/store';
 import type { ExportConfig } from '@features/export/exportTypes';
@@ -61,6 +62,7 @@ function makeStore(currentUserId = '253286221395001345') {
       user: userReducer,
       app: appReducer,
       status: statusReducer,
+      export: exportReducer,
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   }) as unknown as {
@@ -103,6 +105,10 @@ describe('packageSlice — exportPackageChannel', () => {
     expect(channelName).toBe('general');
     expect(format).toBe('html');
     expect(includeMedia).toBe(false);
+    // Splits at the export size like a live export, instead of one zip.
+    const zipOptions = mockExportToZip.mock.calls[0][18];
+    expect(zipOptions.maxPartBytes).toBe(store.getState().export.maxZipPartBytes);
+    expect(zipOptions.maxPartBytes).toBeGreaterThan(0);
 
     expect(store.getState().package.exportStatus).toBe('ready');
   });
