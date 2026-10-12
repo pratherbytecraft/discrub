@@ -103,7 +103,8 @@ export interface TransientRetryOptions<T extends RetryableResponse> {
   /** Decide whether to retry; `attempt` is the zero-based retry count so far. */
   shouldRetry?: (response: T, attempt: number) => boolean;
   /** Fires before each backoff sleep with (1-indexed retry number, delayMs, response). */
-  onRetry?: (retryNumber: number, delayMs: number, response: T) => void;
+  /** `max` is the retries this failure can really get (row 168), for the attempt count. */
+  onRetry?: (retryNumber: number, delayMs: number, response: T, max: number) => void;
   /** State accessor so backoff sleep can honor Pause/Cancel. */
   getState: () => RootState;
   /** Optional thunk signal so backoff sleep can honor abort. */
@@ -185,6 +186,9 @@ export const describeAnswer = (response: { status?: number } | null | undefined)
 export const describeFailure = (response: { status?: number } | null | undefined, prefix: string): string =>
   isSignInExpired(response)
     ? t('status.msg.signInExpired')
+    : response?.status === 429
+    // Row 132 (pass 3): the banner carries the wait advice, not only the log.
+    ? `${t(`status.msg.${prefix}Http`, { status: 429 })}. ${t('rateLimit.advice')}`
     : response?.status !== undefined
     ? t(`status.msg.${prefix}Http`, { status: response.status })
     : t(`status.msg.${prefix}NoResponse`);
@@ -215,6 +219,16 @@ export const isSignInExpiredError = (error: unknown): boolean =>
 
 /** Retries in a transient-retry run (the wait doubles this many times, less one). */
 export const TRANSIENT_RETRIES = 5;
+
+/**
+ * Row 168 (pass 3): the retries a failure can really get. A request that
+ * threw while the browser is online gets ONLINE_NETWORK_RETRIES (see
+ * isTransientApiFailure), so "attempt 1 of 5" never got past 2.
+ */
+export const retryMaxFor = (response: { status?: number } | null | undefined, maxRetries: number = TRANSIENT_RETRIES): number =>
+  response?.status === undefined && isBrowserOnline()
+    ? Math.min(maxRetries, ONLINE_NETWORK_RETRIES)
+    : maxRetries;
 
 /**
  * #265: the wait before retry number `attempt + 1`, in ms. The wait doubles
@@ -254,8 +268,9 @@ export const withTransientRetry = async <T extends RetryableResponse>(
     if (opts.signal?.aborted || checkCancelled(opts.getState)) return lastResponse;
 
     const delayMs = transientRetryDelayMs(attempt, baseDelayMs, maxDelayMs);
-    opts.onRetry?.(attempt + 1, delayMs, lastResponse);
-    opts.dispatch?.(setOperationHold({ kind: 'retryWait', until: Date.now() + delayMs, attempt: attempt + 1, max: maxRetries, answer: describeAnswer(lastResponse) }));
+    const max = retryMaxFor(lastResponse, maxRetries);
+    opts.onRetry?.(attempt + 1, delayMs, lastResponse, max);
+    opts.dispatch?.(setOperationHold({ kind: 'retryWait', until: Date.now() + delayMs, attempt: attempt + 1, max, answer: describeAnswer(lastResponse) }));
     // Retry now clears the hold from the UI, which ends this wait early.
     const cancelled = await cancellableDelay(delayMs, opts.getState, opts.signal, opts.dispatch ? () => opts.getState().app.operationHold == null : undefined);
     opts.dispatch?.(setOperationHold(null));

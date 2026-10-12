@@ -13,6 +13,7 @@ import {
   isTransientApiFailure,
   retryBaseDelayMs,
   TRANSIENT_RETRIES,
+  retryMaxFor,
   transientRetryDelayMs,
   waitWhilePaused,
 } from './operationLoopUtils';
@@ -111,9 +112,9 @@ export async function* iterateSearchMessagesRedux(
         const answer = describeAnswer({ status });
         dispatch(addStatusEntry({
           level: 'warning',
-          message: t('status.msg.searchPageRetry', { answer, seconds: Math.round(delayMs / 1000), attempt: transientRetries }),
+          message: t('status.msg.searchPageRetry', { answer, seconds: Math.round(delayMs / 1000), attempt: transientRetries, max: retryMaxFor({ status }) }),
         }));
-        dispatch(setOperationHold({ kind: 'retryWait', until: Date.now() + delayMs, attempt: transientRetries, max: TRANSIENT_RETRIES, answer }));
+        dispatch(setOperationHold({ kind: 'retryWait', until: Date.now() + delayMs, attempt: transientRetries, max: retryMaxFor({ status }), answer }));
         // Retry now clears the hold from the UI, which ends this wait early.
         const cancelled = await cancellableDelay(delayMs, getState, signal, () => getState().app.operationHold == null);
         dispatch(setOperationHold(null));

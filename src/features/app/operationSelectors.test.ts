@@ -41,7 +41,7 @@ describe('operationSelectors', () => {
       expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
-        label: 'Exporting (attachments)... 45%',
+        label: 'Exporting (downloading attachments)... 45%',
         progress: 45,
         tier: 'heavy',
       });
@@ -87,7 +87,7 @@ describe('operationSelectors', () => {
       expect(summary).toMatchObject({
         isRunning: true,
         isPaused: false,
-        label: 'Channel 2/5: general (attachments)... 30%',
+        label: 'Channel 2/5: general (downloading attachments)... 30%',
         progress: 30,
         tier: 'heavy',
       });
@@ -320,7 +320,7 @@ describe('operationSelectors', () => {
       });
       const summary = selectOperationSummary(state);
       expect(summary.tier).toBe('heavy');
-      expect(summary.label).toBe('Package export (attachments)... 25%');
+      expect(summary.label).toBe('Package export (downloading attachments)... 25%');
       expect(summary.progress).toBe(25);
     });
 

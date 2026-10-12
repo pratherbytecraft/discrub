@@ -234,7 +234,7 @@ describe('Data package rehydration (Tier 2)', () => {
     // Status log surfaces the rate-limit notice from the global handler.
     // Expand the panel first — #183 unmounts collapsed status rows.
     cy.get('[aria-label="Expand log"]').click();
-    cy.contains(/Rate limited by Discord/i, { timeout: 10000 }).should('exist');
+    cy.contains(/Discord asked Discrub to wait/i, { timeout: 10000 }).should('exist');
     // Eventually the run finishes with all 4 enriched.
     cy.contains(/4 enriched/i, { timeout: 15000 }).should('exist');
   });

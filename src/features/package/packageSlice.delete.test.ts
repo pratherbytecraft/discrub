@@ -52,7 +52,7 @@ vi.mock('@utils/operationLoopUtils', () => ({
       lastResponse = await fn();
       if (lastResponse.success || !shouldRetry(lastResponse, attempt)) return lastResponse;
       if (attempt === maxRetries) return lastResponse;
-      opts.onRetry?.(attempt + 1, 1000, lastResponse);
+      opts.onRetry?.(attempt + 1, 1000, lastResponse, lastResponse.status === undefined ? Math.min(maxRetries, 2) : maxRetries);
     }
     return lastResponse;
   }),

@@ -138,7 +138,7 @@ vi.mock('@/utils/operationLoopUtils', async () => {
         lastResponse = await fn();
         if (lastResponse.success || !shouldRetry(lastResponse, attempt)) return lastResponse;
         if (attempt === maxRetries) return lastResponse;
-        opts.onRetry?.(attempt + 1, 1000, lastResponse);
+        opts.onRetry?.(attempt + 1, 1000, lastResponse, lastResponse.status === undefined ? Math.min(maxRetries, 2) : maxRetries);
       }
       return lastResponse;
     }),
@@ -2286,6 +2286,23 @@ describe('messageSlice', () => {
       expect(successCalls[0][0].message).toBe('Load All complete: 50 messages');
     });
 
+    it('closes with the count now loaded, not only this run\'s fetches (pass 3, row 165)', async () => {
+      const mockDiscordService = {
+        fetchMessageData: vi.fn()
+          .mockResolvedValueOnce({ success: true, data: createMockMessages(100) })
+          .mockResolvedValueOnce({ success: true, data: createMockMessages(50).map((m, i) => ({ ...m, id: `older-${i}` })) }),
+      };
+      vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
+      const testStore = await createStoreWithApp();
+      await testStore.dispatch(fetchMessages({ channelId: 'channel-1', token: 'token' }));
+      vi.mocked(addStatusEntry).mockClear();
+
+      await testStore.dispatch(fetchAllMessages({ channelId: 'channel-1', token: 'token' }));
+
+      const successCalls = vi.mocked(addStatusEntry).mock.calls.filter(([payload]) => payload.level === 'success');
+      expect(successCalls[0][0].message).toBe('Load All complete: 150 messages');
+    });
+
     it('should not dispatch info entries below 500-message milestone', async () => {
       const batch1 = createMockMessages(100);
       const batch2 = createMockMessages(50).map((m, i) =>
@@ -2454,6 +2471,25 @@ describe('messageSlice', () => {
       expect(result.type).toBe('message/editMessage/fulfilled');
       expect(result.payload).toEqual(updatedMsg);
       expect(mockDiscordService.editMessage).toHaveBeenCalledWith('token', 'msg-1', { content: 'edited content' }, 'channel-1');
+    });
+
+    it('logs the edit, and a warning when Discord refuses it (pass 3, row 166)', async () => {
+      vi.mocked(discordService.getDiscordService).mockReturnValue({
+        editMessage: vi.fn()
+          .mockResolvedValueOnce({ success: true, data: createMockMessage({ id: 'msg-1', content: 'edited' }) })
+          .mockResolvedValueOnce({ success: false, status: 403 }),
+      } as any);
+      store.dispatch(setMessages([createMockMessage({ id: 'msg-1', content: 'original' })]));
+      vi.mocked(addStatusEntry).mockClear();
+
+      await store.dispatch(editMessage({ messageId: 'msg-1', channelId: 'channel-1', content: 'edited', token: 'token' }));
+      await store.dispatch(editMessage({ messageId: 'msg-1', channelId: 'channel-1', content: 'again', token: 'token' }));
+
+      const lines = vi.mocked(addStatusEntry).mock.calls.map(([payload]) => [payload.level, payload.message]);
+      expect(lines).toEqual([
+        ['success', 'Edited 1 message'],
+        ['warning', "Couldn't edit message msg-1 (HTTP 403)."],
+      ]);
     });
 
     it('should update message in state on success', async () => {
@@ -5112,7 +5148,7 @@ describe('messageSlice', () => {
           .filter((m) => /retrying in/.test(m));
         expect(lines).toEqual([
           'Load All: Discord answered HTTP 503, retrying in 1s (attempt 1/5)',
-          'Load All: Discord did not answer, retrying in 1s (attempt 2/5)',
+          'Load All: Discord did not answer, retrying in 1s (attempt 2/2)',
         ]);
       });
 
@@ -6768,7 +6804,7 @@ describe('messageSlice', () => {
           .map(([p]) => p.message)
           .filter((m) => /retrying in/.test(m));
         expect(lines).toEqual([
-          'Load All: Discord did not answer, retrying in 1s (attempt 1/5)',
+          'Load All: Discord did not answer, retrying in 1s (attempt 1/2)',
           'Load All: Discord answered HTTP 503, retrying in 1s (attempt 2/5)',
         ]);
       });

@@ -36,7 +36,7 @@ export interface SearchPageRetryOptions {
   /** A 202 came back and the search is about to wait `delayMs` before attempt `attempt` of INDEXING_WAITS. */
   onIndexingWait?: (attempt: number, delayMs: number) => void;
   /** A transient failure is being retried (same contract as withTransientRetry's onRetry). */
-  onRetry?: (attempt: number, delayMs: number) => void;
+  onRetry?: (attempt: number, delayMs: number, max: number) => void;
   /** Test hook: override the 202 wait schedule. */
   indexingWaitMs?: (attempt: number) => number;
   /** Test hook: base backoff for the transient retry. */
@@ -63,7 +63,7 @@ export const fetchSearchPageWithRetry = async <T extends SearchPageResponse>(
       getState: opts.getState,
       signal: opts.signal,
       dispatch: opts.dispatch,
-      onRetry: opts.onRetry,
+      onRetry: opts.onRetry && ((attempt, delayMs, _last, max) => opts.onRetry?.(attempt, delayMs, max)),
       baseDelayMs: opts.baseDelayMs,
     });
     if (!(response.success && response.status === 202)) return response;

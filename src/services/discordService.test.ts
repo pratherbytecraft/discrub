@@ -3,6 +3,7 @@ import type { AppSettings } from 'discrub-core/types/discrub-types';
 import type { RateLimitInfo } from 'discrub-core/discord-service';
 
 const constructorSpy = vi.fn();
+const listenerSpy = vi.fn();
 
 vi.mock('discrub-core/discord-service', () => ({
   DiscordService: class {
@@ -14,6 +15,7 @@ vi.mock('discrub-core/discord-service', () => ({
       constructorSpy(...args);
     }
   },
+  setRateLimitListener: (listener: unknown) => listenerSpy(listener),
 }));
 
 describe('discordService singleton', () => {
@@ -124,7 +126,24 @@ describe('discordService singleton', () => {
 
       const last = selectStatusEntries(store.getState()).slice(-1)[0];
       expect(last?.level).toBe('warning');
-      expect(last?.message).toBe('Rate limited by Discord (global limit), retrying in 2.5s, 3 in a row');
+      // Row 132 (pass 3): the line comes from the locale, so German shows German.
+      expect(last?.message).toBe('Discord asked Discrub to wait (global limit), retrying in 2.5s (3 in a row)');
+    });
+
+    it('says so when a request waits out a pause Discord asked for (pass 3, rows 133 and 161)', async () => {
+      const { getDiscordService } = await import('./discordService');
+      const { store } = await import('@/app/store');
+      const { selectStatusEntries } = await import('@features/status/statusSlice');
+      const { selectOperationHold } = await import('@features/app/appSlice');
+      getDiscordService({} as AppSettings);
+      const listener = listenerSpy.mock.calls[listenerSpy.mock.calls.length - 1]?.[0] as (event: unknown) => void;
+      listener({ type: 'cooldownWait', waitMs: 42_300 });
+      await vi.waitFor(() => expect(selectStatusEntries(store.getState()).slice(-1)[0]?.message).toBe('Waiting 43 seconds for Discord before the next request'));
+      expect(selectOperationHold(store.getState())?.kind).toBe('discordWait');
+      // A 429 the instance saw itself is logged by its own hook, not twice.
+      const before = selectStatusEntries(store.getState()).length;
+      listener({ type: 'rateLimited', info: info() });
+      expect(selectStatusEntries(store.getState()).length).toBe(before);
     });
 
     it('shows a wait of two seconds or more to the layouts and takes it away after (2.2.2)', async () => {

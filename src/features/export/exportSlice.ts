@@ -501,6 +501,8 @@ export const exportMessages = createAsyncThunk<
           (progress) => {
             if (typeof progress === 'object') {
               dispatch(setExportProgress(progress));
+              // Row 126 (pass 3): a media only export logs its progress like the other formats.
+              logMediaProgress(progress, dispatch);
             }
           },
           exportConfig,
@@ -863,10 +865,10 @@ async function fetchAllChannelMessages(
       {
         getState,
         dispatch,
-        onRetry: (attempt, delayMs) => {
+        onRetry: (attempt, delayMs, _last, max) => {
           dispatch(addStatusEntry({
             level: 'warning',
-            message: t('status.export.loadRetry', { label, seconds: Math.round(delayMs / 1000), attempt }),
+            message: t('status.export.loadRetry', { label, seconds: Math.round(delayMs / 1000), attempt, max }),
           }));
         },
       },
@@ -1067,10 +1069,10 @@ async function fetchAllForumThreads(
       {
         getState,
         dispatch,
-        onRetry: (attempt, delayMs) => {
+        onRetry: (attempt, delayMs, _last, max) => {
           dispatch(addStatusEntry({
             level: 'warning',
-            message: t('status.export.postListingRetry', { name: forum.name || forum.id, seconds: Math.round(delayMs / 1000), attempt }),
+            message: t('status.export.postListingRetry', { name: forum.name || forum.id, seconds: Math.round(delayMs / 1000), attempt, max }),
           }));
         },
       },

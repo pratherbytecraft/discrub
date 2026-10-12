@@ -50,7 +50,7 @@ import { userEnrichmentService } from '@services/userEnrichmentService';
 import { reactionEnrichmentService } from '@services/reactionEnrichmentService';
 import { replyEnrichmentService } from '@services/replyEnrichmentService';
 import { mergeCachedUserMap, addFailedUserId, saveCacheToLocalStorage } from '@features/cache/cacheSlice';
-import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, isTransientApiFailure, transientRetryDelayMs, retryBaseDelayMs, describeAnswer, describeFailure, isSignInExpired, throwIfSignInExpired, isSignInExpiredError } from '@/utils/operationLoopUtils';
+import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, isTransientApiFailure, transientRetryDelayMs, retryBaseDelayMs, describeAnswer, describeFailure, isSignInExpired, throwIfSignInExpired, isSignInExpiredError, retryMaxFor } from '@/utils/operationLoopUtils';
 import { addStatusEntry, showOperationTip, showToast } from '@features/status/statusSlice';
 import { getEmojiKey } from '@/utils/emojiUtils';
 import { applyRefineCriteria, criteriaIsActive, type RefineCriteria } from './messageFiltering';
@@ -60,7 +60,7 @@ import { selectCurrentUser } from '@features/user/userSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { countActiveFilters } from 'discrub-core/filtering';
 import { t } from '@/i18n';
-import { fetchSearchPageWithRetry, describeSearchFailure } from './searchPageRetry';
+import { fetchSearchPageWithRetry, describeSearchFailure, INDEXING_WAITS } from './searchPageRetry';
 import { notePackageDeletions } from '@features/package/packageDeletedCache';
 import {
   clearSavedConversation,
@@ -100,13 +100,13 @@ const searchPageRetryHooks = (
   onIndexingWait: (attempt: number, delayMs: number) => {
     dispatch(addStatusEntry({
       level: 'warning',
-      message: t('status.msg.searchIndexingWait', { seconds: Math.round(delayMs / 1000), attempt }),
+      message: t('status.msg.searchIndexingWait', { seconds: Math.round(delayMs / 1000), attempt, max: INDEXING_WAITS }),
     }));
   },
-  onRetry: (attempt: number, delayMs: number) => {
+  onRetry: (attempt: number, delayMs: number, max: number) => {
     dispatch(addStatusEntry({
       level: 'warning',
-      message: t('status.msg.searchRetry', { seconds: Math.round(delayMs / 1000), attempt }),
+      message: t('status.msg.searchRetry', { seconds: Math.round(delayMs / 1000), attempt, max }),
     }));
   },
 });
@@ -325,7 +325,7 @@ export const editMessage = createAsyncThunk(
       content: string;
       token: string;
     },
-    { rejectWithValue }
+    { rejectWithValue, dispatch }
   ) => {
     try {
       const discordService = getDiscordService();
@@ -337,9 +337,12 @@ export const editMessage = createAsyncThunk(
       );
 
       if (!response.success || !response.data) {
+        // Row 166 (pass 3): an edit says so in the log, like deletes and reactions do.
+        dispatch(addStatusEntry({ level: 'warning', message: t('status.msg.editFailed', { id: messageId, status: response.status ?? '?' }) }));
         return rejectWithValue(withHttpStatus('Failed to edit message', response.status));
       }
 
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.edited', { count: 1 }) }));
       return response.data as Message;
     } catch (error) {
       return rejectWithValue(
@@ -1907,7 +1910,7 @@ export const loadAllSearchResults = createAsyncThunk(
                 );
                 dispatch(addStatusEntry({
                   level: 'warning',
-                  message: t('status.msg.searchLoadAllRetry', { answer: lastAnswer, seconds: Math.round(delayMs / 1000), attempt: transientRetries }),
+                  message: t('status.msg.searchLoadAllRetry', { answer: lastAnswer, seconds: Math.round(delayMs / 1000), attempt: transientRetries, max: retryMaxFor({ status }, 5) }),
                 }));
                 const cancelled = await cancellableDelay(
                   delayMs,
@@ -2182,10 +2185,10 @@ export const fetchAllMessages = createAsyncThunk(
             getState: getState as () => RootState,
             dispatch,
             signal,
-            onRetry: (attempt, delayMs, last) => {
+            onRetry: (attempt, delayMs, last, max) => {
               dispatch(addStatusEntry({
                 level: 'warning',
-                message: t('status.msg.loadAllRetry', { answer: describeAnswer(last), seconds: Math.round(delayMs / 1000), attempt }),
+                message: t('status.msg.loadAllRetry', { answer: describeAnswer(last), seconds: Math.round(delayMs / 1000), attempt, max }),
               }));
             },
           },
@@ -2257,7 +2260,8 @@ export const fetchAllMessages = createAsyncThunk(
         return stopped();
       }
 
-      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: loadedCount }) }));
+      // Row 165 (pass 3): the closing line counts what is loaded now, not only this run's fetches.
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: (continuing ? existingRows.length : 0) + loadedCount }) }));
       const finalCursor = lastFetchedId ?? (continuing ? lastMessageId : null);
       await persistConversation(api, channelId, {
         complete: true,
@@ -2795,10 +2799,10 @@ export const fetchAllThreadMessages = createAsyncThunk(
             getState: getState as () => RootState,
             dispatch,
             signal,
-            onRetry: (attempt, delayMs, last) => {
+            onRetry: (attempt, delayMs, last, max) => {
               dispatch(addStatusEntry({
                 level: 'warning',
-                message: t('status.msg.loadAllRetry', { answer: describeAnswer(last), seconds: Math.round(delayMs / 1000), attempt }),
+                message: t('status.msg.loadAllRetry', { answer: describeAnswer(last), seconds: Math.round(delayMs / 1000), attempt, max }),
               }));
             },
           },
@@ -2887,7 +2891,8 @@ export const fetchAllThreadMessages = createAsyncThunk(
           lastMessageId: threadFinalCursor,
         },
       }));
-      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: loadedCount }) }));
+      // Row 165 (pass 3): the closing line counts what is loaded now, not only this run's fetches.
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: (continuing ? existingRows.length : 0) + loadedCount }) }));
       await persistConversation(api, threadId, {
         complete: true,
         pagination: paginationRecord({ mode: 'all', hasMore: false, lastMessageId: threadFinalCursor }),

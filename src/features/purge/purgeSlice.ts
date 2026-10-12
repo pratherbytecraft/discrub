@@ -340,10 +340,10 @@ async function* iterateReactionPurgeMessages(
       {
         getState,
         dispatch,
-        onRetry: (attempt, delayMs) => {
+        onRetry: (attempt, delayMs, _last, max) => {
           dispatch(addStatusEntry({
             level: 'warning',
-            message: t('status.purge.retry', { seconds: Math.round(delayMs / 1000), attempt }),
+            message: t('status.purge.retry', { seconds: Math.round(delayMs / 1000), attempt, max }),
           }));
         },
       },
@@ -439,10 +439,10 @@ async function* iterateDeletedUserScan(
         {
           getState,
           dispatch,
-          onRetry: (attempt, delayMs) => {
+          onRetry: (attempt, delayMs, _last, max) => {
             dispatch(addStatusEntry({
               level: 'warning',
-              message: t('status.purge.scanRetry', { label: channelLabel, seconds: Math.round(delayMs / 1000), attempt }),
+              message: t('status.purge.scanRetry', { label: channelLabel, seconds: Math.round(delayMs / 1000), attempt, max }),
             }));
           },
         },
@@ -849,10 +849,10 @@ async function purgeChannelMessages(
       {
         getState,
         dispatch,
-        onRetry: (attempt, delayMs) => {
+        onRetry: (attempt, delayMs, _last, max) => {
           dispatch(addStatusEntry({
             level: 'warning',
-            message: t('status.purge.finalPassRetry', { label, seconds: Math.round(delayMs / 1000), attempt }),
+            message: t('status.purge.finalPassRetry', { label, seconds: Math.round(delayMs / 1000), attempt, max }),
           }));
         },
       },
@@ -2656,10 +2656,10 @@ export const purgeGuilds = createAsyncThunk<
             getState,
             dispatch,
             signal,
-            onRetry: (attempt, delayMs) => {
+            onRetry: (attempt, delayMs, _last, max) => {
               dispatch(addStatusEntry({
                 level: 'warning',
-                message: t('status.purge.channelsRetry', { mode: modeLabel, name: guild.name, seconds: Math.round(delayMs / 1000), attempt }),
+                message: t('status.purge.channelsRetry', { mode: modeLabel, name: guild.name, seconds: Math.round(delayMs / 1000), attempt, max }),
               }));
             },
           },

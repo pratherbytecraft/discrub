@@ -151,16 +151,18 @@ const selectBaseSummary = createSelector(
       const progress = exportState.exportProgress;
       if (progress?.bulk) {
         const { currentIndex, totalChannels, currentChannelName } = progress.bulk;
-        const channelLabel = `Channel ${currentIndex + 1}/${totalChannels}: ${currentChannelName}`;
+        // Row 126 (pass 3): the bulk label in the app language, the stage as a phrase.
+        const channelLabel = t('operation.channelLabel', { channelIndex: currentIndex + 1, channelTotal: totalChannels, channelName: currentChannelName });
         if (progress.total > 0) {
           const pct = Math.round((progress.current / progress.total) * 100);
+          const stage = t(`operation.stage.${progress.stage}`, { defaultValue: progress.stage });
           return {
             isRunning: true, isPaused, tier: 'heavy',
-            label: isPaused ? `Paused · ${channelLabel}` : `${channelLabel} (${progress.stage})... ${pct}%`,
+            label: isPaused ? t('operation.paused', { label: channelLabel }) : t('operation.bulkExportStage', { channel: channelLabel, stage, pct }),
             progress: pct,
           };
         }
-        return { isRunning: true, isPaused, tier: 'heavy', label: isPaused ? `Paused · ${channelLabel}` : channelLabel };
+        return { isRunning: true, isPaused, tier: 'heavy', label: isPaused ? t('operation.paused', { label: channelLabel }) : channelLabel };
       }
       if (progress) {
         const pct = progress.total > 0

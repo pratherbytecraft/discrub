@@ -105,7 +105,7 @@ describe('StatusPanel', () => {
         },
       }),
     });
-    expect(screen.getByText(/Exporting \(avatars\).*50%/)).toBeInTheDocument();
+    expect(screen.getByText(/Exporting \(downloading avatars\).*50%/)).toBeInTheDocument();
     const progressBars = screen.getAllByRole('progressbar');
     expect(progressBars.length).toBeGreaterThanOrEqual(1);
   });

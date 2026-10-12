@@ -210,7 +210,7 @@ describe('Search & Filters', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         const messages = (store?.getState()?.status?.entries ?? []).map((e: any) => e.message);
-        expect(messages).to.include('message/searchMessages: Failed to search messages (HTTP 403)');
+        expect(messages).to.include('Failed to search messages (HTTP 403)');
       });
     });
 
@@ -600,10 +600,9 @@ describe('Search & Filters', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         const entries = store?.getState()?.status?.entries ?? [];
-        const failure = entries.find((e: any) => /message\/fetchNextSearchPage: /.test(e.message));
+        const failure = entries.find((e: any) => e.message === 'Failed to search messages (HTTP 403)');
         expect(failure, 'Load More failure entry').to.exist;
         expect(failure.level).to.equal('error');
-        expect(failure.message).to.equal('message/fetchNextSearchPage: Failed to search messages (HTTP 403)');
         expect(store.getState().message.rows.length).to.equal(25);
         expect(store.getState().message.pagination.hasMore).to.be.true;
       });

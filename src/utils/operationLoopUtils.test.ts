@@ -6,7 +6,7 @@ import {
   withTransientRetry,
   isTransientApiFailure,
   isBrowserOnline,
-  ONLINE_NETWORK_RETRIES, transientRetryDelayMs, describeAnswer, describeFailure } from './operationLoopUtils';
+  ONLINE_NETWORK_RETRIES, transientRetryDelayMs, describeAnswer, describeFailure, retryMaxFor } from './operationLoopUtils';
 import type { RootState } from '@/app/store';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { initialAppState } from '@features/app/appTypes';
@@ -315,6 +315,17 @@ describe('withTransientRetry', () => {
 });
 
 describe('describeAnswer / describeFailure (#266)', () => {
+  it('adds the wait advice to a 429 (pass 3, row 132)', () => {
+    expect(describeFailure({ status: 429 }, 'fetchAllFailed')).toBe(
+      'Failed to fetch all messages (HTTP 429). Discord is rate limiting this account. Wait at least 10 minutes before starting another run.',
+    );
+  });
+
+  it('counts the retries a failure really gets (pass 3, row 168)', () => {
+    expect(retryMaxFor({ status: 503 })).toBe(5);
+    expect(retryMaxFor({})).toBe(ONLINE_NETWORK_RETRIES);
+  });
+
   it('names the HTTP status when Discord answered', () => {
     expect(describeAnswer({ status: 503 })).toBe('Discord answered HTTP 503');
     expect(describeFailure({ status: 403 }, 'fetchAllFailed')).toBe('Failed to fetch all messages (HTTP 403)');

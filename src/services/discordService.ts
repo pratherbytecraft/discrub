@@ -1,4 +1,4 @@
-import { DiscordService } from 'discrub-core/discord-service';
+import { DiscordService, setRateLimitListener } from 'discrub-core/discord-service';
 import type { AppSettings } from 'discrub-core/types/discrub-types';
 import { addStatusEntry, showToast } from '@features/status/statusSlice';
 import { setDiscrubCancelled, setDiscrubPaused, setOperationHold, setRateLimitStopped, setRequestsRefusedStopped, selectRequestsRefusedStopped } from '@features/app/appSlice';
@@ -74,11 +74,14 @@ export const getDiscordService = (settings?: AppSettings): DiscordService => {
     discordServiceInstance = new DiscordService(settings, { autoDelay: false });
     discordServiceInstance.onRateLimit = async (retryAfter, info) => {
       const store = await getStore();
-      const scope = info?.global ? ' (global limit)' : '';
-      const streak = info && info.consecutive > 1 ? `, ${info.consecutive} in a row` : '';
+      // Row 132 (pass 3): the retry line in the app language.
+      const seconds = retryAfter.toFixed(1);
+      const key = info?.global ? 'rateLimit.retryingGlobal' : 'rateLimit.retrying';
       store.dispatch(addStatusEntry({
         level: 'warning',
-        message: `Rate limited by Discord${scope}, retrying in ${retryAfter.toFixed(1)}s${streak}`,
+        message: info && info.consecutive > 1
+          ? t(`${key}InARow`, { seconds, count: info.consecutive })
+          : t(key, { seconds }),
       }));
       showDiscordWait(store, retryAfter);
     };
@@ -116,6 +119,18 @@ export const getDiscordService = (settings?: AppSettings): DiscordService => {
       dispatchNow(setRequestsRefusedStopped(true));
       dispatchNow(showToast({ level: 'error', message: t('requestsRefused.toast') }));
     };
+    // Rows 133 and 161 (pass 3): a request that waits out a pause Discord
+    // asked for, from any service instance (the enrichment adapters too),
+    // says so, so a search or Load All started during the wait does not
+    // look hung. Each instance's own 429s already log above.
+    setRateLimitListener((event) => {
+      if (event.type !== 'cooldownWait') return;
+      void getStore().then((store) => {
+        const seconds = Math.ceil(event.waitMs / 1000);
+        store.dispatch(addStatusEntry({ level: 'info', message: t('rateLimit.waiting', { count: seconds }) }));
+        showDiscordWait(store, event.waitMs / 1000);
+      });
+    });
     // Warm the store cache so the storm hook can dispatch synchronously.
     void getStore();
     discordServiceInstance.onDelay = async () => {

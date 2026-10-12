@@ -116,7 +116,7 @@ vi.mock('@/utils/operationLoopUtils', async () => {
         lastResponse = await fn();
         if (lastResponse.success || !shouldRetry(lastResponse, attempt)) return lastResponse;
         if (attempt === maxRetries) return lastResponse;
-        opts.onRetry?.(attempt + 1, 1000, lastResponse);
+        opts.onRetry?.(attempt + 1, 1000, lastResponse, lastResponse.status === undefined ? Math.min(maxRetries, 2) : maxRetries);
       }
       return lastResponse;
     }),
@@ -2710,5 +2710,30 @@ describe('Stop keeps the messages pulled so far (#276)', () => {
     const entries = testStore.getState().status.entries.map((e: any) => e.message);
     expect(entries).toContain('Export: Stopped · nothing kept from test-channel, a media file is only saved once it finished downloading');
     expect(entries).toContain('Export: Cancelled · test-channel');
+  });
+
+  it('media only export logs its download progress like the other formats (pass 3, row 126)', async () => {
+    const { exportMessages } = await import('./exportSlice');
+    const exportServiceModule = await import('@services/exportService');
+
+    const testStore = await buildStore();
+    const exportMediaOnly = vi.fn(async (_messages, _name, _config, onProgress) => {
+      onProgress({ stage: 'attachments', current: 10, total: 20 });
+    });
+    vi.mocked(exportServiceModule.getExportService).mockReturnValue({ exportToZip: vi.fn(), exportMediaOnly } as any);
+
+    await testStore.dispatch(
+      exportMessages({
+        messages: [makeMessage(1, 'c1')] as any,
+        channelName: 'test-channel',
+        format: 'media',
+        messagesPerPage: 100,
+        separateThreads: false,
+        includeMedia: true,
+      }) as any,
+    );
+
+    const entries = testStore.getState().status.entries.map((e: any) => e.message);
+    expect(entries.some((m: string) => m.includes('10') && m.includes('20') && /attachment/i.test(m))).toBe(true);
   });
 });

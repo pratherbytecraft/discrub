@@ -29,6 +29,7 @@ vi.mock('@utils/operationLoopUtils', () => ({
   waitWhilePaused: vi.fn().mockResolvedValue(undefined),
   cancellableDelay: vi.fn().mockResolvedValue(false),
   TRANSIENT_RETRIES: 5,
+  retryMaxFor: vi.fn((r: { status?: number } | null | undefined, max = 5) => (r?.status === undefined ? Math.min(max, 2) : max)),
   // Same predicate as the real helper: no status and 5xx retry, 4xx does not.
   isTransientApiFailure: vi.fn((r: { success: boolean; status?: number }) =>
     !r.success && (r.status === undefined || r.status >= 500)),
@@ -211,8 +212,9 @@ describe('iterateSearchMessagesRedux page retry (2.2.1)', () => {
     const actions = dispatch.mock.calls.map((c) => c[0]);
     expect(actions[0]).toMatchObject({ type: 'status/addStatusEntry', payload: { level: 'warning' } });
     expect(actions[0].payload.message).toContain('Discord did not answer');
-    expect(actions[0].payload.message).toContain('attempt 1/5');
-    expect(actions[1]).toMatchObject({ type: 'app/setOperationHold', payload: { kind: 'retryWait', attempt: 1, max: 5 } });
+    // Row 168: no answer while online can get two retries before the refused guard stops the run.
+    expect(actions[0].payload.message).toContain('attempt 1/2');
+    expect(actions[1]).toMatchObject({ type: 'app/setOperationHold', payload: { kind: 'retryWait', attempt: 1, max: 2 } });
     expect(actions[2]).toEqual({ type: 'app/setOperationHold', payload: null });
   });
 

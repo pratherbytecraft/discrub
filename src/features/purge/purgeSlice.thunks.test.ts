@@ -146,6 +146,7 @@ vi.mock('@services/discordService', () => ({
 }));
 
 vi.mock('@utils/operationLoopUtils', () => ({
+  retryMaxFor: vi.fn((r: { status?: number } | null | undefined, max = 5) => (r?.status === undefined ? Math.min(max, 2) : max)),
   // Instant fake of withTransientRetry (#245) — same retry+predicate
   // contract as the real helper minus the backoff sleep.
   withTransientRetry: vi.fn(async (fn: () => Promise<any>, opts: any) => {
@@ -158,7 +159,7 @@ vi.mock('@utils/operationLoopUtils', () => ({
       lastResponse = await fn();
       if (lastResponse.success || !shouldRetry(lastResponse, attempt)) return lastResponse;
       if (attempt === maxRetries) return lastResponse;
-      opts.onRetry?.(attempt + 1, 1000, lastResponse);
+      opts.onRetry?.(attempt + 1, 1000, lastResponse, lastResponse.status === undefined ? Math.min(maxRetries, 2) : maxRetries);
     }
     return lastResponse;
   }),
@@ -1627,7 +1628,7 @@ describe('purgeSlice thunks', () => {
       expect(retryCriteria.searchBeforeDate).toEqual(new Date('2026-01-02T00:00:00Z'));
 
       const messages = store.getState().status.entries.map((e: any) => e.message);
-      expect(messages.some((m: string) => m.includes('Discord did not answer') && m.includes('attempt 1/5'))).toBe(true);
+      expect(messages.some((m: string) => m.includes('Discord did not answer') && m.includes('attempt 1/2'))).toBe(true);
       expect(messages.some((m: string) => m.includes('Search request failed'))).toBe(false);
     });
 
