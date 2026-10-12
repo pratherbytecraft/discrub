@@ -125,6 +125,24 @@ describe('bulkEditChannels (#215)', () => {
     expect(mockDiscordService.editMessage).toHaveBeenCalledTimes(3);
   });
 
+  it('stops at the channel where the sign in expired and answers signInExpired (row 134)', async () => {
+    const { showToast } = await import('@features/status/statusSlice');
+    mockDiscordService.editMessage
+      .mockResolvedValueOnce({ success: true, data: { id: 'm1' } })
+      .mockResolvedValueOnce({ success: false, status: 401 });
+    yieldPage([ownMsg('m1'), ownMsg('m2'), ownMsg('m3')]);
+
+    const result = await store.dispatch(
+      bulkEditChannels({ channels: [channel('c1', 'general'), channel('c2', 'random')], content: 'redacted', guildId: 'g1' }),
+    ).unwrap();
+
+    expect(result).toMatchObject({ edited: 1, failed: 0, signInExpired: true });
+    expect(mockDiscordService.editMessage).toHaveBeenCalledTimes(2);
+    expect(searchPagination.iterateSearchMessagesRedux).toHaveBeenCalledTimes(1);
+    expect(store.getState().message.isEditing).toBe(false);
+    expect(vi.mocked(showToast)).toHaveBeenCalledWith(expect.objectContaining({ level: 'warning' }));
+  });
+
   it('holds isEditing true during the run and clears it on completion (#215 pause/cancel surfacing)', async () => {
     // A controllable edit promise lets us inspect state mid-flight.
     let resolveEdit: (v: unknown) => void = () => {};

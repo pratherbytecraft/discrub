@@ -31,6 +31,8 @@ import {
 } from '@services/workspaceStore';
 
 vi.mock('@services/discordService', () => ({ getDiscordService: vi.fn(() => ({})) }));
+// Row 134: Sign in again reads the open Discord tab, which only the extension can do.
+vi.mock('@/extension/messaging', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/extension/messaging')>()), isExtensionMode: () => true }));
 vi.mock('@features/purge/purgeSlice', async () => {
   const actual = await vi.importActual('@features/purge/purgeSlice');
   return { ...actual, bulkPurgeChannels: vi.fn(() => ({ type: 'purge/bulkPurgeChannels/mock' })) };
@@ -165,6 +167,27 @@ describe('Bulk Export resume', () => {
     expect(arg.channels.map((c) => c.id)).toEqual(['c1', 'c2', 'c3']);
     // The run picks up its record, so the units that finished render from the workspace (WP6c).
     expect(arg.resume).toBe(true);
+  });
+});
+
+describe('a run the sign in expired on (row 134)', () => {
+  it('offers Sign in again beside Resume', async () => {
+    await saveBulk({ kind: 'bulkExport', done: [], inHand: null, total: 5, doneCount: 2, signInExpired: true, settings: { snapshot: null, searchCriteria: null } });
+    renderWithProviders(<BulkExportDialog open onClose={vi.fn()} channels={[]} mode="channels" guildId={GUILD_ID} />, {
+      preloadedState: stateWith({ kind: 'bulkExport', mode: 'channels', guildId: GUILD_ID, total: 5, doneCount: 2, remaining: 3, signInExpired: true }),
+    });
+    expect(await screen.findByTestId('bulk-export-sign-in-again')).toHaveTextContent('The sign in expired during this run. Sign in to Discord in this tab, then click Sign in again and Resume.');
+    expect(screen.getByRole('button', { name: 'Sign in again' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Resume'));
+  });
+
+  it('a run that was only cut shows no Sign in again', async () => {
+    await saveBulk({ settings: { config: CONFIG, searchCriteria: null } });
+    renderWithProviders(<BulkPurgeDialog open onClose={vi.fn()} channels={[]} mode="channels" guildId={GUILD_ID} />, {
+      preloadedState: stateWith({ kind: 'bulkPurge', mode: 'channels', guildId: GUILD_ID, total: 3, doneCount: 1, remaining: 2 }),
+    });
+    await screen.findByTestId('purge-resume-note');
+    expect(screen.queryByTestId('purge-sign-in-again')).not.toBeInTheDocument();
   });
 });
 

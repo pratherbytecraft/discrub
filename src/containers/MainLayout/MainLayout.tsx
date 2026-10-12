@@ -29,8 +29,8 @@ import {
   selectArchiveError,
   selectSelectedArchiveVersion,
 } from '@features/announcement/announcementSlice';
-import { selectIsExporting, selectExportError, resetExport } from '@features/export/exportSlice';
-import { selectIsPurging, selectPurgeError, selectPurgeChannelErrorCount } from '@features/purge/purgeSlice';
+import { selectIsExporting, selectExportError, selectExportSignInExpired, resetExport } from '@features/export/exportSlice';
+import { selectIsPurging, selectPurgeError, selectPurgeChannelErrorCount, selectPurgeSignInExpired } from '@features/purge/purgeSlice';
 import { showToast } from '@features/status/statusSlice';
 import {
   setDiscrubCancelled,
@@ -119,9 +119,11 @@ const MainLayout = () => {
   const markdownError = useAppSelector(selectMarkdownError);
   const isExporting = useAppSelector(selectIsExporting);
   const exportError = useAppSelector(selectExportError);
+  const exportSignInExpired = useAppSelector(selectExportSignInExpired);
   const isPurging = useAppSelector(selectIsPurging);
   const purgeError = useAppSelector(selectPurgeError);
   const purgeChannelErrorCount = useAppSelector(selectPurgeChannelErrorCount);
+  const purgeSignInExpired = useAppSelector(selectPurgeSignInExpired);
   const isOperationRunning = useAppSelector(selectIsOperationRunning);
   const rateLimitStopped = useAppSelector(selectRateLimitStopped);
   const requestsRefusedStopped = useAppSelector(selectRequestsRefusedStopped);
@@ -135,35 +137,38 @@ const MainLayout = () => {
   useEffect(() => {
     if (prevIsExporting.current && !isExporting) {
       if (exportError === 'Export cancelled') {
-        dispatch(showToast({ level: 'warning', message: 'Export cancelled' }));
+        dispatch(showToast({ level: 'warning', message: t('export.cancelledToast') }));
       } else if (exportError) {
-        dispatch(showToast({ level: 'error', message: `Export failed: ${exportError}` }));
+        dispatch(showToast({ level: 'error', message: t('export.failedToast', { error: exportError }) }));
+      } else if (exportSignInExpired) {
+        // Row 134: the run stopped on a 401 and kept its record; the dialog offers Sign in again and Resume.
+        dispatch(showToast({ level: 'warning', message: t('workspace.signInExpiredToast'), duration: 15000 }));
       } else {
-        dispatch(showToast({ level: 'success', message: 'Export complete' }));
+        dispatch(showToast({ level: 'success', message: t('export.completeToast') }));
       }
       dispatch(resetExport());
     }
     prevIsExporting.current = isExporting;
-  }, [isExporting, exportError, dispatch]);
+  }, [isExporting, exportError, exportSignInExpired, dispatch, t]);
 
   // Detect purge completion (isPurging transitions from true → false)
   useEffect(() => {
     if (prevIsPurging.current && !isPurging) {
       if (purgeError) {
-        dispatch(showToast({ level: 'error', message: `Purge failed: ${purgeError}` }));
+        dispatch(showToast({ level: 'error', message: t('purge.failedToast', { error: purgeError }) }));
+      } else if (purgeSignInExpired) {
+        // Row 134: the run stopped on a 401 and kept its record; the dialog offers Sign in again and Resume.
+        dispatch(showToast({ level: 'warning', message: t('workspace.signInExpiredToast'), duration: 15000 }));
       } else if (purgeChannelErrorCount > 0) {
         // #250: a run where a channel errored is not a clean success even
         // though the thunk fulfilled; the details are in the status log.
-        dispatch(showToast({
-          level: 'warning',
-          message: `Purge finished, but ${purgeChannelErrorCount} ${purgeChannelErrorCount === 1 ? 'channel' : 'channels'} had errors (see the status log)`,
-        }));
+        dispatch(showToast({ level: 'warning', message: t('purge.channelErrorsToast', { count: purgeChannelErrorCount }) }));
       } else {
-        dispatch(showToast({ level: 'success', message: 'Purge complete' }));
+        dispatch(showToast({ level: 'success', message: t('purge.completeToast') }));
       }
     }
     prevIsPurging.current = isPurging;
-  }, [isPurging, purgeError, purgeChannelErrorCount, dispatch]);
+  }, [isPurging, purgeError, purgeChannelErrorCount, purgeSignInExpired, dispatch, t]);
 
   // Reset pause/cancel flags when any operation completes. Runs after the
   // per-operation completion effects above, so when the run was stopped

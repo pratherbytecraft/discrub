@@ -130,6 +130,8 @@ export interface WorkspaceBulk {
   /** Units the run reports (a forum's posts count one by one in Bulk Export). */
   total: number;
   doneCount: number;
+  /** Row 134: the run stopped because the sign in expired; Resume after a new sign in. */
+  signInExpired?: boolean;
 }
 
 export interface WorkspaceAuthor {

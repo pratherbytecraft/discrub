@@ -670,6 +670,29 @@ function recordBulkAt(persistApi: PersistApi, index: number, total: number | nul
   });
 }
 
+/** The run's thunk answered with `signInExpired` (row 134). */
+const signInExpiredRun = (action: unknown): boolean =>
+  ((action as { payload?: { signInExpired?: boolean } | null }).payload)?.signInExpired === true;
+
+/** Row 134: the run stopped on a 401. The record stays, flagged, so the dialog offers Sign in again and Resume. */
+function recordBulkSignInExpired(persistApi: PersistApi): void {
+  const wid = selectCurrentWid(persistApi.getState());
+  if (!wid || !persistApi.getState().workspace?.bulk) return;
+  bulkWrittenIndex = -1;
+  void chained(async () => {
+    try {
+      const record = await updateWorkspace(wid, (workspace) => {
+        if (workspace.bulk) workspace.bulk.signInExpired = true;
+      });
+      if (selectCurrentWid(persistApi.getState()) === wid && persistApi.getState().workspace?.bulk) {
+        persistApi.dispatch(bulkRecorded(bulkOf(record)));
+      }
+    } catch (error) {
+      console.error('[workspace] could not flag the bulk run', error);
+    }
+  });
+}
+
 function recordBulkEnd(persistApi: PersistApi): void {
   const wid = selectCurrentWid(persistApi.getState());
   if (!wid || isSuspendingForSwitch()) return;
@@ -724,8 +747,9 @@ listen({
 
 listen({
   matcher: isAnyOf(bulkExportChannels.fulfilled, bulkExportChannels.rejected, bulkExportDMs.fulfilled, bulkExportDMs.rejected),
-  effect: (_action, listenerApi) => {
-    recordBulkEnd(api(listenerApi));
+  effect: (action, listenerApi) => {
+    if (signInExpiredRun(action)) recordBulkSignInExpired(api(listenerApi));
+    else recordBulkEnd(api(listenerApi));
   },
 });
 
@@ -775,7 +799,8 @@ listen({
     if (bulkPurgeChannels.fulfilled.match(action) || bulkPurgeChannels.rejected.match(action)) {
       if (listenerApi.getState().workspace?.bulk?.mode === 'servers') return;
     }
-    recordBulkEnd(api(listenerApi));
+    if (signInExpiredRun(action)) recordBulkSignInExpired(api(listenerApi));
+    else recordBulkEnd(api(listenerApi));
   },
 });
 
@@ -803,7 +828,8 @@ listen({
 
 listen({
   matcher: isAnyOf(bulkEditChannels.fulfilled, bulkEditChannels.rejected),
-  effect: (_action, listenerApi) => {
-    recordBulkEnd(api(listenerApi));
+  effect: (action, listenerApi) => {
+    if (signInExpiredRun(action)) recordBulkSignInExpired(api(listenerApi));
+    else recordBulkEnd(api(listenerApi));
   },
 });

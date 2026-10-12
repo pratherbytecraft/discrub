@@ -961,6 +961,9 @@
     }
   },
   "export": {
+    "completeToast": "Export abgeschlossen",
+    "cancelledToast": "Export abgebrochen",
+    "failedToast": "Export fehlgeschlagen: {{error}}",
     "title": "Nachrichten exportieren",
     "exportingFrom_one": "{{count}} Nachricht aus <strong>{{name}}</strong> wird exportiert",
     "exportingFrom_other": "{{count}} Nachrichten aus <strong>{{name}}</strong> werden exportiert",
@@ -1096,6 +1099,10 @@
   "purge": {
     "scopeServers_one": "jedem lesbaren Kanal in {{count}} Server",
     "scopeServers_other": "jedem lesbaren Kanal in {{count}} Servern",
+    "completeToast": "Purge abgeschlossen",
+    "failedToast": "Purge fehlgeschlagen: {{error}}",
+    "channelErrorsToast_one": "Purge beendet, aber {{count}} Kanal hatte Fehler (siehe Statusprotokoll)",
+    "channelErrorsToast_other": "Purge beendet, aber {{count}} Kanäle hatten Fehler (siehe Statusprotokoll)",
     "summaryServerAttachments": "Anhänge werden aus deinen Nachrichten in {{scope}} entfernt. Der Nachrichtentext bleibt erhalten.",
     "summaryServerMessages": "Deine Nachrichten in {{scope}} werden dauerhaft gelöscht.",
     "targets_channel_one": "{{count}} Kanal",
@@ -1637,6 +1644,7 @@
       "failed": "fehlgeschlagen",
       "bulkEditCompletedChannel": "Sammelbearbeitung: {{name}} abgeschlossen · {{count}} bearbeitet",
       "bulkEditComplete": "Sammelbearbeitung abgeschlossen · {{edited}} bearbeitet{{skipped}}{{failed}}",
+      "bulkEditSignInExpired": "Sammelbearbeitung: Anmeldung abgelaufen, gestoppt bei {{done}} von {{total}}. Nach einer neuen Anmeldung fortsetzen.",
       "skippedSuffix": ", {{count}} übersprungen",
       "failedSuffix": ", {{count}} fehlgeschlagen",
       "removedReaction": "Reaktion {{emoji}} von Nachricht {{id}} entfernt",
@@ -1882,6 +1890,8 @@
       "completedDetail": "{{mode}}: {{name}} abgeschlossen · {{detail}}",
       "unknownError": "Unbekannter Fehler",
       "errorProcessing": "{{mode}}: Fehler bei {{name}} · {{error}}",
+      "signInExpired": "{{mode}}: Anmeldung abgelaufen, gestoppt bei {{done}} von {{total}}. Nach einer neuen Anmeldung fortsetzen.",
+      "serversSignInExpired": "{{mode}}: Anmeldung abgelaufen · {{servers}}, {{detail}}. Nach einer neuen Anmeldung fortsetzen.",
       "cancelledReactions": "{{mode}}: Abgebrochen · {{count}} Reaktionen entfernt",
       "cancelledDetail": "{{mode}}: Abgebrochen · {{detail}}",
       "serverComplete": "{{name}} abgeschlossen",
@@ -1975,6 +1985,7 @@
       "bulkFromWorkspace": "Sammelexport: {{name}} war bereits fertig, wird aus diesem Arbeitsbereich geschrieben",
       "storageFullInMemory": "Der Browserspeicher ist voll, der Rest dieses Exports bleibt im Arbeitsspeicher",
       "bulkFailedOn": "Sammelexport: Fehler bei {{name}}: {{error}}",
+      "bulkSignInExpired": "Sammelexport: Anmeldung abgelaufen, gestoppt bei {{done}} von {{total}}. Die ZIP-Datei enthält, was exportiert wurde. Nach einer neuen Anmeldung fortsetzen.",
       "zeroChannels": "Sammelexport: 0 Kanäle exportiert, die ZIP enthält nur die README. Prüfe die Einträge oben auf übersprungene oder fehlgeschlagene Kanäle.",
       "bulkStartingDm": "Sammelexport: DM {{index}}/{{total}} startet: {{name}}"
     }

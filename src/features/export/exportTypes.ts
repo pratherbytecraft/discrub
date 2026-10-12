@@ -316,6 +316,8 @@ export interface ExportState {
   currentPage: number;
   totalPages: number;
   exportError: string | null;
+  /** Row 134: the last bulk run stopped on a 401 and kept its record. */
+  signInExpired: boolean;
   exportFormat: ExportFormat;
   messagesPerPage: number;
   separateThreads: boolean;
@@ -344,6 +346,7 @@ export const initialExportState: ExportState = {
   currentPage: 0,
   totalPages: 0,
   exportError: null,
+  signInExpired: false,
   exportFormat: 'html',
   messagesPerPage: 100,
   separateThreads: false,

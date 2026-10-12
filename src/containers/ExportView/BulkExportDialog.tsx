@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
 import { useBulkResume } from '@/hooks/useResume';
+import SignInAgainRow from '@components/ui/SignInAgainRow';
 import { discardBulkRecord, readBulkRecord, resolveQueue } from '@features/workspace/resumeRecords';
 import {
   applyPreset,
@@ -219,6 +220,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
               {t('workspace.resumeBulkExportNote', { done: bulkResume.doneCount, count: bulkResume.total, context: mode === 'dms' ? 'dm' : undefined })}
             </Typography>
           )}
+          {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="bulk-export-sign-in-again" />}
           <SelectedChannelsPill channels={channels} mode={mode} />
 
           <PresetSelector />

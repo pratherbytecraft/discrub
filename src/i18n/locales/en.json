@@ -961,6 +961,9 @@
     }
   },
   "export": {
+    "completeToast": "Export complete",
+    "cancelledToast": "Export cancelled",
+    "failedToast": "Export failed: {{error}}",
     "title": "Export Messages",
     "exportingFrom_one": "Exporting {{count}} message from <strong>{{name}}</strong>",
     "exportingFrom_other": "Exporting {{count}} messages from <strong>{{name}}</strong>",
@@ -1096,6 +1099,10 @@
   "purge": {
     "scopeServers_one": "every channel you can read in {{count}} server",
     "scopeServers_other": "every channel you can read in {{count}} servers",
+    "completeToast": "Purge complete",
+    "failedToast": "Purge failed: {{error}}",
+    "channelErrorsToast_one": "Purge finished, but {{count}} channel had errors (see the status log)",
+    "channelErrorsToast_other": "Purge finished, but {{count}} channels had errors (see the status log)",
     "summaryServerAttachments": "Attachments will be stripped from your messages in {{scope}}. Message text is preserved.",
     "summaryServerMessages": "Your messages in {{scope}} will be permanently deleted.",
     "targets_channel_one": "{{count}} channel",
@@ -1637,6 +1644,7 @@
       "failed": "failed",
       "bulkEditCompletedChannel": "Bulk edit: Completed {{name}} · {{count}} edited",
       "bulkEditComplete": "Bulk edit complete · {{edited}} edited{{skipped}}{{failed}}",
+      "bulkEditSignInExpired": "Bulk edit: Sign in expired, stopped at {{done}} of {{total}}. Resume after a new sign in.",
       "skippedSuffix": ", {{count}} skipped",
       "failedSuffix": ", {{count}} failed",
       "removedReaction": "Removed reaction {{emoji}} from message {{id}}",
@@ -1882,6 +1890,8 @@
       "completedDetail": "{{mode}}: Completed {{name}} · {{detail}}",
       "unknownError": "Unknown error",
       "errorProcessing": "{{mode}}: Error processing {{name}} · {{error}}",
+      "signInExpired": "{{mode}}: Sign in expired, stopped at {{done}} of {{total}}. Resume after a new sign in.",
+      "serversSignInExpired": "{{mode}}: Sign in expired · {{servers}}, {{detail}}. Resume after a new sign in.",
       "cancelledReactions": "{{mode}}: Cancelled · {{count}} reactions removed",
       "cancelledDetail": "{{mode}}: Cancelled · {{detail}}",
       "serverComplete": "{{name}} complete",
@@ -1975,6 +1985,7 @@
       "bulkFromWorkspace": "Bulk export: {{name}} finished earlier, writing it from this workspace",
       "storageFullInMemory": "Browser storage is full, the rest of this export is kept in memory",
       "bulkFailedOn": "Bulk export: Failed on {{name}}: {{error}}",
+      "bulkSignInExpired": "Bulk export: Sign in expired, stopped at {{done}} of {{total}}. The zip holds what was exported. Resume after a new sign in.",
       "zeroChannels": "Bulk export: 0 channels exported, the zip contains only the README. Review the entries above for skipped or failed channels.",
       "bulkStartingDm": "Bulk export: Starting DM {{index}}/{{total}}: {{name}}"
     }

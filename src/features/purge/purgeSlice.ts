@@ -17,6 +17,8 @@ import {
   cancellableDelay,
   CancelledError,
   withTransientRetry,
+  throwIfSignInExpired,
+  isSignInExpiredError,
 } from '@utils/operationLoopUtils';
 import { calculateRandomDelay } from '@utils/delayUtils';
 import { iterateSearchMessagesRedux } from '@utils/searchPagination';
@@ -290,6 +292,7 @@ async function* iterateReactionPurgeMessages(
           continue;
         }
         if (!aroundResp.success || !aroundResp.data) {
+          throwIfSignInExpired(aroundResp);
           // HTTP error (404, 403, etc.) — log once and move on. Often caused
           // by search results that reference messages the user can no longer
           // read (moved threads, revoked access, etc.).
@@ -346,6 +349,7 @@ async function* iterateReactionPurgeMessages(
       },
     );
     if (!response.success || !response.data) {
+      throwIfSignInExpired(response);
       if (!checkCancelled(getState) && lastId !== null) {
         dispatch(addStatusEntry({
           level: 'warning',
@@ -444,6 +448,7 @@ async function* iterateDeletedUserScan(
         },
       );
       if (!response.success || !response.data) {
+        throwIfSignInExpired(response);
         // A FIRST-page failure is the expected shape for unwalkable
         // channels (forum parents 400 on the list endpoint, unreadable
         // private threads) — skip quietly. A MID-walk failure means part
@@ -842,6 +847,7 @@ async function purgeChannelMessages(
     if (response.success && Array.isArray(response.data)) {
       newestPage = response.data;
     } else {
+      throwIfSignInExpired(response);
       newestPage = null;
       if (!checkCancelled(getState)) {
         dispatch(addStatusEntry({
@@ -1190,6 +1196,7 @@ async function purgeChannelMessages(
               failureStreak = 0;
               noteLiveDeletion(targetChannelId, message.id);
             } else {
+              throwIfSignInExpired(response);
               totalFailed++;
               dispatch(addStatusEntry({
                 level: 'warning',
@@ -1209,6 +1216,7 @@ async function purgeChannelMessages(
             } else {
               // Don't count as "stripped". Log once per miss so the user
               // can audit; keep Discord's status for diagnostics.
+              throwIfSignInExpired(response);
               totalFailed++;
               dispatch(addStatusEntry({
                 level: 'warning',
@@ -1233,6 +1241,7 @@ async function purgeChannelMessages(
               totalSkipped++;
               failureStreak = 0;
             } else {
+              throwIfSignInExpired(response);
               totalFailed++;
               dispatch(addStatusEntry({
                 level: 'warning',
@@ -1260,6 +1269,7 @@ async function purgeChannelMessages(
             noteLiveDeletion(targetChannelId, message.id);
             if (finalPassIds.has(message.id)) totalFinalPass++;
           } else {
+            throwIfSignInExpired(response);
             totalFailed++;
             dispatch(addStatusEntry({
               level: 'warning',
@@ -1702,6 +1712,7 @@ async function purgeChannelClearAllReactions(
           if (delResp.success) {
             totalCleared++;
           } else {
+            throwIfSignInExpired(delResp);
             totalFailed++;
             dispatch(addStatusEntry({
               level: 'warning',
@@ -1908,6 +1919,7 @@ async function purgeChannelReactions(
                   // the counter and logged "Removed" even on 400/403.
                   // Surface actual failures so the completion total
                   // matches what the user sees happen on Discord.
+                  throwIfSignInExpired(delResp);
                   totalFailed++;
                   dispatch(addStatusEntry({
                     level: 'warning',
@@ -1974,6 +1986,8 @@ interface BulkPurgeApi {
 interface BulkPurgeRunResult {
   errors: string[];
   cancelled: boolean;
+  /** Row 134: the run stopped because Discord answered 401. */
+  signInExpired: boolean;
   completedStats: {
     deleted: number;
     skipped: number;
@@ -2049,6 +2063,8 @@ const executeBulkPurge = async (
         : `${modeLabel}: Starting operation across ${channels.length} ${isDm ? 'conversation' : 'channel'}${channels.length !== 1 ? 's' : ''}`,
     }));
 
+    // Row 134: the channel the sign in expired on; the run stops there and keeps its record.
+    let signInExpiredAt: number | null = null;
     try {
       // Thread discovery for guild channels only
       let threadMap: Map<string, Channel[]> | undefined;
@@ -2437,6 +2453,7 @@ const executeBulkPurge = async (
             }
           }
           if (error instanceof CancelledError) break;
+          if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
           const errorMsg = error instanceof Error ? error.message : t('status.purge.unknownError');
           errors.push(`${channelName}: ${errorMsg}`);
           dispatch(addStatusEntry({
@@ -2470,7 +2487,12 @@ const executeBulkPurge = async (
         'messages',
         completedStats.finalPass,
       );
-      if (wasCancelled) {
+      if (signInExpiredAt !== null) {
+        dispatch(addStatusEntry({
+          level: 'warning',
+          message: t('status.purge.signInExpired', { mode: modeLabel, done: signInExpiredAt, total: channels.length }),
+        }));
+      } else if (wasCancelled) {
         if (isReactionsMode) {
           dispatch(addStatusEntry({
             level: 'warning',
@@ -2516,7 +2538,7 @@ const executeBulkPurge = async (
         }
       }
 
-      return { errors, cancelled: wasCancelled, completedStats };
+      return { errors, cancelled: wasCancelled, signInExpired: signInExpiredAt !== null, completedStats };
     } catch (error) {
       dispatch(addStatusEntry({
         level: 'error',
@@ -2531,14 +2553,15 @@ const executeBulkPurge = async (
  * Processes channels sequentially with pause/cancel support.
  */
 export const bulkPurgeChannels = createAsyncThunk<
-  { success: true; errors?: string[] },
+  { success: true; errors?: string[]; signInExpired?: true },
   BulkPurgeParams,
   { state: RootState; rejectValue: string }
 >(
   'purge/bulkPurgeChannels',
   async (params, { rejectWithValue, dispatch, getState }) => {
     try {
-      const { errors } = await executeBulkPurge(params, { dispatch, getState });
+      const { errors, signInExpired } = await executeBulkPurge(params, { dispatch, getState });
+      if (signInExpired) return { success: true, errors, signInExpired: true };
       return errors.length > 0 ? { success: true, errors } : { success: true };
     } catch (error) {
       return rejectWithValue(
@@ -2564,7 +2587,7 @@ export interface PurgeGuildsParams {
  * and stops.
  */
 export const purgeGuilds = createAsyncThunk<
-  { success: true; errors?: string[] },
+  { success: true; errors?: string[]; signInExpired?: true },
   PurgeGuildsParams,
   { state: RootState; rejectValue: string }
 >(
@@ -2593,6 +2616,7 @@ export const purgeGuilds = createAsyncThunk<
     const totals = { deleted: 0, skipped: 0, editedAttachmentsOnly: 0, failed: 0, finalPass: 0, reactionsRemoved: 0 };
     let serversProcessed = 0;
     let cancelled = false;
+    let signInExpired = false;
 
     try {
       for (let i = 0; i < guilds.length; i++) {
@@ -2679,6 +2703,7 @@ export const purgeGuilds = createAsyncThunk<
         totals.failed += result.completedStats.failed;
         totals.finalPass += result.completedStats.finalPass;
         totals.reactionsRemoved += result.completedStats.reactionsRemoved;
+        if (result.signInExpired) { signInExpired = true; break; }
         if (result.cancelled) { cancelled = true; break; }
 
         // Delay between servers — same cadence as between channels.
@@ -2693,11 +2718,14 @@ export const purgeGuilds = createAsyncThunk<
         ? formatPurgeDetail(totals.deleted, totals.skipped, totals.editedAttachmentsOnly, totals.failed, 'messages', totals.finalPass)
         : t('status.purge.reactionsRemovedDetail', { count: totals.reactionsRemoved });
       const serverCount = t('status.purge.serverCount', { processed: serversProcessed, count: guilds.length });
-      if (cancelled || checkCancelled(getState)) {
+      if (signInExpired) {
+        dispatch(addStatusEntry({ level: 'warning', message: t('status.purge.serversSignInExpired', { mode: modeLabel, servers: serverCount, detail }) }));
+      } else if (cancelled || checkCancelled(getState)) {
         dispatch(addStatusEntry({ level: 'warning', message: t('status.purge.serversCancelled', { mode: modeLabel, servers: serverCount, detail }) }));
       } else {
         dispatch(addStatusEntry({ level: 'success', message: t('status.purge.serversComplete', { mode: modeLabel, servers: serverCount, detail }) }));
       }
+      if (signInExpired) return { success: true, errors, signInExpired: true };
       return errors.length > 0 ? { success: true, errors } : { success: true };
     } catch (error) {
       return rejectWithValue(
@@ -2712,7 +2740,7 @@ export const purgeGuilds = createAsyncThunk<
  * Delegates to the same logic as bulkPurgeChannels with guildId=null.
  */
 export const bulkPurgeDMs = createAsyncThunk<
-  { success: true; errors?: string[] },
+  { success: true; errors?: string[]; signInExpired?: true },
   Omit<BulkPurgeParams, 'guildId'>,
   { state: RootState; rejectValue: string }
 >(
@@ -2725,7 +2753,7 @@ export const bulkPurgeDMs = createAsyncThunk<
     if (bulkPurgeChannels.rejected.match(result)) {
       return thunkApi.rejectWithValue(result.payload as string);
     }
-    return result.payload as { success: true; errors?: string[] };
+    return result.payload as { success: true; errors?: string[]; signInExpired?: true };
   },
 );
 
@@ -2761,6 +2789,7 @@ const purgeSlice = createSlice({
       state.channelErrorCount = 0;
       state.expectedTotal = null;
       state.channelFraction = 0;
+      state.signInExpired = false;
     },
   },
   extraReducers: (builder) => {
@@ -2773,10 +2802,12 @@ const purgeSlice = createSlice({
         state.channelErrorCount = 0;
         state.expectedTotal = null;
         state.channelFraction = 0;
+        state.signInExpired = false;
       })
       .addCase(bulkPurgeChannels.fulfilled, (state, action) => {
         state.isPurging = false;
         state.channelErrorCount = action.payload.errors?.length ?? 0;
+        state.signInExpired = action.payload.signInExpired === true;
       })
       .addCase(bulkPurgeChannels.rejected, (state, action) => {
         state.isPurging = false;
@@ -2790,10 +2821,12 @@ const purgeSlice = createSlice({
         state.channelErrorCount = 0;
         state.expectedTotal = null;
         state.channelFraction = 0;
+        state.signInExpired = false;
       })
       .addCase(bulkPurgeDMs.fulfilled, (state, action) => {
         state.isPurging = false;
         state.channelErrorCount = action.payload.errors?.length ?? 0;
+        state.signInExpired = action.payload.signInExpired === true;
       })
       .addCase(bulkPurgeDMs.rejected, (state, action) => {
         state.isPurging = false;
@@ -2807,10 +2840,12 @@ const purgeSlice = createSlice({
         state.channelErrorCount = 0;
         state.expectedTotal = null;
         state.channelFraction = 0;
+        state.signInExpired = false;
       })
       .addCase(purgeGuilds.fulfilled, (state, action) => {
         state.isPurging = false;
         state.channelErrorCount = action.payload.errors?.length ?? 0;
+        state.signInExpired = action.payload.signInExpired === true;
       })
       .addCase(purgeGuilds.rejected, (state, action) => {
         state.isPurging = false;
@@ -2826,5 +2861,7 @@ export const selectIsPurging = (state: RootState) => state.purge.isPurging;
 export const selectPurgeProgress = (state: RootState) => state.purge.purgeProgress;
 export const selectPurgeError = (state: RootState) => state.purge.purgeError;
 export const selectPurgeChannelErrorCount = (state: RootState) => state.purge.channelErrorCount;
+/** Row 134: the last bulk purge stopped because the sign in expired; its record is kept for a Resume. */
+export const selectPurgeSignInExpired = (state: RootState) => state.purge.signInExpired;
 
 export default purgeSlice.reducer;

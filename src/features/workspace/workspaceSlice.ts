@@ -35,6 +35,8 @@ export interface UnfinishedBulk {
   total: number;
   doneCount: number;
   remaining: number;
+  /** Row 134: the run stopped on a 401; the dialog offers Sign in again beside Resume. */
+  signInExpired?: boolean;
 }
 
 /**
@@ -126,6 +128,7 @@ export function bulkOf(record: WorkspaceRecord | null | undefined): UnfinishedBu
     guildId: bulk.guildId,
     total: bulk.total ?? bulk.queue.length,
     doneCount: bulk.doneCount ?? bulk.done.length,
+    signInExpired: bulk.signInExpired === true,
     remaining: bulk.queue.filter((id) => !bulk.done.includes(id)).length,
   };
 }

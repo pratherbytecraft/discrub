@@ -28,7 +28,7 @@ import { addRecentExport } from '@features/history/historySlice';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { IsPinnedType, ChannelType } from 'discrub-core/discord-enum';
 import { calculateRandomDelay } from '@/utils/delayUtils';
-import { waitWhilePaused, checkCancelled, cancellableDelay, createShouldContinue, CancelledError, withTransientRetry, isTransientApiFailure, describeAnswer } from '@/utils/operationLoopUtils';
+import { waitWhilePaused, checkCancelled, cancellableDelay, createShouldContinue, CancelledError, withTransientRetry, isTransientApiFailure, describeAnswer, throwIfSignInExpired, isSignInExpiredError } from '@/utils/operationLoopUtils';
 import { iterateSearchMessagesRedux, nextMilestone } from '@/utils/searchPagination';
 import { addStatusEntry, showOperationTip } from '@features/status/statusSlice';
 import i18n, { t } from '@/i18n';
@@ -886,6 +886,7 @@ async function fetchAllChannelMessages(
         }));
         continue;
       }
+      throwIfSignInExpired(response);
       throw new Error(`Failed to fetch messages for channel ${channelId} (${response.status ?? 'network error'})`);
     }
 
@@ -1389,7 +1390,7 @@ interface BulkExportParams {
  * Bulk export multiple channels sequentially
  */
 export const bulkExportChannels = createAsyncThunk<
-  { success: true; errors?: string[] },
+  { success: true; errors?: string[]; signInExpired?: true },
   BulkExportParams,
   { state: RootState; rejectValue: string }
 >(
@@ -1429,6 +1430,8 @@ export const bulkExportChannels = createAsyncThunk<
     } catch { /* guild slice may not be available in tests */ }
 
     const zipService = new StreamingZipService('bulk-export', buildZipOptions(getState, dispatch));
+    // Row 134: the unit the sign in expired on; the run stops there and keeps its record.
+    let signInExpiredAt: number | null = null;
     const exportedChannels: { id: string; name: string; filename: string; category?: string }[] = [];
 
     // #238: expand multi-selected forum/media channels into their post
@@ -1545,6 +1548,7 @@ export const bulkExportChannels = createAsyncThunk<
           dispatch(bulkUnitFinished({ id: channel.id }));
         } catch (error) {
           if (error instanceof CancelledError) break;
+          if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
           const errorMsg = error instanceof Error ? error.message : t('status.export.unknownError');
           errors.push(`${channelName}: ${errorMsg}`);
           dispatch(addStatusEntry({
@@ -1564,10 +1568,17 @@ export const bulkExportChannels = createAsyncThunk<
 
       // #238: an all-skipped/all-failed run must not read as a clean
       // success — the zip holds only the README at this point.
-      if (exportedChannels.length === 0 && !checkCancelled(getState)) {
+      if (exportedChannels.length === 0 && !checkCancelled(getState) && signInExpiredAt === null) {
         dispatch(addStatusEntry({
           level: 'warning',
           message: t('status.export.zeroChannels'),
+        }));
+      }
+
+      if (signInExpiredAt !== null) {
+        dispatch(addStatusEntry({
+          level: 'warning',
+          message: t('status.export.bulkSignInExpired', { done: signInExpiredAt, total: expandedChannels.length }),
         }));
       }
 
@@ -1659,6 +1670,9 @@ export const bulkExportChannels = createAsyncThunk<
         config: buildConfigSnapshot(getState()),
       });
 
+      if (signInExpiredAt !== null) {
+        return { success: true, errors, signInExpired: true };
+      }
       if (errors.length > 0) {
         return { success: true, errors };
       }
@@ -1676,7 +1690,7 @@ export const bulkExportChannels = createAsyncThunk<
  * Bulk export multiple DM channels sequentially
  */
 export const bulkExportDMs = createAsyncThunk<
-  { success: true; errors?: string[] },
+  { success: true; errors?: string[]; signInExpired?: true },
   BulkExportParams,
   { state: RootState; rejectValue: string }
 >(
@@ -1704,6 +1718,8 @@ export const bulkExportDMs = createAsyncThunk<
     const onStorageFull = storageFullOnce(dispatch as ExportDispatch);
 
     const zipService = new StreamingZipService('bulk-export', buildZipOptions(getState, dispatch));
+    // Row 134: the unit the sign in expired on; the run stops there and keeps its record.
+    let signInExpiredAt: number | null = null;
     const exportedDMs: { id: string; name: string; filename: string }[] = [];
 
     // Pre-compute unique folder names to prevent collisions
@@ -1764,6 +1780,7 @@ export const bulkExportDMs = createAsyncThunk<
           dispatch(bulkUnitFinished({ id: dm.id }));
         } catch (error) {
           if (error instanceof CancelledError) break;
+          if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
           const errorMsg = error instanceof Error ? error.message : 'Unknown error';
           errors.push(`${dmName}: ${errorMsg}`);
           dispatch(addStatusEntry({
@@ -1777,6 +1794,13 @@ export const bulkExportDMs = createAsyncThunk<
           const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState);
           if (wasCancelled) break;
         }
+      }
+
+      if (signInExpiredAt !== null) {
+        dispatch(addStatusEntry({
+          level: 'warning',
+          message: t('status.export.bulkSignInExpired', { done: signInExpiredAt, total: channels.length }),
+        }));
       }
 
       // Generate Discord shell wrapper for bulk DM HTML exports
@@ -1823,6 +1847,9 @@ export const bulkExportDMs = createAsyncThunk<
         config: buildConfigSnapshot(getState()),
       });
 
+      if (signInExpiredAt !== null) {
+        return { success: true, errors, signInExpired: true };
+      }
       if (errors.length > 0) {
         return { success: true, errors };
       }
@@ -1980,6 +2007,7 @@ const exportSlice = createSlice({
       state.currentPage = 0;
       state.totalPages = 0;
       state.exportError = null;
+      state.signInExpired = false;
     },
   },
   extraReducers: (builder) => {
@@ -1988,6 +2016,7 @@ const exportSlice = createSlice({
         state.isExporting = true;
         state.exportError = null;
         state.exportProgress = null;
+        state.signInExpired = false;
       })
       .addCase(exportMessages.fulfilled, (state) => {
         state.isExporting = false;
@@ -2002,10 +2031,12 @@ const exportSlice = createSlice({
         state.isExporting = true;
         state.exportError = null;
         state.exportProgress = null;
+        state.signInExpired = false;
       })
-      .addCase(bulkExportChannels.fulfilled, (state) => {
+      .addCase(bulkExportChannels.fulfilled, (state, action) => {
         state.isExporting = false;
         state.exportProgress = null;
+        state.signInExpired = action.payload.signInExpired === true;
       })
       .addCase(bulkExportChannels.rejected, (state, action) => {
         state.isExporting = false;
@@ -2016,10 +2047,12 @@ const exportSlice = createSlice({
         state.isExporting = true;
         state.exportError = null;
         state.exportProgress = null;
+        state.signInExpired = false;
       })
-      .addCase(bulkExportDMs.fulfilled, (state) => {
+      .addCase(bulkExportDMs.fulfilled, (state, action) => {
         state.isExporting = false;
         state.exportProgress = null;
+        state.signInExpired = action.payload.signInExpired === true;
       })
       .addCase(bulkExportDMs.rejected, (state, action) => {
         state.isExporting = false;
@@ -2055,6 +2088,8 @@ export const selectExportProgress = (state: RootState) => state.export.exportPro
 export const selectExportFormat = (state: RootState) => state.export.exportFormat;
 export const selectTextOptions = (state: RootState) => state.export.textOptions;
 export const selectExportError = (state: RootState) => state.export.exportError;
+/** Row 134: the last bulk export stopped because the sign in expired; its record is kept for a Resume. */
+export const selectExportSignInExpired = (state: RootState) => state.export.signInExpired;
 export const selectExportCriteria = (state: RootState) => state.export.exportCriteria;
 
 export default exportSlice.reducer;

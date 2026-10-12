@@ -83,7 +83,8 @@ export interface PurgeState {
    */
   expectedTotal: number | null;
   /** 2.2.2: how far through the current channel the run is, 0 to 0.99. It never moves back. */
-  channelFraction: number;
+  channelFraction: number;  /** Row 134: the last bulk run stopped on a 401 and kept its record. */
+  signInExpired: boolean;
 }
 
 export const initialPurgeState: PurgeState = {
@@ -93,4 +94,5 @@ export const initialPurgeState: PurgeState = {
   channelErrorCount: 0,
   expectedTotal: null,
   channelFraction: 0,
+  signInExpired: false,
 };

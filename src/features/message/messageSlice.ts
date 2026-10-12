@@ -50,7 +50,7 @@ import { userEnrichmentService } from '@services/userEnrichmentService';
 import { reactionEnrichmentService } from '@services/reactionEnrichmentService';
 import { replyEnrichmentService } from '@services/replyEnrichmentService';
 import { mergeCachedUserMap, addFailedUserId, saveCacheToLocalStorage } from '@features/cache/cacheSlice';
-import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, isTransientApiFailure, transientRetryDelayMs, retryBaseDelayMs, describeAnswer, describeFailure, isSignInExpired } from '@/utils/operationLoopUtils';
+import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, isTransientApiFailure, transientRetryDelayMs, retryBaseDelayMs, describeAnswer, describeFailure, isSignInExpired, throwIfSignInExpired, isSignInExpiredError } from '@/utils/operationLoopUtils';
 import { addStatusEntry, showOperationTip, showToast } from '@features/status/statusSlice';
 import { getEmojiKey } from '@/utils/emojiUtils';
 import { applyRefineCriteria, criteriaIsActive, type RefineCriteria } from './messageFiltering';
@@ -464,7 +464,7 @@ export const editMessages = createAsyncThunk(
 export const bulkEditChannelStarted = createAction<{ index: number; total: number }>('message/bulkEditChannelStarted');
 
 export const bulkEditChannels = createAsyncThunk<
-  { edited: number; skipped: number; failed: number },
+  { edited: number; skipped: number; failed: number; signInExpired?: true },
   {
     channels: Channel[];
     content: string;
@@ -493,6 +493,8 @@ export const bulkEditChannels = createAsyncThunk<
 
     const isDm = !guildId;
     const stats = { edited: 0, skipped: 0, failed: 0 };
+    // Row 134: the channel the sign in expired on; the run stops there and keeps its record.
+    let signInExpiredAt: number | null = null;
 
     dispatch(addStatusEntry({
       level: 'info',
@@ -569,10 +571,12 @@ export const bulkEditChannels = createAsyncThunk<
                   stats.edited++;
                   channelEdited++;
                 } else {
+                  throwIfSignInExpired(response);
                   stats.failed++;
                   console.error(`Bulk edit: failed to edit ${message.id} (HTTP ${response.status ?? 'unknown'})`);
                 }
               } catch (error) {
+                if (isSignInExpiredError(error)) throw error;
                 stats.failed++;
                 console.error(`Bulk edit: failed to edit ${message.id}:`, error);
               }
@@ -585,6 +589,7 @@ export const bulkEditChannels = createAsyncThunk<
             if (cancelled) break;
           }
         } catch (error) {
+          if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
           dispatch(addStatusEntry({
             level: 'error',
             message: t('status.msg.bulkEditFailedChannel', { name: `${isDm ? '' : '#'}${channelName}`, error: error instanceof Error ? error.message : t('status.msg.failed') }),
@@ -599,6 +604,14 @@ export const bulkEditChannels = createAsyncThunk<
         if (cancelled) break;
       }
 
+      if (signInExpiredAt !== null) {
+        dispatch(addStatusEntry({
+          level: 'warning',
+          message: t('status.msg.bulkEditSignInExpired', { done: signInExpiredAt, total: channels.length }),
+        }));
+        dispatch(showToast({ level: 'warning', message: t('workspace.signInExpiredToast') }));
+        return { ...stats, signInExpired: true };
+      }
       dispatch(addStatusEntry({
         level: 'success',
         message: t('status.msg.bulkEditComplete', { edited: stats.edited, skipped: stats.skipped > 0 ? t('status.msg.skippedSuffix', { count: stats.skipped }) : '', failed: stats.failed > 0 ? t('status.msg.failedSuffix', { count: stats.failed }) : '' }),

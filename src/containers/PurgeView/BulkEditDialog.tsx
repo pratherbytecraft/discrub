@@ -20,6 +20,7 @@ import type { Channel } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
 import { useBulkResume } from '@/hooks/useResume';
+import SignInAgainRow from '@components/ui/SignInAgainRow';
 import { discardBulkRecord, readBulkRecord, resolveQueue } from '@features/workspace/resumeRecords';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
@@ -147,6 +148,7 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
               {t('workspace.resumeEditNote')}
             </Typography>
           )}
+          {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="bulk-edit-sign-in-again" />}
           <SelectedChannelsPill channels={channels} mode={isDmMode ? 'dms' : 'channels'} />
 
           <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>

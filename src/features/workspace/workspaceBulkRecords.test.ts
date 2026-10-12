@@ -140,6 +140,22 @@ describe('Bulk Purge record', () => {
     expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.bulk).toBeNull();
   });
 
+  it('a run the sign in expired on keeps its record, flagged, until the next start (row 134)', async () => {
+    const store = await openDefault();
+    store.dispatch(bulkPurgeChannels.pending('p1', purgeArg()));
+    store.dispatch(setPurgeProgress({ processed: 0, deleted: 0, skipped: 0, reactionsRemoved: 0, bulk: bulk(1, 3) }));
+    await flush(store);
+    store.dispatch(bulkPurgeChannels.fulfilled({ success: true, signInExpired: true }, 'p1', purgeArg()));
+    await flush(store);
+    expect(selectUnfinishedBulk(store.getState() as never)).toMatchObject({ kind: 'bulkPurge', doneCount: 1, signInExpired: true });
+    expect((await readBulkRecord(store.getState() as never))).toMatchObject({ done: ['c1'], inHand: 'c2', signInExpired: true });
+
+    store.dispatch(bulkPurgeChannels.pending('p2', purgeArg()));
+    await flush(store);
+    expect(selectUnfinishedBulk(store.getState() as never)?.signInExpired).toBe(false);
+    expect((await readBulkRecord(store.getState() as never))?.signInExpired).toBeUndefined();
+  });
+
   it('keeps the record when a workspace switch stopped the run', async () => {
     const store = await openDefault();
     store.dispatch(bulkPurgeChannels.pending('p1', purgeArg()));

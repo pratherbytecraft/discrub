@@ -2609,6 +2609,51 @@ describe('Stop keeps the messages pulled so far (#276)', () => {
     expect(entries.some((m: string) => m.includes('never-reached'))).toBe(false);
   });
 
+  it('bulk export stops on an expired sign in, keeps the zip so far and answers signInExpired (row 134)', async () => {
+    const { bulkExportChannels } = await import('./exportSlice');
+    const { getDiscordService } = await import('@services/discordService');
+    const exportServiceModule = await import('@services/exportService');
+
+    const testStore = await buildStore();
+    const fetchMessageData = vi.fn().mockImplementation(async (_token: string, _before: string, channelId: string) => {
+      if (channelId === 'ch-first') return { success: true, data: [makeMessage(1, 'ch-first')] };
+      return { success: false, status: 401 };
+    });
+    vi.mocked(getDiscordService).mockReturnValue({
+      fetchMessageData,
+      fetchSearchMessageData: vi.fn(),
+      iterateSearchResults: async function* () {},
+    } as any);
+    const exportToZip = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(exportServiceModule.getExportService).mockReturnValue({ exportToZip } as any);
+
+    const result = await testStore.dispatch(
+      bulkExportChannels({
+        channels: [
+          { id: 'ch-first', name: 'first' } as any,
+          { id: 'ch-expired', name: 'expired-on' } as any,
+          { id: 'ch-never', name: 'never-reached' } as any,
+        ],
+        token: 'token',
+        format: 'html',
+        messagesPerPage: 100,
+        separateThreads: false,
+        includeMedia: true,
+        guildId: 'g-1',
+      }) as any,
+    );
+
+    expect(result.type).toBe('export/bulkExportChannels/fulfilled');
+    expect(result.payload).toMatchObject({ success: true, signInExpired: true });
+    expect(exportToZip).toHaveBeenCalledTimes(1);
+    expect(fetchMessageData.mock.calls.map((c) => c[2])).toEqual(['ch-first', 'ch-expired']);
+    expect(testStore.getState().export.signInExpired).toBe(true);
+    const entries = testStore.getState().status.entries.map((e: any) => e.message);
+    expect(entries).toContain('Bulk export: Sign in expired, stopped at 1 of 3. The zip holds what was exported. Resume after a new sign in.');
+    expect(entries.some((m: string) => m.includes('never-reached'))).toBe(false);
+    expect(entries.some((m: string) => m.includes('Failed on'))).toBe(false);
+  });
+
   it('single export writes the messages without media when Stop lands during the media phase', async () => {
     const { exportMessages } = await import('./exportSlice');
     const exportServiceModule = await import('@services/exportService');

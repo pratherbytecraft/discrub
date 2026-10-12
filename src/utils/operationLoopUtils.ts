@@ -192,6 +192,27 @@ export const describeFailure = (response: { status?: number } | null | undefined
 /** 2.2.5 row 50: Discord answered 401, the sign in this tab holds has expired. */
 export const isSignInExpired = (response: { status?: number } | null | undefined): boolean => response?.status === 401;
 
+/**
+ * Row 134: thrown out of a unit of a bulk run when Discord answered 401,
+ * so the loop that owns the run stops at that unit and keeps its record
+ * for a Resume after a new sign in, instead of failing every unit left.
+ */
+export class SignInExpiredError extends Error {
+  constructor() {
+    super(t('status.msg.signInExpired'));
+    this.name = 'SignInExpiredError';
+  }
+}
+
+export const throwIfSignInExpired = (response: { status?: number } | null | undefined): void => {
+  if (isSignInExpired(response)) throw new SignInExpiredError();
+};
+
+/** The error a run caught was the sign in expiring: ours, or a failed page the search iterator rethrew with Discord's 401. */
+export const isSignInExpiredError = (error: unknown): boolean =>
+  error instanceof SignInExpiredError
+  || (typeof error === 'object' && error !== null && (error as { status?: number }).status === 401);
+
 /** Retries in a transient-retry run (the wait doubles this many times, less one). */
 export const TRANSIENT_RETRIES = 5;
 

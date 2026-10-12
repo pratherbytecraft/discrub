@@ -29,6 +29,7 @@ import type { Channel, Guild } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
 import { useBulkResume } from '@/hooks/useResume';
+import SignInAgainRow from '@components/ui/SignInAgainRow';
 import { discardBulkRecord, readBulkRecord, resolveQueue } from '@features/workspace/resumeRecords';
 import TourFootnote from '@components/welcome/TourFootnote';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
@@ -400,6 +401,7 @@ const BulkPurgeDialog = ({ open, onClose, channels: selectedChannels, mode, guil
               {t('workspace.resumePurgeNote')}
             </Typography>
           )}
+          {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="purge-sign-in-again" />}
           <SelectedChannelsPill channels={channels} guilds={guilds} mode={isServerMode ? 'servers' : isDmMode ? 'dms' : 'channels'} />
 
           {/* Mode selection — 4 first-class modes */}

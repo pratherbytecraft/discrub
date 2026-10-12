@@ -183,6 +183,23 @@ vi.mock('@utils/operationLoopUtils', () => ({
       this.partialResult = partialResult;
     }
   },
+  // Row 134: the sign in expired helpers as shipped; the loop under test throws and catches them.
+  isSignInExpired: (r: { status?: number } | null | undefined) => r?.status === 401,
+  SignInExpiredError: class SignInExpiredError extends Error {
+    constructor() {
+      super('Sign in expired.');
+      this.name = 'SignInExpiredError';
+    }
+  },
+  throwIfSignInExpired: (r: { status?: number } | null | undefined) => {
+    if (r?.status === 401) {
+      const err = new Error('Sign in expired.');
+      err.name = 'SignInExpiredError';
+      (err as { status?: number }).status = 401;
+      throw err;
+    }
+  },
+  isSignInExpiredError: (e: unknown) => typeof e === 'object' && e !== null && (e as { status?: number }).status === 401,
 }));
 
 vi.mock('@utils/delayUtils', () => ({
@@ -518,6 +535,29 @@ describe('purgeSlice thunks', () => {
       expect(mockDeleteMessage).toHaveBeenCalledWith(TOKEN, 'm1', 'ch1');
       expect(mockDeleteMessage).toHaveBeenCalledWith(TOKEN, 'm2', 'ch1');
       expect(mockDeleteMessage).toHaveBeenCalledWith(TOKEN, 'm3', 'ch2');
+    });
+
+    it('stops at the channel where the sign in expired and answers signInExpired (row 134)', async () => {
+      const channels = [mockChannel('ch1', 'general'), mockChannel('ch2', 'random')];
+      const served: Record<string, boolean> = {};
+      mockFetchSearchMessageData.mockImplementation((_token: string, _offset: number, channelId: string) => {
+        if (served[channelId]) return Promise.resolve({ success: true, data: { messages: [] } });
+        served[channelId] = true;
+        return Promise.resolve({ success: true, data: { messages: [[mockMessage(`${channelId}-m1`)]] } });
+      });
+      mockDeleteMessage.mockResolvedValue({ success: false, status: 401 });
+
+      const result = await store.dispatch(
+        bulkPurgeChannels({ channels, config: messagesConfig([CURRENT_USER.id]), guildId: 'guild1' }),
+      );
+
+      expect(bulkPurgeChannels.fulfilled.match(result)).toBe(true);
+      expect(result.payload).toMatchObject({ success: true, signInExpired: true });
+      // One delete answered 401; ch2 was never searched.
+      expect(mockDeleteMessage).toHaveBeenCalledTimes(1);
+      expect(mockFetchSearchMessageData.mock.calls.map((c) => c[2])).toEqual(['ch1']);
+      expect(store.getState().purge.signInExpired).toBe(true);
+      expect(store.getState().purge.isPurging).toBe(false);
     });
 
     it('#250: an Invalid Date in the criteria is dropped, not NaN-poisoning the scan', async () => {
