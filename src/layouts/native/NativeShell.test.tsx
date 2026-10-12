@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
+import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/test-utils';
 import { createAuthenticatedState } from '@/test/state-factories';
 import { createMockChannel, createMockGuild } from '@/test/fixtures';
 import NativeShell from './NativeShell';
@@ -23,6 +23,17 @@ describe('<NativeShell />', () => {
     renderWithProviders(<NativeShell {...props} focusedView={false} />, { preloadedState: withChannel() });
     fireEvent.click(screen.getByTestId('native-user-panel'));
     expect(screen.getByTestId('profile-logout')).toBeInTheDocument();
+  });
+
+  // Row 129 (pass 2): picking a server in the rail closes an open DM.
+  it('closes the open DM when a server is picked in the rail', async () => {
+    const state = createAuthenticatedState();
+    state.guild = { ...state.guild, guilds: [guild], selectedGuild: null };
+    state.dm = { ...state.dm, selectedDm: createMockChannel({ id: 'dm1', type: 3, name: 'the group chat' }) };
+    const { store } = renderWithProviders(<NativeShell {...props} focusedView={false} />, { preloadedState: state });
+    fireEvent.click(screen.getByTestId('rail-guild-g1'));
+    await waitFor(() => expect(store.getState().guild.selectedGuild?.id).toBe('g1'));
+    expect(store.getState().dm.selectedDm).toBeNull();
   });
 
   it('renders the rail, the column, the head and the inspector around the feed', () => {

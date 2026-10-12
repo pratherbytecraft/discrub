@@ -7,11 +7,11 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setSidebarView } from '@features/app/appSlice';
 import { selectIsGuestMode } from '@features/auth/authSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
-import { fetchChannels, selectSelectedChannels, selectSelectedChannel, setSelectedChannel, deselectAllChannels } from '@features/channel/channelSlice';
+import { selectSelectedChannels, selectSelectedChannel, setSelectedChannel, deselectAllChannels } from '@features/channel/channelSlice';
 import { selectSelectedDms, selectSelectedDm, deselectAllDms } from '@features/dm/dmSlice';
-import { fetchCurrentMember, fetchRoles, selectGuilds, selectSelectedGuild, setSelectedGuild } from '@features/guild/guildSlice';
+import { selectGuilds, selectSelectedGuild, setSelectedGuild } from '@features/guild/guildSlice';
 import { clearMessages } from '@features/message/messageSlice';
-import { addStatusEntry } from '@features/status/statusSlice';
+import { openGuild } from '@features/navigation/openConversation';
 import ChannelList, { type QueueMarks } from '@components/navigation/ChannelList';
 import DMList from '@components/navigation/DMList';
 import PackageChannelList from '@components/package/PackageChannelList';
@@ -54,13 +54,8 @@ const OperatorQueue = ({ marks, runProgress }: { marks: QueueMarks; runProgress?
   const pickGuild = async (g: Guild) => {
     if (!token) return;
     dispatch(deselectAllChannels());
-    dispatch(setSelectedChannel(null));
-    dispatch(clearMessages());
-    dispatch(setSelectedGuild(g));
-    dispatch(addStatusEntry({ level: 'info', message: t('nav.loadingServer', { name: g.name }) }));
-    dispatch(fetchCurrentMember({ guildId: g.id, token }));
-    dispatch(fetchRoles({ guildId: g.id, token }));
-    await dispatch(fetchChannels({ guildId: g.id, token }));
+    // openGuild also closes an open DM (row 129).
+    await dispatch(openGuild({ guild: g }));
   };
   const setSegment = (next: Segment | null) => {
     if (!next || next === segment) return;

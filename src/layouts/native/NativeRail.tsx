@@ -5,10 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setDialogOpen, setSidebarView } from '@features/app/appSlice';
 import { selectIsGuestMode } from '@features/auth/authSlice';
-import { selectGuilds, selectSelectedGuild, setSelectedGuild, fetchRoles, fetchCurrentMember } from '@features/guild/guildSlice';
-import { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
-import { clearMessages } from '@features/message/messageSlice';
-import { addStatusEntry } from '@features/status/statusSlice';
+import { selectGuilds, selectSelectedGuild, setSelectedGuild } from '@features/guild/guildSlice';
+import { openGuild } from '@features/navigation/openConversation';
 import { selectAuthToken } from '@features/auth/authSlice';
 import GuildAvatar from '@components/ui/GuildAvatar';
 import { useLoadGuilds } from '@/hooks/useLoadGuilds';
@@ -58,17 +56,12 @@ const NativeRail = () => {
 
   useLoadGuilds();
 
-  // Same sequence ServerList runs on a click, so the rail behaves like the list.
+  // Same thunk ServerList runs on a click, so the rail behaves like the list
+  // and closes an open DM too (row 129).
   const pickGuild = async (guild: Guild) => {
     if (!token) return;
     if (view !== 'server') setView('server');
-    dispatch(setSelectedChannel(null));
-    dispatch(clearMessages());
-    dispatch(setSelectedGuild(guild));
-    dispatch(addStatusEntry({ level: 'info', message: t('nav.loadingServer', { name: guild.name }) }));
-    dispatch(fetchCurrentMember({ guildId: guild.id, token }));
-    dispatch(fetchRoles({ guildId: guild.id, token }));
-    await dispatch(fetchChannels({ guildId: guild.id, token }));
+    await dispatch(openGuild({ guild }));
   };
 
   return (
