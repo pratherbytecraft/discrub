@@ -34,6 +34,14 @@ export interface PaginationState {
    * `dismissLoadAllCancelled` from the UI. See backlog #193.
    */
   loadAllCancelled: boolean;
+  /**
+   * 2.2.5 row 49: why the last Load All failed. The rows stay on screen
+   * and the failure shows in a callout like the stop's; reset on the next
+   * attempt or by `dismissLoadAllCancelled`.
+   */
+  loadAllFailed?: string | null;
+  /** 2.2.5 row 50: the failure was a 401, so the callout offers Sign in again. */
+  loadAllSignInExpired?: boolean;
   mode: 'paginated' | 'all' | 'search';
   /**
    * Offset-based cursor for the next search page fetch. Only meaningful when
@@ -126,6 +134,7 @@ export const initialPaginationState: PaginationState = {
   isLoadingAll: false,
   loadAllProgress: null,
   loadAllCancelled: false,
+  loadAllFailed: null,
   mode: 'paginated',
   searchOffset: 0,
 };

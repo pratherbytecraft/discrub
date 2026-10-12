@@ -215,6 +215,15 @@ function recordActionEnd(api: PersistApi, cid: string): void {
   void chained(() => persistConversation(api, cid, { action: null }, null));
 }
 
+/**
+ * Row 49: a Load All that failed (not one the user stopped) keeps its
+ * record, so the button reads Resume and continues from the cursor.
+ */
+function loadAllFailed(action: { type: string; payload?: unknown }): boolean {
+  if (!action.type.endsWith('/rejected')) return false;
+  return action.payload !== 'Load all cancelled' && action.payload !== 'Load cancelled';
+}
+
 /** The action's end: finished or stopped clears the record, a switch keeps it. */
 function actionEnded(api: PersistApi, cid: string | null): void {
   if (!cid || isSuspendingForSwitch()) return;
@@ -494,6 +503,7 @@ listen({
 listen({
   matcher: isAnyOf(fetchAllMessages.fulfilled, fetchAllMessages.rejected),
   effect: (action, listenerApi) => {
+    if (loadAllFailed(action)) return;
     actionEnded(api(listenerApi), argOf<{ channelId: string }>(action).channelId);
   },
 });
@@ -501,6 +511,7 @@ listen({
 listen({
   matcher: isAnyOf(loadAllSearchResults.fulfilled, loadAllSearchResults.rejected),
   effect: (action, listenerApi) => {
+    if (loadAllFailed(action)) return;
     const arg = argOf<{ channelId?: string }>(action);
     const cid = arg.channelId ?? mainCid(listenerApi.getState());
     if (cid) actionEnded(api(listenerApi), searchCid(cid));
@@ -510,6 +521,7 @@ listen({
 listen({
   matcher: isAnyOf(fetchAllThreadMessages.fulfilled, fetchAllThreadMessages.rejected),
   effect: (action, listenerApi) => {
+    if (loadAllFailed(action)) return;
     actionEnded(api(listenerApi), argOf<{ threadId: string }>(action).threadId);
   },
 });

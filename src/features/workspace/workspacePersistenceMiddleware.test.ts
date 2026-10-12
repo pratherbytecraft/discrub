@@ -19,6 +19,7 @@ import messageReducer, {
   clearSavedSearch,
   bulkDeleteAllReactions,
   selectAllMessages,
+  fetchAllMessages,
 } from '@features/message/messageSlice';
 import { RowFlag } from '@features/message/messageRows';
 import { dropCachedMessages, getCachedMessage, MAIN_CONTAINER } from '@features/message/messageCache';
@@ -237,6 +238,22 @@ describe('workspacePersistenceMiddleware', () => {
     store.dispatch(setSearchCriteria(null));
     await settle();
     expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(1);
+  });
+
+  it('a failed Load All keeps its record for Resume, a stopped one clears it (row 49)', async () => {
+    const store = makeStore();
+    const arg = { channelId: CID, token: 't' } as never;
+    store.dispatch(fetchAllMessages.pending('r1', arg));
+    await settle();
+    expect(store.getState().workspace.actions[CID]?.kind).toBe('loadAll');
+    store.dispatch(fetchAllMessages.rejected(null, 'r1', arg, 'Failed to fetch all messages (HTTP 500)'));
+    await settle();
+    expect(store.getState().workspace.actions[CID]?.kind).toBe('loadAll');
+
+    store.dispatch(fetchAllMessages.pending('r2', arg));
+    store.dispatch(fetchAllMessages.rejected(null, 'r2', arg, 'Load cancelled'));
+    await settle();
+    expect(store.getState().workspace.actions[CID] ?? null).toBe(null);
   });
 
   it('closing a thread tab forgets its record and updates the parent', async () => {

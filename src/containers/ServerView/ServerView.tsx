@@ -32,7 +32,8 @@ import { selectSelectedDm } from '@features/dm/dmSlice';
 import { getDmDisplayName, getDmName } from '@/utils/dmListUtils';
 import { selectSelectedGuild, selectRoles, selectCurrentMemberRoles, selectGuildEmojis, fetchGuildEmojis } from '@features/guild/guildSlice';
 import type { SelectableEmoji } from '@/utils/emojiDataset';
-import { selectAuthToken } from '@features/auth/authSlice';
+import { selectAuthToken, signInAgain, type SignInAgainResult } from '@features/auth/authSlice';
+import { isExtensionMode } from '@/extension/messaging';
 import {
   selectSettings,
   selectSearchDelay,
@@ -58,6 +59,8 @@ import {
   selectActiveLoading,
   selectActiveError,
   selectActiveLoadAllCancelled,
+  selectActiveLoadAllFailed,
+  selectActiveLoadAllSignInExpired,
   selectRestored,
   selectActivePagination,
   selectActiveTab,
@@ -168,6 +171,22 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const isLoading = useAppSelector(selectActiveLoading);
   const error = useAppSelector(selectActiveError);
   const loadAllCancelled = useAppSelector(selectActiveLoadAllCancelled);
+  const loadAllFailed = useAppSelector(selectActiveLoadAllFailed);
+  const loadAllSignInExpired = useAppSelector(selectActiveLoadAllSignInExpired);
+  const [signingIn, setSigningIn] = useState(false);
+  const handleSignInAgain = async () => {
+    setSigningIn(true);
+    const result: SignInAgainResult = await dispatch(signInAgain()).unwrap().catch((): SignInAgainResult => 'failed');
+    setSigningIn(false);
+    const messages: Record<SignInAgainResult, string> = {
+      signedIn: t('serverView.signedInAgain'),
+      unchanged: t('serverView.signInUnchanged'),
+      otherAccount: t('serverView.signInOtherAccount'),
+      failed: t('serverView.signInFailed'),
+    };
+    dispatch(addStatusEntry({ level: result === 'signedIn' ? 'success' : 'warning', message: messages[result] }));
+    if (result === 'signedIn') dispatch(dismissLoadAllCancelled());
+  };
   const restored = useAppSelector(selectRestored);
   const token = useAppSelector(selectAuthToken);
   const pagination = useAppSelector(selectActivePagination);
@@ -1213,6 +1232,39 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
       {!isForumChannel && isLoading && (
         <MessageTableSkeleton />
+      )}
+
+      {/* Row 49: a failed Load All keeps the loaded rows on screen and says why here. */}
+      {loadAllFailed && !error && (
+        <Paper
+          data-testid="load-all-failed-callout"
+          sx={{ p: 1.5, backgroundColor: 'warning.dark', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+        >
+          <Box sx={{ flex: 1, color: 'warning.contrastText', fontSize: '0.875rem' }}>
+            <Typography sx={{ fontSize: 'inherit', fontWeight: 600 }}>{loadAllFailed}</Typography>
+            {loadAllSignInExpired && isExtensionMode() && <Typography sx={{ fontSize: 'inherit' }}>{t('serverView.signInAgainHint')}</Typography>}
+            <Typography sx={{ fontSize: 'inherit' }}>{t('serverView.loadAllFailedKept', { count: messages.length })}</Typography>
+          </Box>
+          {loadAllSignInExpired && isExtensionMode() && (
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={signingIn}
+              onClick={() => void handleSignInAgain()}
+              data-testid="load-all-sign-in-again"
+              sx={{ color: 'warning.contrastText', borderColor: 'warning.contrastText', textTransform: 'none', whiteSpace: 'nowrap' }}
+            >
+              {t('serverView.signInAgain')}
+            </Button>
+          )}
+          <Button
+            size="small"
+            onClick={() => dispatch(dismissLoadAllCancelled())}
+            sx={{ color: 'warning.contrastText', textTransform: 'none', minWidth: 'auto' }}
+          >
+            {t('serverView.dismiss')}
+          </Button>
+        </Paper>
       )}
 
       {error && (

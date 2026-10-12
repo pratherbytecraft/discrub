@@ -268,10 +268,10 @@ describe('Thread Tabs — Comprehensive', () => {
       cy.window().then((win) => {
         const store = (win as any).__store__;
         const entries = store?.getState()?.status?.entries ?? [];
-        const failure = entries.find((e: any) => /message\/searchThreadMessages: /.test(e.message));
+        const failure = entries.find((e: any) => e.message === 'Failed to search thread messages (HTTP 403)');
         expect(failure, 'thread search failure entry').to.exist;
         expect(failure.level).to.equal('error');
-        expect(failure.message).to.equal('message/searchThreadMessages: Failed to search thread messages (HTTP 403)');
+        expect(entries.some((e: any) => e.message.includes('message/searchThreadMessages'))).to.equal(false);
         // The tab is usable again: no spinner, no stuck progress.
         expect(store.getState().message.threadTabs[THREAD_ID].isLoading).to.be.false;
         expect(store.getState().message.threadTabs[THREAD_ID].pagination.loadAllProgress).to.be.null;

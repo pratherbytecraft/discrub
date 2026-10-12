@@ -50,7 +50,7 @@ import { userEnrichmentService } from '@services/userEnrichmentService';
 import { reactionEnrichmentService } from '@services/reactionEnrichmentService';
 import { replyEnrichmentService } from '@services/replyEnrichmentService';
 import { mergeCachedUserMap, addFailedUserId, saveCacheToLocalStorage } from '@features/cache/cacheSlice';
-import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, isTransientApiFailure, transientRetryDelayMs, retryBaseDelayMs, describeAnswer, describeFailure } from '@/utils/operationLoopUtils';
+import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, isTransientApiFailure, transientRetryDelayMs, retryBaseDelayMs, describeAnswer, describeFailure, isSignInExpired } from '@/utils/operationLoopUtils';
 import { addStatusEntry, showOperationTip, showToast } from '@features/status/statusSlice';
 import { getEmojiKey } from '@/utils/emojiUtils';
 import { applyRefineCriteria, criteriaIsActive, type RefineCriteria } from './messageFiltering';
@@ -2184,6 +2184,7 @@ export const fetchAllMessages = createAsyncThunk(
             }));
             continue;
           }
+          if (isSignInExpired(response)) dispatch(messageSlice.actions.markLoadAllSignInExpired());
           return rejectWithValue(describeFailure(response, 'fetchAllFailed'));
         }
 
@@ -2717,6 +2718,9 @@ export const fetchAllThreadMessages = createAsyncThunk(
         pagination: {
           isLoadingAll: true,
           mode: 'all',
+          loadAllCancelled: false,
+          loadAllFailed: null,
+          loadAllSignInExpired: false,
           loadAllProgress: { current: 0, total: 0, message: t('status.msg.startingLoadAll') },
         },
       }));
@@ -2793,11 +2797,12 @@ export const fetchAllThreadMessages = createAsyncThunk(
             }));
             continue;
           }
+          const failure = describeFailure(response, 'fetchAllThreadFailed');
           dispatch(messageSlice.actions.updateThreadPagination({
             threadId,
-            pagination: { isLoadingAll: false, loadAllProgress: null },
+            pagination: { isLoadingAll: false, loadAllProgress: null, loadAllFailed: failure, loadAllSignInExpired: isSignInExpired(response) },
           }));
-          return rejectWithValue(describeFailure(response, 'fetchAllThreadFailed'));
+          return rejectWithValue(failure);
         }
 
         const messages = response.data as Message[];
@@ -3728,10 +3733,19 @@ const messageSlice = createSlice({
       // soft-callout state instead of state.error.
       state.pagination.loadAllCancelled = true;
     },
+    /** Row 50: the Load All under way is about to fail on a 401; the callout offers Sign in again. */
+    markLoadAllSignInExpired: (state) => {
+      state.pagination.loadAllSignInExpired = true;
+    },
     dismissLoadAllCancelled: (state) => {
       // #193: lets the user close the "stopped at N" soft callout in
-      // ServerView without starting a new load. Idempotent.
-      state.pagination.loadAllCancelled = false;
+      // ServerView without starting a new load. Idempotent. Also closes
+      // the failed callout (row 49), on the open thread tab when there is one.
+      const tab = state.activeTab ? state.threadTabs[state.activeTab] : undefined;
+      const pagination = tab ? tab.pagination : state.pagination;
+      pagination.loadAllCancelled = false;
+      pagination.loadAllFailed = null;
+      pagination.loadAllSignInExpired = false;
     },
     // Thread tab management
     setActiveTab: (state, action: PayloadAction<string | null>) => {
@@ -3999,6 +4013,8 @@ const messageSlice = createSlice({
       .addCase(fetchAllMessages.pending, (state) => {
         state.pagination.isLoadingAll = true;
         state.pagination.loadAllCancelled = false; // #193: clear stale cancel state on a new attempt
+        state.pagination.loadAllFailed = null;
+        state.pagination.loadAllSignInExpired = false;
         state.pagination.loadAllProgress = {
           current: 0,
           total: 0,
@@ -4029,7 +4045,8 @@ const messageSlice = createSlice({
           state.pagination.loadAllCancelled = true;
           return;
         }
-        state.error = payload ?? null;
+        // Row 49: the rows stay; the failure shows in the callout, not in place of the feed.
+        state.pagination.loadAllFailed = payload ?? action.error.message ?? null;
       })
       // Bulk edit messages (F13: row updates land via the batched
       // messagesEdited flushes during the run)
@@ -4097,6 +4114,8 @@ const messageSlice = createSlice({
       .addCase(loadAllSearchResults.pending, (state) => {
         state.pagination.isLoadingAll = true;
         state.pagination.loadAllCancelled = false; // #193: clear stale cancel state on a new attempt
+        state.pagination.loadAllFailed = null;
+        state.pagination.loadAllSignInExpired = false;
         state.pagination.loadAllProgress = {
           current: state.rows.length,
           total: state.pagination.totalCount ?? 0,
@@ -4121,7 +4140,8 @@ const messageSlice = createSlice({
           state.pagination.loadAllCancelled = true;
           return;
         }
-        state.error = payload ?? null;
+        // Row 49: the rows stay; the failure shows in the callout, not in place of the feed.
+        state.pagination.loadAllFailed = payload ?? action.error.message ?? null;
       })
       // Reaction changes (2.2.5 W1: one update per action, shared with the
       // persistence middleware through reactionChangeOf).
@@ -4443,6 +4463,20 @@ export const selectActiveLoadAllCancelled = (state: RootState): boolean => {
     return threadTabs[activeTab].pagination.loadAllCancelled;
   }
   return pagination.loadAllCancelled;
+};
+
+/** Row 49: why the open container's last Load All failed, or null. */
+export const selectActiveLoadAllFailed = (state: RootState): string | null => {
+  const { activeTab, threadTabs, pagination } = state.message;
+  if (activeTab && threadTabs[activeTab]) return threadTabs[activeTab].pagination.loadAllFailed ?? null;
+  return pagination.loadAllFailed ?? null;
+};
+
+/** Row 50: the open container's last Load All failed on an expired sign in. */
+export const selectActiveLoadAllSignInExpired = (state: RootState): boolean => {
+  const { activeTab, threadTabs, pagination } = state.message;
+  if (activeTab && threadTabs[activeTab]) return threadTabs[activeTab].pagination.loadAllSignInExpired === true;
+  return pagination.loadAllSignInExpired === true;
 };
 
 export default messageSlice.reducer;

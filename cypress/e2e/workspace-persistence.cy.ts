@@ -220,6 +220,43 @@ describe('Workspace persistence (2.2.5)', () => {
     });
   });
 
+  [
+    { status: 403, line: 'Failed to fetch all messages (HTTP 403)', row: '49' },
+    { status: 401, line: 'Sign in expired.', row: '50' },
+  ].forEach(({ status, line, row }) => {
+    it(`a Load All Discord refuses with ${status} keeps the rows, says why and offers Resume (row ${row})`, () => {
+      cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+        const pageA = makePage(messages[0], 9000);
+        let calls = 0;
+        cy.intercept('GET', '**/api/v10/channels/*/messages?*', (req) => {
+          calls += 1;
+          if (calls === 1) req.reply({ statusCode: 200, body: pageA });
+          else req.reply({ statusCode: status, body: { message: 'refused', code: 0 } });
+        }).as('pagedMessages');
+        cy.contains(CHANNEL).click();
+        cy.wait('@pagedMessages');
+        cy.contains('100 messages').should('be.visible');
+
+        cy.contains('button', 'Load All').click();
+        cy.get('[data-testid="load-all-confirm"]').click();
+        cy.get('[data-testid="load-all-failed-callout"]', { timeout: 15000 })
+          .should('contain', line)
+          .and('contain', 'The 100 messages loaded so far are still available below.');
+        cy.contains('[data-testid="message-feed-row"]', 'page message 9000').should('exist');
+        // The web app has no Discord tab to read a sign in from.
+        cy.get('[data-testid="load-all-sign-in-again"]').should('not.exist');
+        cy.contains('button', 'Resume').should('be.visible').and('not.be.disabled');
+        cy.window().its('__store__').invoke('getState').its('status.entries').should((entries: Array<{ message: string }>) => {
+          expect(entries.map((e) => e.message)).to.include(line);
+          expect(entries.some((e) => e.message.includes('message/fetchAllMessages'))).to.eq(false);
+        });
+
+        cy.get('[data-testid="load-all-failed-callout"]').contains('button', 'Dismiss').click();
+        cy.get('[data-testid="load-all-failed-callout"]').should('not.exist');
+      });
+    });
+  });
+
   it('a Load All cut short by a reload reads Resume and continues from the cursor', () => {
     cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
       const pageA = makePage(messages[0], 9000);

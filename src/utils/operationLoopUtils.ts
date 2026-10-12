@@ -183,9 +183,14 @@ export const describeAnswer = (response: { status?: number } | null | undefined)
  * online). `prefix` is the locale key stem, e.g. `fetchAllFailed`.
  */
 export const describeFailure = (response: { status?: number } | null | undefined, prefix: string): string =>
-  response?.status !== undefined
+  isSignInExpired(response)
+    ? t('status.msg.signInExpired')
+    : response?.status !== undefined
     ? t(`status.msg.${prefix}Http`, { status: response.status })
     : t(`status.msg.${prefix}NoResponse`);
+
+/** 2.2.5 row 50: Discord answered 401, the sign in this tab holds has expired. */
+export const isSignInExpired = (response: { status?: number } | null | undefined): boolean => response?.status === 401;
 
 /** Retries in a transient-retry run (the wait doubles this many times, less one). */
 export const TRANSIENT_RETRIES = 5;

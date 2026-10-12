@@ -14,7 +14,8 @@ import authReducer, {
   forgetRememberedToken,
   hydrateRememberedToken,
   selectAuthRestoring,
-  selectTokenRemembered, enterGuestMode, leaveGuestMode } from './authSlice';
+  selectTokenRemembered, enterGuestMode, leaveGuestMode, signInAgain } from './authSlice';
+import { requestDiscordToken } from '@/extension/messaging';
 import {
   initialAuthState,
   REMEMBERED_TOKEN_STORAGE_KEY,
@@ -22,6 +23,8 @@ import {
 } from './authTypes';
 import userReducer from '@features/user/userSlice';
 import * as discordService from '@services/discordService';
+
+vi.mock('@/extension/messaging', async (importOriginal) => ({ ...(await importOriginal<object>()), requestDiscordToken: vi.fn() }));
 
 // Mock the Discord service
 vi.mock('@services/discordService', () => ({
@@ -88,6 +91,44 @@ describe('authSlice', () => {
     vi.mocked(discordService.getDiscordService).mockReturnValue(svc as any);
     return svc;
   };
+
+  describe('signInAgain (2.2.5 row 50)', () => {
+    const signedInAs = async (id: string, token: string) => {
+      vi.mocked(discordService.getDiscordService).mockReturnValue({
+        fetchUserData: vi.fn().mockResolvedValue({ success: true, data: { id, username: 'u' } }),
+      } as any);
+      await store.dispatch(authenticateWithToken(token));
+    };
+
+    it('swaps in the fresh token from the Discord tab for the same account', async () => {
+      await signedInAs('user-123', 'old');
+      vi.mocked(requestDiscordToken).mockResolvedValue({ success: true, token: 'new' });
+      expect(await store.dispatch(signInAgain()).unwrap()).toBe('signedIn');
+      expect(store.getState().auth.token).toBe('new');
+      expect(store.getState().auth.isAuthenticated).toBe(true);
+    });
+
+    it('leaves everything as it is when the tab still has the expired token, another account or nothing', async () => {
+      await signedInAs('user-123', 'old');
+      vi.mocked(requestDiscordToken).mockResolvedValue({ success: true, token: 'old' });
+      expect(await store.dispatch(signInAgain()).unwrap()).toBe('unchanged');
+
+      vi.mocked(discordService.getDiscordService).mockReturnValue({
+        fetchUserData: vi.fn().mockResolvedValue({ success: true, data: { id: 'someone-else' } }),
+      } as any);
+      vi.mocked(requestDiscordToken).mockResolvedValue({ success: true, token: 'other' });
+      expect(await store.dispatch(signInAgain()).unwrap()).toBe('otherAccount');
+
+      mockInvalidUser();
+      expect(await store.dispatch(signInAgain()).unwrap()).toBe('failed');
+
+      vi.mocked(requestDiscordToken).mockResolvedValue({ success: false, token: null });
+      expect(await store.dispatch(signInAgain()).unwrap()).toBe('failed');
+
+      expect(store.getState().auth.token).toBe('old');
+      expect(store.getState().auth.isAuthenticated).toBe(true);
+    });
+  });
 
   describe('remembered token (#249)', () => {
     it('rememberToken persists the token under the auth:rememberedToken key', async () => {

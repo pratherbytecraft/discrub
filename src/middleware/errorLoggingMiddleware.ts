@@ -37,10 +37,13 @@ export const errorLoggingMiddleware: Middleware = (storeAPI) => (next) => (actio
       return result;
     }
 
+    // The log is read by users, so it carries the message alone (rows 28
+    // and 49); the thunk's name goes to the console for debugging.
+    console.debug(`[Discrub] ${thunkName} rejected`);
     storeAPI.dispatch(
       addStatusEntry({
         level: 'error',
-        message: `${thunkName}: ${errorMessage}`,
+        message: errorMessage,
       })
     );
   }

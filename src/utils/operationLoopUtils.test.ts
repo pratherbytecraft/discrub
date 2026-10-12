@@ -321,6 +321,10 @@ describe('describeAnswer / describeFailure (#266)', () => {
     expect(describeFailure({ status: 404 }, 'fetchAllThreadFailed')).toBe('Failed to fetch all thread messages (HTTP 404)');
   });
 
+  it('says the sign in expired on a 401 (row 50)', () => {
+    expect(describeFailure({ status: 401 }, 'fetchAllFailed')).toBe('Sign in expired.');
+  });
+
   it('says Discord did not answer when there is no status', () => {
     expect(describeAnswer({})).toBe('Discord did not answer');
     expect(describeAnswer(undefined)).toBe('Discord did not answer');

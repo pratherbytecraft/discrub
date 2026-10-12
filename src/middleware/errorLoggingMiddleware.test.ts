@@ -32,7 +32,7 @@ describe('errorLoggingMiddleware', () => {
     expect(store.dispatch).toHaveBeenCalledWith(
       addStatusEntry({
         level: 'error',
-        message: 'message/fetchMessages: Network error',
+        message: 'Network error',
       })
     );
   });
@@ -50,7 +50,7 @@ describe('errorLoggingMiddleware', () => {
     expect(store.dispatch).toHaveBeenCalledWith(
       addStatusEntry({
         level: 'error',
-        message: 'guild/fetchGuilds: Failed to fetch guilds',
+        message: 'Failed to fetch guilds',
       })
     );
   });
@@ -116,7 +116,7 @@ describe('errorLoggingMiddleware', () => {
     expect(store.dispatch).toHaveBeenCalledWith(
       addStatusEntry({
         level: 'error',
-        message: 'dm/fetchDms: Unknown error',
+        message: 'Unknown error',
       })
     );
   });

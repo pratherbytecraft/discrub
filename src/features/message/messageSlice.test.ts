@@ -6439,7 +6439,7 @@ describe('messageSlice', () => {
         expect(next.pagination.loadAllCancelled).toBe(true);
       });
 
-      it('loadAllSearchResults.rejected with real error payload still sets state.error', () => {
+      it('loadAllSearchResults.rejected with real error payload keeps the rows and records the failure (row 49)', () => {
         const seeded = { ...initialMessageState };
         const action = {
           type: loadAllSearchResults.rejected.type,
@@ -6447,8 +6447,11 @@ describe('messageSlice', () => {
           error: { message: 'Rejected' },
         };
         const next = messageReducer(seeded, action as any);
-        expect(next.error).toBe('Network failure');
+        expect(next.error).toBe(null);
+        expect(next.pagination.loadAllFailed).toBe('Network failure');
         expect(next.pagination.loadAllCancelled).toBe(false);
+        const dismissed = messageReducer(next, dismissLoadAllCancelled());
+        expect(dismissed.pagination.loadAllFailed).toBe(null);
       });
 
       it('fetchAllMessages.rejected with cancel payload does NOT set state.error and FLIPS loadAllCancelled', () => {
@@ -6782,7 +6785,8 @@ describe('messageSlice', () => {
 
         expect(result.type).toBe('message/fetchAllMessages/rejected');
         expect(result.payload).toBe('Failed to fetch all messages (HTTP 403)');
-        expect(store.getState().message.error).toBe('Failed to fetch all messages (HTTP 403)');
+        expect(store.getState().message.error).toBe(null);
+        expect(store.getState().message.pagination.loadAllFailed).toBe('Failed to fetch all messages (HTTP 403)');
       });
 
       it('online: a status-less failure stops after two quick retries instead of pausing (GH #14)', async () => {

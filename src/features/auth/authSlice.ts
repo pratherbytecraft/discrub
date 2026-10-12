@@ -9,6 +9,9 @@ import { storage } from '@/extension/storage';
 import { isHostedGateEnabled } from '@services/hostedGate';
 import { selectHasHosted } from '@features/supporter/supporterSlice';
 import type { RootState } from '@/app/store';
+import type { User } from 'discrub-core/types/discord-types';
+import { requestDiscordToken } from '@/extension/messaging';
+import { getDiscordService } from '@services/discordService';
 
 /**
  * Auth slice - manages authentication state
@@ -34,6 +37,31 @@ export const authenticateWithToken = createAsyncThunk(
         error instanceof Error ? error.message : 'Failed to authenticate'
       );
     }
+  }
+);
+
+export type SignInAgainResult = 'signedIn' | 'unchanged' | 'otherAccount' | 'failed';
+
+/**
+ * 2.2.5 row 50: picks up a fresh sign in from the open Discord tab after
+ * Discord answered 401 mid run. The token is checked before it is swapped
+ * in, so a failed try leaves the app where it is (authenticateWithToken
+ * signs out on a refusal), and a different account is refused because
+ * the open workspace belongs to this one.
+ */
+export const signInAgain = createAsyncThunk<SignInAgainResult, void, { state: RootState }>(
+  'auth/signInAgain',
+  async (_, { dispatch, getState }) => {
+    const response = await requestDiscordToken();
+    const token = response.success ? response.token?.trim() : null;
+    if (!token) return 'failed';
+    if (token === getState().auth.token) return 'unchanged';
+    const user = await getDiscordService().fetchUserData(token);
+    if (!user.success || !user.data) return 'failed';
+    if ((user.data as User).id !== getState().user.currentUser?.id) return 'otherAccount';
+    dispatch(setToken(token));
+    if (getState().auth.tokenRemembered) await dispatch(rememberToken(token));
+    return 'signedIn';
   }
 );
 
