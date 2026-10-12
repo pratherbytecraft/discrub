@@ -24,6 +24,8 @@ export interface StreamingZipOptions {
   onOversizeFile?: (info: { fileName: string; size: number }) => void;
   /** Invoked when a duplicate path had to be renamed to keep the archive writable (#224). */
   onPathCollision?: (info: { requestedPath: string; finalPath: string }) => void;
+  /** File extension without the dot, `zip` when omitted (a workspace file is `discrub-workspace`). */
+  extension?: string;
 }
 
 /**
@@ -43,6 +45,7 @@ export class StreamingZipService {
   private readonly onPartStart?: StreamingZipOptions['onPartStart'];
   private readonly onOversizeFile?: StreamingZipOptions['onOversizeFile'];
   private readonly onPathCollision?: StreamingZipOptions['onPathCollision'];
+  private readonly extension: string;
 
   /**
    * Every path ever written across ALL parts. Conflux's Writer errors its
@@ -63,6 +66,7 @@ export class StreamingZipService {
     this.onPartStart = options.onPartStart;
     this.onOversizeFile = options.onOversizeFile;
     this.onPathCollision = options.onPathCollision;
+    this.extension = options.extension ?? 'zip';
     this.initWriter();
   }
 
@@ -75,7 +79,7 @@ export class StreamingZipService {
 
   private partFileName(index: number): string {
     // First part keeps the plain name so non-split exports look unchanged.
-    return index <= 1 ? `${this.zipName}.zip` : `${this.zipName}-part${index}.zip`;
+    return index <= 1 ? `${this.zipName}.${this.extension}` : `${this.zipName}-part${index}.${this.extension}`;
   }
 
   /** Reserve a unique in-archive path, renaming with a `-2`/`-3`… suffix on duplicates. */

@@ -2104,6 +2104,26 @@
     "fullLoadAll": "Load All ist bei {{messages}} Nachrichten in {{conversation}} pausiert.",
     "fullRun": "{{name}} ist bei {{messages}} Nachrichten pausiert.",
     "fullNext": "Schaffe in Arbeitsbereiche Platz und klicke dann in der Statusleiste auf Fortsetzen.",
-    "nearlyFullToast": "Der Browserspeicher ist zu über 80 Prozent voll. Schaffe in Arbeitsbereiche Platz."
+    "nearlyFullToast": "Der Browserspeicher ist zu über 80 Prozent voll. Schaffe in Arbeitsbereiche Platz.",
+    "export": "Exportieren",
+    "import": "Importieren",
+    "exportTitle": "{{name}} exportieren",
+    "exportBody": "Speichert {{messages}} ({{size}}) in einer .discrub-workspace Datei, die Discrub in jedem Browser importieren kann. Die Datei enthält Nachrichteninhalte.",
+    "exporting": "Arbeitsbereich {{name}} wird exportiert",
+    "exported": "{{name}} wurde als Arbeitsbereich Datei gespeichert",
+    "exportFailed": "{{name}} konnte nicht exportiert werden",
+    "importing": "Arbeitsbereich {{name}} wird importiert",
+    "imported": "{{name}} mit {{messages}} importiert",
+    "importStoppedFull": "Der Browserspeicher ist voll, der Import von {{name}} wurde gestoppt. Was gelesen wurde, bleibt erhalten.",
+    "importFailed": "Diese Arbeitsbereich Datei konnte nicht gelesen werden",
+    "notWorkspaceFile": "Diese Datei ist kein Discrub Arbeitsbereich",
+    "needsVersionFile": "Diese Arbeitsbereich Datei braucht Discrub {{version}}",
+    "alreadyHereTitle": "Arbeitsbereich schon vorhanden",
+    "replaceTitle": "{{name}} ersetzen",
+    "here": "Hier",
+    "inTheFile": "In der Datei",
+    "exportedOn": "Exportiert am {{date}}",
+    "keepBoth": "Beide behalten",
+    "replace": "Ersetzen"
   }
 }

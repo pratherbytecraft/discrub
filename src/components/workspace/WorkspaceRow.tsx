@@ -6,6 +6,7 @@ import {
   ContentCopyOutlined as DuplicateIcon,
   CleaningServicesOutlined as ClearIcon,
   DeleteOutline as DeleteIcon,
+  FileDownloadOutlined as ExportIcon,
   PlayArrow as WorkIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,7 @@ export interface WorkspaceRowProps {
   onRenameStart: () => void;
   onRenameEnd: (name: string | null) => void;
   onDuplicate: () => void;
+  onExport: () => void;
   onClear: () => void;
   onDelete: () => void;
   onClearConversation: (conversation: ConversationSummary) => void;
@@ -58,6 +60,7 @@ const WorkspaceRow = ({
   onRenameStart,
   onRenameEnd,
   onDuplicate,
+  onExport,
   onClear,
   onDelete,
   onClearConversation,
@@ -193,6 +196,7 @@ const WorkspaceRow = ({
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', pt: 0.25, pb: 1, pl: 4.375, pr: 1.75 }}>
             {act(t('workspace.rename'), <RenameIcon />, onRenameStart, { testid: 'workspace-rename', disabled: !w.openable })}
             {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', lock: locked, disabled: !w.openable })}
+            {act(t('workspace.export'), <ExportIcon />, onExport, { testid: 'workspace-export', disabled: !w.openable })}
             {act(t('workspace.clear'), <ClearIcon />, onClear, { testid: 'workspace-clear', disabled: (current && busy) || w.count === 0 })}
             {w.wid !== DEFAULT_WORKSPACE_ID && act(t('workspace.delete'), <DeleteIcon />, onDelete, { testid: 'workspace-delete', danger: true, disabled: (current && busy) || w.heldElsewhere })}
           </Box>

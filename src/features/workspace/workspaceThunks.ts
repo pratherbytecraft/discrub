@@ -8,6 +8,14 @@ import { fetchDmById, setSelectedDm } from '@features/dm/dmSlice';
 import { setSelectedGuild } from '@features/guild/guildSlice';
 import { clearMessages, openThreadTab, removeThreadTab, setActiveTab } from '@features/message/messageSlice';
 import { t } from '@/i18n';
+import { addStatusEntry, showToast } from '@features/status/statusSlice';
+import { countLabel } from '@components/workspace/workspaceFormat';
+import {
+  WorkspaceFileError,
+  exportWorkspaceFile,
+  importWorkspaceFile,
+  type WorkspaceManifest,
+} from '@services/workspaceArchive';
 import { openChannel, openDm, openGuild } from '@features/navigation/openConversation';
 import { isMessageChannel } from '@utils/channelTypeUtils';
 import {
@@ -15,16 +23,19 @@ import {
   clearConversation,
   clearWorkspaceMessages,
   createWorkspace,
+  createWorkspaceId,
   deleteWorkspace,
   deleteWorkspaceDatabase,
   duplicateWorkspace,
   getWorkspace,
+  installImportedWorkspace,
   isWorkspaceOpenable,
   releaseWorkspaceLock,
   renameWorkspace,
   setLastWorkspace,
   touchWorkspace,
   updateWorkspace,
+  WorkspaceQuotaError,
 } from '@services/workspaceStore';
 import { DEFAULT_WORKSPACE_ID } from './workspaceTypes';
 import { copyName, nextWorkspaceColor, nextWorkspaceName } from './workspaceSummary';
@@ -351,5 +362,112 @@ export const clearAllWorkspaces = createAsyncThunk<void, void, { state: RootStat
     await deleteWorkspaceDatabase();
     await dispatch(initializeWorkspaces());
     await dispatch(refreshWorkspaces());
+  },
+);
+
+/* ─────────────────── Export and import (WP6b) ─────────────────── */
+
+/** "Raid archive (2)", the first number not taken. */
+export function importName(name: string, names: string[]): string {
+  if (!names.includes(name)) return name;
+  for (let n = 2; ; n++) {
+    const candidate = `${name} (${n})`;
+    if (!names.includes(candidate)) return candidate;
+  }
+}
+
+/** Saves a workspace to a `.discrub-workspace` file (plan section 8). Reads only, so it runs beside anything. */
+export const exportWorkspaceThunk = createAsyncThunk<void, { wid: string }, { state: RootState }>(
+  'workspace/export',
+  async ({ wid }, { dispatch, getState }) => {
+    const name = getState().workspace.list.find((w) => w.wid === wid)?.name ?? wid;
+    if (getState().workspace.currentWid === wid) await flushPendingRecords({ dispatch, getState });
+    dispatch(addStatusEntry({ level: 'info', message: t('workspace.exporting', { name }) }));
+    try {
+      const manifest = await exportWorkspaceFile(wid);
+      if (!manifest) return;
+      dispatch(addStatusEntry({ level: 'success', message: t('workspace.exported', { name }) }));
+      dispatch(showToast({ level: 'success', message: t('workspace.exported', { name }) }));
+    } catch (error) {
+      console.error('[workspace] export failed', error);
+      dispatch(addStatusEntry({ level: 'error', message: t('workspace.exportFailed', { name }) }));
+    }
+  },
+);
+
+export interface ImportWorkspaceArgs {
+  file: Blob;
+  manifest: WorkspaceManifest;
+  /** `new` adds a workspace (the file's id when free, a fresh one beside a match); `replace` writes over `targetWid`. */
+  mode: 'new' | 'replace';
+  targetWid?: string;
+}
+
+export type ImportOutcome = 'imported' | 'stopped' | 'busy' | 'failed';
+
+/**
+ * Imports a workspace file (plan section 8). Never replaces without the
+ * caller asking: `replace` comes only from the import dialog. Replacing
+ * the open workspace waits for nothing; it is refused while a run is
+ * going, and afterwards the workspace opens again the way a switch does.
+ */
+export const importWorkspaceThunk = createAsyncThunk<ImportOutcome, ImportWorkspaceArgs, { state: RootState }>(
+  'workspace/import',
+  async ({ file, manifest, mode, targetWid }, { dispatch, getState }) => {
+    const list = getState().workspace.list;
+    const names = list.map((w) => w.name);
+    let target: { wid: string; name: string; color: string };
+    if (mode === 'replace' && targetWid) {
+      target = { wid: targetWid, name: manifest.name, color: manifest.color };
+    } else {
+      const taken = list.some((w) => w.wid === manifest.wid);
+      target = {
+        wid: taken ? createWorkspaceId() : manifest.wid,
+        name: importName(manifest.name, names),
+        color: taken || list.some((w) => w.color === manifest.color) ? nextWorkspaceColor(list.map((w) => w.color)) : manifest.color,
+      };
+    }
+
+    const current = getState().workspace.currentWid === target.wid;
+    if (current) {
+      if (selectIsOperationRunning(getState())) {
+        dispatch(showToast({ level: 'warning', message: t('workspace.busy') }));
+        return 'busy';
+      }
+      await flushPendingRecords({ dispatch, getState });
+      // Holds scope writes off while the record underneath is replaced.
+      dispatch(workspaceSwitchStarted({ wid: target.wid }));
+    }
+
+    dispatch(addStatusEntry({ level: 'info', message: t('workspace.importing', { name: target.name }) }));
+    let outcome: ImportOutcome = 'imported';
+    try {
+      const installed = await importWorkspaceFile(file, target, (record) => installImportedWorkspace(record, mode === 'replace'));
+      const message = t('workspace.imported', { name: target.name, messages: countLabel('messages', installed.messages) });
+      dispatch(addStatusEntry({ level: 'success', message }));
+      dispatch(showToast({ level: 'success', message }));
+    } catch (error) {
+      if (error instanceof WorkspaceQuotaError) {
+        outcome = 'stopped';
+        const message = t('workspace.importStoppedFull', { name: target.name });
+        dispatch(addStatusEntry({ level: 'warning', message }));
+        dispatch(showToast({ level: 'warning', message }));
+      } else {
+        outcome = 'failed';
+        console.error('[workspace] import failed', error);
+        const message = error instanceof WorkspaceFileError && error.reason === 'needsUpdate'
+          ? t('workspace.needsVersionFile', { version: error.appVersion })
+          : t('workspace.importFailed');
+        dispatch(addStatusEntry({ level: 'error', message }));
+        dispatch(showToast({ level: 'error', message }));
+      }
+    } finally {
+      if (current) {
+        const record = await getWorkspace(target.wid);
+        await finishSwitch(target.wid, null, record?.name ?? target.name, actionsOf(record), bulkOf(record), dispatch, getState);
+      }
+      await dispatch(refreshWorkspaces());
+    }
+    return outcome;
   },
 );

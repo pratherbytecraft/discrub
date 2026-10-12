@@ -2104,6 +2104,26 @@
     "fullLoadAll": "Load All is paused at {{messages}} messages in {{conversation}}.",
     "fullRun": "{{name}} is paused at {{messages}} messages.",
     "fullNext": "Clear room in Workspaces, then Resume from the status bar.",
-    "nearlyFullToast": "Browser storage is over 80 percent full. Clear room in Workspaces."
+    "nearlyFullToast": "Browser storage is over 80 percent full. Clear room in Workspaces.",
+    "export": "Export",
+    "import": "Import",
+    "exportTitle": "Export {{name}}",
+    "exportBody": "Saves {{messages}} ({{size}}) to a .discrub-workspace file that Discrub can import on any browser. The file holds message content.",
+    "exporting": "Exporting workspace {{name}}",
+    "exported": "Saved {{name}} to a workspace file",
+    "exportFailed": "Could not export {{name}}",
+    "importing": "Importing workspace {{name}}",
+    "imported": "Imported {{name}} with {{messages}}",
+    "importStoppedFull": "Browser storage is full, the import of {{name}} stopped. What was read is kept.",
+    "importFailed": "Could not read this workspace file",
+    "notWorkspaceFile": "This file is not a Discrub workspace",
+    "needsVersionFile": "This workspace file needs Discrub {{version}}",
+    "alreadyHereTitle": "Workspace already here",
+    "replaceTitle": "Replace {{name}}",
+    "here": "Here",
+    "inTheFile": "In the file",
+    "exportedOn": "Exported {{date}}",
+    "keepBoth": "Keep both",
+    "replace": "Replace"
   }
 }

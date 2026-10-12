@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -11,26 +11,32 @@ import {
   Typography,
   type PopoverOrigin,
 } from '@mui/material';
-import { Add as NewIcon } from '@mui/icons-material';
+import { Add as NewIcon, FileDownloadOutlined as ImportIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import { selectHasThemes, setSupporterPanelOpen } from '@features/supporter/supporterSlice';
-import { selectCurrentWid, selectStorageFigures, selectWorkspaceList } from '@features/workspace/workspaceSlice';
+import { refreshWorkspaces, selectCurrentWid, selectStorageFigures, selectWorkspaceList } from '@features/workspace/workspaceSlice';
 import {
   clearConversationThunk,
   clearWorkspaceThunk,
   createNewWorkspace,
   deleteWorkspaceThunk,
   duplicateWorkspaceThunk,
+  exportWorkspaceThunk,
+  importWorkspaceThunk,
   renameWorkspaceThunk,
 } from '@features/workspace/workspaceThunks';
+import { DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
+import { showToast } from '@features/status/statusSlice';
+import { WORKSPACE_FILE_EXTENSION, WorkspaceFileError, readWorkspaceManifest, type WorkspaceManifest } from '@services/workspaceArchive';
 import type { WorkspaceSummary } from '@features/workspace/workspaceSummary';
 import { formatDiskSize, segmentPercents, shelfBytes } from '@features/workspace/diskBarScale';
 import { useWorkspaceSwitch } from '@/hooks/useWorkspaceSwitch';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import WorkspaceSwitchDialog from './WorkspaceSwitchDialog';
 import WorkspaceRow from './WorkspaceRow';
+import WorkspaceImportDialog from './WorkspaceImportDialog';
 import LockMark from './LockMark';
 import { countLabel } from './workspaceFormat';
 
@@ -45,6 +51,13 @@ interface Confirm {
   run: () => unknown;
 }
 
+interface PendingImport {
+  file: Blob;
+  manifest: WorkspaceManifest;
+  mode: 'conflict' | 'replaceDefault';
+  here: WorkspaceSummary;
+}
+
 interface WorkspacesPopoverProps {
   anchorEl: HTMLElement | null;
   open: boolean;
@@ -54,10 +67,11 @@ interface WorkspacesPopoverProps {
 }
 
 /**
- * The Workspaces popover (plan 5.2): New in the header, one row per
+ * The Workspaces popover (plan 5.2): New and Import in the header, one row per
  * workspace, and the disk line and bar in the footer. Free accounts keep
- * Default only, so New and Duplicate carry the supporter lock and open the
- * supporter hub, and a faint struck "Supporter only" row sits under the list.
+ * Default only, so New, Import and Duplicate carry the supporter lock (New
+ * and Duplicate open the supporter hub; Import still reads the file and can
+ * replace Default), and a faint struck "Supporter only" row sits under the list.
  */
 const WorkspacesPopover = ({
   anchorEl,
@@ -78,6 +92,12 @@ const WorkspacesPopover = ({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  // The list follows writes at most every 1.5 s; opening reads it fresh so the figures and confirms are current.
+  useEffect(() => {
+    if (open) void dispatch(refreshWorkspaces());
+  }, [open, dispatch]);
 
   const openHub = () => {
     onClose();
@@ -107,6 +127,55 @@ const WorkspacesPopover = ({
       run: () => dispatch(duplicateWorkspaceThunk({ wid: w.wid })),
     });
   };
+  const onExport = (w: WorkspaceSummary) =>
+    setConfirm({
+      title: t('workspace.exportTitle', { name: w.name }),
+      body: t('workspace.exportBody', { messages: messages(w.count), size: size(w) }),
+      label: t('workspace.export'),
+      danger: false,
+      run: () => dispatch(exportWorkspaceThunk({ wid: w.wid })),
+    });
+
+  /**
+   * Import (plan section 8): the manifest is read first. The file's
+   * workspace already here asks Cancel, Keep both or Replace. A new one
+   * goes into its own slot for supporters; a free account's only slot is
+   * Default, so the same dialog asks before replacing it.
+   */
+  const onFile = async (file: File) => {
+    let manifest: WorkspaceManifest;
+    try {
+      manifest = await readWorkspaceManifest(file);
+    } catch (error) {
+      const message = error instanceof WorkspaceFileError && error.reason === 'needsUpdate'
+        ? t('workspace.needsVersionFile', { version: error.appVersion })
+        : t('workspace.notWorkspaceFile');
+      dispatch(showToast({ level: 'error', message }));
+      return;
+    }
+    const match = list.find((w) => w.wid === manifest.wid);
+    if (match) return setPendingImport({ file, manifest, mode: 'conflict', here: match });
+    if (supporter) return void dispatch(importWorkspaceThunk({ file, manifest, mode: 'new' }));
+    const defaultWorkspace = list.find((w) => w.wid === DEFAULT_WORKSPACE_ID);
+    if (defaultWorkspace) setPendingImport({ file, manifest, mode: 'replaceDefault', here: defaultWorkspace });
+  };
+  const keepBoth = () => {
+    const pending = pendingImport;
+    if (!pending) return;
+    if (!supporter) {
+      setPendingImport(null);
+      return openHub();
+    }
+    setPendingImport(null);
+    void dispatch(importWorkspaceThunk({ file: pending.file, manifest: pending.manifest, mode: 'new' }));
+  };
+  const replace = () => {
+    const pending = pendingImport;
+    if (!pending) return;
+    setPendingImport(null);
+    void dispatch(importWorkspaceThunk({ file: pending.file, manifest: pending.manifest, mode: 'replace', targetWid: pending.here.wid }));
+  };
+
   const onClear = (w: WorkspaceSummary) =>
     setConfirm({
       title: t('workspace.clearWorkspaceTitle', { name: w.name }),
@@ -140,7 +209,7 @@ const WorkspacesPopover = ({
         slotProps={{ paper: { sx: { width: 560, maxWidth: 'calc(100vw - 24px)', mb: 1, border: '1px solid', borderColor: 'divider' }, 'data-testid': 'workspaces-popover' } as never }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, px: 1.75, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>{t('workspace.title')}</Typography>
+          <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, flex: 1 }}>{t('workspace.title')}</Typography>
           <Box sx={{ position: 'relative', display: 'inline-flex' }}>
             <Button
               size="small"
@@ -154,6 +223,32 @@ const WorkspacesPopover = ({
               {t('workspace.new')}
             </Button>
             {!supporter && <LockMark sx={{ position: 'absolute', top: -6, right: -6 }} />}
+          </Box>
+          <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="inherit"
+              startIcon={<ImportIcon sx={{ color: 'primary.main' }} />}
+              onClick={() => fileInput.current?.click()}
+              data-testid="workspace-import"
+              sx={{ textTransform: 'none', py: 0.125, px: 1, fontSize: '0.75rem', borderColor: 'divider' }}
+            >
+              {t('workspace.import')}
+            </Button>
+            {!supporter && <LockMark sx={{ position: 'absolute', top: -6, right: -6 }} />}
+            <input
+              ref={fileInput}
+              type="file"
+              accept={`.${WORKSPACE_FILE_EXTENSION},.zip`}
+              hidden
+              data-testid="workspace-import-input"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void onFile(file);
+              }}
+            />
           </Box>
         </Box>
         <Box sx={{ py: 0.5, maxHeight: LIST_MAX_H, overflowY: 'auto' }}>
@@ -174,6 +269,7 @@ const WorkspacesPopover = ({
                 if (name !== null && name.trim() && name.trim() !== w.name) void dispatch(renameWorkspaceThunk({ wid: w.wid, name }));
               }}
               onDuplicate={() => onDuplicate(w)}
+              onExport={() => onExport(w)}
               onClear={() => onClear(w)}
               onDelete={() => onDelete(w)}
               onClearConversation={(c) =>
@@ -214,6 +310,17 @@ const WorkspacesPopover = ({
         </Box>
       </Popover>
       <WorkspaceSwitchDialog {...dialogProps} />
+      {pendingImport && (
+        <WorkspaceImportDialog
+          mode={pendingImport.mode}
+          here={pendingImport.here}
+          file={pendingImport.manifest}
+          locked={!supporter}
+          onCancel={() => setPendingImport(null)}
+          onKeepBoth={keepBoth}
+          onReplace={replace}
+        />
+      )}
       <Dialog open={confirm !== null} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth data-testid="workspace-confirm">
         <DialogTitle sx={{ pr: 5 }}>
           {confirm?.title}

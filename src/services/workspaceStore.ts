@@ -573,6 +573,41 @@ export function duplicateWorkspace(wid: string, name: string, now = Date.now()):
   });
 }
 
+/**
+ * Puts an imported workspace record in place before its rows arrive
+ * (2.2.5 WP6b). Every conversation starts at zero rows and the page
+ * writes that follow (`writePage`) bring the counts and sizes up, so a
+ * stopped import leaves figures that match what is on disk. With
+ * `replace`, the workspace's old rows go first; the order keeps its
+ * place, a new workspace is appended.
+ */
+export function installImportedWorkspace(record: WorkspaceRecord, replace: boolean): Promise<WorkspaceRecord> {
+  const installed: WorkspaceRecord = structuredClone(record);
+  installed.bytes = 0;
+  for (const conversation of Object.values(installed.conversations)) {
+    conversation.count = 0;
+    conversation.bytes = 0;
+    conversation.oldestId = null;
+    conversation.newestId = null;
+  }
+  return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid: installed.wid, cid: null }, async (tx) => {
+    const existing = await req<WorkspaceRecord | undefined>(tx.objectStore(STORE_WORKSPACES).get(installed.wid));
+    if (existing && !replace) throw new WorkspaceStoreError(`Workspace ${installed.wid} already exists`);
+    if (existing) tx.objectStore(STORE_ROWS).delete(workspaceRange(installed.wid));
+    tx.objectStore(STORE_WORKSPACES).put(installed);
+    const meta = await readMeta(tx);
+    if (!meta.order.includes(installed.wid)) {
+      tx.objectStore(STORE_META).put({ ...meta, order: [...meta.order, installed.wid] }, META_KEY);
+    }
+    return installed;
+  });
+}
+
+/** A fresh workspace id, for an import kept beside the workspace it matches. */
+export function createWorkspaceId(): string {
+  return newWorkspaceId();
+}
+
 /* ─────────────────── Conversations ─────────────────── */
 
 /**
