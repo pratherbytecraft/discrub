@@ -27,7 +27,6 @@ import {
   importWorkspaceThunk,
   renameWorkspaceThunk,
 } from '@features/workspace/workspaceThunks';
-import { DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
 import { showToast } from '@features/status/statusSlice';
 import { WORKSPACE_FILE_EXTENSION, WorkspaceFileError, readWorkspaceManifest, type WorkspaceManifest } from '@services/workspaceArchive';
 import type { WorkspaceSummary } from '@features/workspace/workspaceSummary';
@@ -156,7 +155,7 @@ const WorkspacesPopover = ({
     const match = list.find((w) => w.wid === manifest.wid);
     if (match) return setPendingImport({ file, manifest, mode: 'conflict', here: match });
     if (supporter) return void dispatch(importWorkspaceThunk({ file, manifest, mode: 'new' }));
-    const defaultWorkspace = list.find((w) => w.wid === DEFAULT_WORKSPACE_ID);
+    const defaultWorkspace = list.find((w) => w.isDefault);
     if (defaultWorkspace) setPendingImport({ file, manifest, mode: 'replaceDefault', here: defaultWorkspace });
   };
   const keepBoth = () => {

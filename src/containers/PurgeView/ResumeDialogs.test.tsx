@@ -4,6 +4,7 @@
  * theirs (plan section 6): the saved settings, the run's own channels, one
  * note line, Resume, and Start over on the left.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
@@ -20,11 +21,10 @@ import { bulkEditChannels } from '@features/message/messageSlice';
 import { buildConfigSnapshot, bulkExportChannels, exportMessages } from '@features/export/exportSlice';
 import { initialExportState } from '@features/export/exportTypes';
 import { initialWorkspaceState, type UnfinishedBulk } from '@features/workspace/workspaceSlice';
-import { DEFAULT_WORKSPACE_ID, type WorkspaceBulk } from '@features/workspace/workspaceTypes';
+import { LEGACY_DEFAULT_WORKSPACE_ID, type WorkspaceBulk } from '@features/workspace/workspaceTypes';
 import type { PurgeConfig } from '@features/purge/purgeTypes';
 import {
   deleteWorkspaceDatabase,
-  ensureDefaultWorkspace,
   getWorkspace,
   updateConversation,
   updateWorkspace,
@@ -71,13 +71,13 @@ function stateWith(bulk: UnfinishedBulk | null, extra: Record<string, unknown> =
     ...base,
     channel: { ...base.channel, channels: CHANNELS },
     user: { currentUser: { id: '999', username: 'me', discriminator: '0', global_name: 'Me', avatar: null }, isLoading: false, error: null },
-    workspace: { ...initialWorkspaceState, currentWid: DEFAULT_WORKSPACE_ID, ready: true, bulk },
+    workspace: { ...initialWorkspaceState, currentWid: LEGACY_DEFAULT_WORKSPACE_ID, ready: true, bulk },
     ...extra,
   };
 }
 
 async function saveBulk(record: Partial<WorkspaceBulk>) {
-  await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+  await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
     w.bulk = {
       kind: 'bulkPurge',
       mode: 'channels',
@@ -96,7 +96,7 @@ async function saveBulk(record: Partial<WorkspaceBulk>) {
 beforeEach(async () => {
   vi.clearAllMocks();
   await deleteWorkspaceDatabase();
-  await ensureDefaultWorkspace();
+  await ensureTestDefaultWorkspace();
 });
 
 afterEach(async () => {
@@ -124,7 +124,7 @@ describe('Bulk Purge resume', () => {
     fireEvent.click(await screen.findByTestId('purge-start-over'));
     await waitFor(() => expect(screen.queryByTestId('purge-resume-note')).not.toBeInTheDocument());
     expect(screen.getByTestId('purge-confirm')).not.toHaveTextContent('Resume');
-    await waitFor(async () => expect((await getWorkspace(DEFAULT_WORKSPACE_ID))?.bulk).toBeNull());
+    await waitFor(async () => expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.bulk).toBeNull());
   });
 
   it('stays a plain dialog for a run in another server or list', async () => {
@@ -170,7 +170,7 @@ describe('Bulk Export resume', () => {
 
 describe('Export resume', () => {
   it('applies the saved settings and reads Resume', async () => {
-    await updateConversation(DEFAULT_WORKSPACE_ID, '801', (c) => {
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, '801', (c) => {
       c.action = {
         kind: 'export',
         settings: {
@@ -184,7 +184,7 @@ describe('Export resume', () => {
         ...stateWith(null),
         channel: { ...base.channel, channels: [channel], selectedChannel: channel },
         message: { ...base.message, ...messageStateWith(base.message, [createMockMessage({ id: '1', channel_id: '801' })]) },
-        workspace: { ...initialWorkspaceState, currentWid: DEFAULT_WORKSPACE_ID, ready: true, actions: { '801': { cid: '801', name: 'general', kind: 'export' } } },
+        workspace: { ...initialWorkspaceState, currentWid: LEGACY_DEFAULT_WORKSPACE_ID, ready: true, actions: { '801': { cid: '801', name: 'general', kind: 'export' } } },
       },
     });
     expect(await screen.findByTestId('export-resume-note')).toHaveTextContent('This export was running when Discrub closed. Resume writes a new zip.');

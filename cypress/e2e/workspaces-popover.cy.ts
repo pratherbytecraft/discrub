@@ -73,6 +73,7 @@ describe('Workspaces popover (2.2.5 WP5)', () => {
       cy.get('[data-testid="workspace-row-toggle-default"]').click();
       cy.get('[data-testid="workspace-duplicate"]').parent().find('[data-testid="workspace-lock"]').should('exist');
       cy.get('[data-testid="workspace-delete"]').should('not.exist');
+      cy.get('[data-testid^="workspace-conversation-"]').first().should('contain', '# general · Cypress Test Server');
       cy.get('[data-testid^="workspace-conversation-clear-"]').first().click();
       cy.get('[data-testid="workspace-confirm"]').should('contain', 'Removes 200 messages');
       cy.get('[data-testid="workspace-confirm-button"]').click();
@@ -177,6 +178,23 @@ describe('Workspaces popover (2.2.5 WP5)', () => {
       cy.get('[data-testid="workspace-export"]').should('be.disabled');
       // The row stays; an update never destroys data, Delete is the user's call.
       cy.get('[data-testid="workspace-delete"]').should('not.be.disabled');
+    });
+  });
+
+  it('asks before signing out when the workspace holds messages (ws-signout)', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      interceptPagedChannel(messages[0]);
+      loadTwoPages();
+      cy.blockAutoAuth();
+      cy.get('[aria-label^="Your profile"]').click({ force: true });
+      cy.get('[data-testid="profile-logout"]').click();
+      cy.get('[data-testid="signout-confirm"]').should('contain', 'Signing out clears every workspace. 1 workspace, 200 messages');
+      cy.get('[data-testid="signout-confirm"]').contains('button', 'Cancel').click();
+      cy.get('[data-testid="workspace-pill"]').should('be.visible');
+      cy.get('[aria-label^="Your profile"]').click({ force: true });
+      cy.get('[data-testid="profile-logout"]').click();
+      cy.get('[data-testid="signout-confirm-button"]').click();
+      cy.get('[data-testid="landing-sign-in"]', { timeout: 10000 }).should('be.visible');
     });
   });
 });

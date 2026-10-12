@@ -2,6 +2,7 @@
  * 2.2.5 WP6b: importing a workspace file over the open workspace, and
  * the names an import takes beside a match.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
 import type { AppDispatch } from '@/app/store';
@@ -21,13 +22,12 @@ import authReducer from '@features/auth/authSlice';
 import userReducer from '@features/user/userSlice';
 import workspaceReducer, { refreshWorkspaces, setCurrentWorkspace } from './workspaceSlice';
 import { importName, importWorkspaceThunk } from './workspaceThunks';
-import { DEFAULT_WORKSPACE_ID } from './workspaceTypes';
+import { LEGACY_DEFAULT_WORKSPACE_ID } from './workspaceTypes';
 import type { WorkspaceManifest } from '@services/workspaceArchive';
 import {
   acquireWorkspaceLock,
   countRows,
   deleteWorkspaceDatabase,
-  ensureDefaultWorkspace,
   getWorkspace,
   releaseWorkspaceLock,
   updateConversation,
@@ -60,12 +60,12 @@ const manifest: WorkspaceManifest = {
 
 beforeEach(async () => {
   await deleteWorkspaceDatabase();
-  await ensureDefaultWorkspace();
-  await acquireWorkspaceLock(DEFAULT_WORKSPACE_ID);
+  await ensureTestDefaultWorkspace();
+  await acquireWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
 });
 
 afterEach(async () => {
-  releaseWorkspaceLock(DEFAULT_WORKSPACE_ID);
+  releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
   vi.restoreAllMocks();
   await deleteWorkspaceDatabase();
 });
@@ -81,21 +81,21 @@ describe('importName', () => {
 describe('importWorkspaceThunk over the open workspace', () => {
   it('is refused while a run is going', async () => {
     const store = makeStore(true);
-    store.dispatch(setCurrentWorkspace(DEFAULT_WORKSPACE_ID));
+    store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
     const spy = vi.spyOn(archive, 'importWorkspaceFile');
-    const outcome = await thunk(store)(importWorkspaceThunk({ file: new Blob(), manifest, mode: 'replace', targetWid: DEFAULT_WORKSPACE_ID })).unwrap();
+    const outcome = await thunk(store)(importWorkspaceThunk({ file: new Blob(), manifest, mode: 'replace', targetWid: LEGACY_DEFAULT_WORKSPACE_ID })).unwrap();
     expect(outcome).toBe('busy');
     expect(spy).not.toHaveBeenCalled();
     expect(store.getState().status.toast.message).toBe('Wait for the running action to finish or stop it first.');
   });
 
   it('replaces Default and opens it again with the file\'s unfinished work', async () => {
-    await writePage(DEFAULT_WORKSPACE_ID, '999', [createMockMessage({ id: '50', channel_id: '999' })], { kind: 'channel', guildId: '1', name: 'old' });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '999', [createMockMessage({ id: '50', channel_id: '999' })], { kind: 'channel', guildId: '1', name: 'old' });
     const store = makeStore();
-    store.dispatch(setCurrentWorkspace(DEFAULT_WORKSPACE_ID));
+    store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
     await thunk(store)(refreshWorkspaces());
     vi.spyOn(archive, 'importWorkspaceFile').mockImplementation(async (_source, target, install) => {
-      const record = await getWorkspace(DEFAULT_WORKSPACE_ID);
+      const record = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
       const installed = await install({
         ...record!,
         conversations: {},
@@ -108,12 +108,12 @@ describe('importWorkspaceThunk over the open workspace', () => {
       });
       return { record: installed, messages: 2 };
     });
-    const outcome = await thunk(store)(importWorkspaceThunk({ file: new Blob(), manifest, mode: 'replace', targetWid: DEFAULT_WORKSPACE_ID })).unwrap();
+    const outcome = await thunk(store)(importWorkspaceThunk({ file: new Blob(), manifest, mode: 'replace', targetWid: LEGACY_DEFAULT_WORKSPACE_ID })).unwrap();
     expect(outcome).toBe('imported');
-    expect(await countRows(DEFAULT_WORKSPACE_ID, '999')).toBe(0);
-    expect(await countRows(DEFAULT_WORKSPACE_ID, '801')).toBe(2);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(0);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '801')).toBe(2);
     const workspace = store.getState().workspace;
-    expect(workspace.currentWid).toBe(DEFAULT_WORKSPACE_ID);
+    expect(workspace.currentWid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
     expect(workspace.currentName).toBe('Old raids');
     expect(workspace.switching).toBe(false);
     expect(workspace.scopeRestoredWid).toBeNull();

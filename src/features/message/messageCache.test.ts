@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import type { Message } from 'discrub-core/types/discord-types';
 import { createMockMessage } from '@/test/fixtures';
@@ -20,8 +21,8 @@ import {
   useHydratedAll,
   useHydratedMessages,
 } from './messageCache';
-import { deleteWorkspaceDatabase, ensureDefaultWorkspace, writePage } from '@services/workspaceStore';
-import { DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
+import { deleteWorkspaceDatabase, writePage } from '@services/workspaceStore';
+import { LEGACY_DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
 
 const msg = (id: string, content = id): Message => createMockMessage({ id, content }) as Message;
 const noStore = { wid: null, cid: null };
@@ -93,21 +94,21 @@ describe('messageCache', () => {
   });
 
   describe('with the workspace store', () => {
-    beforeEach(async () => { await deleteWorkspaceDatabase(); await ensureDefaultWorkspace(); });
+    beforeEach(async () => { await deleteWorkspaceDatabase(); await ensureTestDefaultWorkspace(); });
     afterEach(async () => { await deleteWorkspaceDatabase(); });
 
     it('reads evicted objects from the store and caches them', async () => {
-      await writePage(DEFAULT_WORKSPACE_ID, 'c1', [msg('1'), msg('2'), msg('3')], { kind: 'channel', guildId: null, name: 'general' });
+      await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', [msg('1'), msg('2'), msg('3')], { kind: 'channel', guildId: null, name: 'general' });
       cacheMessages(MAIN_CONTAINER, [msg('2')]);
-      const out = await hydrateMessages(MAIN_CONTAINER, { wid: DEFAULT_WORKSPACE_ID, cid: 'c1' }, ['1', '2', '3', '9']);
+      const out = await hydrateMessages(MAIN_CONTAINER, { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'c1' }, ['1', '2', '3', '9']);
       expect(out.map((m) => m.id)).toEqual(['1', '2', '3']);
       expect(getCachedMessage(MAIN_CONTAINER, '3')).toBeDefined();
     });
 
     it('useHydratedMessages returns cached rows at once and the rest after the read', async () => {
-      await writePage(DEFAULT_WORKSPACE_ID, 'c1', [msg('1'), msg('2')], { kind: 'channel', guildId: null, name: 'general' });
+      await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', [msg('1'), msg('2')], { kind: 'channel', guildId: null, name: 'general' });
       cacheMessages(MAIN_CONTAINER, [msg('1')]);
-      const source = { wid: DEFAULT_WORKSPACE_ID, cid: 'c1' };
+      const source = { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'c1' };
       const ids = ['1', '2'];
       const { result } = renderHook(() => useHydratedMessages(MAIN_CONTAINER, source, ids));
       expect(result.current.has('1')).toBe(true);
@@ -116,8 +117,8 @@ describe('messageCache', () => {
     });
 
     it('useHydratedAll reports loading until every object is in', async () => {
-      await writePage(DEFAULT_WORKSPACE_ID, 'c1', [msg('1'), msg('2')], { kind: 'channel', guildId: null, name: 'general' });
-      const source = { wid: DEFAULT_WORKSPACE_ID, cid: 'c1' };
+      await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', [msg('1'), msg('2')], { kind: 'channel', guildId: null, name: 'general' });
+      const source = { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'c1' };
       const ids = ['1', '2'];
       const { result } = renderHook(() => useHydratedAll(MAIN_CONTAINER, source, ids, true));
       await waitFor(() => expect(result.current.loading).toBe(false));

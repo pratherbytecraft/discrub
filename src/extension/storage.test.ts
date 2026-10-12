@@ -6,6 +6,7 @@
  * end-to-end so any regression in the adapter wiring or the
  * underlying object stores is caught.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   storage,
@@ -15,7 +16,7 @@ import {
   type StoreName,
 } from './storage';
 import { clear as idbClear, createStore, set as idbSet } from 'idb-keyval';
-import { countRows, ensureDefaultWorkspace, writePage, WORKSPACE_DB_NAME } from '@/services/workspaceStore';
+import { countRows, writePage, WORKSPACE_DB_NAME } from '@/services/workspaceStore';
 import { createMockMessage } from '@/test/fixtures';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 
@@ -452,7 +453,7 @@ describe('resetDiscrubData (Backlog #134 escape hatch)', () => {
   });
 
   it('deletes the workspaces database (2.2.5)', async () => {
-    await ensureDefaultWorkspace();
+    await ensureTestDefaultWorkspace();
     await writePage('default', '1000', [createMockMessage({ id: '1' })], { kind: 'channel', guildId: null, name: 'general' });
     expect(await countRows('default', '1000')).toBe(1);
 

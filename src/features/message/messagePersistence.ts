@@ -76,7 +76,13 @@ function logWriteFailure(api: PersistApi, error: unknown): void {
 export function conversationSeedFromState(state: RootState, cid: string): ConversationSeed | null {
   const channel = state.channel?.selectedChannel;
   if (channel && channel.id === cid) {
-    return { kind: 'channel', guildId: state.guild?.selectedGuild?.id ?? channel.guild_id ?? null, name: channel.name ?? cid };
+    const guild = state.guild?.selectedGuild;
+    return {
+      kind: 'channel',
+      guildId: guild?.id ?? channel.guild_id ?? null,
+      name: channel.name ?? cid,
+      guildName: guild && guild.id === (channel.guild_id ?? guild.id) ? guild.name ?? null : null,
+    };
   }
   const dm = state.dm?.selectedDm;
   if (dm && dm.id === cid) {
@@ -89,7 +95,14 @@ export function conversationSeedFromState(state: RootState, cid: string): Conver
 export function threadSeedFromState(state: RootState, threadId: string): ConversationSeed | null {
   const tab = state.message?.threadTabs?.[threadId];
   if (!tab) return null;
-  return { kind: 'thread', guildId: state.guild?.selectedGuild?.id ?? null, name: tab.threadName || threadId };
+  const guild = state.guild?.selectedGuild;
+  return {
+    kind: 'thread',
+    guildId: guild?.id ?? null,
+    name: tab.threadName || threadId,
+    guildName: guild?.name ?? null,
+    parentName: state.channel?.selectedChannel?.name ?? null,
+  };
 }
 
 /* ─────────────────── Pages ─────────────────── */

@@ -3,6 +3,7 @@
  * runs themselves are covered elsewhere; these tests dispatch their
  * lifecycle actions and check what the workspace keeps.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import type { AppDispatch } from '@/app/store';
@@ -19,12 +20,11 @@ import statusReducer from '@features/status/statusSlice';
 import exportReducer, { bulkExportChannels, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
 import purgeReducer, { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
 import type { PurgeConfig } from '@features/purge/purgeTypes';
-import { DEFAULT_WORKSPACE_ID } from './workspaceTypes';
+import { LEGACY_DEFAULT_WORKSPACE_ID } from './workspaceTypes';
 import { discardBulkRecord, discardConversationAction, readBulkRecord, readConversationAction, resolveQueue } from './resumeRecords';
 import {
   acquireWorkspaceLock,
   deleteWorkspaceDatabase,
-  ensureDefaultWorkspace,
   getConversation,
   getWorkspace,
   releaseWorkspaceLock,
@@ -73,9 +73,9 @@ const bulk = (index: number, total: number, server?: { name: string; index: numb
 
 async function openDefault() {
   const store = makeStore();
-  await ensureDefaultWorkspace();
-  await acquireWorkspaceLock(DEFAULT_WORKSPACE_ID);
-  store.dispatch(setCurrentWorkspace(DEFAULT_WORKSPACE_ID));
+  await ensureTestDefaultWorkspace();
+  await acquireWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
+  store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
   return store;
 }
 
@@ -85,7 +85,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   setSuspendingForSwitch(false);
-  releaseWorkspaceLock(DEFAULT_WORKSPACE_ID);
+  releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
   await deleteWorkspaceDatabase();
 });
 
@@ -104,7 +104,7 @@ describe('single Export record', () => {
     store.dispatch(exportMessages.fulfilled({} as never, 'r1', arg));
     await flush(store);
     expect(store.getState().workspace.actions['801']).toBeUndefined();
-    expect((await getConversation(DEFAULT_WORKSPACE_ID, '801'))?.action).toBeNull();
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, '801'))?.action).toBeNull();
   });
 
   it('Start over drops the record', async () => {
@@ -114,7 +114,7 @@ describe('single Export record', () => {
     await flush(store);
     await (store.dispatch as unknown as AppDispatch)(discardConversationAction({ cid: '801' }));
     expect(store.getState().workspace.actions['801']).toBeUndefined();
-    expect((await getConversation(DEFAULT_WORKSPACE_ID, '801'))?.action).toBeNull();
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, '801'))?.action).toBeNull();
   });
 });
 
@@ -137,7 +137,7 @@ describe('Bulk Purge record', () => {
     store.dispatch(bulkPurgeChannels.fulfilled({} as never, 'p1', purgeArg()));
     await flush(store);
     expect(selectUnfinishedBulk(store.getState() as never)).toBeNull();
-    expect((await getWorkspace(DEFAULT_WORKSPACE_ID))?.bulk).toBeNull();
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.bulk).toBeNull();
   });
 
   it('keeps the record when a workspace switch stopped the run', async () => {
@@ -147,7 +147,7 @@ describe('Bulk Purge record', () => {
     store.dispatch(bulkPurgeChannels.fulfilled({} as never, 'p1', purgeArg()));
     setSuspendingForSwitch(false);
     await flush(store);
-    expect((await getWorkspace(DEFAULT_WORKSPACE_ID))?.bulk?.kind).toBe('bulkPurge');
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.bulk?.kind).toBe('bulkPurge');
   });
 
   it('a DM run records the dms list', async () => {
@@ -177,7 +177,7 @@ describe('Bulk Purge record', () => {
     await flush(store);
     await (store.dispatch as unknown as AppDispatch)(discardBulkRecord());
     expect(selectUnfinishedBulk(store.getState() as never)).toBeNull();
-    expect((await getWorkspace(DEFAULT_WORKSPACE_ID))?.bulk).toBeNull();
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.bulk).toBeNull();
   });
 });
 
@@ -212,7 +212,7 @@ describe('boot and lookup', () => {
     const first = await openDefault();
     first.dispatch(bulkPurgeChannels.pending('p1', purgeArg()));
     await flush(first);
-    releaseWorkspaceLock(DEFAULT_WORKSPACE_ID);
+    releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
     const store = makeStore();
     await store.dispatch(initializeWorkspaces());
     expect(selectUnfinishedBulk(store.getState() as never)).toMatchObject({ kind: 'bulkPurge', remaining: 3 });
@@ -247,28 +247,28 @@ describe('Bulk Export run conversations (2.2.5 WP6c)', () => {
   it('the run conversations go when the run ends and on Start over, other conversations stay', async () => {
     const store = await openDefault();
     const seed = { kind: 'channel' as const, guildId: '42', name: 'one' };
-    await writePage(DEFAULT_WORKSPACE_ID, 'run:c1', [{ id: '1', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
-    await writePage(DEFAULT_WORKSPACE_ID, 'c1', [{ id: '2', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c1', [{ id: '1', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', [{ id: '2', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
     store.dispatch(bulkExportChannels.pending('e1', arg()));
     store.dispatch(bulkExportChannels.fulfilled({ success: true }, 'e1', arg()));
     await flush(store);
-    expect(Object.keys((await getWorkspace(DEFAULT_WORKSPACE_ID))?.conversations ?? {})).toEqual(['c1']);
+    expect(Object.keys((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.conversations ?? {})).toEqual(['c1']);
 
-    await writePage(DEFAULT_WORKSPACE_ID, 'run:c2', [{ id: '3', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c2', [{ id: '3', timestamp: '2026-01-01T00:00:00.000Z' } as never], seed);
     store.dispatch(bulkExportChannels.pending('e2', arg()));
     await flush(store);
     await (store.dispatch as unknown as AppDispatch)(discardBulkRecord());
-    expect(Object.keys((await getWorkspace(DEFAULT_WORKSPACE_ID))?.conversations ?? {})).toEqual(['c1']);
+    expect(Object.keys((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.conversations ?? {})).toEqual(['c1']);
   });
 
   it('a switch keeps the run conversations with the record', async () => {
     const store = await openDefault();
-    await writePage(DEFAULT_WORKSPACE_ID, 'run:c1', [{ id: '1', timestamp: '2026-01-01T00:00:00.000Z' } as never], { kind: 'channel', guildId: '42', name: 'one' });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c1', [{ id: '1', timestamp: '2026-01-01T00:00:00.000Z' } as never], { kind: 'channel', guildId: '42', name: 'one' });
     store.dispatch(bulkExportChannels.pending('e1', arg()));
     setSuspendingForSwitch(true);
     store.dispatch(bulkExportChannels.rejected(null, 'e1', arg()));
     await flush(store);
-    const workspace = await getWorkspace(DEFAULT_WORKSPACE_ID);
+    const workspace = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
     expect(workspace?.bulk?.kind).toBe('bulkExport');
     expect(Object.keys(workspace?.conversations ?? {})).toEqual(['run:c1']);
   });

@@ -1,7 +1,7 @@
 import { useState, memo } from 'react';
 import {
   AppBar, Toolbar, Avatar, Typography, IconButton, Box, Tooltip, Button,
-  Dialog, DialogContent, Menu, MenuItem, ListItemIcon, ListItemText,
+  Dialog, DialogContent, DialogContentText, DialogTitle, DialogActions, Menu, MenuItem, ListItemIcon, ListItemText,
   alpha, useMediaQuery, useTheme, Divider,
 } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
@@ -55,6 +55,9 @@ import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { selectIsMinimized } from '@features/app/appSlice';
 import { useTranslation } from 'react-i18next';
 import { clearAllWorkspaces } from '@features/workspace/workspaceThunks';
+import { refreshWorkspaces, selectWorkspaceList } from '@features/workspace/workspaceSlice';
+import { countLabel } from '@components/workspace/workspaceFormat';
+import { formatDiskSize } from '@features/workspace/diskBarScale';
 
 interface TopBarProps {
   /** Opens the navigation drawer; the hamburger only renders below `md`. */
@@ -74,7 +77,7 @@ const SectionDivider = () => (
  */
 const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const dispatch = useAppDispatch();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   // `md` and below: hamburger for the sidebar drawer. `sm` and below:
   // compact bar (no username/version text; Settings + Logout live in
@@ -98,6 +101,13 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   const [compatOpen, setCompatOpen] = useState(false);
   const [compatAnchor, setCompatAnchor] = useState<null | HTMLElement>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
+  const workspaces = useAppSelector(selectWorkspaceList);
+  const stored = {
+    workspaces: workspaces.length,
+    messages: workspaces.reduce((sum, w) => sum + w.count, 0),
+    bytes: workspaces.reduce((sum, w) => sum + w.bytes, 0),
+  };
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [ideasOpen, setIdeasOpen] = useState(false);
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
@@ -128,7 +138,25 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
     );
   };
 
+  /**
+   * Sign out clears every workspace (plan decision 9), so when any holds
+   * messages the user is asked first and sees what goes (ws-signout,
+   * owner 2026-10-14). Nothing stored, no question.
+   */
+  const requestLogout = async () => {
+    // The list follows store writes with a short delay, so read it fresh
+    // before deciding; a page loaded a moment ago still counts.
+    const result = await dispatch(refreshWorkspaces());
+    const list = refreshWorkspaces.fulfilled.match(result) ? result.payload.list : workspaces;
+    if (list.some((w) => w.count > 0)) {
+      setSignOutConfirmOpen(true);
+      return;
+    }
+    handleLogout();
+  };
+
   const handleLogout = () => {
+    setSignOutConfirmOpen(false);
     dispatch(clearToken());
     // #249: a remembered token must not outlive an explicit sign-out.
     dispatch(forgetRememberedToken());
@@ -543,7 +571,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                 <MenuItem
                   onClick={() => {
                     setMoreMenuAnchor(null);
-                    handleLogout();
+                    void requestLogout();
                   }}
                   data-testid="more-menu-logout"
                 >
@@ -597,11 +625,33 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
       <UserProfileModal
         open={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
-        onLogout={() => { setProfileModalOpen(false); handleLogout(); }}
+        onLogout={() => { setProfileModalOpen(false); void requestLogout(); }}
         user={currentUser}
         cachedUserMap={cachedUserMap}
         guildId={null}
       />
+
+      <Dialog open={signOutConfirmOpen} onClose={() => setSignOutConfirmOpen(false)} maxWidth="xs" fullWidth data-testid="signout-confirm">
+        <DialogTitle sx={{ pr: 5 }}>
+          {t('workspace.signOutTitle')}
+          <DialogCloseIcon onClose={() => setSignOutConfirmOpen(false)} />
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {t('workspace.signOutBody', {
+              workspaces: countLabel('workspaces', stored.workspaces, i18n.language),
+              messages: countLabel('messages', stored.messages, i18n.language),
+              size: formatDiskSize(stored.bytes),
+            })}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button color="inherit" onClick={() => setSignOutConfirmOpen(false)}>{t('common.cancel')}</Button>
+          <Button variant="contained" color="error" onClick={handleLogout} data-testid="signout-confirm-button">
+            {t('workspace.signOutButton')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={closeDialogOpen}

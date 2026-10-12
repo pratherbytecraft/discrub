@@ -3,17 +3,17 @@
  * download sink captured, read back through the real fflate reader into
  * the fake-indexeddb store.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Blob as NodeBlob } from 'node:buffer';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import type { Message } from 'discrub-core/types/discord-types';
 import { createMockMessage } from '@/test/fixtures';
-import { DEFAULT_WORKSPACE_ID, WORKSPACE_SCHEMA_VERSION } from '@features/workspace/workspaceTypes';
+import { LEGACY_DEFAULT_WORKSPACE_ID, WORKSPACE_SCHEMA_VERSION } from '@features/workspace/workspaceTypes';
 import {
   countRows,
   createWorkspace,
   deleteWorkspaceDatabase,
-  ensureDefaultWorkspace,
   getWorkspace,
   installImportedWorkspace,
   listWorkspaces,
@@ -54,7 +54,7 @@ beforeEach(async () => {
     } as never;
   });
   await deleteWorkspaceDatabase();
-  await ensureDefaultWorkspace();
+  await ensureTestDefaultWorkspace();
 });
 
 afterEach(async () => {
@@ -124,23 +124,23 @@ describe('workspace files', () => {
     const original = await getWorkspace(wid);
     expect(record).toMatchObject({ name: 'Raid: archive (2)', color: '#faa61a', bytes: original!.bytes, authors: original!.authors });
     expect(record!.conversations['100']).toMatchObject({ count: 7, oldestId: '1', newestId: '7', searchCriteria: { content: 'runite' } });
-    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([DEFAULT_WORKSPACE_ID, wid, 'imported']);
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID, wid, 'imported']);
   });
 
   it('replace drops the rows that were there and keeps the place in the order', async () => {
-    await writePage(DEFAULT_WORKSPACE_ID, '999', [msg('999', '50')], seedOf('old'));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '999', [msg('999', '50')], seedOf('old'));
     const wid = await seedRaidArchive();
     await exportWorkspaceFile(wid);
     await importWorkspaceFile(
       fileBytes('Raid_ archive.discrub-workspace'),
-      { wid: DEFAULT_WORKSPACE_ID, name: 'Raid: archive', color: '#3ba55d' },
+      { wid: LEGACY_DEFAULT_WORKSPACE_ID, name: 'Raid: archive', color: '#3ba55d' },
       (record) => installImportedWorkspace(record, true),
     );
-    expect(await countRows(DEFAULT_WORKSPACE_ID, '999')).toBe(0);
-    expect(await countRows(DEFAULT_WORKSPACE_ID, '100')).toBe(7);
-    const record = await getWorkspace(DEFAULT_WORKSPACE_ID);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '999')).toBe(0);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, '100')).toBe(7);
+    const record = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
     expect(Object.keys(record!.conversations).sort()).toEqual(['100', '200']);
-    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([DEFAULT_WORKSPACE_ID, wid]);
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID, wid]);
   });
 
   it('never installs over a workspace without replace', async () => {

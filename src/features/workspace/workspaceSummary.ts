@@ -6,6 +6,10 @@ export interface ConversationSummary {
   cid: string;
   kind: ConversationKind;
   name: string;
+  /** The server's name, from the workspace's map or the signed in server list; null for a DM or when unknown. */
+  guildName: string | null;
+  /** A thread's parent channel. */
+  parentName: string | null;
   count: number;
   bytes: number;
 }
@@ -34,6 +38,8 @@ export interface WorkspaceSummary {
   appVersion: string;
   /** Open in another window. */
   heldElsewhere: boolean;
+  /** The undeletable Default. */
+  isDefault: boolean;
   work: WorkSummary | null;
   /** Conversations with messages on disk, largest first. */
   conversations: ConversationSummary[];
@@ -53,11 +59,29 @@ function workOf(record: WorkspaceRecord): WorkSummary | null {
   return null;
 }
 
-export function summarizeWorkspace(record: WorkspaceRecord, heldElsewhere = false): WorkspaceSummary {
+export interface SummaryOptions {
+  heldElsewhere?: boolean;
+  /** Server names from the signed in list, for records without the map. */
+  guilds?: Record<string, string>;
+  isDefault?: boolean;
+}
+
+export function summarizeWorkspace(record: WorkspaceRecord, options: SummaryOptions = {}): WorkspaceSummary {
+  const { heldElsewhere = false, guilds: fallbackGuilds = {}, isDefault = false } = options;
+  const guildName = (guildId: string | null) =>
+    guildId ? record.guilds?.[guildId] ?? fallbackGuilds[guildId] ?? null : null;
   // Run conversations (an export's walk, 2.2.5 WP6c) are not the user's to see or clear.
   const conversations = Object.values(record.conversations)
     .filter((c) => c.count > 0 && !isRunCid(c.cid))
-    .map((c) => ({ cid: c.cid, kind: c.kind, name: c.name, count: c.count, bytes: c.bytes }))
+    .map((c) => ({
+      cid: c.cid,
+      kind: c.kind,
+      name: c.name,
+      guildName: c.kind === 'dm' ? null : guildName(c.guildId),
+      parentName: c.kind === 'thread' ? c.parentName ?? null : null,
+      count: c.count,
+      bytes: c.bytes,
+    }))
     .sort((a, b) => b.bytes - a.bytes || b.count - a.count);
   return {
     wid: record.wid,
@@ -70,6 +94,7 @@ export function summarizeWorkspace(record: WorkspaceRecord, heldElsewhere = fals
     openable: isWorkspaceOpenable(record),
     appVersion: record.appVersion,
     heldElsewhere,
+    isDefault,
     work: workOf(record),
     conversations,
   };

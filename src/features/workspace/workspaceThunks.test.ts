@@ -2,6 +2,7 @@
  * 2.2.5 WP4a: switching workspaces, the Load All action record, scope
  * writes and scope restore (plan sections 5.4, 5.5, 6 and 7).
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import type { AppDispatch } from '@/app/store';
@@ -30,13 +31,12 @@ import authReducer, { setToken } from '@features/auth/authSlice';
 import userReducer from '@features/user/userSlice';
 import packageReducer from '@features/package/packageSlice';
 import devReducer from '@features/dev/devSlice';
-import { DEFAULT_WORKSPACE_ID, WORKSPACE_SCHEMA_VERSION } from './workspaceTypes';
+import { LEGACY_DEFAULT_WORKSPACE_ID, WORKSPACE_SCHEMA_VERSION } from './workspaceTypes';
 import {
   acquireWorkspaceLock,
   countRows,
   createWorkspace,
   deleteWorkspaceDatabase,
-  ensureDefaultWorkspace,
   getConversation,
   getMeta,
   getWorkspace,
@@ -110,9 +110,9 @@ function service(overrides: Record<string, unknown> = {}) {
 }
 
 async function openDefault(store: Store) {
-  await ensureDefaultWorkspace();
-  await acquireWorkspaceLock(DEFAULT_WORKSPACE_ID);
-  store.dispatch(setCurrentWorkspace(DEFAULT_WORKSPACE_ID));
+  await ensureTestDefaultWorkspace();
+  await acquireWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
+  store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
   store.dispatch(setToken('token'));
 }
 
@@ -133,7 +133,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  releaseWorkspaceLock(DEFAULT_WORKSPACE_ID);
+  releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
   for (const wid of others) releaseWorkspaceLock(wid);
   await deleteWorkspaceDatabase();
 });
@@ -157,7 +157,7 @@ describe('boot', () => {
   it('shows no toast for Default', async () => {
     const store = makeStore();
     await store.dispatch(initializeWorkspaces());
-    expect(store.getState().workspace.currentWid).toBe(DEFAULT_WORKSPACE_ID);
+    expect(store.getState().workspace.currentWid).toBe(store.getState().workspace.defaultWid);
     expect(store.getState().status.toast.isVisible).toBe(false);
   });
 });
@@ -183,12 +183,12 @@ describe('switchWorkspace', () => {
     expect(state.message.rows).toHaveLength(0);
     expect(state.channel.selectedChannel).toBeNull();
     expect(state.guild.selectedGuild).toBeNull();
-    expect(holdsWorkspaceLock(DEFAULT_WORKSPACE_ID)).toBe(false);
+    expect(holdsWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID)).toBe(false);
     expect(holdsWorkspaceLock(other.wid)).toBe(true);
     expect((await getMeta()).lastWid).toBe(other.wid);
     // The switch's own clearing does not overwrite Default's scope.
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
-    expect((await getWorkspace(DEFAULT_WORKSPACE_ID))?.scope).toMatchObject({ guildId: '42', channelId: CID });
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.scope).toMatchObject({ guildId: '42', channelId: CID });
   });
 
   it('refuses the open workspace, a missing one and one written by a newer schema', async () => {
@@ -199,10 +199,10 @@ describe('switchWorkspace', () => {
     await updateWorkspace(newer.wid, (w) => {
       w.schema = WORKSPACE_SCHEMA_VERSION + 1;
     });
-    expect((await thunk(store)(switchWorkspace({ wid: DEFAULT_WORKSPACE_ID }))).payload).toBe('same');
+    expect((await thunk(store)(switchWorkspace({ wid: LEGACY_DEFAULT_WORKSPACE_ID }))).payload).toBe('same');
     expect((await thunk(store)(switchWorkspace({ wid: 'gone' }))).payload).toBe('missing');
     expect((await thunk(store)(switchWorkspace({ wid: newer.wid }))).payload).toBe('needsUpdate');
-    expect(store.getState().workspace.currentWid).toBe(DEFAULT_WORKSPACE_ID);
+    expect(store.getState().workspace.currentWid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
   });
 
   it('pauses a running Load All, keeps its record for Resume and writes nothing into the new workspace', async () => {
@@ -236,10 +236,10 @@ describe('switchWorkspace', () => {
     expect(ended.payload).toBe('Load cancelled');
     expect((await switching).type).toBe('workspace/switch/fulfilled');
 
-    const saved = await getConversation(DEFAULT_WORKSPACE_ID, CID);
+    const saved = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(saved?.action?.kind).toBe('loadAll');
     expect(saved?.complete).toBe(false);
-    expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(200);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(200);
     expect(await countRows(other.wid, CID)).toBe(0);
     expect(store.getState().workspace.currentWid).toBe(other.wid);
     expect(store.getState().app.discrubCancelled).toBe(false);
@@ -262,7 +262,7 @@ describe('Load All action record', () => {
     await run;
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
     expect(selectConversationAction(CID)(store.getState() as never)).toBeNull();
-    const saved = await getConversation(DEFAULT_WORKSPACE_ID, CID);
+    const saved = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(saved?.action).toBeNull();
     expect(saved?.complete).toBe(true);
   });
@@ -279,7 +279,7 @@ describe('Load All action record', () => {
     const ended = await store.dispatch(fetchAllMessages({ channelId: CID, token: 'token' }));
     expect(ended.payload).toBe('Load cancelled');
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
-    const saved = await getConversation(DEFAULT_WORKSPACE_ID, CID);
+    const saved = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(saved?.action).toBeNull();
     expect(saved?.complete).toBe(false);
     expect(saved?.pagination.hasMore).toBe(true);
@@ -296,14 +296,14 @@ describe('scope and anchor writes', () => {
     store.dispatch(setSelectedGuild(GUILD));
     store.dispatch(setSelectedChannel(CHANNEL));
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
-    expect((await getWorkspace(DEFAULT_WORKSPACE_ID))?.scope).toEqual({ tab: null, guildId: '42', channelId: CID, dmId: null });
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.scope).toEqual({ tab: null, guildId: '42', channelId: CID, dmId: null });
 
     store.dispatch(setSelectedChannel(null));
     store.dispatch(setSelectedGuild(null));
     const dm = createMockDmChannel({ id: '555' });
     store.dispatch(setSelectedDm(dm));
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
-    expect((await getWorkspace(DEFAULT_WORKSPACE_ID))?.scope).toEqual({ tab: null, guildId: null, channelId: null, dmId: '555' });
+    expect((await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID))?.scope).toEqual({ tab: null, guildId: null, channelId: null, dmId: '555' });
   });
 
   it('writes the scroll anchor only into a conversation that has a record', async () => {
@@ -312,12 +312,12 @@ describe('scope and anchor writes', () => {
     store.dispatch(setSelectedChannel(CHANNEL));
     store.dispatch(feedAnchorMoved({ containerId: null, messageId: '950' }));
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
-    expect(await getConversation(DEFAULT_WORKSPACE_ID, CID)).toBeNull();
+    expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
 
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(1000, 100), seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(1000, 100), seed);
     store.dispatch(feedAnchorMoved({ containerId: null, messageId: '950' }));
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
-    expect((await getConversation(DEFAULT_WORKSPACE_ID, CID))?.scrollAnchorId).toBe('950');
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.scrollAnchorId).toBe('950');
   });
 });
 
@@ -325,11 +325,11 @@ describe('restoreWorkspaceScope', () => {
   it('opens the saved server and channel from disk, with the scroll anchor', async () => {
     const store = makeStore();
     await openDefault(store);
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(1000, 100), seed);
-    await updateConversation(DEFAULT_WORKSPACE_ID, CID, (c) => {
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(1000, 100), seed);
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => {
       c.scrollAnchorId = '950';
     });
-    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
       w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
     });
     await store.dispatch(fetchGuilds('token'));
@@ -345,7 +345,7 @@ describe('restoreWorkspaceScope', () => {
     expect(fetchMessageData).not.toHaveBeenCalled();
     expect(selectFeedScrollAnchor(state as never)).toEqual({ key: `${CID}:main`, messageId: '950' });
     expect(state.workspace.restoringScope).toBe(false);
-    expect(state.workspace.scopeRestoredWid).toBe(DEFAULT_WORKSPACE_ID);
+    expect(state.workspace.scopeRestoredWid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
     // Once per workspace.
     expect(((await thunk(store)(restoreWorkspaceScope())).meta as { condition?: boolean }).condition).toBe(true);
   });
@@ -353,7 +353,7 @@ describe('restoreWorkspaceScope', () => {
   it('leaves the screen alone when the user already picked something', async () => {
     const store = makeStore();
     await openDefault(store);
-    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
       w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
     });
     const dm = createMockDmChannel({ id: '555' });
@@ -366,7 +366,7 @@ describe('restoreWorkspaceScope', () => {
   it('stops when the user leaves the server view before the saved scope opened', async () => {
     const store = makeStore();
     await openDefault(store);
-    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
       w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
     });
     // The servers are not loaded yet, so the restore waits for them.
@@ -381,7 +381,7 @@ describe('restoreWorkspaceScope', () => {
     service({ fetchChannels: vi.fn().mockResolvedValue({ success: true, data: [] }) });
     const store = makeStore();
     await openDefault(store);
-    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
       w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
     });
     await store.dispatch(fetchGuilds('token'));
@@ -393,13 +393,13 @@ describe('restoreWorkspaceScope', () => {
     const store = makeStore();
     await openDefault(store);
     const threadSeed = { kind: 'thread' as const, guildId: '42', name: 'Bug talk' };
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(1000, 100), seed);
-    await writePage(DEFAULT_WORKSPACE_ID, '77', page(500, 10).map((m) => ({ ...m, channel_id: '77' })), threadSeed);
-    await updateConversation(DEFAULT_WORKSPACE_ID, CID, (c) => {
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(1000, 100), seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, '77', page(500, 10).map((m) => ({ ...m, channel_id: '77' })), threadSeed);
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => {
       c.threadTabs = ['77'];
       c.activeTab = '77';
     });
-    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
       w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
     });
     await store.dispatch(fetchGuilds('token'));
@@ -412,6 +412,6 @@ describe('restoreWorkspaceScope', () => {
     // The restore does not write its partial steps back.
     store.dispatch(setActiveTab(null));
     await flushPendingRecords({ dispatch: store.dispatch, getState: store.getState as never });
-    expect((await getConversation(DEFAULT_WORKSPACE_ID, CID))?.activeTab).toBeNull();
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.activeTab).toBeNull();
   });
 });

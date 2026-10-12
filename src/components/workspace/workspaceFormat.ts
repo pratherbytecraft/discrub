@@ -17,6 +17,6 @@ export function workLabel(work: WorkSummary, locale?: string): string {
 }
 
 /** "4 conversations" with the number in the reader's locale. */
-export function countLabel(key: 'conversations' | 'messages', count: number, locale?: string): string {
+export function countLabel(key: 'workspaces' | 'conversations' | 'messages', count: number, locale?: string): string {
   return t(`workspace.${key}`, { count, formatted: count.toLocaleString(locale) });
 }

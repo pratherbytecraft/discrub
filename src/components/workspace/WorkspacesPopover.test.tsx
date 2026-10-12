@@ -27,13 +27,13 @@ const supporter = { ...initialSupporterState, keyStatus: 'valid' as const, paylo
 
 const ws = (over: Partial<WorkspaceSummary>): WorkspaceSummary => ({
   wid: 'default', name: 'Default', color: '#5865f2', bytes: 190_000_000, count: 14_620, conversationCount: 3,
-  lastOpened: Date.now() - 2 * 3600_000, openable: true, appVersion: '2.2.5', heldElsewhere: false, work: null,
-  conversations: [{ cid: '801', kind: 'channel', name: 'general', count: 14_000, bytes: 180_000_000 }],
+  lastOpened: Date.now() - 2 * 3600_000, openable: true, appVersion: '2.2.5', heldElsewhere: false, isDefault: false, work: null,
+  conversations: [{ cid: '801', kind: 'channel', name: 'general', guildName: 'Sandbox', parentName: null, count: 14_000, bytes: 180_000_000 }],
   ...over,
 });
 
 const LIST = [
-  ws({}),
+  ws({ isDefault: true }),
   ws({ wid: 'w2', name: 'Raid archive', color: '#3ba55c', bytes: 1_400_000_000, count: 1_180_400, conversationCount: 12, work: { kind: 'export', done: 3, total: 12 } }),
   ws({ wid: 'w3', name: 'Mod cleanup', color: '#faa61a', heldElsewhere: true }),
 ];
@@ -46,6 +46,12 @@ function render(isSupporter: boolean) {
 }
 
 describe('WorkspacesPopover (2.2.5 WP5)', () => {
+  it('names the server beside each conversation (ws-conv-names)', () => {
+    render(true);
+    fireEvent.click(screen.getByTestId('workspace-row-toggle-default'));
+    expect(screen.getByTestId('workspace-conversation-801')).toHaveTextContent('# general · Sandbox');
+  });
+
   it('lists each workspace with its state and the disk line', () => {
     render(true);
     const current = screen.getByTestId('workspace-row-default');

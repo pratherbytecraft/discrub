@@ -2,11 +2,12 @@
  * Workspace store (2.2.5 WP1). Backed by `fake-indexeddb/auto` from
  * src/test/setup.ts; every test starts from a deleted database.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { Message } from 'discrub-core/types/discord-types';
 import { createMockMessage, createMockUser } from '@/test/fixtures';
 import {
-  DEFAULT_WORKSPACE_ID,
+  LEGACY_DEFAULT_WORKSPACE_ID,
   WORKSPACE_SCHEMA_VERSION,
   type WorkspaceRecord,
 } from '@features/workspace/workspaceTypes';
@@ -25,6 +26,7 @@ import {
   deleteWorkspaceDatabase,
   duplicateWorkspace,
   ensureDefaultWorkspace,
+  getDefaultWid,
   estimateMessageBytes,
   getConversation,
   getMessages,
@@ -35,6 +37,8 @@ import {
   isWorkspaceHeldElsewhere,
   isWorkspaceOpenable,
   listWorkspaces,
+  onWorkspaceStoreChange,
+  refreshConversationNames,
   openWorkspaceDatabase,
   padSnowflake,
   patchRows,
@@ -52,7 +56,7 @@ import {
   writePage,
 } from './workspaceStore';
 
-const WID = DEFAULT_WORKSPACE_ID;
+const WID = LEGACY_DEFAULT_WORKSPACE_ID;
 const CID = '1000';
 const seed = { kind: 'channel' as const, guildId: '42', name: 'general' };
 
@@ -66,7 +70,7 @@ const LONG = '123456789012345678';
 
 beforeEach(async () => {
   await deleteWorkspaceDatabase();
-  await ensureDefaultWorkspace();
+  await ensureTestDefaultWorkspace();
 });
 
 afterEach(async () => {
@@ -113,15 +117,23 @@ describe('database', () => {
 });
 
 describe('workspaces and meta', () => {
-  it('ensureDefaultWorkspace creates Default once and sets it as last', async () => {
-    const first = await getWorkspace(WID);
-    expect(first?.name).toBe('Default');
-    expect(first?.schema).toBe(WORKSPACE_SCHEMA_VERSION);
+  it('ensureDefaultWorkspace creates Default once under a generated id and sets it as last and as Default', async () => {
+    await deleteWorkspaceDatabase();
+    const first = await ensureDefaultWorkspace();
+    expect(first.name).toBe('Default');
+    expect(first.wid).not.toBe(LEGACY_DEFAULT_WORKSPACE_ID);
     const again = await ensureDefaultWorkspace();
-    expect(again.createdAt).toBe(first?.createdAt);
-    expect(await getMeta()).toEqual({ lastWid: WID, order: [WID] });
+    expect(again.wid).toBe(first.wid);
+    expect(await getMeta()).toMatchObject({ lastWid: first.wid, order: [first.wid], defaultWid: first.wid });
+    expect(await getDefaultWid()).toBe(first.wid);
   });
 
+  it('ensureDefaultWorkspace adopts a Default written under the fixed id (ws-default-id)', async () => {
+    // beforeEach made one under the legacy id and adopted it.
+    expect((await getMeta()).defaultWid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    expect((await ensureDefaultWorkspace()).wid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    expect((await listWorkspaces()).map((w) => w.wid)).toEqual([LEGACY_DEFAULT_WORKSPACE_ID]);
+  });
   it('creates, lists in meta order, reorders and renames', async () => {
     const a = await createWorkspace({ name: 'Raid archive', color: '#ff0000' });
     const b = await createWorkspace({ name: 'Mod logs' });
@@ -159,7 +171,7 @@ describe('workspaces and meta', () => {
     await deleteWorkspace(a.wid);
     expect(await getWorkspace(a.wid)).toBeNull();
     expect(await countRows(a.wid, CID)).toBe(0);
-    expect(await getMeta()).toEqual({ lastWid: WID, order: [WID] });
+    expect(await getMeta()).toEqual({ lastWid: WID, order: [WID], defaultWid: WID });
   });
 
   it('refuses to delete Default', async () => {
@@ -191,6 +203,16 @@ describe('writePage', () => {
     expect(conversation?.bytes).toBe(result.bytes);
     expect((await getWorkspace(WID))?.bytes).toBe(result.bytes);
     expect(await getMessages(WID, CID, ['1', '2', '3'])).toEqual([msg('1'), msg('2'), msg('3')]);
+  });
+
+  it('a later seed brings the names up to date and fills the guilds map (ws-conv-names)', async () => {
+    await writePage(WID, CID, [msg('1')], { ...seed, guildName: 'Sandbox' });
+    expect((await getWorkspace(WID))?.guilds).toEqual({ '42': 'Sandbox' });
+    await writePage(WID, CID, [msg('2')], { ...seed, name: 'general-chat', guildName: 'Sandbox 2' });
+    expect(await getConversation(WID, CID)).toMatchObject({ name: 'general-chat', count: 2 });
+    expect((await getWorkspace(WID))?.guilds).toEqual({ '42': 'Sandbox 2' });
+    await updateConversation(WID, CID, () => undefined, { ...seed, name: 'general' });
+    expect((await getConversation(WID, CID))?.name).toBe('general');
   });
 
   it('refuses a page for an unseeded conversation', async () => {
@@ -243,6 +265,32 @@ describe('writePage', () => {
     }
     expect(await getConversation(WID, CID)).toEqual(before);
     expect(await countRows(WID, CID)).toBe(1);
+  });
+});
+
+describe('refreshConversationNames (ws-conv-names)', () => {
+  it('renames channels, DMs, thread parents and servers from a list, and writes nothing when nothing changed', async () => {
+    await writePage(WID, CID, [msg('1')], { ...seed, guildName: 'Old' });
+    await writePage(WID, '2000', [msg('5', { channel_id: '2000' })], { kind: 'dm', guildId: null, name: 'sam' });
+    await writePage(WID, '3000', [msg('6', { channel_id: '3000' })], { kind: 'thread', guildId: '42', name: 'patch', parentName: 'general' });
+    await updateConversation(WID, CID, (c) => { c.threadTabs = ['3000']; });
+    const writes = vi.fn();
+    const off = onWorkspaceStoreChange(writes);
+    expect(await refreshConversationNames(WID, { guilds: { '42': 'Old' }, channels: { [CID]: 'general', '9': 'other' } })).toBe(false);
+    expect(await refreshConversationNames(WID, { guilds: { '42': 'Sandbox' }, channels: { [CID]: 'general-chat' }, dms: { '2000': 'sam, alex' } })).toBe(true);
+    off();
+    const record = await getWorkspace(WID);
+    expect(record?.guilds).toEqual({ '42': 'Sandbox' });
+    expect(record?.conversations[CID].name).toBe('general-chat');
+    expect(record?.conversations['2000'].name).toBe('sam, alex');
+    expect(record?.conversations['3000'].parentName).toBe('general-chat');
+    expect(record?.conversations['3000'].name).toBe('patch');
+  });
+
+  it('a record written before the guilds map reads as an empty map', async () => {
+    await updateWorkspace(WID, (r) => { delete (r as Partial<typeof r>).guilds; });
+    expect((await getWorkspace(WID))?.guilds).toEqual({});
+    expect((await listWorkspaces())[0].guilds).toEqual({});
   });
 });
 

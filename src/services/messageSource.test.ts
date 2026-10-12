@@ -1,10 +1,11 @@
 /**
  * 2.2.5 WP6c: the message sources an export reads a window at a time.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMockMessages } from '@/test/fixtures';
-import { deleteWorkspaceDatabase, ensureDefaultWorkspace, writePage } from './workspaceStore';
-import { DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
+import { deleteWorkspaceDatabase, writePage } from './workspaceStore';
+import { LEGACY_DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
 import {
   arraySource,
   collectMessages,
@@ -33,7 +34,7 @@ async function drain(source: { windows: (d: 'asc' | 'desc') => AsyncIterable<Arr
 
 beforeEach(async () => {
   await deleteWorkspaceDatabase();
-  await ensureDefaultWorkspace();
+  await ensureTestDefaultWorkspace();
 });
 
 afterEach(async () => {
@@ -59,31 +60,31 @@ describe('arraySource', () => {
 describe('storeSource', () => {
   it('reads the conversation in id order in both directions', async () => {
     const messages = createMockMessages(7);
-    await writePage(DEFAULT_WORKSPACE_ID, 'c1', messages, seed);
-    const source = await storeSourceOf(DEFAULT_WORKSPACE_ID, 'c1');
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', messages, seed);
+    const source = await storeSourceOf(LEGACY_DEFAULT_WORKSPACE_ID, 'c1');
     expect(source.count).toBe(7);
     expect((await drain(source, 'asc')).ids).toEqual(messages.map((m) => m.id));
     expect((await drain(source, 'desc')).ids).toEqual(messages.map((m) => m.id).reverse());
   });
 
   it('keeps only the ids a refine accepted', async () => {
-    await writePage(DEFAULT_WORKSPACE_ID, 'c1', createMockMessages(6), seed);
-    const source = await storeSourceOf(DEFAULT_WORKSPACE_ID, 'c1', new Set(['msg-2', 'msg-5']));
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', createMockMessages(6), seed);
+    const source = await storeSourceOf(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', new Set(['msg-2', 'msg-5']));
     expect(source.count).toBe(2);
     expect((await drain(source, 'desc')).ids).toEqual(['msg-5', 'msg-2']);
   });
 
   it('walks past the window size', async () => {
     const messages = createMockMessages(WINDOW_SIZE + 2);
-    await writePage(DEFAULT_WORKSPACE_ID, 'c1', messages, seed);
-    const { ids, sizes } = await drain(storeSource(DEFAULT_WORKSPACE_ID, 'c1', messages.length), 'asc');
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', messages, seed);
+    const { ids, sizes } = await drain(storeSource(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', messages.length), 'asc');
     expect(sizes).toEqual([WINDOW_SIZE, 2]);
     expect(ids).toHaveLength(messages.length);
     expect(new Set(ids).size).toBe(messages.length);
   });
 
   it('is empty for a conversation that is not there', async () => {
-    const source = await storeSourceOf(DEFAULT_WORKSPACE_ID, 'nope');
+    const source = await storeSourceOf(LEGACY_DEFAULT_WORKSPACE_ID, 'nope');
     expect(source.count).toBe(0);
     expect((await drain(source, 'asc')).ids).toEqual([]);
   });

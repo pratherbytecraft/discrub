@@ -51,11 +51,12 @@ import {
   threadSeedFromState,
   type PersistApi,
 } from '@features/message/messagePersistence';
-import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, updateWorkspace, type RowPatch } from '@services/workspaceStore';
-import { setSelectedGuild } from '@features/guild/guildSlice';
-import { setSelectedChannel } from '@features/channel/channelSlice';
-import { setSelectedDm } from '@features/dm/dmSlice';
-import type { ActionKind, BulkKind, BulkMode, ConversationSeed, WorkspaceBulk, WorkspaceScope } from './workspaceTypes';
+import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, refreshConversationNames, updateWorkspace, type RowPatch } from '@services/workspaceStore';
+import { fetchGuilds, setSelectedGuild } from '@features/guild/guildSlice';
+import { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
+import { fetchDMs, setSelectedDm } from '@features/dm/dmSlice';
+import { getDmName } from '@utils/dmListUtils';
+import type { ActionKind, BulkKind, BulkMode, ConversationSeed, NameRefresh, WorkspaceBulk, WorkspaceScope } from './workspaceTypes';
 import { actionRecorded, bulkOf, bulkRecorded, feedAnchorMoved, scopeRestoreFinished, selectCurrentWid } from './workspaceSlice';
 import { buildConfigSnapshot, bulkExportChannels, bulkExportDMs, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
 import { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
@@ -381,6 +382,50 @@ listen({
     const parent = mainCid(state);
     await forgetConversation(api(listenerApi), threadId);
     if (parent) await persistThreadTabs(api(listenerApi), parent, state);
+  },
+});
+
+/* ─────────────────── Name refresh (2.2.5 ws-conv-names) ─────────────────── */
+
+/**
+ * A server, channel or DM list the app just fetched carries the current
+ * names, so the open workspace's records follow it. Nothing is written
+ * while a switch is going, since the list may belong to the old scope.
+ */
+function refreshNames(listenerApi: { getState: () => RootState }, names: NameRefresh): void {
+  const state = listenerApi.getState();
+  const wid = state.workspace?.currentWid;
+  if (!wid || state.workspace?.switching) return;
+  void chained(async () => {
+    try {
+      await refreshConversationNames(wid, names);
+    } catch (error) {
+      console.warn('[workspace] name refresh failed', error);
+    }
+  });
+}
+
+const namesOf = <T extends { id: string; name?: string | null }>(items: T[], nameOf: (item: T) => string = (item) => item.name ?? item.id) =>
+  Object.fromEntries(items.map((item) => [item.id, nameOf(item)]));
+
+listen({
+  actionCreator: fetchGuilds.fulfilled,
+  effect: (action, listenerApi) => {
+    refreshNames(listenerApi, { guilds: namesOf(action.payload) });
+  },
+});
+
+listen({
+  actionCreator: fetchChannels.fulfilled,
+  effect: (action, listenerApi) => {
+    refreshNames(listenerApi, { channels: namesOf(action.payload) });
+  },
+});
+
+listen({
+  actionCreator: fetchDMs.fulfilled,
+  effect: (action, listenerApi) => {
+    refreshNames(listenerApi, { dms: namesOf(action.payload, getDmName) });
   },
 });
 

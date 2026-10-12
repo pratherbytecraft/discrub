@@ -6,6 +6,7 @@
  * conversation from the store, writing its first page when nothing is
  * there yet.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import type { Channel, Message } from 'discrub-core/types/discord-types';
@@ -24,7 +25,7 @@ import cacheReducer from '@features/cache/cacheSlice';
 import historyReducer from '@features/history/historySlice';
 import exportReducer, { bulkExportChannels, exportMessages } from './exportSlice';
 import { readBulkRecord } from '@features/workspace/resumeRecords';
-import { DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
+import { LEGACY_DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
 import { cacheMessages } from '@features/message/messageCache';
 import { isExportSourceSet, type ExportSourceSet } from '@services/exportService';
 import * as exportServiceModule from '@services/exportService';
@@ -33,7 +34,6 @@ import {
   acquireWorkspaceLock,
   countRows,
   deleteWorkspaceDatabase,
-  ensureDefaultWorkspace,
   getWorkspace,
   releaseWorkspaceLock,
   updateConversation,
@@ -116,9 +116,9 @@ const flush = (store: Store) => flushPendingRecords({ dispatch: store.dispatch, 
 
 async function openDefault(messages: Message[] = []) {
   const store = makeStore(messages);
-  await ensureDefaultWorkspace();
-  await acquireWorkspaceLock(DEFAULT_WORKSPACE_ID);
-  store.dispatch(setCurrentWorkspace(DEFAULT_WORKSPACE_ID));
+  await ensureTestDefaultWorkspace();
+  await acquireWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
+  store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
   return store;
 }
 
@@ -138,9 +138,9 @@ interface Seen {
 function captureExports(store: Store) {
   const seen: Seen[] = [];
   const exportToZip = vi.fn(async (input: unknown) => {
-    const workspace = await getWorkspace(DEFAULT_WORKSPACE_ID);
+    const workspace = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
     const rowsOnDisk: Record<string, number> = {};
-    for (const cid of Object.keys(workspace?.conversations ?? {})) rowsOnDisk[cid] = await countRows(DEFAULT_WORKSPACE_ID, cid);
+    for (const cid of Object.keys(workspace?.conversations ?? {})) rowsOnDisk[cid] = await countRows(LEGACY_DEFAULT_WORKSPACE_ID, cid);
     seen.push({ input, rowsOnDisk, done: (await readBulkRecord(store.getState() as never))?.done ?? [] });
   });
   vi.mocked(exportServiceModule.getExportService).mockReturnValue({
@@ -165,7 +165,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  releaseWorkspaceLock(DEFAULT_WORKSPACE_ID);
+  releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
   await deleteWorkspaceDatabase();
 });
 
@@ -205,7 +205,7 @@ describe('Bulk Export through the workspace', () => {
 
     // The run is over: record cleared, run conversations gone, nothing else written.
     await flush(store);
-    const workspace = await getWorkspace(DEFAULT_WORKSPACE_ID);
+    const workspace = await getWorkspace(LEGACY_DEFAULT_WORKSPACE_ID);
     expect(workspace?.bulk).toBeNull();
     expect(Object.keys(workspace?.conversations ?? {})).toEqual([]);
     expect(workspace?.bytes).toBe(0);
@@ -214,11 +214,11 @@ describe('Bulk Export through the workspace', () => {
   it('a resumed run renders the units that finished from disk and fetches only the rest', async () => {
     const store = await openDefault();
     // A run that got through c1 before the app closed.
-    await writePage(DEFAULT_WORKSPACE_ID, 'run:c1', pages.c1, seed);
-    await updateConversation(DEFAULT_WORKSPACE_ID, 'run:c1', (c) => {
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c1', pages.c1, seed);
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c1', (c) => {
       c.complete = true;
     });
-    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
       w.bulk = { kind: 'bulkExport', mode: 'channels', guildId: '42', settings: null, queue: ['c1', 'c2'], done: ['c1'], inHand: 'c2', total: 2, doneCount: 1 };
     });
     store.dispatch(bulkRecorded({ kind: 'bulkExport', mode: 'channels', guildId: '42', total: 2, doneCount: 1, remaining: 1 }));
@@ -238,8 +238,8 @@ describe('Bulk Export through the workspace', () => {
 
   it('a unit the earlier run was in the middle of starts over', async () => {
     const store = await openDefault();
-    await writePage(DEFAULT_WORKSPACE_ID, 'run:c2', pages.c2.slice(0, 1), seed);
-    await updateWorkspace(DEFAULT_WORKSPACE_ID, (w) => {
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c2', pages.c2.slice(0, 1), seed);
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
       w.bulk = { kind: 'bulkExport', mode: 'channels', guildId: '42', settings: null, queue: ['c1', 'c2'], done: [], inHand: 'c2', total: 2, doneCount: 0 };
     });
     store.dispatch(bulkRecorded({ kind: 'bulkExport', mode: 'channels', guildId: '42', total: 2, doneCount: 0, remaining: 2 }));
@@ -262,11 +262,11 @@ describe('Bulk Export through the workspace', () => {
 describe('single Export through the workspace', () => {
   it('reads the refined list from the store', async () => {
     const store = await openDefault();
-    await writePage(DEFAULT_WORKSPACE_ID, 'c1', createMockMessages(4), seed);
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'c1', createMockMessages(4), seed);
     const { seen } = captureExports(store);
 
     const result = await store.dispatch(exportMessages({
-      store: { wid: DEFAULT_WORKSPACE_ID, cid: 'c1', container: 'main', ids: ['msg-1', 'msg-3'] },
+      store: { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'c1', container: 'main', ids: ['msg-1', 'msg-3'] },
       channelName: 'general', format: 'json', messagesPerPage: 100, separateThreads: false, includeMedia: false, guildId: '42',
     }));
     expect(result.type).toBe('export/exportMessages/fulfilled');
@@ -284,10 +284,10 @@ describe('single Export through the workspace', () => {
     const { seen } = captureExports(store);
 
     await store.dispatch(exportMessages({
-      store: { wid: DEFAULT_WORKSPACE_ID, cid: 'c1', container: 'main', ids: messages.map((m) => m.id) },
+      store: { wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'c1', container: 'main', ids: messages.map((m) => m.id) },
       channelName: 'general', format: 'json', messagesPerPage: 100, separateThreads: false, includeMedia: false, guildId: '42',
     }));
-    expect(await countRows(DEFAULT_WORKSPACE_ID, 'c1')).toBe(3);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, 'c1')).toBe(3);
     expect((seen[0].input as ExportSourceSet).main.count).toBe(3);
   });
 });

@@ -38,10 +38,12 @@ if (import.meta.env.DEV) {
   });
   // 2.2.5 WP4a: specs drive switching and make workspaces here (New is supporter only in the popover).
   Promise.all([import('./features/workspace/workspaceThunks'), import('./services/workspaceStore')]).then(([thunks, workspaceStore]) => {
+    // Specs say 'default' for the Default workspace whatever id it was given.
+    const resolve = async (wid: string) => (wid === 'default' ? workspaceStore.getDefaultWid() : wid);
     (window as any).__workspace__ = {
-      switchTo: (wid: string) => store.dispatch(thunks.switchWorkspace({ wid })),
+      switchTo: async (wid: string) => store.dispatch(thunks.switchWorkspace({ wid: await resolve(wid) })),
       create: (name: string) => workspaceStore.createWorkspace({ name }),
-      get: (wid: string) => workspaceStore.getWorkspace(wid),
+      get: async (wid: string) => workspaceStore.getWorkspace(await resolve(wid)),
     };
   });
 }

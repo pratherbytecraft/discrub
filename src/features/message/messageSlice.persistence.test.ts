@@ -2,6 +2,7 @@
  * 2.2.5 WP2a: the message thunks write through to the workspace store and
  * a conversation with saved rows comes back from disk.
  */
+import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
 import type { Message } from 'discrub-core/types/discord-types';
@@ -26,11 +27,10 @@ import guildReducer from '@features/guild/guildSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
 import cacheReducer from '@features/cache/cacheSlice';
-import { DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
+import { LEGACY_DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
 import {
   countRows,
   deleteWorkspaceDatabase,
-  ensureDefaultWorkspace,
   getConversation,
   readWindow,
   updateConversation,
@@ -82,7 +82,7 @@ function makeStore() {
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
-  store.dispatch(setCurrentWorkspace(DEFAULT_WORKSPACE_ID));
+  store.dispatch(setCurrentWorkspace(LEGACY_DEFAULT_WORKSPACE_ID));
   store.dispatch(setSelectedChannel(createMockChannel({ id: CID, name: 'general', guild_id: '42' })));
   return store;
 }
@@ -96,7 +96,7 @@ function serviceWith(overrides: Record<string, unknown>) {
 
 beforeEach(async () => {
   await deleteWorkspaceDatabase();
-  await ensureDefaultWorkspace();
+  await ensureTestDefaultWorkspace();
 });
 
 afterEach(async () => {
@@ -109,7 +109,7 @@ describe('fetchMessages', () => {
     serviceWith({ fetchMessageData: vi.fn().mockResolvedValue({ success: true, data: page(100, 100) }) });
     await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
     expect(store.getState().message.rows).toHaveLength(100);
-    expect(await getConversation(DEFAULT_WORKSPACE_ID, CID)).toBeNull();
+    expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBeNull();
     expect(selectRestored(store.getState() as never)).toBeNull();
   });
 
@@ -117,8 +117,8 @@ describe('fetchMessages', () => {
     const store = makeStore();
     const fetchMessageData = vi.fn();
     serviceWith({ fetchMessageData });
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(300, 300), { kind: 'channel', guildId: '42', name: 'general' });
-    await updateConversation(DEFAULT_WORKSPACE_ID, CID, (c) => {
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(300, 300), { kind: 'channel', guildId: '42', name: 'general' });
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => {
       c.pagination = { ...c.pagination, mode: 'paginated', lastMessageId: '1', hasMore: true };
       c.selectedIds = ['5', '7'];
       c.refineCriteria = null;
@@ -139,7 +139,7 @@ describe('fetchMessages', () => {
 
   it('clearMessages forgets the restored marker', async () => {
     const store = makeStore();
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(3, 3), { kind: 'channel', guildId: '42', name: 'general' });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(3, 3), { kind: 'channel', guildId: '42', name: 'general' });
     await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
     expect(selectRestored(store.getState() as never)).not.toBeNull();
     store.dispatch(clearMessages());
@@ -157,8 +157,8 @@ describe('fetchMoreMessages', () => {
     });
     await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
     await store.dispatch(fetchMoreMessages({ channelId: CID, token: TOKEN, lastMessageId: '101' }));
-    expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(200);
-    const record = await getConversation(DEFAULT_WORKSPACE_ID, CID);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(200);
+    const record = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(record?.pagination).toMatchObject({ mode: 'paginated', lastMessageId: '1', hasMore: true });
     expect(record?.name).toBe('general');
   });
@@ -167,15 +167,15 @@ describe('fetchMoreMessages', () => {
 describe('searchMessages', () => {
   it('replaces the saved rows with the results and keeps the criteria', async () => {
     const store = makeStore();
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(50, 50), { kind: 'channel', guildId: '42', name: 'general' });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(50, 50), { kind: 'channel', guildId: '42', name: 'general' });
     const hits = page(9, 3);
     serviceWith({
       fetchSearchMessageData: vi.fn().mockResolvedValue({ success: true, data: { messages: hits.map((m) => [m]), total_results: 3 } }),
     });
     const criteria = { searchMessageContents: ['hello'], userIds: [], mentionIds: [], channelIds: [], selectedHasTypes: [], isPinned: 0, authorType: null, searchAfterDate: null, searchBeforeDate: null } as never;
     await store.dispatch(searchMessages({ channelId: CID, guildId: '42', token: TOKEN, searchCriteria: criteria }));
-    expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(3);
-    const record = await getConversation(DEFAULT_WORKSPACE_ID, CID);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(3);
+    const record = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(record?.pagination).toMatchObject({ mode: 'search', totalCount: 3, searchOffset: 3, hasMore: false });
     expect((record?.searchCriteria as { searchMessageContents: string[] }).searchMessageContents).toEqual(['hello']);
   });
@@ -192,16 +192,16 @@ describe('fetchAllMessages', () => {
     });
     await store.dispatch(fetchAllMessages({ channelId: CID, token: TOKEN }));
     expect(store.getState().message.rows).toHaveLength(250);
-    expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(250);
-    const record = await getConversation(DEFAULT_WORKSPACE_ID, CID);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(250);
+    const record = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
     expect(record).toMatchObject({ complete: true, count: 250, oldestId: '1', newestId: '250' });
     expect(record?.pagination).toMatchObject({ mode: 'all', hasMore: false, lastMessageId: '1' });
   });
 
   it('continues from the restored cursor instead of walking from the top', async () => {
     const store = makeStore();
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(300, 100), { kind: 'channel', guildId: '42', name: 'general' });
-    await updateConversation(DEFAULT_WORKSPACE_ID, CID, (c) => {
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(300, 100), { kind: 'channel', guildId: '42', name: 'general' });
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => {
       c.pagination = { ...c.pagination, mode: 'paginated', lastMessageId: '201', hasMore: true };
     });
     const fetchMessageData = vi.fn()
@@ -213,8 +213,8 @@ describe('fetchAllMessages', () => {
     await store.dispatch(fetchAllMessages({ channelId: CID, token: TOKEN }));
     expect(fetchMessageData.mock.calls[0][1]).toBe('201');
     expect(store.getState().message.rows).toHaveLength(300);
-    expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(300);
-    expect((await getConversation(DEFAULT_WORKSPACE_ID, CID))?.complete).toBe(true);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(300);
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.complete).toBe(true);
   });
 
   it('a page that hits the quota pauses the run and finishes after Resume', async () => {
@@ -239,7 +239,7 @@ describe('fetchAllMessages', () => {
       IDBObjectStore.prototype.put = original;
     }
     expect(store.getState().message.rows).toHaveLength(150);
-    expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(150);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(150);
     expect(store.getState().app.operationHold).toEqual({ kind: 'storageFull', loaded: 0 });
     const statusLines = store.getState().status.entries.map((e) => e.message);
     expect(statusLines.some((line) => /storage is full/.test(line))).toBe(true);
@@ -249,15 +249,15 @@ describe('fetchAllMessages', () => {
 describe('openThreadTab', () => {
   it('writes the thread first page, the parent record, and restores next time', async () => {
     const store = makeStore();
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(2, 2), { kind: 'channel', guildId: '42', name: 'general' });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(2, 2), { kind: 'channel', guildId: '42', name: 'general' });
     const threadPage = page(5, 5).map((m) => ({ ...m, channel_id: 't1' }));
     const fetchMessageData = vi.fn().mockResolvedValue({ success: true, data: threadPage });
     serviceWith({ fetchMessageData });
     await store.dispatch(openThreadTab({ threadId: 't1', threadName: 'Plans', token: TOKEN }));
     expect(fetchMessageData).toHaveBeenCalledTimes(1);
-    expect(await countRows(DEFAULT_WORKSPACE_ID, 't1')).toBe(5);
-    expect((await getConversation(DEFAULT_WORKSPACE_ID, 't1'))).toMatchObject({ kind: 'thread', name: 'Plans' });
-    expect((await getConversation(DEFAULT_WORKSPACE_ID, CID))?.threadTabs).toEqual(['t1']);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, 't1')).toBe(5);
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, 't1'))).toMatchObject({ kind: 'thread', name: 'Plans' });
+    expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID))?.threadTabs).toEqual(['t1']);
 
     // A fresh store (a reload) opens the same thread from disk.
     const again = makeStore();
@@ -272,10 +272,10 @@ describe('openThreadTab', () => {
 describe('clearSavedMessages', () => {
   it('drops the saved rows so the next open fetches', async () => {
     const store = makeStore();
-    await writePage(DEFAULT_WORKSPACE_ID, CID, page(3, 3), { kind: 'channel', guildId: '42', name: 'general' });
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(3, 3), { kind: 'channel', guildId: '42', name: 'general' });
     await store.dispatch(clearSavedMessages({ cid: CID }));
-    expect(await countRows(DEFAULT_WORKSPACE_ID, CID)).toBe(0);
-    expect(await readWindow(DEFAULT_WORKSPACE_ID, CID)).toEqual([]);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(0);
+    expect(await readWindow(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toEqual([]);
     const fetchMessageData = vi.fn().mockResolvedValue({ success: true, data: page(1, 1) });
     serviceWith({ fetchMessageData });
     await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));

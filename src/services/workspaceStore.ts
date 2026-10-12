@@ -26,11 +26,12 @@ import type { Message } from 'discrub-core/types/discord-types';
 import { SortDirection } from 'discrub-core/common-enum';
 import {
   DEFAULT_WORKSPACE_COLOR,
-  DEFAULT_WORKSPACE_ID,
+  LEGACY_DEFAULT_WORKSPACE_ID,
   DEFAULT_WORKSPACE_NAME,
   WORKSPACE_SCHEMA_VERSION,
   type Conversation,
   type ConversationSeed,
+  type NameRefresh,
   type WorkspaceMeta,
   type WorkspaceRecord,
   type WorkspaceScope,
@@ -327,6 +328,7 @@ export function newConversation(cid: string, seed: ConversationSeed): Conversati
     kind: seed.kind,
     guildId: seed.guildId,
     name: seed.name,
+    parentName: seed.parentName ?? null,
     count: 0,
     bytes: 0,
     oldestId: null,
@@ -350,6 +352,21 @@ export function newConversation(cid: string, seed: ConversationSeed): Conversati
     action: null,
     enrichment: { reactions: 'off', replies: 'off', names: 'off' },
   };
+}
+
+/**
+ * The conversation record for `cid`, created from `seed` when missing and
+ * otherwise brought up to date with the names the seed carries, so a
+ * renamed channel or server corrects itself on the next write (2.2.5
+ * ws-conv-names). The server name lands in the record's `guilds` map.
+ */
+function conversationFromSeed(record: WorkspaceRecord, cid: string, seed: ConversationSeed): Conversation {
+  const conversation = record.conversations[cid] ?? newConversation(cid, seed);
+  conversation.name = seed.name;
+  if (seed.guildId) conversation.guildId = seed.guildId;
+  if (seed.parentName !== undefined) conversation.parentName = seed.parentName;
+  if (seed.guildId && seed.guildName) record.guilds[seed.guildId] = seed.guildName;
+  return conversation;
 }
 
 const emptyScope = (): WorkspaceScope => ({ tab: null, guildId: null, channelId: null, dmId: null });
@@ -380,6 +397,7 @@ export function newWorkspaceRecord(input: NewWorkspaceInput, now = Date.now()): 
     conversations: {},
     bulk: null,
     authors: {},
+    guilds: {},
   };
 }
 
@@ -393,11 +411,11 @@ export function isWorkspaceOpenable(record: WorkspaceRecord): boolean {
 
 /* ─────────────────── Meta ─────────────────── */
 
-const emptyMeta = (): WorkspaceMeta => ({ lastWid: null, order: [] });
+const emptyMeta = (): WorkspaceMeta => ({ lastWid: null, order: [], defaultWid: null });
 
 async function readMeta(tx: IDBTransaction): Promise<WorkspaceMeta> {
   const stored = await req<WorkspaceMeta | undefined>(tx.objectStore(STORE_META).get(META_KEY));
-  return stored ?? emptyMeta();
+  return stored ? { ...emptyMeta(), ...stored } : emptyMeta();
 }
 
 export function getMeta(): Promise<WorkspaceMeta> {
@@ -423,13 +441,19 @@ export function setWorkspaceOrder(order: string[]): Promise<void> {
 async function readWorkspace(tx: IDBTransaction, wid: string): Promise<WorkspaceRecord> {
   const record = await req<WorkspaceRecord | undefined>(tx.objectStore(STORE_WORKSPACES).get(wid));
   if (!record) throw new WorkspaceStoreError(`Workspace ${wid} not found`);
+  return withGuilds(record);
+}
+
+/** A record written before the `guilds` map existed reads as an empty map. */
+function withGuilds(record: WorkspaceRecord): WorkspaceRecord {
+  if (!record.guilds) record.guilds = {};
   return record;
 }
 
 export function getWorkspace(wid: string): Promise<WorkspaceRecord | null> {
   return withTx('readonly', [STORE_WORKSPACES], { wid, cid: null }, async (tx) => {
     const record = await req<WorkspaceRecord | undefined>(tx.objectStore(STORE_WORKSPACES).get(wid));
-    return record ?? null;
+    return record ? withGuilds(record) : null;
   });
 }
 
@@ -441,7 +465,7 @@ export function listWorkspaces(): Promise<WorkspaceRecord[]> {
       readMeta(tx),
     ]);
     const rank = new Map(meta.order.map((wid, i) => [wid, i]));
-    return [...records].sort((a, b) => {
+    return records.map(withGuilds).sort((a, b) => {
       const ra = rank.get(a.wid);
       const rb = rank.get(b.wid);
       if (ra !== undefined && rb !== undefined) return ra - rb;
@@ -461,18 +485,46 @@ export function createWorkspace(input: NewWorkspaceInput): Promise<WorkspaceReco
     tx.objectStore(STORE_WORKSPACES).put(record);
     const meta = await readMeta(tx);
     tx.objectStore(STORE_META).put(
-      { lastWid: meta.lastWid ?? record.wid, order: [...meta.order, record.wid] },
+      { ...meta, lastWid: meta.lastWid ?? record.wid, order: [...meta.order, record.wid] },
       META_KEY,
     );
     return record;
   });
 }
 
-/** Creates Default on first run. Returns the record either way. */
-export async function ensureDefaultWorkspace(): Promise<WorkspaceRecord> {
-  const existing = await getWorkspace(DEFAULT_WORKSPACE_ID);
-  if (existing) return existing;
-  return createWorkspace({ wid: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME });
+/**
+ * Creates Default on first run and answers it every run after. The id is
+ * generated and kept in `meta.defaultWid`; a record under the fixed id
+ * older builds used is adopted instead of a second Default being made.
+ */
+export function ensureDefaultWorkspace(now = Date.now()): Promise<WorkspaceRecord> {
+  return withTx('readwrite', [STORE_WORKSPACES, STORE_META], { wid: '', cid: null }, async (tx) => {
+    const workspaces = tx.objectStore(STORE_WORKSPACES);
+    const meta = await readMeta(tx);
+    if (meta.defaultWid) {
+      const current = await req<WorkspaceRecord | undefined>(workspaces.get(meta.defaultWid));
+      if (current) return withGuilds(current);
+    }
+    const legacy = await req<WorkspaceRecord | undefined>(workspaces.get(LEGACY_DEFAULT_WORKSPACE_ID));
+    if (legacy) {
+      tx.objectStore(STORE_META).put({ ...meta, defaultWid: legacy.wid }, META_KEY);
+      return withGuilds(legacy);
+    }
+    const record = newWorkspaceRecord({ name: DEFAULT_WORKSPACE_NAME }, now);
+    workspaces.add(record);
+    tx.objectStore(STORE_META).put(
+      { lastWid: meta.lastWid ?? record.wid, order: [...meta.order, record.wid], defaultWid: record.wid },
+      META_KEY,
+    );
+    return record;
+  });
+}
+
+/** The Default workspace's id. Only valid after `ensureDefaultWorkspace` ran once. */
+export async function getDefaultWid(): Promise<string> {
+  const meta = await getMeta();
+  if (!meta.defaultWid) throw new WorkspaceStoreError('Default workspace not created yet');
+  return meta.defaultWid;
 }
 
 /**
@@ -506,16 +558,15 @@ export function renameWorkspace(wid: string, name: string): Promise<WorkspaceRec
 
 /** Removes every row of the workspace and the record itself. Default cannot be deleted. */
 export function deleteWorkspace(wid: string): Promise<void> {
-  if (wid === DEFAULT_WORKSPACE_ID) {
-    return Promise.reject(new WorkspaceStoreError('The Default workspace cannot be deleted'));
-  }
   return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES, STORE_META], { wid, cid: null }, async (tx) => {
+    const meta = await readMeta(tx);
+    if (wid === meta.defaultWid) throw new WorkspaceStoreError('The Default workspace cannot be deleted');
     tx.objectStore(STORE_ROWS).delete(workspaceRange(wid));
     tx.objectStore(STORE_WORKSPACES).delete(wid);
-    const meta = await readMeta(tx);
     tx.objectStore(STORE_META).put(
       {
-        lastWid: meta.lastWid === wid ? DEFAULT_WORKSPACE_ID : meta.lastWid,
+        ...meta,
+        lastWid: meta.lastWid === wid ? meta.defaultWid : meta.lastWid,
         order: meta.order.filter((w) => w !== wid),
       },
       META_KEY,
@@ -589,7 +640,7 @@ export function duplicateWorkspace(wid: string, name: string, now = Date.now()):
  * place, a new workspace is appended.
  */
 export function installImportedWorkspace(record: WorkspaceRecord, replace: boolean): Promise<WorkspaceRecord> {
-  const installed: WorkspaceRecord = structuredClone(record);
+  const installed: WorkspaceRecord = withGuilds(structuredClone(record));
   installed.bytes = 0;
   for (const conversation of Object.values(installed.conversations)) {
     conversation.count = 0;
@@ -658,10 +709,8 @@ export function updateConversation(
   return withTx('readwrite', [STORE_WORKSPACES], { wid, cid }, async (tx) => {
     const record = await readWorkspace(tx, wid);
     let conversation = record.conversations[cid];
-    if (!conversation) {
-      if (!seed) throw new WorkspaceStoreError(`Conversation ${cid} not found in workspace ${wid}`);
-      conversation = newConversation(cid, seed);
-    }
+    if (seed) conversation = conversationFromSeed(record, cid, seed);
+    if (!conversation) throw new WorkspaceStoreError(`Conversation ${cid} not found in workspace ${wid}`);
     const next = mutate(conversation) ?? conversation;
     record.conversations[cid] = next;
     tx.objectStore(STORE_WORKSPACES).put(record);
@@ -680,6 +729,43 @@ export function clearConversation(wid: string, cid: string): Promise<Conversatio
     resetConversationRows(conversation);
     tx.objectStore(STORE_WORKSPACES).put(record);
     return conversation;
+  });
+}
+
+/**
+ * Brings the workspace's names in line with a server, channel or DM list
+ * the app just fetched (2.2.5 ws-conv-names). Only a changed name writes;
+ * answers whether anything changed. A conversation whose server or channel
+ * is gone keeps its last name.
+ */
+export function refreshConversationNames(wid: string, names: NameRefresh): Promise<boolean> {
+  return withTx('readwrite', [STORE_WORKSPACES], { wid, cid: null }, async (tx) => {
+    const record = await readWorkspace(tx, wid);
+    let changed = false;
+    for (const [guildId, name] of Object.entries(names.guilds ?? {})) {
+      if (record.guilds[guildId] !== name) {
+        record.guilds[guildId] = name;
+        changed = true;
+      }
+    }
+    for (const conversation of Object.values(record.conversations)) {
+      const list = conversation.kind === 'channel' ? names.channels : conversation.kind === 'dm' ? names.dms : undefined;
+      const name = list?.[conversation.cid];
+      if (name !== undefined && name !== conversation.name) {
+        conversation.name = name;
+        changed = true;
+      }
+      if (conversation.kind === 'thread' && conversation.parentName && names.channels) {
+        const parent = Object.values(record.conversations).find((c) => c.kind === 'channel' && c.threadTabs.includes(conversation.cid));
+        const parentName = parent ? names.channels[parent.cid] : undefined;
+        if (parentName !== undefined && parentName !== conversation.parentName) {
+          conversation.parentName = parentName;
+          changed = true;
+        }
+      }
+    }
+    if (changed) tx.objectStore(STORE_WORKSPACES).put(record);
+    return changed;
   });
 }
 
@@ -756,10 +842,8 @@ export function writePage(
   return withTx('readwrite', [STORE_ROWS, STORE_WORKSPACES], { wid, cid }, async (tx) => {
     const record = await readWorkspace(tx, wid);
     let conversation = record.conversations[cid];
-    if (!conversation) {
-      if (!seed) throw new WorkspaceStoreError(`Conversation ${cid} not found in workspace ${wid}`);
-      conversation = newConversation(cid, seed);
-    }
+    if (seed) conversation = conversationFromSeed(record, cid, seed);
+    if (!conversation) throw new WorkspaceStoreError(`Conversation ${cid} not found in workspace ${wid}`);
     const rows = tx.objectStore(STORE_ROWS);
     let added = 0;
     let bytes = 0;

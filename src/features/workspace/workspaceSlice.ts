@@ -16,7 +16,7 @@ import {
   type StorageFigures,
 } from '@services/workspaceStore';
 import { summarizeWorkspace, type WorkspaceSummary } from './workspaceSummary';
-import { DEFAULT_WORKSPACE_ID, type ActionKind, type BulkKind, type BulkMode, type WorkspaceRecord } from './workspaceTypes';
+import { type ActionKind, type BulkKind, type BulkMode, type WorkspaceRecord } from './workspaceTypes';
 
 /** An unfinished long action recorded in a conversation of the open workspace (plan section 6). */
 export interface UnfinishedAction {
@@ -44,6 +44,8 @@ export interface UnfinishedBulk {
 export interface WorkspaceState {
   /** The open workspace, null until boot finished. */
   currentWid: string | null;
+  /** The undeletable Default's id, known once boot ran. */
+  defaultWid: string | null;
   currentName: string | null;
   /** True once Default exists and the last workspace is open. Writes wait for it. */
   ready: boolean;
@@ -74,6 +76,7 @@ export interface WorkspaceState {
 
 export const initialWorkspaceState: WorkspaceState = {
   currentWid: null,
+  defaultWid: null,
   currentName: null,
   ready: false,
   booting: false,
@@ -125,6 +128,7 @@ export interface OpenedWorkspace {
 
 export interface BootResult {
   opened: OpenedWorkspace | null;
+  defaultWid: string;
   /** Set when the last workspace is open in another window. */
   heldElsewhere: string | null;
 }
@@ -141,25 +145,26 @@ export const initializeWorkspaces = createAsyncThunk<BootResult, void, { rejectV
   'workspace/initialize',
   async (_, { dispatch, rejectWithValue }) => {
     try {
-      await ensureDefaultWorkspace();
+      const defaultRecord = await ensureDefaultWorkspace();
+      const defaultWid = defaultRecord.wid;
       const meta = await getMeta();
-      let wid = meta.lastWid ?? DEFAULT_WORKSPACE_ID;
+      let wid = meta.lastWid ?? defaultWid;
       let record = await getWorkspace(wid);
       if (!record || !isWorkspaceOpenable(record)) {
-        wid = DEFAULT_WORKSPACE_ID;
-        record = await getWorkspace(wid);
+        wid = defaultWid;
+        record = defaultRecord;
       }
       if (!(await acquireWorkspaceLock(wid))) {
         dispatch(addStatusEntry({ level: 'warning', message: t('workspace.heldElsewhere') }));
-        return { opened: null, heldElsewhere: wid };
+        return { opened: null, defaultWid, heldElsewhere: wid };
       }
       await touchWorkspace(wid);
       if (meta.lastWid !== wid) await setLastWorkspace(wid);
       const name = record?.name ?? wid;
-      if (wid !== DEFAULT_WORKSPACE_ID) {
+      if (wid !== defaultWid) {
         dispatch(showToast({ level: 'info', message: t('workspace.openedToast', { name }) }));
       }
-      return { opened: { wid, name, actions: actionsOf(record), bulk: bulkOf(record) }, heldElsewhere: null };
+      return { opened: { wid, name, actions: actionsOf(record), bulk: bulkOf(record) }, defaultWid, heldElsewhere: null };
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Could not open workspaces');
     }
@@ -178,10 +183,11 @@ export interface WorkspaceListResult {
 export const refreshWorkspaces = createAsyncThunk<WorkspaceListResult, void, { state: RootState }>(
   'workspace/refresh',
   async (_, { getState }) => {
-    const [records, storage] = await Promise.all([listWorkspaces(), readStorageEstimate()]);
+    const [records, storage, meta] = await Promise.all([listWorkspaces(), readStorageEstimate(), getMeta()]);
     const current = getState().workspace?.currentWid ?? null;
     const held = await Promise.all(records.map((r) => (r.wid === current ? Promise.resolve(false) : isWorkspaceHeldElsewhere(r.wid))));
-    return { list: records.map((r, i) => summarizeWorkspace(r, held[i])), storage };
+    const guilds = Object.fromEntries((getState().guild?.guilds ?? []).map((g) => [g.id, g.name]));
+    return { list: records.map((r, i) => summarizeWorkspace(r, { heldElsewhere: held[i], guilds, isDefault: r.wid === meta.defaultWid })), storage };
   },
 );
 
@@ -233,9 +239,10 @@ const workspaceSlice = createSlice({
         state.booting = true;
       })
       .addCase(initializeWorkspaces.fulfilled, (state, action) => {
-        const { opened, heldElsewhere } = action.payload;
+        const { opened, defaultWid, heldElsewhere } = action.payload;
         state.booting = false;
         state.error = null;
+        state.defaultWid = defaultWid;
         state.heldElsewhere = heldElsewhere;
         state.currentWid = opened?.wid ?? null;
         state.currentName = opened?.name ?? null;
@@ -296,6 +303,7 @@ const workspaceSlice = createSlice({
 export const { setCurrentWorkspace, scopeRestoreFinished, actionRecorded, bulkRecorded, currentWorkspaceRenamed, workspacesPopoverToggled } = workspaceSlice.actions;
 
 /** The open workspace id, or null while workspaces are not ready (writes are skipped). */
+export const selectDefaultWid = (state: RootState): string | null => state.workspace?.defaultWid ?? null;
 export const selectCurrentWid = (state: RootState): string | null => {
   const ws = state.workspace;
   return ws && ws.ready ? ws.currentWid : null;

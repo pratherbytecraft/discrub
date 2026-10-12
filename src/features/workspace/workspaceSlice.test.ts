@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createTestStore } from '@/test/test-utils';
-import workspaceReducer, { initializeWorkspaces, selectCurrentWid, selectWorkspaceReady, setCurrentWorkspace, waitForWorkspaces } from './workspaceSlice';
-import { DEFAULT_WORKSPACE_ID, WORKSPACE_SCHEMA_VERSION } from './workspaceTypes';
+import workspaceReducer, { initializeWorkspaces, selectCurrentWid,
+  selectDefaultWid, selectWorkspaceReady, setCurrentWorkspace, waitForWorkspaces } from './workspaceSlice';
+import { LEGACY_DEFAULT_WORKSPACE_ID, WORKSPACE_SCHEMA_VERSION } from './workspaceTypes';
 import {
   createWorkspace,
   deleteWorkspaceDatabase,
@@ -10,6 +11,7 @@ import {
   releaseWorkspaceLock,
   setLastWorkspace,
   updateWorkspace,
+  listWorkspaces,
 } from '@services/workspaceStore';
 
 const makeStore = () => createTestStore({ workspace: workspaceReducer });
@@ -19,7 +21,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  releaseWorkspaceLock(DEFAULT_WORKSPACE_ID);
+  releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
   await deleteWorkspaceDatabase();
 });
 
@@ -33,11 +35,24 @@ describe('workspaceSlice', () => {
   it('boot creates Default on a fresh install and opens it', async () => {
     const store = makeStore();
     await store.dispatch(initializeWorkspaces());
-    expect(selectCurrentWid(store.getState())).toBe(DEFAULT_WORKSPACE_ID);
+    const wid = selectDefaultWid(store.getState());
+    expect(wid).not.toBeNull();
+    expect(wid).not.toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    expect(selectCurrentWid(store.getState())).toBe(wid);
     expect(selectWorkspaceReady(store.getState())).toBe(true);
-    const record = await getWorkspace(DEFAULT_WORKSPACE_ID);
+    const record = await getWorkspace(wid!);
     expect(record?.name).toBe('Default');
-    expect((await getMeta()).lastWid).toBe(DEFAULT_WORKSPACE_ID);
+    expect(await getMeta()).toMatchObject({ lastWid: wid, defaultWid: wid });
+    releaseWorkspaceLock(wid!);
+  });
+
+  it('boot adopts a Default written under the fixed id of older builds (ws-default-id)', async () => {
+    await createWorkspace({ wid: LEGACY_DEFAULT_WORKSPACE_ID, name: 'Default' });
+    const store = makeStore();
+    await store.dispatch(initializeWorkspaces());
+    expect(selectDefaultWid(store.getState())).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    expect(selectCurrentWid(store.getState())).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
+    expect((await listWorkspaces()).length).toBe(1);
   });
 
   it('boot opens the workspace that was open last', async () => {
@@ -58,13 +73,15 @@ describe('workspaceSlice', () => {
     await setLastWorkspace(other.wid);
     const store = makeStore();
     await store.dispatch(initializeWorkspaces());
-    expect(selectCurrentWid(store.getState())).toBe(DEFAULT_WORKSPACE_ID);
-    expect((await getMeta()).lastWid).toBe(DEFAULT_WORKSPACE_ID);
+    const wid = selectDefaultWid(store.getState());
+    expect(selectCurrentWid(store.getState())).toBe(wid);
+    expect((await getMeta()).lastWid).toBe(wid);
 
     await setLastWorkspace('missing');
     const again = makeStore();
     await again.dispatch(initializeWorkspaces());
-    expect(selectCurrentWid(again.getState())).toBe(DEFAULT_WORKSPACE_ID);
+    expect(selectCurrentWid(again.getState())).toBe(wid);
+    releaseWorkspaceLock(wid!);
   });
 
   it('waitForWorkspaces waits only while boot is in flight', async () => {

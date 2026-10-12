@@ -22,6 +22,17 @@ describe('workspace summaries (2.2.5 WP5)', () => {
     expect(s.openable).toBe(true);
   });
 
+  it('names the server from the workspace map, then the signed in list, and a thread by its parent (ws-conv-names)', () => {
+    const r = record();
+    r.guilds = { g: 'Sandbox' };
+    r.conversations['4'] = { ...newConversation('4', { kind: 'thread', guildId: 'h', name: 'patch notes', parentName: 'general' }), count: 5, bytes: 50 };
+    const s = summarizeWorkspace(r, { guilds: { h: 'Friends' } });
+    const byCid = Object.fromEntries(s.conversations.map((c) => [c.cid, c]));
+    expect(byCid['1']).toMatchObject({ guildName: 'Sandbox', parentName: null });
+    expect(byCid['4']).toMatchObject({ guildName: 'Friends', parentName: 'general' });
+    expect(summarizeWorkspace(r).conversations.find((c) => c.cid === '4')?.guildName).toBeNull();
+  });
+
   it('names a bulk run by its progress, ahead of a conversation action', () => {
     const r = record();
     r.conversations['1'].action = { kind: 'loadAll', settings: null };
@@ -39,7 +50,7 @@ describe('workspace summaries (2.2.5 WP5)', () => {
   });
 
   it('marks a row held by another window', () => {
-    expect(summarizeWorkspace(record(), true).heldElsewhere).toBe(true);
+    expect(summarizeWorkspace(record(), { heldElsewhere: true }).heldElsewhere).toBe(true);
   });
 
   it('picks names and colours not yet taken', () => {

@@ -10,7 +10,6 @@ import {
   PlayArrow as WorkIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { DEFAULT_WORKSPACE_ID } from '@features/workspace/workspaceTypes';
 import type { ConversationSummary, WorkspaceSummary } from '@features/workspace/workspaceSummary';
 import { formatDiskSize } from '@features/workspace/diskBarScale';
 import { timeAgo } from '@/utils/timeAgo';
@@ -40,7 +39,9 @@ export interface WorkspaceRowProps {
   onClearConversation: (conversation: ConversationSummary) => void;
 }
 
-const conversationName = (c: ConversationSummary) => (c.kind === 'dm' ? c.name : `# ${c.name}`);
+/** "# general", "# general › thread" or the DM's name. */
+const conversationName = (c: ConversationSummary) =>
+  c.kind === 'dm' ? c.name : c.kind === 'thread' && c.parentName ? `# ${c.parentName} › ${c.name}` : `# ${c.name}`;
 
 /**
  * One workspace in the popover (plan 5.2): a colour dot, the name with its
@@ -68,6 +69,8 @@ const WorkspaceRow = ({
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const locale = i18n.language;
+  // Test ids name the Default row "default" whatever id it was given.
+  const rowId = w.isDefault ? 'default' : w.wid;
   const [draft, setDraft] = useState(w.name);
   const input = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
@@ -131,7 +134,7 @@ const WorkspaceRow = ({
 
   return (
     <Box
-      data-testid={`workspace-row-${w.wid}`}
+      data-testid={`workspace-row-${rowId}`}
       sx={{
         borderLeft: '2px solid',
         borderLeftColor: current ? 'primary.main' : 'transparent',
@@ -184,7 +187,7 @@ const WorkspaceRow = ({
           size="small"
           aria-label={w.name}
           aria-expanded={expanded}
-          data-testid={`workspace-row-toggle-${w.wid}`}
+          data-testid={`workspace-row-toggle-${rowId}`}
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
           sx={{ color: expanded ? 'text.primary' : 'text.secondary', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }}
         >
@@ -198,13 +201,16 @@ const WorkspaceRow = ({
             {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', lock: locked, disabled: !w.openable })}
             {act(t('workspace.export'), <ExportIcon />, onExport, { testid: 'workspace-export', disabled: !w.openable })}
             {act(t('workspace.clear'), <ClearIcon />, onClear, { testid: 'workspace-clear', disabled: (current && busy) || w.count === 0 })}
-            {w.wid !== DEFAULT_WORKSPACE_ID && act(t('workspace.delete'), <DeleteIcon />, onDelete, { testid: 'workspace-delete', danger: true, disabled: (current && busy) || w.heldElsewhere })}
+            {!w.isDefault && act(t('workspace.delete'), <DeleteIcon />, onDelete, { testid: 'workspace-delete', danger: true, disabled: (current && busy) || w.heldElsewhere })}
           </Box>
           {w.conversations.length > 0 && (
             <Box sx={{ pt: 0.5, pb: 1, pl: 4.375, mr: 1.75, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 0.25 }}>
               {w.conversations.slice(0, CONVERSATIONS_SHOWN).map((c) => (
                 <Box key={c.cid} data-testid={`workspace-conversation-${c.cid}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, height: 28, fontSize: '0.75rem', color: 'text.secondary' }}>
-                  <Typography component="span" noWrap sx={{ fontSize: 'inherit', color: 'text.primary', maxWidth: 220 }}>{conversationName(c)}</Typography>
+                  <Typography component="span" noWrap sx={{ fontSize: 'inherit', color: 'text.primary', maxWidth: 260 }}>
+                    {conversationName(c)}
+                    {c.guildName && <Box component="span" sx={{ color: 'text.secondary' }}> · {c.guildName}</Box>}
+                  </Typography>
                   <Typography component="span" noWrap sx={{ fontSize: 'inherit', flex: 1, fontVariantNumeric: 'tabular-nums' }}>
                     {countLabel('messages', c.count, locale)} · {formatDiskSize(c.bytes)}
                   </Typography>

@@ -1,9 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { newWorkspaceRecord, newConversation } from '@services/workspaceStore';
 import { renderWithProviders, screen, fireEvent, waitFor } from '../../test/test-utils';
 import TopBar from './TopBar';
 import { createBaseState } from '../../test/state-factories';
 import { createMockUser } from '../../test/fixtures';
 import { initialSupporterState } from '@features/supporter/supporterTypes';
+
+// ws-signout: the confirm reads the list fresh from the store, so the
+// records a test wants stored go here.
+const storedRecords = vi.hoisted(() => ({ list: [] as unknown[] }));
+vi.mock('@services/workspaceStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@services/workspaceStore')>();
+  return {
+    ...actual,
+    listWorkspaces: vi.fn(async () => storedRecords.list),
+    readStorageEstimate: vi.fn(async () => null),
+    getMeta: vi.fn(async () => ({ lastWid: 'a', order: ['a', 'b'], defaultWid: 'a' })),
+  };
+});
+
 
 vi.mock('@services/discordService', () => ({
   getDiscordService: vi.fn(() => ({})),
@@ -223,7 +238,7 @@ describe('TopBar', () => {
       expect(screen.getByTestId('profile-logout')).toBeInTheDocument();
     });
 
-    it('should clear all state on logout', () => {
+    it('should clear all state on logout', async () => {
       const { store } = renderWithProviders(<TopBar />, {
         preloadedState: createBaseState({
           auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
@@ -232,11 +247,39 @@ describe('TopBar', () => {
         }),
       });
       logoutFromProfile();
+      await vi.waitFor(() => expect(store.getState().auth.token).toBeNull());
       const state = store.getState();
       expect(state.auth.token).toBeNull();
       expect(state.auth.isAuthenticated).toBe(false);
       expect(state.user.currentUser).toBeNull();
     });
+
+    it('asks before signing out when a workspace holds messages (ws-signout)', async () => {
+      const stored = (wid: string, name: string, count: number, bytes: number) => {
+        const record = newWorkspaceRecord({ wid, name });
+        record.conversations['1'] = { ...newConversation('1', { kind: 'channel', guildId: 'g', name: 'general' }), count, bytes };
+        record.bytes = bytes;
+        return record;
+      };
+      storedRecords.list = [stored('a', 'Default', 100_000, 1_200_000_000), stored('b', 'Raid', 20_000, 10_000_000)];
+      const { store } = renderWithProviders(<TopBar />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+          user: { currentUser, isLoading: false, error: null },
+        }),
+      });
+      logoutFromProfile();
+      await vi.waitFor(() => expect(screen.getByTestId('signout-confirm')).toHaveTextContent('Signing out clears every workspace. 2 workspaces, 120,000 messages, 1.2 GB.'));
+      expect(store.getState().auth.isAuthenticated).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(store.getState().auth.isAuthenticated).toBe(true);
+      logoutFromProfile();
+      await vi.waitFor(() => expect(screen.getByTestId('signout-confirm-button')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('signout-confirm-button'));
+      expect(store.getState().auth.isAuthenticated).toBe(false);
+      storedRecords.list = [];
+    });
+
 
     it('forgets a remembered token on logout (#249)', async () => {
       const { storage } = await import('@/extension/storage');

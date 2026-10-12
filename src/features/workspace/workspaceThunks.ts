@@ -36,8 +36,8 @@ import {
   touchWorkspace,
   updateWorkspace,
   WorkspaceQuotaError,
+  getDefaultWid,
 } from '@services/workspaceStore';
-import { DEFAULT_WORKSPACE_ID } from './workspaceTypes';
 import { copyName, nextWorkspaceColor, nextWorkspaceName } from './workspaceSummary';
 import {
   actionRecorded,
@@ -340,9 +340,10 @@ export const clearWorkspaceThunk = createAsyncThunk<void, { wid: string }, { sta
 export const deleteWorkspaceThunk = createAsyncThunk<void, { wid: string }, { state: RootState }>(
   'workspace/delete',
   async ({ wid }, { dispatch, getState }) => {
-    if (wid === DEFAULT_WORKSPACE_ID) return;
+    const defaultWid = getState().workspace.defaultWid ?? (await getDefaultWid());
+    if (wid === defaultWid) return;
     if (getState().workspace.currentWid === wid) {
-      await (dispatch(switchWorkspace({ wid: DEFAULT_WORKSPACE_ID })) as unknown as { unwrap: () => Promise<unknown> }).unwrap();
+      await (dispatch(switchWorkspace({ wid: defaultWid })) as unknown as { unwrap: () => Promise<unknown> }).unwrap();
     }
     await deleteWorkspace(wid);
     await dispatch(refreshWorkspaces());

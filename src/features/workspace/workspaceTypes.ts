@@ -14,8 +14,14 @@ import type { MessageOrder } from '@features/message/messageTypes';
 /** Bumped whenever a stored shape changes in a way an older build cannot read. */
 export const WORKSPACE_SCHEMA_VERSION = 1;
 
-/** The one workspace every account has. It cannot be deleted, only cleared. */
-export const DEFAULT_WORKSPACE_ID = 'default';
+/**
+ * The one workspace every account has. It cannot be deleted, only cleared.
+ * Its id is generated like any other and kept in `meta.defaultWid`
+ * (ws-default-id, 2026-10-14), so a Default file from another install is
+ * a different workspace and not "already here". Builds before that gave
+ * every Default the fixed id below; a record under it is adopted at boot.
+ */
+export const LEGACY_DEFAULT_WORKSPACE_ID = 'default';
 export const DEFAULT_WORKSPACE_NAME = 'Default';
 export const DEFAULT_WORKSPACE_COLOR = '#5865f2';
 
@@ -54,6 +60,8 @@ export interface Conversation {
   kind: ConversationKind;
   guildId: string | null;
   name: string;
+  /** A thread's parent channel name, for the "# general › thread" label. */
+  parentName?: string | null;
   /** Rows on disk for this conversation. */
   count: number;
   /** Discrub's own byte estimate for the rows on disk (plan section 3.2). */
@@ -79,6 +87,16 @@ export interface ConversationSeed {
   kind: ConversationKind;
   guildId: string | null;
   name: string;
+  /** The server's name as the app saw it, kept in the workspace's `guilds` map. */
+  guildName?: string | null;
+  parentName?: string | null;
+}
+
+/** Current names from a server, channel or DM list, for `refreshConversationNames`. */
+export interface NameRefresh {
+  guilds?: Record<string, string>;
+  channels?: Record<string, string>;
+  dms?: Record<string, string>;
 }
 
 export interface WorkspaceScope {
@@ -129,9 +147,13 @@ export interface WorkspaceRecord {
   conversations: Record<string, Conversation>;
   bulk: WorkspaceBulk | null;
   authors: Record<string, WorkspaceAuthor>;
+  /** Server names by guild id, written with each conversation and refreshed from the server list. */
+  guilds: Record<string, string>;
 }
 
 export interface WorkspaceMeta {
   lastWid: string | null;
   order: string[];
+  /** The undeletable Default. Null only before the first boot. */
+  defaultWid: string | null;
 }
