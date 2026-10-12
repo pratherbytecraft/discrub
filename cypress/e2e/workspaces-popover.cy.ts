@@ -125,4 +125,58 @@ describe('Workspaces popover (2.2.5 WP5)', () => {
     cy.contains('[data-testid^="workspace-row-"]', 'Default copy').should('exist');
     cy.get('[data-testid="workspace-pill"]').should('contain', 'Default');
   });
+
+  /* ─────────────── WP7: another window, another build ─────────────── */
+
+  type WorkspaceHooks = { create: (name: string) => Promise<{ wid: string }> };
+  const hooks = () => cy.window({ log: false }).its('__workspace__') as unknown as Cypress.Chainable<WorkspaceHooks>;
+
+  it('a workspace open in another window is dimmed and a click does not switch to it', () => {
+    hooks().then((h) => h.create('Raid archive')).then((created) => {
+      // A same origin frame holds the workspace's lock the way another window would.
+      cy.window().then((win) => {
+        const frame = win.document.createElement('iframe');
+        win.document.body.appendChild(frame);
+        void (frame.contentWindow as Window & { navigator: Navigator }).navigator.locks.request(`discrub-workspace-${created.wid}`, () => new Promise<void>(() => undefined));
+      });
+      openPopover();
+      cy.get(`[data-testid="workspace-row-${created.wid}"]`).should('contain', 'Another window').click();
+      cy.window().its('__store__').invoke('getState').its('workspace.currentName').should('eq', 'Default');
+      cy.get(`[data-testid="workspace-row-toggle-${created.wid}"]`).click();
+      cy.get('[data-testid="workspace-delete"]').should('be.disabled');
+    });
+  });
+
+  it('a workspace written by a newer Discrub is greyed with the version it needs and cannot be changed', () => {
+    hooks().then((h) => h.create('From the future')).then((created) => {
+      cy.window().then((win) =>
+        new Cypress.Promise<void>((resolve, reject) => {
+          const open = win.indexedDB.open('Discrub-workspaces');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const db = open.result;
+            const tx = db.transaction('workspaces', 'readwrite');
+            const store = tx.objectStore('workspaces');
+            const get = store.get(created.wid);
+            get.onsuccess = () => {
+              store.put({ ...get.result, schema: 99, appVersion: '9.9.9' });
+            };
+            tx.oncomplete = () => {
+              db.close();
+              resolve();
+            };
+            tx.onerror = () => reject(tx.error);
+          };
+        }),
+      );
+      openPopover();
+      cy.get(`[data-testid="workspace-row-${created.wid}"]`).should('contain', 'Needs Discrub 9.9.9').click();
+      cy.window().its('__store__').invoke('getState').its('workspace.currentName').should('eq', 'Default');
+      cy.get(`[data-testid="workspace-row-toggle-${created.wid}"]`).click();
+      cy.get('[data-testid="workspace-rename"]').should('be.disabled');
+      cy.get('[data-testid="workspace-export"]').should('be.disabled');
+      // The row stays; an update never destroys data, Delete is the user's call.
+      cy.get('[data-testid="workspace-delete"]').should('not.be.disabled');
+    });
+  });
 });

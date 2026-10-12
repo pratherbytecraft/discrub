@@ -83,6 +83,38 @@ describe('Workspace file (2.2.5 WP6b)', () => {
     });
   });
 
+  it('a supporter importing a workspace already here can keep both', () => {
+    const payload = { v: 1, kid: 'k', jti: 'j', name: 'Aaron', eh: 'x', ent: { themes: null }, iat: 1, exp: null };
+    cy.window().its('__store__').invoke('getState').its('supporter.initialized').should('be.true').then(() => cy.window()).then((win) => {
+      (win as any).__store__.dispatch({ type: 'supporter/refreshKey/fulfilled', payload: { keyStatus: 'valid', payload, lastRefreshAt: 1 } });
+    });
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      interceptPagedChannel(messages[0]);
+      cy.contains(CHANNEL).click();
+      cy.wait('@pagedMessages');
+      cy.get('[data-testid="message-feed-load-more"]').then(($btn) => { $btn[0].click(); });
+      cy.wait('@pagedMessages');
+      cy.contains('200 messages').should('be.visible');
+
+      openPopover();
+      cy.get('[data-testid="workspace-row-toggle-default"]').click();
+      cy.get('[data-testid="workspace-export"]').click();
+      cy.get('[data-testid="workspace-confirm-button"]').click();
+      cy.contains('Saved Default to a workspace file', { timeout: 15000 }).should('exist');
+      cy.task('downloads:list', null, { timeout: 15000 }).should((files) => {
+        expect((files as Array<{ name: string }>).map((f) => f.name)).to.include('Default.discrub-workspace');
+      });
+
+      cy.get('[data-testid="workspace-import-input"]').selectFile(`${Cypress.config('downloadsFolder')}/Default.discrub-workspace`, { force: true });
+      cy.get('[data-testid="workspace-import-dialog"]').should('contain', 'Workspace already here');
+      cy.get('[data-testid="workspace-import-keep-both"]').click();
+      cy.contains('Imported Default (2) with 200 messages', { timeout: 15000 }).should('exist');
+      // Both are here: the open one untouched, the copy with its own row.
+      cy.get('[data-testid="workspaces-popover"]').should('contain', 'Default (2)');
+      cy.contains('200 messages').should('be.visible');
+    });
+  });
+
   it('refuses a file that is not a workspace', () => {
     openPopover();
     cy.get('[data-testid="workspace-import-input"]').selectFile({ contents: Cypress.Buffer.from('not a zip'), fileName: 'notes.discrub-workspace' }, { force: true });
