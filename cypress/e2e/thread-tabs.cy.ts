@@ -240,16 +240,14 @@ describe('Thread Tabs — Comprehensive', () => {
       // The walk pauses for the search delay between pages.
       cy.wait('@searchThread', { timeout: 15000 });
 
-      // The thunk sorts and commits after the last page; retry until it has.
+      // Pages land on the tab as they arrive (2.2.5); the walk logs its
+      // completion after the last one, so retry until both are in.
       cy.window().its('__store__').should((store: any) => {
         expect(store.getState().message.threadTabs[THREAD_ID].rows.length).to.equal(30);
-      });
-      cy.window().then((win) => {
-        const store = (win as any).__store__;
-        expect(offsets).to.deep.equal(['0', '20']);
-        const messages = (store?.getState()?.status?.entries ?? []).map((e: any) => e.message);
+        const messages = (store.getState().status?.entries ?? []).map((e: any) => e.message);
         expect(messages.some((m: string) => /Search complete/.test(m))).to.be.true;
       });
+      cy.then(() => expect(offsets).to.deep.equal(['0', '20']));
     });
 
     // #262: when Discord refuses the thread search, the status log says

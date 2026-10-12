@@ -4419,6 +4419,53 @@ describe('messageSlice', () => {
         expect(successCalls).toHaveLength(1);
         expect(successCalls[0][0].message).toBe('Load All complete: 50 messages');
       });
+      it('puts each page on the tab as it arrives (2.2.5 fix B)', async () => {
+        const batch1 = createMockMessages(100);
+        const batch2 = createMockMessages(50).map((m, i) => createMockMessage({ ...m, id: `live-b2-${i + 1}` }));
+        let releaseSecond: () => void = () => undefined;
+        const second = new Promise<void>((resolve) => { releaseSecond = resolve; });
+        const fetchMessageData = vi.fn()
+          .mockResolvedValueOnce({ success: true, data: batch1 })
+          .mockImplementationOnce(async () => {
+            await second;
+            return { success: true, data: batch2 };
+          });
+        vi.mocked(discordService.getDiscordService).mockReturnValue({ fetchMessageData } as any);
+        const old = createMockMessages(3).map((m, i) => createMockMessage({ ...m, id: `old-${i}` }));
+        const testStore = await createStoreWithApp({
+          ...initialMessageState,
+          activeTab: 'thread-100',
+          threadTabs: { 'thread-100': threadTab('thread-100', old, { pagination: { ...initialMessageState.pagination, mode: 'search' } as any }) },
+        });
+
+        const run = testStore.dispatch(fetchAllThreadMessages({ threadId: 'thread-100', token: 'token' }));
+        await vi.waitFor(() => expect(fetchMessageData).toHaveBeenCalledTimes(2));
+        // A walk from the top replaced the search rows with its first page.
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(100);
+        releaseSecond();
+        const result = await run;
+        expect(result.payload).toEqual({ threadId: 'thread-100', count: 150 });
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(150);
+      });
+
+      it('a continued walk merges its pages behind the rows the tab had (2.2.5 fix B)', async () => {
+        const loaded = createMockMessages(100);
+        const more = createMockMessages(40).map((m, i) => createMockMessage({ ...m, id: `more-${i}` }));
+        const fetchMessageData = vi.fn().mockResolvedValueOnce({ success: true, data: more });
+        vi.mocked(discordService.getDiscordService).mockReturnValue({ fetchMessageData } as any);
+        const testStore = await createStoreWithApp({
+          ...initialMessageState,
+          activeTab: 'thread-100',
+          threadTabs: {
+            'thread-100': threadTab('thread-100', loaded, {
+              pagination: { ...initialMessageState.pagination, mode: 'paginated', hasMore: true, lastMessageId: loaded[99].id } as any,
+            }),
+          },
+        });
+        await testStore.dispatch(fetchAllThreadMessages({ threadId: 'thread-100', token: 'token' }));
+        expect(fetchMessageData.mock.calls[0][1]).toBe(loaded[99].id);
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(140);
+      });
     });
 
     describe('searchThreadMessages', () => {
@@ -4458,6 +4505,18 @@ describe('messageSlice', () => {
         expect(tab.isLoading).toBe(false);
         expect(tab.pagination.mode).toBe('search');
         expect(tab.pagination.hasMore).toBe(false);
+      });
+
+      it('replaces the tab rows with the first page and ends empty when nothing matches (2.2.5 fix B)', async () => {
+        const fetchSearchMessageData = vi.fn().mockResolvedValue({ success: true, data: { messages: [], total_results: 0 } });
+        vi.mocked(discordService.getDiscordService).mockReturnValue({ fetchSearchMessageData } as any);
+        const testStore = await createStoreWithApp({
+          ...initialMessageState,
+          activeTab: 'thread-100',
+          threadTabs: { 'thread-100': threadTab('thread-100', createMockMessages(5)) },
+        });
+        await testStore.dispatch(searchThreadMessages({ threadId: 'thread-100', token: 'token', searchCriteria: { searchContent: 'none' } as any }));
+        expect(testStore.getState().message.threadTabs['thread-100'].rows).toHaveLength(0);
       });
 
       // #264: Discord's search returns spuriously short pages mid-stream
@@ -6637,7 +6696,7 @@ describe('messageSlice', () => {
         );
 
         expect(result.type).toBe('message/fetchAllMessages/fulfilled');
-        expect((result.payload as any).messages).toHaveLength(10);
+        expect((result.payload as any).count).toBe(10);
 
         const retryEntries = vi.mocked(addStatusEntry).mock.calls.filter(
           ([p]) => p.level === 'warning' && /retrying in/.test(p.message),

@@ -2071,7 +2071,11 @@ export const fetchAllMessages = createAsyncThunk(
       const seed = conversationSeedFromState(state, channelId);
       const api = { dispatch, getState: getState as () => RootState };
 
-      let allMessages: Message[] = [];
+      // 2.2.5 fix B: pages go to disk and Redux as they arrive, so the walk
+      // keeps only a count and the oldest id it fetched. It used to hold
+      // every message in an array copied on every page.
+      let loadedCount = 0;
+      let lastFetchedId: string | null = null;
       let lastMessageId = continuing ? (state.message.pagination.lastMessageId as string) : '';
       let hasMore = continuing ? state.message.pagination.hasMore : true;
       // 500-step cadence (not the shared adaptive helper) — direct-history
@@ -2083,8 +2087,8 @@ export const fetchAllMessages = createAsyncThunk(
       // resumable. Before this a stop between pages fell through to the
       // success path and the conversation was recorded as complete.
       const stopped = () => {
-        if (allMessages.length > 0) {
-          dispatch(messageSlice.actions.setLoadAllCursor({ lastMessageId: allMessages[allMessages.length - 1].id, hasMore: true }));
+        if (lastFetchedId) {
+          dispatch(messageSlice.actions.setLoadAllCursor({ lastMessageId: lastFetchedId, hasMore: true }));
         }
         return rejectWithValue('Load cancelled');
       };
@@ -2116,10 +2120,10 @@ export const fetchAllMessages = createAsyncThunk(
         if (!response.success || !response.data) {
           if (isTransientApiFailure(response)) {
             dispatch(setDiscrubPaused(true));
-            dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: allMessages.length }));
+            dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: loadedCount }));
             dispatch(addStatusEntry({
               level: 'warning',
-              message: t('status.msg.loadAllPaused', { answer: describeAnswer(response), count: allMessages.length }),
+              message: t('status.msg.loadAllPaused', { answer: describeAnswer(response), count: loadedCount }),
             }));
             continue;
           }
@@ -2127,7 +2131,8 @@ export const fetchAllMessages = createAsyncThunk(
         }
 
         const messages = response.data as Message[];
-        allMessages = [...allMessages, ...messages];
+        loadedCount += messages.length;
+        if (messages.length > 0) lastFetchedId = messages[messages.length - 1].id;
         const pageHasMore = messages.length >= 100;
         const pageCursor = messages.length > 0 ? messages[messages.length - 1].id : lastMessageId;
 
@@ -2136,7 +2141,7 @@ export const fetchAllMessages = createAsyncThunk(
         const outcome = await persistPage(api, channelId, messages, {
           seed,
           backfill: existing,
-          loaded: existingRows.length + allMessages.length,
+          loaded: existingRows.length + loadedCount,
           record: { pagination: paginationRecord({ mode: 'all', lastMessageId: pageCursor, hasMore: pageHasMore }) },
         });
         if (outcome === 'cancelled') return stopped();
@@ -2147,15 +2152,15 @@ export const fetchAllMessages = createAsyncThunk(
         // Update progress
         dispatch(
           updateLoadAllProgress({
-            current: allMessages.length,
+            current: loadedCount,
             total: 0, // Unknown until we reach the end
-            message: t('status.msg.loadedProgress', { count: allMessages.length }),
+            message: t('status.msg.loadedProgress', { count: loadedCount }),
           })
         );
 
-        if (allMessages.length >= nextLogBoundary) {
-          dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loadAllFetched', { count: allMessages.length }) }));
-          nextLogBoundary = allMessages.length + 500 - (allMessages.length % 500);
+        if (loadedCount >= nextLogBoundary) {
+          dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loadAllFetched', { count: loadedCount }) }));
+          nextLogBoundary = loadedCount + 500 - (loadedCount % 500);
         }
 
         // Check if we've reached the end
@@ -2177,14 +2182,14 @@ export const fetchAllMessages = createAsyncThunk(
         return stopped();
       }
 
-      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: allMessages.length }) }));
-      const finalCursor = allMessages.length > 0 ? allMessages[allMessages.length - 1].id : (continuing ? lastMessageId : null);
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: loadedCount }) }));
+      const finalCursor = lastFetchedId ?? (continuing ? lastMessageId : null);
       await persistConversation(api, channelId, {
         complete: true,
         pagination: paginationRecord({ mode: 'all', hasMore: false, lastMessageId: finalCursor }),
       });
       return {
-        messages: allMessages,
+        count: loadedCount,
         hasMore: false,
         lastMessageId: finalCursor,
       };
@@ -2668,7 +2673,11 @@ export const fetchAllThreadMessages = createAsyncThunk(
       const api = { dispatch, getState: getState as () => RootState };
       const seed = threadSeedFromState(state, threadId);
 
-      let allMessages: Message[] = [];
+      // 2.2.5 fix B: a count and the oldest fetched id, not every message.
+      // Each page goes to the tab as it arrives, like the channel walk, so a
+      // long thread no longer holds its pages until the end.
+      let loadedCount = 0;
+      let lastFetchedId: string | null = null;
       let lastMsgId = continuing ? (startTab.pagination.lastMessageId as string) : '';
       let hasMore = continuing ? startTab.pagination.hasMore : true;
       // 500-step cadence (not the shared adaptive helper) — same rationale
@@ -2679,17 +2688,13 @@ export const fetchAllThreadMessages = createAsyncThunk(
       // 2.2.5 WP4a: a stop keeps the pages already fetched (they are on
       // disk) and leaves the walk resumable instead of marking it complete.
       const stopped = () => {
-        if (allMessages.length > 0 && (getState() as RootState).message.threadTabs[threadId]) {
-          if (continuing) dispatch(messageSlice.actions.appendThreadMessages({ threadId, messages: allMessages }));
-          else dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: allMessages }));
-        }
         dispatch(messageSlice.actions.updateThreadPagination({
           threadId,
           pagination: {
             isLoadingAll: false,
             loadAllProgress: null,
             loadAllCancelled: true,
-            ...(allMessages.length > 0 ? { lastMessageId: allMessages[allMessages.length - 1].id, hasMore: true } : {}),
+            ...(lastFetchedId ? { lastMessageId: lastFetchedId, hasMore: true } : {}),
           },
         }));
         return rejectWithValue('Load cancelled');
@@ -2720,10 +2725,10 @@ export const fetchAllThreadMessages = createAsyncThunk(
         if (!response.success || !response.data) {
           if (isTransientApiFailure(response) && !signal.aborted && !checkCancelled(getState as () => RootState)) {
             dispatch(setDiscrubPaused(true));
-            dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: allMessages.length }));
+            dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: loadedCount }));
             dispatch(addStatusEntry({
               level: 'warning',
-              message: t('status.msg.loadAllPaused', { answer: describeAnswer(response), count: allMessages.length }),
+              message: t('status.msg.loadAllPaused', { answer: describeAnswer(response), count: loadedCount }),
             }));
             continue;
           }
@@ -2735,30 +2740,38 @@ export const fetchAllThreadMessages = createAsyncThunk(
         }
 
         const messages = response.data as Message[];
-        allMessages = [...allMessages, ...messages];
+        loadedCount += messages.length;
+        if (messages.length > 0) lastFetchedId = messages[messages.length - 1].id;
 
         const outcome = await persistPage(api, threadId, messages, {
           seed,
           backfill: existing,
-          loaded: existingRows.length + allMessages.length,
+          loaded: existingRows.length + loadedCount,
           record: { pagination: paginationRecord({ mode: 'all', hasMore: messages.length >= 100, lastMessageId: messages.length > 0 ? messages[messages.length - 1].id : lastMsgId }) },
         });
         if (outcome === 'cancelled') return stopped();
+
+        // A walk from the top replaces what the tab showed with its first
+        // page; every later page, and every page of a continued walk, merges in.
+        if (messages.length > 0 && (getState() as RootState).message.threadTabs[threadId]) {
+          if (!continuing && loadedCount === messages.length) dispatch(messageSlice.actions.setThreadMessages({ threadId, messages }));
+          else dispatch(messageSlice.actions.appendThreadMessages({ threadId, messages }));
+        }
 
         dispatch(messageSlice.actions.updateThreadPagination({
           threadId,
           pagination: {
             loadAllProgress: {
-              current: allMessages.length,
+              current: loadedCount,
               total: 0,
-              message: t('status.msg.loadedProgress', { count: allMessages.length }),
+              message: t('status.msg.loadedProgress', { count: loadedCount }),
             },
           },
         }));
 
-        if (allMessages.length >= nextLogBoundary) {
-          dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loadAllFetched', { count: allMessages.length }) }));
-          nextLogBoundary = allMessages.length + 500 - (allMessages.length % 500);
+        if (loadedCount >= nextLogBoundary) {
+          dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loadAllFetched', { count: loadedCount }) }));
+          nextLogBoundary = loadedCount + 500 - (loadedCount % 500);
         }
 
         if (messages.length < 100) {
@@ -2779,9 +2792,9 @@ export const fetchAllThreadMessages = createAsyncThunk(
 
       // When continuing, the pages already in the tab stay and the new ones
       // merge in behind them.
-      const threadFinalCursor = allMessages.length > 0 ? allMessages[allMessages.length - 1].id : (continuing ? lastMsgId : null);
-      if (continuing) dispatch(messageSlice.actions.appendThreadMessages({ threadId, messages: allMessages }));
-      else dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: allMessages }));
+      const threadFinalCursor = lastFetchedId ?? (continuing ? lastMsgId : null);
+      // An empty thread walked from the top ends with an empty tab.
+      if (!continuing && loadedCount === 0) dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: [] }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
         pagination: {
@@ -2791,12 +2804,12 @@ export const fetchAllThreadMessages = createAsyncThunk(
           lastMessageId: threadFinalCursor,
         },
       }));
-      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: allMessages.length }) }));
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: loadedCount }) }));
       await persistConversation(api, threadId, {
         complete: true,
         pagination: paginationRecord({ mode: 'all', hasMore: false, lastMessageId: threadFinalCursor }),
       });
-      return { threadId, count: allMessages.length };
+      return { threadId, count: loadedCount };
     } catch (error) {
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
@@ -2848,7 +2861,9 @@ export const searchThreadMessages = createAsyncThunk(
       const threadSeed = threadSeedFromState(state, threadId);
       await clearSavedConversation(api, threadId);
 
-      let allMessages: Message[] = [];
+      // 2.2.5 fix B: counts, not arrays; each page goes to the tab as it
+      // arrives (the first replaces what the tab showed before the search).
+      let totalCount = 0;
       let currentCriteria = { ...searchCriteria };
       let shouldContinue = true;
       let milestoneBoundary = nextMilestone(0);
@@ -2902,11 +2917,12 @@ export const searchThreadMessages = createAsyncThunk(
       };
 
       while (shouldContinue && !signal.aborted) {
-        let batchMessages: Message[] = [];
+        let batchCount = 0;
+        let batchLast: Message | null = null;
         let offset = 0;
         const maxPerBatch = 5000;
 
-        while (batchMessages.length < maxPerBatch && !signal.aborted) {
+        while (batchCount < maxPerBatch && !signal.aborted) {
           await waitWhilePaused(getState as () => RootState);
           if (checkCancelled(getState as () => RootState)) {
             shouldContinue = false;
@@ -2946,7 +2962,7 @@ export const searchThreadMessages = createAsyncThunk(
 
           // #216 parity with the channel search: an empty first page while
           // Discord is still building the index is not "no matches".
-          if (offset === 0 && allMessages.length === 0
+          if (offset === 0 && totalCount === 0
             && searchResult.doing_deep_historical_index && rawMessages.length === 0) {
             dispatch(addStatusEntry({ level: 'warning', message: t('status.msg.stillIndexing') }));
           }
@@ -2984,8 +3000,13 @@ export const searchThreadMessages = createAsyncThunk(
             },
           );
 
-          batchMessages = [...batchMessages, ...messages];
-          const fetched = allMessages.length + batchMessages.length;
+          if (messages.length > 0 && (getState() as RootState).message.threadTabs[threadId]) {
+            if (totalCount + batchCount === 0) dispatch(messageSlice.actions.setThreadMessages({ threadId, messages }));
+            else dispatch(messageSlice.actions.appendThreadMessages({ threadId, messages }));
+          }
+          batchCount += messages.length;
+          if (messages.length > 0) batchLast = messages[messages.length - 1];
+          const fetched = totalCount + batchCount;
           const total = searchResult.total_results;
 
           const outcome = await persistPage(api, threadId, messages, {
@@ -3020,7 +3041,7 @@ export const searchThreadMessages = createAsyncThunk(
           // pages while its index lags. Only an empty page (handled above)
           // or reaching total_results ends the walk, and the offset advances
           // by what actually came back so a short page skips nothing.
-          if (batchMessages.length >= searchResult.total_results) {
+          if (batchCount >= searchResult.total_results) {
             break;
           }
 
@@ -3031,10 +3052,10 @@ export const searchThreadMessages = createAsyncThunk(
           if (wasCancelled) return rejectWithValue('Search cancelled');
         }
 
-        allMessages = [...allMessages, ...batchMessages];
+        totalCount += batchCount;
 
-        if (batchMessages.length >= maxPerBatch && shouldContinue) {
-          const lastMessage = batchMessages[batchMessages.length - 1];
+        if (batchCount >= maxPerBatch && shouldContinue && batchLast) {
+          const lastMessage = batchLast;
           // Tighten searchBeforeDate (max_id) to the oldest seen so the
           // next batch walks further back in time within the user's
           // search window. Matches the lib iterator's cap-shift pattern.
@@ -3063,14 +3084,15 @@ export const searchThreadMessages = createAsyncThunk(
       const tab = (getState() as RootState).message.threadTabs[threadId];
       if (!tab) return rejectWithValue('Thread tab no longer exists');
 
-      dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: allMessages }));
+      // A search with no matches ends with an empty tab.
+      if (totalCount === 0) dispatch(messageSlice.actions.setThreadMessages({ threadId, messages: [] }));
       dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
         pagination: {
           loadAllProgress: null,
           hasMore: false,
-          totalCount: allMessages.length,
+          totalCount: totalCount,
           lastMessageId: null,
         },
       }));
@@ -3081,14 +3103,14 @@ export const searchThreadMessages = createAsyncThunk(
           message: t('status.msg.searchEnrichedTotal', { count: reactionTotal }),
         }));
       }
-      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.searchComplete', { count: allMessages.length }) }));
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.searchComplete', { count: totalCount }) }));
       // The record write follows the status line so the log never waits on disk.
       await persistConversation(api, threadId, {
         complete: true,
         searchCriteria,
-        pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: allMessages.length, searchOffset: allMessages.length }),
+        pagination: paginationRecord({ mode: 'search', hasMore: false, totalCount: totalCount, searchOffset: totalCount }),
       });
-      return { threadId, count: allMessages.length };
+      return { threadId, count: totalCount };
     } catch (error) {
       dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: false }));
       dispatch(messageSlice.actions.updateThreadPagination({
