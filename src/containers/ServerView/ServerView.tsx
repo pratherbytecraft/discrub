@@ -977,7 +977,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
                   const n = (value: number) => value.toLocaleString(i18n.language);
                   if (isForumChannel) {
                     const total = forumThreadsTotalResults || forumThreads.length;
-                    return `${n(total)} post${total !== 1 ? 's' : ''}`;
+                    return t('serverView.headerPosts', { count: total, n: n(total) });
                   }
                   // Three counts to keep separate when a local refine is on
                   // top of a server search:
@@ -999,12 +999,12 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
                     const remaining = Math.max(0, displayTotal - loaded);
                     if (isRefined) {
                       return pagination.hasMore
-                        ? `${n(visible)} visible · ${n(loaded)} of ${n(displayTotal)} matches loaded`
-                        : `${n(visible)} visible · ${n(displayTotal)} matches loaded`;
+                        ? t('serverView.headerRefinedMatchesMore', { visible: n(visible), loaded: n(loaded), total: n(displayTotal) })
+                        : t('serverView.headerRefinedMatches', { visible: n(visible), total: n(displayTotal) });
                     }
                     return pagination.hasMore
-                      ? `${n(loaded)} of ${n(displayTotal)} matches loaded (${n(remaining)} remaining)`
-                      : `${n(displayTotal)} match${displayTotal !== 1 ? 'es' : ''}`;
+                      ? t('serverView.headerMatchesMore', { loaded: n(loaded), total: n(displayTotal), remaining: n(remaining) })
+                      : t('serverView.headerMatches', { count: displayTotal, n: n(displayTotal) });
                   }
 
                   // Paginated (no server search). Channel total is unknown,
@@ -1013,10 +1013,10 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
                   // narrowed the visible set down.
                   if (isRefined) {
                     return pagination.hasMore
-                      ? `${n(visible)} visible · ${n(loaded)} loaded · scroll for more`
-                      : `${n(visible)} visible · ${n(loaded)} loaded`;
+                      ? t('serverView.headerRefinedLoadedMore', { visible: n(visible), loaded: n(loaded) })
+                      : t('serverView.headerRefinedLoaded', { visible: n(visible), loaded: n(loaded) });
                   }
-                  return `${n(loaded)} message${loaded !== 1 ? 's' : ''}`;
+                  return t('serverView.headerMessages', { count: loaded, n: n(loaded) });
                 })()}
               </Typography>
               {!isForumChannel && pagination.mode === 'search' && (
@@ -1235,8 +1235,9 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
         <MessageTableSkeleton />
       )}
 
-      {/* A rest break says so above the messages, with the time left and Skip. */}
-      <RestBreakBanner />
+      {/* A rest break says so above the messages, with the time left and Skip. Operator's run card
+          already carries the countdown, and its feed column is too narrow for the banner (pass 2, row 77). */}
+      {variant !== 'operator' && <RestBreakBanner />}
 
       {/* Row 49: a failed Load All keeps the loaded rows on screen and says why here. */}
       {loadAllFailed && !error && (

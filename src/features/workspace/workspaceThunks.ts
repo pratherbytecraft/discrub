@@ -4,7 +4,7 @@ import type { RootState } from '@/app/store';
 import { selectIsOperationRunning } from '@features/app/operationSelectors';
 import { setDiscrubCancelled, setDiscrubPaused, setFeedScrollAnchor } from '@features/app/appSlice';
 import { setSelectedChannel } from '@features/channel/channelSlice';
-import { fetchDmById, setSelectedDm } from '@features/dm/dmSlice';
+import { fetchDMs, fetchDmById, setSelectedDm } from '@features/dm/dmSlice';
 import { setSelectedGuild } from '@features/guild/guildSlice';
 import { clearMessages, openThreadTab, removeThreadTab, setActiveTab, stopUserLookups } from '@features/message/messageSlice';
 import { t } from '@/i18n';
@@ -232,6 +232,16 @@ async function openScope(wid: string, dispatchAny: Dispatch, getState: () => Roo
     await dispatch(openChannel({ channel }));
     cid = channelId;
   } else if (dmId) {
+    // Pass 2 (row 96): with no DM list yet, load the whole list first. The DMs
+    // tab fetches only when its list is empty, so one restored DM would
+    // otherwise be the only one it ever shows.
+    if ((getState().dm?.dms?.length ?? 0) === 0) {
+      try {
+        await (dispatch(fetchDMs(token)) as unknown as { unwrap: () => Promise<Channel[]> }).unwrap();
+      } catch {
+        // The single fetch below still opens the DM.
+      }
+    }
     let dm: Channel | undefined = getState().dm?.dms?.find((d) => d.id === dmId);
     if (!dm) {
       try {

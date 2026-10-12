@@ -1,5 +1,8 @@
 import { useMemo } from 'react';
-import { ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { deDE as coreDeDE } from '@mui/material/locale';
+import { deDE as pickersDeDE } from '@mui/x-date-pickers/locales';
+import { useTranslation } from 'react-i18next';
 import CssBaseline from '@mui/material/CssBaseline';
 import { GlobalStyles } from '@mui/material';
 import { useAppSelector } from '@/app/hooks';
@@ -39,7 +42,12 @@ const ThemeWrapper = ({ children }: ThemeWrapperProps) => {
     return id;
   }, [previewTheme, themeModeSetting, supporterInitialized, isSupporter]);
 
-  const theme = useMemo(() => getThemeById(themeId), [themeId]);
+  const baseTheme = useMemo(() => getThemeById(themeId), [themeId]);
+  // 2.2.5 pass 2 (row 71): MUI's own labels (Autocomplete Open and Close,
+  // picker buttons) follow the app language. English is MUI's default.
+  const { i18n } = useTranslation();
+  const language = i18n.language;
+  const theme = useMemo(() => (language === 'de' ? createTheme(baseTheme, coreDeDE, pickersDeDE) : baseTheme), [baseTheme, language]);
 
   return (
     <ThemeProvider theme={theme}>

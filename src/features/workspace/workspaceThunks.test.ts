@@ -391,6 +391,24 @@ describe('restoreWorkspaceScope', () => {
     expect(((await thunk(store)(restoreWorkspaceScope())).meta as { condition?: boolean }).condition).toBe(true);
   });
 
+  it('loads the whole DM list when the scope restores into a DM (pass 2, row 96)', async () => {
+    const store = makeStore();
+    await openDefault(store);
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
+      w.scope = { tab: null, guildId: null, channelId: null, dmId: '555' };
+    });
+    const dms = ['555', '556', '557'].map((id) => createMockDmChannel({ id }));
+    const fetchChannel = vi.fn();
+    service({ fetchDirectMessages: vi.fn().mockResolvedValue({ success: true, data: dms }), fetchChannel });
+
+    const outcome = await thunk(store)(restoreWorkspaceScope());
+    expect(outcome.payload).toBe('restored');
+    const state = store.getState();
+    expect(state.dm.selectedDm?.id).toBe('555');
+    expect(state.dm.dms.map((d: { id: string }) => d.id).sort()).toEqual(['555', '556', '557']);
+    expect(fetchChannel).not.toHaveBeenCalled();
+  });
+
   it('leaves the screen alone when the user already picked something', async () => {
     const store = makeStore();
     await openDefault(store);

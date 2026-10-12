@@ -122,7 +122,7 @@ const AppearancePopover = ({ anchorEl, open, tab, onTabChange, onClose, onOpenSe
                   <LayoutMockup layout={m.key} width={156} />
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{m.name}{!built && <Box component="span" sx={{ ml: 0.75, fontSize: '0.65rem', color: 'text.secondary', border: '1px solid', borderColor: 'divider', borderRadius: 0.5, px: 0.5 }}>{t('appearance.soon')}</Box>}</Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.35, minHeight: 31 }}>{m.blurb}</Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.35, minHeight: 31 }}>{t(`appearance.blurbs.${m.key}`, { defaultValue: m.blurb })}</Typography>
                 {locked && built && (
                   <Box data-testid={`layout-locked-${m.key}`} sx={{ position: 'absolute', right: 6, top: 6, width: 18, height: 18, borderRadius: '50%', bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', display: 'grid', placeItems: 'center' }}>
                     <LockIcon sx={{ fontSize: 11, color: 'error.main' }} />

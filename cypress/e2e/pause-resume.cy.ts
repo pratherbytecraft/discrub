@@ -220,7 +220,8 @@ describe('Pause/Resume Controls', () => {
       });
       cy.get('[data-testid="operation-state"]').should('have.attr', 'data-state', 'restBreak');
       cy.get('[data-testid="operation-state-headline"]').invoke('text').should('match', /^Resumes in 4:\d\d, rest break$/);
-      cy.contains('Resume skips the break').should('be.visible');
+      // The sentence gives way to the countdown on a narrow bar; the row's tooltip carries all of it (pass 2, row 76).
+      cy.get('[data-testid="operation-state"]').should('have.attr', 'title').and('contain', 'Resume skips the break');
       cy.get('[aria-label="Resume"]').should('be.visible');
       cy.get('[aria-label="Stop"]').should('be.visible');
       // The main area says so too, and Skip break ends the hold.
@@ -237,7 +238,7 @@ describe('Pause/Resume Controls', () => {
       });
       cy.get('[data-testid="operation-state"]').should('have.attr', 'data-state', 'retrying');
       cy.get('[data-testid="operation-state-headline"]').invoke('text').should('match', /^Retrying in \d s, attempt 2 of 5$/);
-      cy.contains('Each retry waits twice as long, then Export pauses for you.').should('be.visible');
+      cy.get('[data-testid="operation-state"]').should('have.attr', 'title').and('contain', 'Each retry waits twice as long, then Export pauses for you.');
       cy.contains('button', 'Retry now').click({ force: true });
       cy.get('[data-testid="operation-state"]').should('not.exist');
       cy.window().then((win) => { expect((win as any).__store__.getState().app.operationHold ?? null).to.eq(null); });
@@ -251,7 +252,7 @@ describe('Pause/Resume Controls', () => {
       });
       cy.get('[data-testid="operation-state"]').should('have.attr', 'data-state', 'retryPaused');
       cy.get('[data-testid="operation-state-headline"]').should('have.text', 'Paused after 5 failed retries');
-      cy.contains('Wait a bit, then Resume to continue from 1,250 loaded.').should('be.visible');
+      cy.get('[data-testid="operation-state"]').should('have.attr', 'title').and('contain', 'Wait a bit, then Resume to continue from 1,250 loaded.');
       cy.get('[aria-label="Resume"]').click({ force: true });
       cy.get('[data-testid="operation-state"]').should('not.exist');
       cy.get('[aria-label="Pause"]').should('be.visible');

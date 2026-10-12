@@ -31,7 +31,7 @@ import { calculateRandomDelay } from '@/utils/delayUtils';
 import { waitWhilePaused, checkCancelled, cancellableDelay, createShouldContinue, CancelledError, withTransientRetry, isTransientApiFailure, describeAnswer } from '@/utils/operationLoopUtils';
 import { iterateSearchMessagesRedux, nextMilestone } from '@/utils/searchPagination';
 import { addStatusEntry, showOperationTip } from '@features/status/statusSlice';
-import { t } from '@/i18n';
+import i18n, { t } from '@/i18n';
 import { arraySource, collectMessages, concatSources, forEachMessage, storeSourceOf, toSource, type MessageSource } from '@services/messageSource';
 import type { ExportSourceSet } from '@services/exportService';
 import type { ShouldContinueFn } from '@services/mediaDownloadService';
@@ -1155,8 +1155,8 @@ async function keepStoppedMessages(opts: {
     level: 'warning',
     message: t('status.export.stoppedKept', {
       name: label,
-      count: source.count.toLocaleString(),
-      oldest: Number.isFinite(oldest) ? new Date(oldest).toLocaleDateString() : 'unknown',
+      count: source.count.toLocaleString(i18n.language),
+      oldest: Number.isFinite(oldest) ? new Date(oldest).toLocaleDateString(i18n.language) : 'unknown',
     }),
   }));
   return true;

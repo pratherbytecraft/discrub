@@ -56,6 +56,9 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
   const resumeDate = resumable && restored.oldestTimestamp
     ? new Date(restored.oldestTimestamp).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' })
     : null;
+  // Pass 2 (row 93): the restored figure is from when the conversation opened; runs since then
+  // wrote every page they loaded, so the larger of the two is what is saved now.
+  const savedCount = Math.max(restored?.count ?? 0, messages.length);
   const scope = activeTab ? 'thread' : contextLabel === 'conversation' ? 'dm' : 'channel';
 
   const isFilteredSearch =
@@ -89,8 +92,8 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
           <DialogContentText sx={{ mt: 1 }} data-testid="load-all-restored-line">
             {/* "Resume continues from" only when a Load All was cut (row 35). */}
             {resumeDate && !completeOnDisk && unfinished
-              ? t('loadAll.restoredLine', { count: restored.count.toLocaleString(i18n.language), date: resumeDate })
-              : t('loadAll.restoredLineNoDate', { count: restored.count.toLocaleString(i18n.language) })}
+              ? t('loadAll.restoredLine', { count: savedCount.toLocaleString(i18n.language), date: resumeDate })
+              : t('loadAll.restoredLineNoDate', { count: savedCount.toLocaleString(i18n.language) })}
           </DialogContentText>
         )}
         <DialogContentText sx={{ mt: 1 }}>

@@ -60,8 +60,22 @@ export class WorkspaceFileError extends Error {
 const json = (value: unknown): Blob => new Blob([JSON.stringify(value)], { type: 'application/json' });
 
 /** The name the file is saved under: only characters the download URL keeps as they are. */
+const GERMAN_LETTERS: Record<string, string> = { ä: 'ae', ö: 'oe', ü: 'ue', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue', ß: 'ss' };
+
+/**
+ * Pass 2 (row 91): letters the URL safe name would drop are spelled out
+ * first, German ones the German way and other accents as their base
+ * letter, so "Raid #2 Größe" saves as Raid_2_Groesse and not Raid_2_Gr_e.
+ */
+function transliterate(name: string): string {
+  return name
+    .replace(/[äöüÄÖÜß]/g, (ch) => GERMAN_LETTERS[ch] ?? ch)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export function workspaceFileName(name: string): string {
-  return urlSafeFileName(name.trim()) || 'workspace';
+  return urlSafeFileName(transliterate(name.trim())) || 'workspace';
 }
 
 export function manifestOf(record: WorkspaceRecord, exportedAt = Date.now()): WorkspaceManifest {

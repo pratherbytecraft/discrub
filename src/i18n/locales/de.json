@@ -29,6 +29,7 @@
     "cancel": "Abbrechen"
   },
   "sidebar": {
+    "backToServers": "Zurück zu den Servern",
     "seed": "Befüllen",
     "tabServers": "Server",
     "tabDms": "DMs",
@@ -39,6 +40,7 @@
     "searchPackage": "Paket durchsuchen..."
   },
   "topbar": {
+    "menu": "Menü",
     "profile": "Dein Profil, {{name}}",
     "guestSignIn": "Anmelden",
     "openNavigation": "Navigation öffnen",
@@ -61,6 +63,14 @@
     "closeAnyway": "Trotzdem schließen"
   },
   "appearance": {
+    "blurbs": {
+      "classic": "Das Layout von 2.1.",
+      "native": "Sieht aus wie Discord.",
+      "workbench": "Eine kompakte Tabelle.",
+      "simple": "Eine breite Spalte.",
+      "operator": "Warteschlange und Fortschritt vorne.",
+      "timeline": "Nachrichten nach Tag gruppiert."
+    },
     "button": "Darstellung",
     "layout": "Layout",
     "theme": "Theme",
@@ -535,6 +545,7 @@
     "confirm": "Alles zurücksetzen"
   },
   "bots": {
+    "analyticsNudge": "Willst du das jede Woche für den ganzen Server, ohne Export? {{name}} macht das.",
     "button": "Bots",
     "title": "Bots vom Entwickler",
     "learnMore": "Mehr erfahren",
@@ -767,6 +778,17 @@
     }
   },
   "serverView": {
+    "headerPosts_one": "{{n}} Beitrag",
+    "headerPosts_other": "{{n}} Beiträge",
+    "headerRefinedMatchesMore": "{{visible}} sichtbar · {{loaded}} von {{total}} Treffern geladen",
+    "headerRefinedMatches": "{{visible}} sichtbar · {{total}} Treffer geladen",
+    "headerMatchesMore": "{{loaded}} von {{total}} Treffern geladen ({{remaining}} übrig)",
+    "headerMatches_one": "{{n}} Treffer",
+    "headerMatches_other": "{{n}} Treffer",
+    "headerRefinedLoadedMore": "{{visible}} sichtbar · {{loaded}} geladen · scrollen für mehr",
+    "headerRefinedLoaded": "{{visible}} sichtbar · {{loaded}} geladen",
+    "headerMessages_one": "{{n}} Nachricht",
+    "headerMessages_other": "{{n}} Nachrichten",
     "loadingThread": "Thread wird geladen...",
     "threadLoaded": "Thread erfolgreich geladen",
     "threadLoadFailed": "Thread konnte nicht geladen werden: {{error}}",
@@ -1592,6 +1614,7 @@
   },
   "status": {
     "msg": {
+      "scanningMessages": "{{count, number}} gespeicherte Nachrichten werden mit dem Filter abgeglichen",
       "showingMessages_author": "Nachrichten von {{name}} werden angezeigt",
       "showingMessages_mentions": "Nachrichten, die {{name}} erwähnen, werden angezeigt",
       "skippedNoPermission": "{{count}} übersprungen (keine Berechtigung zum Reagieren)",
@@ -1704,7 +1727,7 @@
       "searchCancelled": "Suche abgebrochen",
       "searchComplete": "Suche abgeschlossen: {{count}} Ergebnisse gefunden",
       "loadingAllSearchResults": "Alle Suchergebnisse werden geladen...",
-      "restoredFromWorkspace": "{{count}} Nachrichten aus diesem Arbeitsbereich wiederhergestellt",
+      "restoredFromWorkspace": "{{count, number}} Nachrichten aus diesem Arbeitsbereich wiederhergestellt",
       "storageFull": "Der Browserspeicher ist voll, pausiert bei {{count}}",
       "workspaceWriteFailed": "Nachrichten konnten nicht in diesem Arbeitsbereich gespeichert werden, es geht im Speicher weiter",
       "storageFullNotSaved": "Der Browserspeicher ist voll, jetzt geladene Nachrichten werden nicht gespeichert",
@@ -1785,7 +1808,6 @@
       "discoveringThreads_one": "Threads in {{count}} Kanal werden gesucht...",
       "discoveringThreads_other": "Threads in {{count}} Kanälen werden gesucht...",
       "scanningThreads": "Threads in #{{name}} werden geprüft ({{index}}/{{total}})",
-      "scanningMessages": "{{count, number}} gespeicherte Nachrichten werden mit dem Filter abgeglichen",
       "archivedThreadsFailed": "Archivierte Threads für #{{name}} konnten nicht geladen werden",
       "privateThreadsFailed": "Private Threads für #{{name}} konnten nicht geladen werden",
       "foundThreads_one": "{{count}} Thread für die Bereinigung gefunden",

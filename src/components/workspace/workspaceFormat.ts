@@ -1,4 +1,4 @@
-import { t } from '@/i18n';
+import i18n, { t } from '@/i18n';
 import type { WorkSummary } from '@features/workspace/workspaceSummary';
 
 /** "Export 3 of 12", "Load All 48,200", "Purge". */
@@ -6,7 +6,7 @@ export function workLabel(work: WorkSummary, locale?: string): string {
   const of = work.done !== undefined && work.total !== undefined;
   switch (work.kind) {
     case 'loadAll':
-      return t('workspace.workLoadAll', { count: (work.count ?? 0).toLocaleString(locale) });
+      return t('workspace.workLoadAll', { count: (work.count ?? 0).toLocaleString(locale ?? i18n.language) });
     case 'export':
       return of ? t('workspace.workExportOf', { done: work.done, total: work.total }) : t('workspace.workExport');
     case 'purge':
@@ -18,5 +18,5 @@ export function workLabel(work: WorkSummary, locale?: string): string {
 
 /** "4 conversations" with the number in the reader's locale. */
 export function countLabel(key: 'workspaces' | 'conversations' | 'messages', count: number, locale?: string): string {
-  return t(`workspace.${key}`, { count, formatted: count.toLocaleString(locale) });
+  return t(`workspace.${key}`, { count, formatted: count.toLocaleString(locale ?? i18n.language) });
 }

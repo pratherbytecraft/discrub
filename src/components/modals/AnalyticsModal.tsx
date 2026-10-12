@@ -213,7 +213,7 @@ const AnalyticsModal = ({ open, onClose, messages = NO_MESSAGES, walk = null, us
         <AnalyticsIcon sx={{ color: 'primary.main' }} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h6" sx={{ fontWeight: 700 }} data-testid="analytics-title">
-            {report.title}
+            {t(`analytics.report.${report.id}.title`, { defaultValue: report.title })}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {subtitle}

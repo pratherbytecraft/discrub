@@ -29,6 +29,7 @@
     "cancel": "Cancel"
   },
   "sidebar": {
+    "backToServers": "Back to servers",
     "seed": "Seed",
     "tabServers": "Servers",
     "tabDms": "DMs",
@@ -39,6 +40,7 @@
     "searchPackage": "Search package..."
   },
   "topbar": {
+    "menu": "Menu",
     "profile": "Your profile, {{name}}",
     "guestSignIn": "Sign in",
     "openNavigation": "Open navigation",
@@ -61,6 +63,14 @@
     "closeAnyway": "Close Anyway"
   },
   "appearance": {
+    "blurbs": {
+      "classic": "The 2.1 layout.",
+      "native": "Looks like Discord.",
+      "workbench": "A compact table.",
+      "simple": "One wide column.",
+      "operator": "Queue and progress up front.",
+      "timeline": "Messages grouped by day."
+    },
     "button": "Appearance",
     "layout": "Layout",
     "theme": "Theme",
@@ -535,6 +545,7 @@
     "confirm": "Reset everything"
   },
   "bots": {
+    "analyticsNudge": "Want this every week, server-wide, without exporting? {{name}} does that.",
     "button": "Bots",
     "title": "Bots From The Developer",
     "learnMore": "Learn more",
@@ -767,6 +778,17 @@
     }
   },
   "serverView": {
+    "headerPosts_one": "{{n}} post",
+    "headerPosts_other": "{{n}} posts",
+    "headerRefinedMatchesMore": "{{visible}} visible · {{loaded}} of {{total}} matches loaded",
+    "headerRefinedMatches": "{{visible}} visible · {{total}} matches loaded",
+    "headerMatchesMore": "{{loaded}} of {{total}} matches loaded ({{remaining}} remaining)",
+    "headerMatches_one": "{{n}} match",
+    "headerMatches_other": "{{n}} matches",
+    "headerRefinedLoadedMore": "{{visible}} visible · {{loaded}} loaded · scroll for more",
+    "headerRefinedLoaded": "{{visible}} visible · {{loaded}} loaded",
+    "headerMessages_one": "{{n}} message",
+    "headerMessages_other": "{{n}} messages",
     "loadingThread": "Loading thread...",
     "threadLoaded": "Thread loaded successfully",
     "threadLoadFailed": "Failed to load thread: {{error}}",
@@ -1592,6 +1614,7 @@
   },
   "status": {
     "msg": {
+      "scanningMessages": "Checking {{count, number}} saved messages against the filter",
       "showingMessages_author": "Showing messages from {{name}}",
       "showingMessages_mentions": "Showing messages mentioning {{name}}",
       "skippedNoPermission": "{{count}} skipped (no permission to react)",
@@ -1704,7 +1727,7 @@
       "searchCancelled": "Search cancelled",
       "searchComplete": "Search complete: {{count}} results found",
       "loadingAllSearchResults": "Loading all search results...",
-      "restoredFromWorkspace": "Restored {{count}} messages from this workspace",
+      "restoredFromWorkspace": "Restored {{count, number}} messages from this workspace",
       "storageFull": "Browser storage is full, paused at {{count}}",
       "workspaceWriteFailed": "Could not save messages to this workspace, continuing in memory",
       "storageFullNotSaved": "Browser storage is full, messages loaded now are not saved",
@@ -1785,7 +1808,6 @@
       "discoveringThreads_one": "Discovering threads across {{count}} channel...",
       "discoveringThreads_other": "Discovering threads across {{count}} channels...",
       "scanningThreads": "Scanning threads in #{{name}} ({{index}}/{{total}})",
-      "scanningMessages": "Checking {{count, number}} saved messages against the filter",
       "archivedThreadsFailed": "Could not fetch archived threads for #{{name}}",
       "privateThreadsFailed": "Could not fetch private threads for #{{name}}",
       "foundThreads_one": "Found {{count}} thread to include in purge",

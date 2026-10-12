@@ -89,7 +89,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
 
       {running && (
         <Card title={summary.name} testId="inspector-run">
-          <PauseResumeControls label={summary.label} progress={summary.progress} />
+          <PauseResumeControls label={summary.label} progress={summary.progress} wrap />
         </Card>
       )}
 

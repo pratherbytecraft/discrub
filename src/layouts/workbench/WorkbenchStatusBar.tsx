@@ -10,6 +10,7 @@ import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { perfCount } from '@/utils/perfCounters';
 import WorkspacePill from '@components/workspace/WorkspacePill';
+import { useOperationHeadline } from '@components/ui/PauseResumeControls';
 
 const STATE_HEX: Record<string, string> = { neutral: '#8b949e', success: '#3fb950', warning: '#d29922', info: '#58a6ff', error: '#f85149' };
 
@@ -30,12 +31,14 @@ const WorkbenchStatusBar = () => {
   const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
   const hasContext = !isPackage && !isForum && (!!channel || !!dm);
   const running = summary.tier === 'heavy';
+  // 2.2.5 pass 2 (row 79): a rest break or a Discord wait shows its countdown here too.
+  const headline = useOperationHeadline();
   return (
     <Box data-testid="workbench-status-bar" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, height: 26, borderTop: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', fontSize: '0.72rem', color: 'text.secondary', flexShrink: 0 }}>
       <WorkspacePill variant="bar" />
       <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: STATE_HEX[summary.stateColor] }} />
       {running ? (
-        <Typography variant="caption" noWrap sx={{ fontSize: 'inherit' }}>{summary.name} · {summary.label}</Typography>
+        <Typography variant="caption" noWrap sx={{ fontSize: 'inherit' }}>{summary.name} · {headline || summary.label}</Typography>
       ) : hasContext ? (
         <Typography variant="caption" noWrap sx={{ fontSize: 'inherit' }}>
           {t('workbench.loaded', { count: messages.length })}

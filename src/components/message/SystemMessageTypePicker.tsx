@@ -73,7 +73,7 @@ const SystemMessageTypePicker = ({
                 size="small"
                 checked={selectedGroups.includes(group.key)}
                 onChange={() => onChange(toggleGroupKey(selectedGroups, group.key))}
-                inputProps={{ 'aria-label': group.label }}
+                inputProps={{ 'aria-label': t(`systemGroups.${group.key}`, { defaultValue: group.label }) }}
               />
             }
             label={<Typography variant="body2">{t(`systemGroups.${group.key}`, { defaultValue: group.label })}</Typography>}

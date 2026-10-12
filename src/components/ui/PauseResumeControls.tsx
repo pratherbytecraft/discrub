@@ -25,6 +25,8 @@ interface PauseResumeControlsProps {
   progress?: number;
   /** 2.2.2: the buttons alone. The Operator run card prints the state and the label on rows of their own. */
   buttonsOnly?: boolean;
+  /** Pass 2 (row 79): in a narrow card the state goes on its own line under the buttons. */
+  wrap?: boolean;
 }
 
 /**
@@ -82,7 +84,7 @@ export const useOperationHeadline = (): string => {
   return '';
 };
 
-const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResumeControlsProps) => {
+const PauseResumeControls = ({ label, progress, buttonsOnly = false, wrap = false }: PauseResumeControlsProps) => {
   perfCount('PauseResumeControls');
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -152,7 +154,7 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResu
 
   return (
     <Box
-      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, px: 1, minWidth: 0 }}
+      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5, px: 1, minWidth: 0, flexWrap: wrap ? 'wrap' : 'nowrap' }}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -235,7 +237,7 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResu
       )}
 
       {inHold && !buttonsOnly && (
-        <Box data-testid="operation-state" data-state={summary.state} sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 0.5, minWidth: 0, overflow: 'hidden' }}>
+        <Box data-testid="operation-state" data-state={summary.state} title={[summary.name, headline, summary.sentence].filter(Boolean).join(' · ')} sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: wrap ? 0 : 0.5, minWidth: 0, overflow: 'hidden', flexBasis: wrap ? '100%' : 'auto' }}>
           <Box
             aria-hidden
             sx={{
@@ -251,7 +253,8 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false }: PauseResu
           </Box>
           <Typography variant="caption" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{summary.name}</Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
-          <Typography variant="caption" data-testid="operation-state-headline" sx={{ color: stateHex, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{headline}</Typography>
+          {/* 2.2.5 pass 2 (row 76): the countdown keeps its width and the sentence after it shrinks first; the whole line is the row's tooltip. */}
+          <Typography variant="caption" data-testid="operation-state-headline" sx={{ color: stateHex, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 0, maxWidth: '100%' }}>{headline}</Typography>
           {summary.sentence && (
             // On a narrow row the headline and sentence shorten with an ellipsis; the buttons stay whole.
             <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{summary.sentence}</Typography>

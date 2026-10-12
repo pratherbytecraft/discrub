@@ -189,7 +189,9 @@ describe('workspace files', () => {
     expect(workspaceFileName('Raid: archive')).toBe('Raid_archive');
     expect(workspaceFileName('a/b\\c')).toBe('a_b_c');
     expect(workspaceFileName('Mod #2 (50%)')).toBe('Mod_2_50');
-    expect(workspaceFileName('Ünïcödé')).toBe('n_c_d');
+    expect(workspaceFileName('Ünïcödé')).toBe('Uenicoede');
+    expect(workspaceFileName('Raid #2 Größe')).toBe('Raid_2_Groesse');
+    expect(workspaceFileName('Crème brûlée')).toBe('Creme_brulee');
     expect(workspaceFileName('Mod-work_v2.1')).toBe('Mod-work_v2.1');
     expect(workspaceFileName('  ')).toBe('workspace');
     expect(workspaceFileName('日本語')).toBe('workspace');

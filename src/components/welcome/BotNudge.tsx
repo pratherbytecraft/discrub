@@ -1,4 +1,5 @@
 import { Box, Link, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { BOTS } from './bots';
 import RetrostatMark from './RetrostatMark';
 
@@ -11,6 +12,7 @@ import RetrostatMark from './RetrostatMark';
  * lands may be the fifth Analytics session, not the first.
  */
 const BotNudge = () => {
+  const { t } = useTranslation();
   const bot = BOTS.find((entry) => entry.id === 'retrostat');
   if (!bot) return null;
 
@@ -32,9 +34,9 @@ const BotNudge = () => {
     >
       <RetrostatMark size={22} />
       <Typography variant="caption" color="text.secondary" sx={{ flex: 1, lineHeight: 1.4 }}>
-        Want this every week, server-wide, without exporting? {bot.name} does that.{' '}
+        {t('bots.analyticsNudge', { name: bot.name })}{' '}
         <Link href={bot.pageUrl} target="_blank" rel="noopener noreferrer" underline="hover" sx={{ fontWeight: 600 }}>
-          Learn more
+          {t('bots.learnMore')}
         </Link>
       </Typography>
     </Box>
