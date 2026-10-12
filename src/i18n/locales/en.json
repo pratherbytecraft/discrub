@@ -1475,6 +1475,8 @@
     "sectionOther": "Other",
     "hideEmpty_one": "Hide {{count}} empty channel",
     "hideEmpty_other": "Hide {{count}} empty channels",
+    "recheckLeftServers": "Recheck left servers",
+    "moveOutOfLeftServers": "Move out of Left Servers",
     "showEmpty_one": "Show {{count}} empty channel",
     "showEmpty_other": "Show {{count}} empty channels",
     "noChannelsMatch": "No channels match your filter.",

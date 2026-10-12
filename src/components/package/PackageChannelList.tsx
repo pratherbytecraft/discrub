@@ -24,11 +24,14 @@ import {
   VisibilityOff as HideIcon,
   Visibility as ShowIcon,
   HelpOutline as UnknownChannelIcon,
+  Refresh,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
+  recheckLeftServers,
   selectChannelDeletedMessageCount,
   selectChannelGoneMessageCount,
+  selectLeftServersRecheckStatus,
   selectPackageChannel,
   selectParsedPackage,
   selectSelectedPackageChannelId,
@@ -66,6 +69,8 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
   const dispatch = useAppDispatch();
   const parsed = useAppSelector(selectParsedPackage);
   const selectedId = useAppSelector(selectSelectedPackageChannelId);
+  const token = useAppSelector((s) => s.auth.token);
+  const recheckStatus = useAppSelector(selectLeftServersRecheckStatus);
   const [showEmpty, setShowEmpty] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<PackageChannelCategory, boolean>>({
     guildText: false,
@@ -173,6 +178,23 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
                   onToggle={() =>
                     setCollapsed((c) => ({ ...c, [section.key]: !c[section.key] }))
                   }
+                  action={
+                    section.key === 'orphan' && token ? (
+                      <Tooltip title={t('package.recheckLeftServers')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            aria-label={t('package.recheckLeftServers')}
+                            disabled={recheckStatus === 'running'}
+                            onClick={() => void dispatch(recheckLeftServers())}
+                            sx={{ p: 0.25 }}
+                          >
+                            <Refresh fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    ) : null
+                  }
                 >
                   {section.items.map((channel) => (
                     <ChannelRow
@@ -196,6 +218,8 @@ interface SidebarSectionProps {
   count: number;
   collapsed: boolean;
   onToggle: () => void;
+  /** #273: an extra control between the count and the collapse arrow. */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -204,6 +228,7 @@ const SidebarSection = ({
   count,
   collapsed,
   onToggle,
+  action,
   children,
 }: SidebarSectionProps) => (
   <>
@@ -230,6 +255,7 @@ const SidebarSection = ({
         variant="outlined"
         sx={{ height: 18, '& .MuiChip-label': { px: 0.75, fontSize: '0.65rem' } }}
       />
+      {action}
       <IconButton size="small" onClick={onToggle} sx={{ p: 0.25 }}>
         {collapsed ? <ExpandMore fontSize="small" /> : <ExpandLess fontSize="small" />}
       </IconButton>

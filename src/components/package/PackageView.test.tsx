@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
 import { virtualizerMock } from '@/test/virtualizer-mock';
 import PackageView from './PackageView';
+import { initialPackageState } from '@features/package/packageSlice';
 
 vi.mock('@tanstack/react-virtual', () => virtualizerMock);
 import {
@@ -34,6 +35,7 @@ function statePackageLoaded(
 ) {
   return {
     package: {
+      ...initialPackageState,
       status: 'ready',
       parsed,
       validation: { ok: true, readOnly: false, warnings: [], errors: [] },
@@ -154,4 +156,45 @@ describe('<PackageView /> — #236 live remaining counts', () => {
     renderWithProviders(<PackageView />, { preloadedState: state });
     expect(screen.getByText('2 DMs')).toBeInTheDocument();
   });
+});
+
+// #273: a Left Servers channel header carries a button that moves the
+// channel out of Left Servers by hand.
+describe('<PackageView /> — Left Servers (#273)', () => {
+  const orphan: PackageChannel = {
+    id: '400',
+    type: PACKAGE_CHANNEL_TYPE.GUILD_TEXT,
+    name: 'old-guild-channel',
+    messageCount: 2,
+    isOrphan: true,
+  };
+
+  const stateWithOrphan = (token: string | null) => {
+    const state = statePackageLoaded('400') as any;
+    state.package.parsed = { ...parsed, channels: [channel, orphan] };
+    state.auth = { token, isAuthenticated: !!token, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false };
+    // The recheck waits for the live Server list.
+    state.guild = { guilds: [{ id: 'g1', name: 'Guild A' }], selectedGuild: null, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} };
+    return state;
+  };
+
+  it('moves the selected channel out of Left Servers when the button is clicked', async () => {
+    const { store } = renderWithProviders(<PackageView />, { preloadedState: stateWithOrphan(null) });
+    expect(screen.getByText(/Read only · left server/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Move out of Left Servers' }));
+    await screen.findByText('2 messages');
+    expect(screen.queryByText(/Read only · left server/i)).toBeNull();
+    expect(store.getState().package.parsed!.channels.find((c) => c.id === '400')!.isOrphan).toBe(false);
+  });
+
+  it('starts the Left Servers recheck once a package with orphans loads while signed in', () => {
+    const { store } = renderWithProviders(<PackageView />, { preloadedState: stateWithOrphan('tok') });
+    expect(store.getState().package.leftServersRecheckStatus).not.toBe('idle');
+  });
+
+  it('leaves the recheck alone when signed out', () => {
+    const { store } = renderWithProviders(<PackageView />, { preloadedState: stateWithOrphan(null) });
+    expect(store.getState().package.leftServersRecheckStatus).toBe('idle');
+  });
+
 });

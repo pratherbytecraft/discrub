@@ -8,8 +8,11 @@ import {
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   clearPackageDeletedCache,
+  movePackageChannelOutOfLeftServers,
+  recheckLeftServers,
   resetPackage,
   resumeStoredPackage,
+  selectLeftServersRecheckStatus,
   selectChannelDeletedMessageCount,
   selectPackageChannel,
   selectPackageDeletedMessageCount,
@@ -59,6 +62,8 @@ const PackageView = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Resume a previously-streamed package automatically (#162). The
+  const token = useAppSelector((s) => s.auth.token);
+  const recheckStatus = useAppSelector(selectLeftServersRecheckStatus);
   // thunk no-ops when nothing matches the authenticated user, so this
   // is safe to fire on every mount and on auth changes.
   useEffect(() => {
@@ -71,6 +76,15 @@ const PackageView = () => {
     if (!parsed || !liveGuilds) return [];
     const live = new Set(liveGuilds.map((g) => g.id));
     return parsed.guilds.filter((g) => !live.has(g.id));
+
+  // #273: once per loaded package, ask Discord about every Left Servers
+  // channel so a Server rejoined since the export moves back where it
+  // belongs. Needs a token; the section header has a button to run it again.
+  useEffect(() => {
+    if (!parsed || !token || recheckStatus !== 'idle') return;
+    if (!parsed.channels.some((c) => c.isOrphan)) return;
+    void dispatch(recheckLeftServers());
+  }, [dispatch, parsed, token, recheckStatus]);
   }, [parsed, liveGuilds]);
 
   const selectedChannel = useMemo(
@@ -151,7 +165,16 @@ const PackageView = () => {
             )}
           </Box>
           {selectedChannel.isOrphan && (
-            <Chip label="Read only · left server" size="small" color="warning" variant="outlined" />
+            <>
+              <Chip label="Read only · left server" size="small" color="warning" variant="outlined" />
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => void dispatch(movePackageChannelOutOfLeftServers({ channelId: selectedChannel.id }))}
+              >
+                {t('package.moveOutOfLeftServers')}
+              </Button>
+            </>
           )}
         </Stack>
 

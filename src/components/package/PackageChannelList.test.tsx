@@ -122,6 +122,21 @@ describe('<PackageChannelList /> — sections per category (#270)', () => {
     expect(screen.getByText('thread-two')).toBeInTheDocument();
   });
 
+  // #273: the Left Servers header carries a recheck button when signed in.
+  it('shows the Left Servers recheck button only with a token', () => {
+    const state = statePackageLoaded() as any;
+    state.package.parsed = mixed;
+    state.auth = { token: 'tok', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false };
+    const { unmount } = renderWithProviders(<PackageChannelList />, { preloadedState: state });
+    expect(screen.getByRole('button', { name: 'Recheck left servers' })).toBeInTheDocument();
+    unmount();
+
+    const signedOut = statePackageLoaded() as any;
+    signedOut.package.parsed = mixed;
+    renderWithProviders(<PackageChannelList />, { preloadedState: signedOut });
+    expect(screen.queryByRole('button', { name: 'Recheck left servers' })).toBeNull();
+  });
+
   it('leaves the Other section out when nothing is unresolved', () => {
     renderWithProviders(<PackageChannelList />, { preloadedState: statePackageLoaded() });
     expect(screen.queryByText('Other')).not.toBeInTheDocument();

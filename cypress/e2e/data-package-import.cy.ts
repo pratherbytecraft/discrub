@@ -108,9 +108,53 @@ describe('Data package import', () => {
 
     it('orphan channel shows read-only banner in its header', () => {
       // Left Servers section is collapsed by default — expand it first.
-      cy.contains('Left Servers').parent().find('button').click();
+      cy.contains('Left Servers').parent().find('button').last().click();
       cy.contains('Old Guild Channel').click();
       cy.contains(/Read only · left server/i).should('be.visible');
+    });
+
+    // #273: the button in the channel header moves the channel out of Left
+    // Servers by hand, and the sidebar regroups it under Servers.
+    it('moves a channel out of Left Servers from its header button (#273)', () => {
+      cy.contains('Left Servers').parent().find('button').last().click();
+      cy.contains('Old Guild Channel').click();
+      cy.contains(/Read only · left server/i).should('be.visible');
+      cy.contains('button', 'Move out of Left Servers').click();
+      cy.contains(/Read only · left server/i).should('not.exist');
+      cy.contains('Left Servers').should('not.exist');
+      cy.contains('.MuiListItemButton-root', 'Old Guild Channel').should('be.visible');
+      cy.get('input[aria-label="Select message 3001"]').should('not.be.disabled');
+    });
+  });
+
+  // #273: a Server rejoined since the export answers the channel lookup
+  // with a guild id, so the channel leaves Left Servers on its own after
+  // the import and takes the live Server name.
+  describe('Left Servers recheck (#273)', () => {
+    it('moves a rejoined channel out of Left Servers after import', () => {
+      cy.intercept('GET', `${API}/channels/400`, {
+        statusCode: 200,
+        body: { id: '400', type: 0, name: 'Old Guild Channel', guild_id: '901000000000000001' },
+      }).as('getOrphanChannel');
+      cy.uploadPackage();
+      cy.wait('@getOrphanChannel');
+      cy.contains('Left Servers').should('not.exist');
+      cy.contains('.MuiListItemButton-root', 'Old Guild Channel').within(() => {
+        cy.contains('Cypress Test Server').should('be.visible');
+      });
+      cy.window().then((win) => {
+        const store = (win as any).__store__;
+        const messages = (store.getState().status.entries ?? []).map((e: any) => e.message);
+        expect(messages).to.include('Left Servers: 1 channel moved back under a Server you rejoined');
+        expect(store.getState().package.leftServersRecheckStatus).to.equal('done');
+      });
+    });
+
+    it('keeps a channel under Left Servers when Discord still answers 404', () => {
+      cy.uploadPackage();
+      cy.wait('@getChannel');
+      cy.contains('Left Servers').should('be.visible');
+      cy.get('button[aria-label="Recheck left servers"]').should('exist');
     });
   });
 
@@ -164,7 +208,7 @@ describe('Data package import', () => {
 
     it('disables Delete on orphan channels', () => {
       cy.get('[aria-label="Back to analytics"]').click();
-      cy.contains('Left Servers').parent().find('button').click();
+      cy.contains('Left Servers').parent().find('button').last().click();
       cy.contains('Old Guild Channel').click();
       // The row checkbox is disabled in orphan mode, so selection can't happen.
       cy.get('input[aria-label="Select message 3001"]').should('be.disabled');

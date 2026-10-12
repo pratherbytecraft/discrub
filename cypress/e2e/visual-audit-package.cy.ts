@@ -117,7 +117,7 @@ describe('Visual Audit — Data Package', () => {
 
   it('orphan channel — read-only chip + disabled actions', () => {
     cy.uploadPackage();
-    cy.contains('Left Servers').parent().find('button').click();
+    cy.contains('Left Servers').parent().find('button').last().click();
     cy.contains('Old Guild Channel').click();
     cy.contains(/Read only · left server/i).should('be.visible');
     snap('13-orphan-channel-readonly');

@@ -76,6 +76,14 @@ Cypress.Commands.add('interceptDiscordApi', () => {
     }).as('getChannels');
   });
 
+  // #273: the Left Servers recheck asks for each orphan channel by id.
+  // Answer 404 by default so a package import stays deterministic; a
+  // spec that wants a channel to come back rejoined overrides this.
+  cy.intercept('GET', `${API}/channels/*`, {
+    statusCode: 404,
+    body: { message: 'Unknown Channel', code: 10003 },
+  }).as('getChannel');
+
   cy.fixture('messages.json').then((messages) => {
     cy.intercept('GET', `${API}/channels/*/messages?*`, {
       statusCode: 200,

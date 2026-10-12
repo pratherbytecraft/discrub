@@ -6,6 +6,7 @@ import {
   resumePackageFromStorage,
   clearPackageContents,
   hasStoredPackage,
+  updateStoredPackageChannels,
 } from '@/services/packageStreamService';
 import { getDiscordService } from '@/services/discordService';
 import { getExportService } from '@/services/exportService';
@@ -63,6 +64,8 @@ import {
 import type { RootState } from '@/app/store';
 import type {
   PackageMessage,
+  PackageChannel,
+  PackageGuild,
   PackageValidationResult,
   ParsedPackage,
   ImportDiagnostics,
@@ -201,6 +204,13 @@ export interface PackageState {
    */
   filterCriteria: Record<string, import('discrub-core/types/discrub-types').SearchCriteria | null>;
 }
+  /**
+   * #273: the Left Servers recheck runs once per loaded package when a
+   * token is present (PackageView kicks it off), and again on demand from
+   * the Left Servers section header. 'idle' means it has not run for the
+   * package in `parsed`.
+   */
+  leftServersRecheckStatus: 'idle' | 'running' | 'done';
 
 export const initialPackageState: PackageState = {
   status: 'idle',
@@ -209,6 +219,7 @@ export const initialPackageState: PackageState = {
   error: null,
   selectedChannelId: null,
   loadedChannels: {},
+  leftServersRecheckStatus: 'idle',
   loadedOrder: [],
   loadingChannelId: null,
   selectedMessageIds: {},
@@ -394,6 +405,108 @@ export const importPackage = createAsyncThunk<
     validation: PackageValidationResult;
     deletedMessageIds: DeletedCacheMap;
     goneMessageIds: DeletedCacheMap;
+/**
+ * #273: look every Left Servers channel up against Discord. The package
+ * leaves the server off any channel the person was not in when the export
+ * was made, so a Server they rejoined since still sits under Left Servers.
+ * A channel Discord now answers with a guild id moves back under that
+ * Server; a 403 or 404 keeps it where it is.
+ */
+export const recheckLeftServers = createAsyncThunk<
+  { channels: PackageChannel[]; guilds: PackageGuild[]; moved: number },
+  void,
+  { state: RootState; rejectValue: string }
+>('package/recheckLeftServers', async (_, { getState, dispatch, rejectWithValue }) => {
+  const state = getState();
+  const token = state.auth.token;
+  const parsed = state.package.parsed;
+  if (!token) return rejectWithValue('Not authenticated');
+  if (!parsed) return rejectWithValue('No package loaded');
+
+  const orphans = parsed.channels.filter((c) => c.isOrphan);
+  if (orphans.length === 0) {
+    return { channels: parsed.channels, guilds: parsed.guilds, moved: 0 };
+  }
+
+  const discordService = getDiscordService();
+  // The Server list only loads on the Servers tab, so a person who signed
+  // in on the Package tab has none yet; fetch it here so a moved channel
+  // gets its live Server name.
+  let guildList: Array<{ id?: string; name?: string }> = state.guild.guilds;
+  if (guildList.length === 0) {
+    const guildsResponse = await discordService.fetchGuilds(token);
+    if (guildsResponse.success && guildsResponse.data) guildList = guildsResponse.data;
+  }
+  const liveGuilds = new Map<string, string>();
+  for (const g of guildList) if (g.id && g.name) liveGuilds.set(g.id, g.name);
+  const found = new Map<string, { guildId: string; guildName?: string; name: string | null }>();
+  for (const channel of orphans) {
+    const response = await discordService.fetchChannel(token, channel.id);
+    const guildId = response.success ? response.data?.guild_id : undefined;
+    if (!guildId) continue;
+    found.set(channel.id, {
+      guildId,
+      guildName: liveGuilds.get(guildId),
+      name: response.data?.name ?? channel.name,
+    });
+  }
+
+  if (found.size === 0) {
+    dispatch(addStatusEntry({
+      level: 'info',
+      message: `Left Servers: rechecked ${orphans.length} channel${orphans.length === 1 ? '' : 's'}, none are in a Server you are in now`,
+    }));
+    return { channels: parsed.channels, guilds: parsed.guilds, moved: 0 };
+  }
+
+  const channels = parsed.channels.map((c) => {
+    const hit = found.get(c.id);
+    if (!hit) return c;
+    return { ...c, isOrphan: false, guildId: hit.guildId, guildName: hit.guildName, name: hit.name };
+  });
+  const known = new Set(parsed.guilds.map((g) => g.id));
+  const guilds = [...parsed.guilds];
+  for (const hit of found.values()) {
+    if (known.has(hit.guildId) || !hit.guildName) continue;
+    known.add(hit.guildId);
+    guilds.push({ id: hit.guildId, name: hit.guildName });
+  }
+
+  try {
+    await updateStoredPackageChannels(parsed.user.id, channels);
+  } catch {
+    /* storage is best-effort, the session still shows the move */
+  }
+  dispatch(addStatusEntry({
+    level: 'info',
+    message: `Left Servers: ${found.size} channel${found.size === 1 ? '' : 's'} moved back under a Server you rejoined`,
+  }));
+  return { channels, guilds, moved: found.size };
+});
+
+/**
+ * #273: move one channel out of Left Servers by hand. Discord is not asked;
+ * the channel keeps its name and shows under Servers without a Server
+ * name, and delete works on it again. Persisted so a reload keeps it.
+ */
+export const movePackageChannelOutOfLeftServers = createAsyncThunk<
+  { channels: PackageChannel[] },
+  { channelId: string },
+  { state: RootState; rejectValue: string }
+>('package/moveOutOfLeftServers', async ({ channelId }, { getState, rejectWithValue }) => {
+  const parsed = getState().package.parsed;
+  if (!parsed) return rejectWithValue('No package loaded');
+  const channels = parsed.channels.map((c) =>
+    c.id === channelId ? { ...c, isOrphan: false } : c,
+  );
+  try {
+    await updateStoredPackageChannels(parsed.user.id, channels);
+  } catch {
+    /* storage is best-effort */
+  }
+  return { channels };
+});
+
   },
   File | Blob | ArrayBuffer,
   { state: RootState; rejectValue: string }
@@ -2001,6 +2114,7 @@ const packageSlice = createSlice({
         state.loadedOrder = [];
         // #236: same atomic treatment as importPackage.fulfilled —
         // deleted ids come from the payload, never a racing hydrate.
+        state.leftServersRecheckStatus = 'idle';
         state.deletedMessageIds = action.payload.deletedMessageIds;
         state.goneMessageIds = action.payload.goneMessageIds;
         state.filterCriteria = {};
@@ -2027,6 +2141,7 @@ const packageSlice = createSlice({
         state.loadingChannelId = null;
       })
       .addCase(loadAllPackageTimestamps.pending, (state) => {
+        state.leftServersRecheckStatus = 'idle';
         state.timelineStatus = 'loading';
         state.timelineError = null;
         state.timelineTimestamps = [];
@@ -2040,6 +2155,22 @@ const packageSlice = createSlice({
         state.timelineStatus = 'error';
         state.timelineError = action.payload ?? 'Failed to build timeline';
         state.timelineProgress = null;
+      .addCase(recheckLeftServers.pending, (state) => {
+        state.leftServersRecheckStatus = 'running';
+      })
+      .addCase(recheckLeftServers.fulfilled, (state, action) => {
+        state.leftServersRecheckStatus = 'done';
+        if (!state.parsed) return;
+        state.parsed.channels = action.payload.channels;
+        state.parsed.guilds = action.payload.guilds;
+      })
+      .addCase(recheckLeftServers.rejected, (state) => {
+        state.leftServersRecheckStatus = 'done';
+      })
+      .addCase(movePackageChannelOutOfLeftServers.fulfilled, (state, action) => {
+        if (!state.parsed) return;
+        state.parsed.channels = action.payload.channels;
+      })
       })
       .addCase(deletePackageMessages.pending, (state) => {
         state.deleteStatus = 'running';
@@ -2233,6 +2364,8 @@ export const selectChannelGoneMessageIds =
   (state: RootState): string[] =>
     state.package.goneMessageIds[channelId] ?? [];
 /** #271: how many of one channel's gone ids Discrub never actually removed. */
+export const selectLeftServersRecheckStatus = (state: RootState) =>
+  state.package.leftServersRecheckStatus;
 export const selectChannelGoneMessageCount =
   (channelId: string) =>
   (state: RootState): number =>

@@ -550,6 +550,20 @@ export async function resumePackageFromStorage(
 }
 
 /**
+ * #273: rewrite the stored channel list after a Left Servers recheck or a
+ * manual move, so the change survives a reload. Only the channel list
+ * changes; counts and everything else in pkg:meta stay as parsed.
+ */
+export async function updateStoredPackageChannels(
+  userId: string,
+  channels: PackageChannel[],
+): Promise<void> {
+  const meta = await storage.package.get<ParsedPackage>(KEY_META(userId));
+  if (!meta) return;
+  await storage.package.set(KEY_META(userId), { ...meta, channels });
+}
+
+/**
  * Wipe the `pkg:*` namespace.
  *
  * - With `userId`, deletes only entries owned by that user (`pkg:meta:{u}`,

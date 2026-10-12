@@ -1475,6 +1475,8 @@
     "sectionOther": "Sonstige",
     "hideEmpty_one": "{{count}} leeren Kanal ausblenden",
     "hideEmpty_other": "{{count}} leere Kanäle ausblenden",
+    "recheckLeftServers": "Verlassene Server erneut prüfen",
+    "moveOutOfLeftServers": "Aus Verlassene Server entfernen",
     "showEmpty_one": "{{count}} leeren Kanal anzeigen",
     "showEmpty_other": "{{count}} leere Kanäle anzeigen",
     "noChannelsMatch": "Keine Kanäle passen zu deinem Filter.",
