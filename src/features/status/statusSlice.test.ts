@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import statusReducer, {
   addStatusEntry,
   clearStatusLog,
@@ -108,6 +108,32 @@ describe('statusSlice', () => {
       // Buffer holds the remaining 10; IDB holds the first 50.
       expect(_getPersistBufferSizeForTesting()).toBe(10);
       expect((await storage.statuslog.entries()).length).toBe(50);
+    });
+
+    // Storage full on Firefox (2.2.5 recheck): a refused save surfaced as an
+    // unhandled rejection, which the global handler logged as a new entry,
+    // whose save was refused again, four lines a second.
+    it('keeps a refused save from becoming an unhandled rejection', async () => {
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => unhandled.push(reason);
+      process.on('unhandledRejection', onUnhandled);
+      const quota = new Error('The current transaction exceeded its quota limitations.');
+      const setMany = vi.spyOn(storage.statuslog, 'setMany').mockRejectedValueOnce(quota);
+      const remove = vi.spyOn(storage.statuslog, 'remove').mockRejectedValueOnce(quota);
+      try {
+        const store = createStore();
+        store.dispatch(addStatusEntry({ level: 'warning', message: 'Browser storage is full' }));
+        _flushPersistBufferForTesting();
+        store.dispatch(clearStatusLog());
+        await flush();
+        await flush();
+        expect(setMany).toHaveBeenCalled();
+        expect(unhandled).toEqual([]);
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+        setMany.mockRestore();
+        remove.mockRestore();
+      }
     });
 
     it('explicit flush drains the buffer', async () => {

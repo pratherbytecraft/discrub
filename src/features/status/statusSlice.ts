@@ -86,6 +86,15 @@ const PERSIST_FLUSH_THRESHOLD = 50;
 let pendingPersistBuffer: Array<[string, StatusLogEntry]> = [];
 let pendingFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * Saving the log is best effort: the entries stay in memory either way. A
+ * refused write (storage full, a closing database) must not surface as an
+ * unhandled rejection, because the global handler logs that as a new entry,
+ * whose save is refused again, about four lines a second for as long as
+ * storage stays full.
+ */
+const ignorePersistError = (): void => undefined;
+
 function flushPersistBuffer(): void {
   if (pendingPersistBuffer.length === 0) return;
   const batch = pendingPersistBuffer;
@@ -94,7 +103,7 @@ function flushPersistBuffer(): void {
     clearTimeout(pendingFlushTimer);
     pendingFlushTimer = null;
   }
-  void storage.statuslog.setMany(batch);
+  storage.statuslog.setMany(batch).catch(ignorePersistError);
 }
 
 function persistEntry(entry: StatusLogEntry): void {
@@ -121,7 +130,7 @@ function persistTrim(removedKeys: string[]): void {
       ([key]) => !removedSet.has(key),
     );
   }
-  removedKeys.forEach((k) => void storage.statuslog.remove(k));
+  removedKeys.forEach((k) => storage.statuslog.remove(k).catch(ignorePersistError));
 }
 
 function persistClear(): void {
@@ -130,7 +139,7 @@ function persistClear(): void {
     clearTimeout(pendingFlushTimer);
     pendingFlushTimer = null;
   }
-  void storage.statuslog.clear();
+  storage.statuslog.clear().catch(ignorePersistError);
 }
 
 /**
