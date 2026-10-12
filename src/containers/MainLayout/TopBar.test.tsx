@@ -386,6 +386,7 @@ describe('TopBar', () => {
           user: { currentUser, isLoading: false, error: null },
           export: {
             isExporting: true,
+            signInExpired: false,
             exportCriteria: null,
             maxZipPartBytes: null,
             exportProgress: null,
@@ -419,6 +420,7 @@ describe('TopBar', () => {
           user: { currentUser, isLoading: false, error: null },
           export: {
             isExporting: true,
+            signInExpired: false,
             exportCriteria: null,
             maxZipPartBytes: null,
             exportProgress: null,
@@ -451,6 +453,7 @@ describe('TopBar', () => {
           user: { currentUser, isLoading: false, error: null },
           export: {
             isExporting: true,
+            signInExpired: false,
             exportCriteria: null,
             maxZipPartBytes: null,
             exportProgress: null,

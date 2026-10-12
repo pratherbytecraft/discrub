@@ -294,7 +294,8 @@ describe('SupporterPanel', () => {
       await waitFor(() => {
         expect(screen.queryByTestId('supporter-status')).not.toBeInTheDocument();
       });
-      expect(stateStore.remove).toHaveBeenCalledTimes(3);
+      // Key, email, last check-in and the access ended marker.
+      expect(stateStore.remove).toHaveBeenCalledTimes(4);
     });
   });
 

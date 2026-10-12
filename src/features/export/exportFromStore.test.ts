@@ -9,6 +9,7 @@
 import { ensureTestDefaultWorkspace } from '@/test/workspaceDefault';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { configureStore } from '@reduxjs/toolkit';
+import type { AppDispatch } from '@/app/store';
 import type { Channel, Message } from 'discrub-core/types/discord-types';
 import { createMockChannel, createMockMessages } from '@/test/fixtures';
 import { rowsOf } from '@/test/state-factories';
@@ -92,7 +93,7 @@ const chan = (id: string, name = id): Channel => createMockChannel({ id, name, g
 const seed = { kind: 'channel' as const, guildId: '42', name: 'general' };
 
 function makeStore(messages: Message[] = []) {
-  return configureStore({
+  const store = configureStore({
     reducer: {
       message: messageReducer,
       workspace: workspaceReducer,
@@ -109,6 +110,8 @@ function makeStore(messages: Message[] = []) {
     preloadedState: messages.length > 0 ? { message: { ...messageReducer(undefined, { type: 'init' }), rows: rowsOf(messages), filteredRows: rowsOf(messages) } } as never : undefined,
     middleware: (getDefault) => getDefault({ serializableCheck: false }).concat(workspacePersistenceMiddleware.middleware),
   });
+  // The thunks are typed against the full app state; this store carries only the slices they read.
+  return store as typeof store & { dispatch: AppDispatch };
 }
 type Store = ReturnType<typeof makeStore>;
 

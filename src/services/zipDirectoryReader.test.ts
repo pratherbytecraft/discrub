@@ -8,7 +8,7 @@ import { strToU8, zipSync } from 'fflate';
 import { readZipDirectory, readZipEntries, ZipDirectoryError } from './zipDirectoryReader';
 
 const u8 = (text: string): Uint8Array => new Uint8Array(strToU8(text));
-const blobOf = (bytes: Uint8Array): Blob => new NodeBlob([bytes]) as unknown as Blob;
+const blobOf = (bytes: Uint8Array): Blob => new NodeBlob([bytes as Uint8Array<ArrayBuffer>]) as unknown as Blob;
 
 const crcTable = new Uint32Array(256).map((_, n) => {
   let c = n;
