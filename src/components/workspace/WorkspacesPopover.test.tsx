@@ -38,10 +38,10 @@ const LIST = [
   ws({ wid: 'w3', name: 'Mod cleanup', color: '#faa61a', heldElsewhere: true }),
 ];
 
-function render(isSupporter: boolean, extra: { list?: WorkspaceSummary[]; importing?: { name: string; messages: number; total: number } } = {}) {
+function render(isSupporter: boolean, extra: { list?: WorkspaceSummary[]; importing?: { name: string; messages: number; total: number }; duplicating?: string } = {}) {
   const state = createBaseState();
   if (isSupporter) state.supporter = supporter as typeof state.supporter;
-  (state as Record<string, unknown>).workspace = { ...initialWorkspaceState, currentWid: 'default', currentName: 'Default', ready: true, list: extra.list ?? LIST, importing: extra.importing ?? null, storage: { usage: 1_600_000_000, quota: 10_737_418_240, remaining: 9_137_418_240 } };
+  (state as Record<string, unknown>).workspace = { ...initialWorkspaceState, currentWid: 'default', currentName: 'Default', ready: true, list: extra.list ?? LIST, importing: extra.importing ?? null, duplicating: extra.duplicating ?? null, storage: { usage: 1_600_000_000, quota: 10_737_418_240, remaining: 9_137_418_240 } };
   return renderWithProviders(<WorkspacesPopover anchorEl={document.body} open onClose={vi.fn()} />, { preloadedState: state });
 }
 
@@ -85,6 +85,19 @@ describe('WorkspacesPopover (2.2.5 WP5)', () => {
     expect(screen.getByTestId('workspace-import-progress')).toHaveTextContent('Importing Raid archive: 12,000 of 50,000 messages');
     expect(screen.getByTestId('workspace-new')).toBeDisabled();
     expect(screen.getByTestId('workspace-import')).toBeDisabled();
+  });
+
+  it('holds Duplicate while a copy is being made (pass 3, row 154)', () => {
+    render(true, { duplicating: 'Raid archive' });
+    fireEvent.click(screen.getByTestId('workspace-row-toggle-w2'));
+    expect(screen.getByTestId('workspace-duplicate')).toBeDisabled();
+  });
+
+  it('says why a workspace from a newer build cannot be renamed or exported (pass 3, row 118)', () => {
+    render(true, { list: [ws({ isDefault: true, openable: false, appVersion: '9.9.9' })] });
+    fireEvent.click(screen.getByTestId('workspace-row-toggle-default'));
+    expect(screen.getByTestId('workspace-newer-note')).toHaveTextContent('Made with Discrub 9.9.9. Update Discrub to rename, duplicate or export it.');
+    expect(screen.getByTestId('workspace-rename')).toBeDisabled();
   });
 
   it('supporters see no lock and Delete on workspaces other than Default', () => {

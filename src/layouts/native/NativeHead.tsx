@@ -16,6 +16,7 @@ import SupporterWallToggle from '@components/donations/SupporterWallToggle';
 import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import { selectStageRoom } from '@features/scrublings/selectors';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
+import WorkspacePill from '@components/workspace/WorkspacePill';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import { getDmName } from '@/utils/dmListUtils';
 import { perfCount } from '@/utils/perfCounters';
@@ -97,6 +98,8 @@ const NativeHead = ({ inspectorOpen, canToggleInspector, onToggleInspector, show
       )}
       {/* The free stretch, the Scrublings' stage. */}
       <Box data-testid="native-stage" sx={{ flex: 1, alignSelf: 'stretch', position: 'relative', minWidth: stageRoom }}><ScrublingsStage /></Box>
+      {/* On a phone the column with the user row is a drawer, so the Workspaces pill sits here (row 167, pass 3). */}
+      {showMenu && <WorkspacePill variant="bar" opensDown />}
       <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
       {hasContext && !isPackage && (
         <HotkeyTooltip actionId="openFilters" label={t('serverView.filters')} arrow>

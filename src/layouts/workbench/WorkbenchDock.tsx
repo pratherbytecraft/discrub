@@ -5,6 +5,7 @@ import { useAppSelector } from '@/app/hooks';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectRecentExports } from '@features/history/historySlice';
 import { selectStatusEntries } from '@features/status/statusSlice';
+import { selectWorkspaceImporting } from '@features/workspace/workspaceSlice';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
 import { perfCount } from '@/utils/perfCounters';
 
@@ -23,6 +24,8 @@ const WorkbenchDock = ({ onOpenLog }: { onOpenLog: () => void }) => {
   const runs = useAppSelector(selectRecentExports);
   const entries = useAppSelector(selectStatusEntries);
   const running = summary.tier === 'heavy';
+  // Row 164 (pass 3): a workspace import is not an operation (nothing to pause), but it says so here instead of Nothing running.
+  const importing = useAppSelector(selectWorkspaceImporting);
   const last = entries[entries.length - 1];
   return (
     <Box data-testid="workbench-dock" sx={{ flexShrink: 0, height: 150, borderTop: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', display: 'flex', flexDirection: 'column' }}>
@@ -37,6 +40,11 @@ const WorkbenchDock = ({ onOpenLog }: { onOpenLog: () => void }) => {
             <Box data-testid="dock-progress-running" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <PauseResumeControls label={summary.label} progress={summary.progress} />
               {summary.progress != null && <LinearProgress variant="determinate" value={summary.progress} sx={{ height: 6, borderRadius: 3 }} />}
+            </Box>
+          ) : importing ? (
+            <Box data-testid="dock-progress-import" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>{t('workspace.importProgress', { name: importing.name, done: importing.messages, total: importing.total })}</Typography>
+              {importing.total > 0 && <LinearProgress variant="determinate" value={Math.min(100, (importing.messages / importing.total) * 100)} sx={{ height: 6, borderRadius: 3 }} />}
             </Box>
           ) : (
             <Box data-testid="dock-progress-idle">

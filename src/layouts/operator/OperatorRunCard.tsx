@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ChannelType } from 'discrub-core/discord-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setDialogOpen, setOperationHold } from '@features/app/appSlice';
-import { workspacesPopoverToggled } from '@features/workspace/workspaceSlice';
+import { selectWorkspaceImporting, workspacesPopoverToggled } from '@features/workspace/workspaceSlice';
 import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectSelectedChannel, selectSelectedChannels } from '@features/channel/channelSlice';
 import { selectSelectedDm, selectSelectedDms } from '@features/dm/dmSlice';
@@ -45,6 +45,8 @@ const OperatorRunCard = () => {
   const sidebarView = useAppSelector(selectSidebarView);
   const headline = useOperationHeadline();
   const running = summary.tier === 'heavy';
+  // Row 164 (pass 3): a workspace import is not an operation (nothing to pause), but it says so here instead of Nothing running.
+  const importing = useAppSelector(selectWorkspaceImporting);
   const dmMode = !guild;
   const queued = dmMode ? selectedDms.length : selectedChannels.length;
   const openName = channel ? `#${channel.name}` : dm ? getDmName(dm) : '';
@@ -90,9 +92,12 @@ const OperatorRunCard = () => {
   return (
     <Box data-testid="operator-run-card" data-state="idle" sx={{ p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: STATE_HEX.success, flexShrink: 0 }} />
-        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('workbench.nothingRunning')}</Typography>
+        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: importing ? STATE_HEX.info : STATE_HEX.success, flexShrink: 0 }} />
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }} data-testid={importing ? 'operator-import' : undefined}>
+          {importing ? t('workspace.importProgress', { name: importing.name, done: importing.messages, total: importing.total }) : t('workbench.nothingRunning')}
+        </Typography>
       </Box>
+      {importing && importing.total > 0 && <LinearProgress variant="determinate" value={Math.min(100, (importing.messages / importing.total) * 100)} sx={{ height: 6, borderRadius: 3 }} />}
       {isPackage ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('native.packageHint')}</Typography>
       ) : (

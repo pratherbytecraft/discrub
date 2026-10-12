@@ -30,6 +30,8 @@ export interface WorkspaceRowProps {
   atCap?: boolean;
   /** Clear and Delete wait while an action runs in the open workspace. */
   busy: boolean;
+  /** Row 154 (pass 3): a copy is being made, so Duplicate waits for it. */
+  duplicating?: boolean;
   onOpen: () => void;
   onToggle: () => void;
   onRenameStart: () => void;
@@ -59,6 +61,7 @@ const WorkspaceRow = ({
   locked,
   atCap = false,
   busy,
+  duplicating = false,
   onOpen,
   onToggle,
   onRenameStart,
@@ -201,11 +204,17 @@ const WorkspaceRow = ({
         <>
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', pt: 0.25, pb: 1, pl: 4.375, pr: 1.75 }}>
             {act(t('workspace.rename'), <RenameIcon />, onRenameStart, { testid: 'workspace-rename', disabled: !w.openable })}
-            {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', lock: locked, disabled: !w.openable || atCap })}
+            {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', lock: locked, disabled: !w.openable || atCap || duplicating })}
             {act(t('workspace.export'), <ExportIcon />, onExport, { testid: 'workspace-export', disabled: !w.openable })}
             {act(t('workspace.clear'), <ClearIcon />, onClear, { testid: 'workspace-clear', disabled: (current && busy) || w.count === 0 })}
             {!w.isDefault && act(t('workspace.delete'), <DeleteIcon />, onDelete, { testid: 'workspace-delete', danger: true, disabled: (current && busy) || w.heldElsewhere })}
           </Box>
+          {/* Row 118 (pass 3): says why Rename, Duplicate and Export are off on a workspace from a newer build. */}
+          {!w.openable && (
+            <Typography data-testid="workspace-newer-note" sx={{ pl: 4.375, pr: 1.75, pb: 1, mt: -0.5, fontSize: '0.71875rem', color: 'text.secondary' }}>
+              {t('workspace.newerNote', { version: w.appVersion })}
+            </Typography>
+          )}
           {w.conversations.length > 0 && (
             <Box sx={{ pt: 0.5, pb: 1, pl: 4.375, mr: 1.75, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 0.25 }}>
               {w.conversations.slice(0, CONVERSATIONS_SHOWN).map((c) => (

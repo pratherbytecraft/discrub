@@ -58,4 +58,14 @@ describe('<WorkbenchShell />', () => {
     expect(screen.queryByTestId('workbench-status-bar')).toBeNull();
     expect(screen.getByTestId('focus-pill')).toBeInTheDocument();
   });
+
+  // Row 164 (pass 3): a workspace import shows where a run would, not Nothing running.
+  it('shows a workspace import in progress', () => {
+    const state = withChannel();
+    (state as Record<string, unknown>).workspace = { ...(state as { workspace: object }).workspace, importing: { name: 'Raid archive', messages: 12_000, total: 50_000 } };
+    renderWithProviders(<WorkbenchShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(screen.getByTestId('dock-progress-import')).toHaveTextContent('Importing Raid archive: 12,000 of 50,000 messages');
+    expect(screen.getByTestId('status-bar-import')).toHaveTextContent('Importing Raid archive');
+    expect(screen.queryByText('Nothing running')).toBeNull();
+  });
 });

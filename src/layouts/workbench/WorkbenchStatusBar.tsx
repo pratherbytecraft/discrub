@@ -8,6 +8,7 @@ import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectActiveFilteredRows, selectActivePagination, selectActiveSelectedIds } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
+import { selectWorkspaceImporting } from '@features/workspace/workspaceSlice';
 import { perfCount } from '@/utils/perfCounters';
 import WorkspacePill from '@components/workspace/WorkspacePill';
 import { useOperationHeadline } from '@components/ui/PauseResumeControls';
@@ -31,6 +32,8 @@ const WorkbenchStatusBar = () => {
   const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
   const hasContext = !isPackage && !isForum && (!!channel || !!dm);
   const running = summary.tier === 'heavy';
+  // Row 164 (pass 3): a workspace import is not an operation (nothing to pause), but it says so here instead of Nothing running.
+  const importing = useAppSelector(selectWorkspaceImporting);
   // 2.2.5 pass 2 (row 79): a rest break or a Discord wait shows its countdown here too.
   const headline = useOperationHeadline();
   return (
@@ -39,6 +42,10 @@ const WorkbenchStatusBar = () => {
       <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: STATE_HEX[summary.stateColor] }} />
       {running ? (
         <Typography variant="caption" noWrap sx={{ fontSize: 'inherit' }}>{summary.name} · {headline || summary.label}</Typography>
+      ) : importing ? (
+        <Typography variant="caption" noWrap sx={{ fontSize: 'inherit' }} data-testid="status-bar-import">
+          {t('workspace.importProgress', { name: importing.name, done: importing.messages, total: importing.total })}
+        </Typography>
       ) : hasContext ? (
         <Typography variant="caption" noWrap sx={{ fontSize: 'inherit' }}>
           {t('workbench.loaded', { count: messages.length })}

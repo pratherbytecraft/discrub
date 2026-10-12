@@ -7,7 +7,7 @@ import { selectAnyUnfinishedWork, selectCurrentWorkspaceName } from '@features/w
 import WorkspaceIcon from './WorkspaceIcon';
 import WorkspacesPopover from './WorkspacesPopover';
 
-export type WorkspacePillVariant = 'log' | 'bar' | 'floating';
+export type WorkspacePillVariant = 'log' | 'bar';
 
 /** The status log header keeps its own dark palette whatever the theme. */
 const LOG_COLORS = { border: '#30363d', text: '#c9d1d9', icon: '#58a6ff', paper: '#0d1117' };
@@ -17,10 +17,12 @@ const LOG_COLORS = { border: '#30363d', text: '#c9d1d9', icon: '#58a6ff', paper:
  * workspace has unfinished work. Click opens the Workspaces popover above
  * it. `log` sits in the status log header (Classic, Simple, Timeline),
  * `bar` in the Workbench status bar, Native's user row and Operator's
- * queue footer, `floating` bottom left in Native on a phone.
+ * queue footer, and Native's head row on a phone (row 167, pass 3: the
+ * floating pill there covered the feed). `opensDown` opens the popover
+ * below a pill near the top of the screen.
  */
 /** `yieldRoom`: a hold line (a retry wait, a rest break) needs the row, so the pill gives way as in a bar. */
-const WorkspacePill = ({ variant, yieldRoom = false }: { variant: WorkspacePillVariant; yieldRoom?: boolean }) => {
+const WorkspacePill = ({ variant, yieldRoom = false, opensDown = false }: { variant: WorkspacePillVariant; yieldRoom?: boolean; opensDown?: boolean }) => {
   const { t } = useTranslation();
   const name = useAppSelector(selectCurrentWorkspaceName);
   const dot = useAppSelector(selectAnyUnfinishedWork);
@@ -41,8 +43,8 @@ const WorkspacePill = ({ variant, yieldRoom = false }: { variant: WorkspacePillV
         }}
         onMouseDown={(e) => e.stopPropagation()}
         sx={{
-          position: variant === 'floating' ? 'fixed' : 'relative',
-          ...(variant === 'floating' ? { left: 12, bottom: 14, zIndex: 1100, backgroundColor: 'background.paper', boxShadow: 2, height: 24 } : { height: 20 }),
+          position: 'relative',
+          height: 20,
           display: 'inline-flex',
           alignItems: 'center',
           gap: 0.75,
@@ -81,7 +83,12 @@ const WorkspacePill = ({ variant, yieldRoom = false }: { variant: WorkspacePillV
       {/* React events bubble out of portals through the component tree; without this a click
           inside the popover or its dialogs would reach the status log header and toggle it. */}
       <Box component="span" sx={{ display: 'contents' }} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-        <WorkspacesPopover anchorEl={ref.current} open={open} onClose={() => setOpen(false)} />
+        <WorkspacesPopover
+          anchorEl={ref.current}
+          open={open}
+          onClose={() => setOpen(false)}
+          {...(opensDown ? { anchorOrigin: { vertical: 'bottom', horizontal: 'right' }, transformOrigin: { vertical: 'top', horizontal: 'right' } } as const : {})}
+        />
       </Box>
     </>
   );

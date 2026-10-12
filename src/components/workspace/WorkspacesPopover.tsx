@@ -293,6 +293,7 @@ const WorkspacesPopover = ({
               locked={!supporter}
               atCap={atCap}
               busy={busy}
+              duplicating={duplicating !== null}
               onOpen={() => onOpen(w)}
               onToggle={() => setExpanded((prev) => (prev === w.wid ? null : w.wid))}
               onRenameStart={() => setRenaming(w.wid)}

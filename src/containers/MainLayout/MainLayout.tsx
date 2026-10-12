@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useWorkspaceScopeRestore } from '@/hooks/useWorkspaceScopeRestore';
-import { Box, useMediaQuery, useTheme } from '@mui/material';
+import { Box } from '@mui/material';
 import { Joyride } from 'react-joyride';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppSelector, useAppDispatch } from '@/app/hooks';
@@ -66,7 +66,6 @@ import AppDialogs from './AppDialogs';
 import PreviewBar from '@components/appearance/PreviewBar';
 import DiskBar from '@components/workspace/DiskBar';
 import StorageFullDialog from '@components/workspace/StorageFullDialog';
-import WorkspacePill from '@components/workspace/WorkspacePill';
 import { useWallOverlay } from '@components/donations/useWallOverlay';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
@@ -90,9 +89,6 @@ const MainLayout = () => {
   // The layout setting picks the shell; anything unbuilt or unknown resolves to Classic. A live preview wins.
   const effectiveLayout = useAppSelector(selectEffectiveLayout);
   const Shell = resolveShell(effectiveLayout);
-  // Native holds the Workspaces pill in its column's user row; on a phone that column is a drawer, so it floats bottom left.
-  const phone = useMediaQuery(useTheme().breakpoints.down('md'));
-  const floatingPill = !focusedView && phone && effectiveLayout === 'native';
   // While previewing, the whole shell is inert: look and scroll, no clicks or focus.
   const previewing = useAppSelector(selectIsPreviewing);
   // Below `md` the Sidebar becomes a temporary drawer opened from the
@@ -326,7 +322,6 @@ const MainLayout = () => {
         /></PerfProfiler>
       </Box>
       <PreviewBar />
-      {floatingPill && <WorkspacePill variant="floating" />}
       <DiskBar />
       <StorageFullDialog />
 

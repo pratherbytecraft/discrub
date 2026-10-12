@@ -481,8 +481,24 @@ describe('restoreWorkspaceScope', () => {
       w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
     });
     await store.dispatch(fetchGuilds('token'));
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, () => {}, seed);
     expect((await thunk(store)(restoreWorkspaceScope())).payload).toBe('missing');
     expect(store.getState().guild.selectedGuild?.id).toBe('42');
+    // Row 136 (pass 3): the status log says why the last spot did not come back.
+    expect(store.getState().status.entries.some((e) => e.message === '#general is no longer in Raid.')).toBe(true);
+  });
+
+  it('says so when the saved server is gone (pass 3, row 136)', async () => {
+    service({ fetchGuilds: vi.fn().mockResolvedValue({ success: true, data: [] }) });
+    const store = makeStore();
+    await openDefault(store);
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
+      w.scope = { tab: null, guildId: '42', channelId: CID, dmId: null };
+      w.guilds = { ...(w.guilds ?? {}), '42': 'Gone' };
+    });
+    await store.dispatch(fetchGuilds('token'));
+    expect((await thunk(store)(restoreWorkspaceScope())).payload).toBe('missing');
+    expect(store.getState().status.entries.some((e) => e.message === 'Gone is no longer in your server list.')).toBe(true);
   });
 
   it('reopens the thread tabs and the active tab', async () => {

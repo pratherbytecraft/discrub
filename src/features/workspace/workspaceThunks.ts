@@ -228,12 +228,14 @@ async function openScope(wid: string, dispatchAny: Dispatch, getState: () => Roo
     await waitFor(() => (getState().guild?.guilds?.length ?? 0) > 0 || !!getState().guild?.error, GUILDS_TIMEOUT_MS);
     if (!stillHere() || userNavigated(getState())) return 'skipped';
     const guild = getState().guild.guilds.find((g) => g.id === guildId);
-    if (!guild) return 'missing';
+    if (!guild) return scopeMissing(dispatch, t('workspace.scopeMissingServer', { name: record.guilds?.[guildId] ?? guildId }));
     await dispatch(openGuild({ guild }));
     if (!stillHere() || getState().guild.selectedGuild?.id !== guildId) return 'skipped';
     if (!channelId) return 'restored';
     const channel = getState().channel.channels.find((c) => c.id === channelId);
-    if (!channel || !isMessageChannel(channel)) return 'missing';
+    if (!channel || !isMessageChannel(channel)) {
+      return scopeMissing(dispatch, t('workspace.scopeMissingChannel', { name: record.conversations[channelId]?.name ?? channelId, server: guild.name }));
+    }
     await dispatch(openChannel({ channel }));
     cid = channelId;
   } else if (dmId) {
@@ -252,7 +254,7 @@ async function openScope(wid: string, dispatchAny: Dispatch, getState: () => Roo
       try {
         dm = (await (dispatch(fetchDmById({ channelId: dmId, token })) as unknown as { unwrap: () => Promise<Channel> }).unwrap());
       } catch {
-        return 'missing';
+        return scopeMissing(dispatch, t('workspace.scopeMissingDm', { name: record.conversations[dmId]?.name ?? dmId }));
       }
     }
     if (!stillHere() || userNavigated(getState())) return 'skipped';
@@ -276,6 +278,15 @@ async function openScope(wid: string, dispatchAny: Dispatch, getState: () => Roo
     if (anchorId) dispatch(setFeedScrollAnchor({ key: `${cid}:${activeTab ?? 'main'}`, messageId: anchorId }));
   }
   return 'restored';
+}
+
+/**
+ * Row 136 (pass 3): the restore lands on the start view when the saved
+ * server, channel or DM is gone; a status line says why.
+ */
+function scopeMissing(dispatch: (action: unknown) => unknown, message: string): ScopeOutcome {
+  dispatch(addStatusEntry({ level: 'info', message }));
+  return 'missing';
 }
 
 const selectMainCid = (state: RootState): string | null =>
