@@ -218,7 +218,7 @@ export const deleteMessages = createAsyncThunk(
     { dispatch, getState, rejectWithValue }
   ) => {
     try {
-      dispatch(showOperationTip('Delete Operation Queued'));
+      dispatch(showOperationTip(t('operation.queued.delete')));
       const discordService = getDiscordService();
       const deletedIds: string[] = [];
 
@@ -369,7 +369,7 @@ export const editMessages = createAsyncThunk(
     { dispatch, getState, rejectWithValue }
   ) => {
     try {
-      dispatch(showOperationTip('Edit Operation Queued'));
+      dispatch(showOperationTip(t('operation.queued.edit')));
       const discordService = getDiscordService();
       const editedMessages: Message[] = [];
 
@@ -478,7 +478,7 @@ export const bulkEditChannels = createAsyncThunk<
     { channels, content, guildId, searchCriteria },
     { dispatch, getState, rejectWithValue }
   ) => {
-    dispatch(showOperationTip('Edit Operation Queued'));
+    dispatch(showOperationTip(t('operation.queued.edit')));
 
     const initialState = getState() as RootState;
     const token = selectAuthToken(initialState);
@@ -1452,7 +1452,7 @@ export const searchMessages = createAsyncThunk(
     { rejectWithValue, dispatch, getState }
   ) => {
     try {
-      dispatch(showOperationTip('Search Operation Queued'));
+      dispatch(showOperationTip(t('operation.queued.search')));
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.searchStarting') }));
       const discordService = getDiscordService();
 
@@ -2080,8 +2080,8 @@ export const loadAllSearchResults = createAsyncThunk(
         addStatusEntry({
           level: 'success',
           message: isFiltered
-            ? `Loaded ${loaded} filtered message${loaded === 1 ? '' : 's'}`
-            : `Loaded ${loaded} message${loaded === 1 ? '' : 's'}`,
+            ? t('status.msg.loadedFiltered', { count: loaded })
+            : t('status.msg.loaded', { count: loaded }),
         })
       );
 
@@ -2121,7 +2121,7 @@ export const fetchAllMessages = createAsyncThunk(
     { rejectWithValue, dispatch, signal, getState }
   ) => {
     try {
-      dispatch(showOperationTip('Load All Operation Queued'));
+      dispatch(showOperationTip(t('operation.queued.loadAll')));
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loadAllStarting') }));
       const discordService = getDiscordService();
 
@@ -2724,7 +2724,7 @@ export const fetchAllThreadMessages = createAsyncThunk(
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     try {
-      dispatch(showOperationTip('Load All Operation Queued'));
+      dispatch(showOperationTip(t('operation.queued.loadAll')));
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.loadAllStarting') }));
       dispatch(messageSlice.actions.updateThreadPagination({
         threadId,
@@ -2919,7 +2919,7 @@ export const searchThreadMessages = createAsyncThunk(
     { dispatch, getState, rejectWithValue, signal }
   ) => {
     try {
-      dispatch(showOperationTip('Search Operation Queued'));
+      dispatch(showOperationTip(t('operation.queued.search')));
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.searchStarting') }));
       dispatch(messageSlice.actions.setThreadLoading({ threadId, isLoading: true }));
       dispatch(messageSlice.actions.updateThreadPagination({

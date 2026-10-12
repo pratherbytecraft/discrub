@@ -1400,7 +1400,7 @@ export const bulkExportChannels = createAsyncThunk<
     const errors: string[] = [];
     const shouldContinue = createShouldContinue(getState);
 
-    dispatch(showOperationTip('Bulk Export Operation Queued'));
+    dispatch(showOperationTip(t('operation.queued.bulkExport')));
 
     // Snapshot settings at start — prevents mid-operation changes from causing inconsistency
     const initialState = getState();
@@ -1700,7 +1700,7 @@ export const bulkExportDMs = createAsyncThunk<
     const errors: string[] = [];
     const shouldContinue = createShouldContinue(getState);
 
-    dispatch(showOperationTip('Bulk Export Operation Queued'));
+    dispatch(showOperationTip(t('operation.queued.bulkExport')));
 
     // Snapshot settings at start — prevents mid-operation changes from causing inconsistency
     const initialState = getState();

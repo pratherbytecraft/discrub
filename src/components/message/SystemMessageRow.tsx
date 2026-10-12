@@ -154,7 +154,7 @@ const SystemMessageRow = memo(function SystemMessageRow({
   // the app's regular timestamp format.
   let shortTimestamp = '';
   try {
-    shortTimestamp = format(new Date(message.timestamp), 'M/d/yy, h:mm a', { locale: getDateLocale() });
+    shortTimestamp = format(new Date(message.timestamp), 'P, p', { locale: getDateLocale() });
   } catch {
     /* ignore bad timestamps */
   }

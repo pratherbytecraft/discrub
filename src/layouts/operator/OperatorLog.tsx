@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { clearStatusLog, selectStatusEntries } from '@features/status/statusSlice';
 
@@ -28,7 +29,7 @@ const OperatorLog = () => {
         {shown.length === 0 && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('native.logEmpty')}</Typography>}
         {shown.map((e) => (
           <Box key={e.id} sx={{ display: 'flex', gap: 1.25, py: 0.25, whiteSpace: 'nowrap' }}>
-            <Box component="span" sx={{ color: 'text.disabled', flexShrink: 0, minWidth: '11ch' }}>{new Date(e.timestamp).toLocaleTimeString()}</Box>
+            <Box component="span" sx={{ color: 'text.disabled', flexShrink: 0, minWidth: '11ch' }}>{new Date(e.timestamp).toLocaleTimeString(i18n.language)}</Box>
             <Box component="span" sx={{ color: LEVEL_COLOR[e.level] ?? 'text.secondary', flexShrink: 0, textTransform: 'uppercase', width: '7ch' }}>{e.level}</Box>
             <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', color: 'text.primary' }}>{e.message}</Box>
           </Box>

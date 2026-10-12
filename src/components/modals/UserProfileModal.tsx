@@ -354,7 +354,7 @@ const UserProfileModal = ({
                 </Typography>
                 {serverNickname && (
                   <Chip
-                    label="PRIORITY 1"
+                    label={t('profile.priority', { n: 1 })}
                     size="small"
                     sx={{
                       ml: 1,
@@ -389,7 +389,7 @@ const UserProfileModal = ({
               </Typography>
               {displayName && !serverNickname && (
                 <Chip
-                  label="PRIORITY 1"
+                  label={t('profile.priority', { n: 1 })}
                   size="small"
                   sx={{
                     ml: 1,
@@ -404,7 +404,7 @@ const UserProfileModal = ({
               )}
               {displayName && serverNickname && (
                 <Chip
-                  label="PRIORITY 2"
+                  label={t('profile.priority', { n: 2 })}
                   size="small"
                   sx={{
                     ml: 1,
@@ -443,7 +443,7 @@ const UserProfileModal = ({
               </Tooltip>
               {!displayName && !serverNickname && (
                 <Chip
-                  label="PRIORITY 1"
+                  label={t('profile.priority', { n: 1 })}
                   size="small"
                   sx={{
                     ml: 1,
@@ -458,7 +458,7 @@ const UserProfileModal = ({
               )}
               {(displayName || serverNickname) && (
                 <Chip
-                  label={serverNickname && displayName ? 'PRIORITY 3' : 'PRIORITY 2'}
+                  label={t('profile.priority', { n: serverNickname && displayName ? 3 : 2 })}
                   size="small"
                   sx={{
                     ml: 1,

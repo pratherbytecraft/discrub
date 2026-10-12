@@ -99,6 +99,9 @@ const ResetDiscrubButton = ({ variant = 'button' }: ResetDiscrubButtonProps) => 
               <Typography component="li" variant="body2" color="text.secondary">
                 {t('resetDiscrub.itemPackages')}
               </Typography>
+              <Typography component="li" variant="body2" color="text.secondary">
+                {t('resetDiscrub.itemWorkspaces')}
+              </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary">
               {t('resetDiscrub.outro')}

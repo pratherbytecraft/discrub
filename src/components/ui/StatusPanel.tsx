@@ -18,6 +18,7 @@ import type { StatusLevel, StatusLogEntry } from '@features/status/statusTypes';
 import PauseResumeControls, { useOperationHeadline } from './PauseResumeControls';
 import OperationTip from './OperationTip';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { perfCount } from '@/utils/perfCounters';
 import WorkspacePill from '@components/workspace/WorkspacePill';
 
@@ -62,12 +63,17 @@ const terminalColors: Record<StatusLevel, string> = {
 // #183: one shared formatter — toLocaleTimeString() constructs an
 // Intl.DateTimeFormat on every call, which profiled as the single
 // hottest leaf during a high-rate operation (7% of total CPU).
-const timeFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-});
-const formatTime = (ts: number) => timeFormatter.format(ts);
+// Row 106 (pass 2): built for the UI language, and again when it changes.
+let timeFormatter: Intl.DateTimeFormat | null = null;
+let timeFormatterLanguage = '';
+const formatTime = (ts: number) => {
+  const language = i18n.language || 'en';
+  if (!timeFormatter || timeFormatterLanguage !== language) {
+    timeFormatter = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    timeFormatterLanguage = language;
+  }
+  return timeFormatter.format(ts);
+};
 
 /**
  * One terminal log line. Memoized (#183): appending an entry must not

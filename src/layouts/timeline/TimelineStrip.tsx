@@ -87,7 +87,7 @@ const TimelineStrip = () => {
 
   const max = Math.max(1, ...model.bars.map((b) => b.count));
   const inRange = (b: TimelineBar, i: number) => (drag ? i >= Math.min(drag.start, drag.end) && i <= Math.max(drag.start, drag.end) : !!range && b.to >= range.from && b.from <= range.to);
-  const barLabel = (b: TimelineBar) => `${model.unit === 'day' ? fmt(b.from, 'PP') : model.unit === 'week' ? `${fmt(b.from, 'MMM d')} – ${fmt(b.to, 'PP')}` : fmt(b.from, 'LLLL yyyy')} · ${t('timeline.dayCount', { count: b.count })}`;
+  const barLabel = (b: TimelineBar) => `${model.unit === 'day' ? fmt(b.from, 'PP') : model.unit === 'week' ? `${fmt(b.from, 'PP')} – ${fmt(b.to, 'PP')}` : fmt(b.from, 'LLLL yyyy')} · ${t('timeline.dayCount', { count: b.count })}`;
   // Bars sit in month groups so each month carries one label under its first bar.
   const groups: Array<{ month: string; bars: Array<{ bar: TimelineBar; index: number }> }> = [];
   model.bars.forEach((bar, index) => { const g = groups[groups.length - 1]; if (g && g.month === bar.month) g.bars.push({ bar, index }); else groups.push({ month: bar.month, bars: [{ bar, index }] }); });
@@ -115,7 +115,7 @@ const TimelineStrip = () => {
         )}
         <Box sx={{ flex: 1 }} />
         <Typography variant="caption" sx={{ color: 'text.secondary' }} data-testid="timeline-summary">
-          <Box component="b" sx={{ color: 'text.primary', fontWeight: 600 }}>{fmt(model.firstDay, 'MMM d')} – {fmt(model.lastDay, 'PP')}</Box>
+          <Box component="b" sx={{ color: 'text.primary', fontWeight: 600 }}>{fmt(model.firstDay, 'PP')} – {fmt(model.lastDay, 'PP')}</Box>
           {' · '}{loadedLine}{pagination.hasMore && !running && sidebarView !== 'package' ? ` · ${t('timeline.olderNeedLoadAll')}` : ''}
         </Typography>
       </Box>
@@ -145,7 +145,7 @@ const TimelineStrip = () => {
       </Box>
       {range && (
         <Box data-testid="timeline-range" sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75, px: 1.25, py: 0.5, borderRadius: 1, flexWrap: 'wrap', border: '1px solid', borderColor: alpha(theme.palette.primary.main, 0.4), backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>{fmt(range.from, 'MMM d')} – {fmt(range.to, 'PP')}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>{fmt(range.from, 'PP')} – {fmt(range.to, 'PP')}</Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary', flex: 1, minWidth: 180 }}>{t('timeline.rangeShown', { shown, total: model.total })}</Typography>
           <Button size="small" onClick={() => dispatch(setDialogOpen({ dialog: 'filters', open: true }))} data-testid="timeline-range-filters" sx={{ textTransform: 'none' }}>{t('timeline.openInFilters')}</Button>
           <Button size="small" onClick={clearRange} data-testid="timeline-range-clear" sx={{ textTransform: 'none' }}>{t('timeline.clearRange')}</Button>

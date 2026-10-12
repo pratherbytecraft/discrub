@@ -1,3 +1,4 @@
+import { t as translate } from '@/i18n';
 import {
   PACKAGE_CHANNEL_TYPE,
   THREAD_CHANNEL_TYPES,
@@ -59,8 +60,8 @@ export function getPackageChannelLabel(channel: PackageChannel): string {
   const raw = channel.name?.trim();
 
   if (!raw) {
-    if (channel.type === PACKAGE_CHANNEL_TYPE.DM) return 'Direct Message';
-    if (channel.type === PACKAGE_CHANNEL_TYPE.GROUP_DM) return 'Group DM';
+    if (channel.type === PACKAGE_CHANNEL_TYPE.DM) return translate('common.directMessage');
+    if (channel.type === PACKAGE_CHANNEL_TYPE.GROUP_DM) return translate('package.groupDm');
     if (channel.isOrphan) return 'Unknown channel';
     return channel.id;
   }
@@ -74,7 +75,7 @@ export function getPackageChannelLabel(channel: PackageChannel): string {
     const dmPrefix = /^Direct Message with\s+/i;
     if (dmPrefix.test(stripped)) {
       const handle = stripped.replace(dmPrefix, '').trim();
-      return handle || (channel.type === PACKAGE_CHANNEL_TYPE.DM ? 'Direct Message' : 'Group DM');
+      return handle || (channel.type === PACKAGE_CHANNEL_TYPE.DM ? translate('common.directMessage') : translate('package.groupDm'));
     }
   }
 
@@ -90,8 +91,8 @@ export function getPackageChannelSubtitle(channel: PackageChannel): string {
     return channel.name ? 'Left server' : `Left server · ${channel.id}`;
   }
   if (channel.guildName) return channel.guildName;
-  if (channel.type === PACKAGE_CHANNEL_TYPE.DM) return 'Direct Message';
-  if (channel.type === PACKAGE_CHANNEL_TYPE.GROUP_DM) return 'Group DM';
+  if (channel.type === PACKAGE_CHANNEL_TYPE.DM) return translate('common.directMessage');
+  if (channel.type === PACKAGE_CHANNEL_TYPE.GROUP_DM) return translate('package.groupDm');
   if (THREAD_CHANNEL_TYPES.has(channel.type)) return 'Thread';
   return '';
 }

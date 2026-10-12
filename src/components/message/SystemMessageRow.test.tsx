@@ -79,11 +79,11 @@ describe('<SystemMessageRow />', () => {
     expect(screen.getByTestId('system-message-row')).toHaveTextContent('Override');
   });
 
-  it('renders an inline timestamp in Discord\'s compact M/d/yy, h:mm a format', () => {
+  it('renders an inline timestamp in the compact localized date and time (row 98: P, p)', () => {
     render(<SystemMessageRow message={baseMsg(6)} formattingContext={formattingContext} />);
-    // 2026-06-15T14:30:00.000Z → local timezone; just assert shape.
+    // 2026-06-15T14:30:00.000Z → local timezone; just assert the English shape.
     expect(screen.getByTestId('system-message-timestamp')).toHaveTextContent(
-      /^\d{1,2}\/\d{1,2}\/\d{2}, \d{1,2}:\d{2} (AM|PM)$/,
+      /^\d{2}\/\d{2}\/\d{4}, \d{1,2}:\d{2} (AM|PM)$/,
     );
   });
 

@@ -73,13 +73,14 @@ describe('ResetDiscrubButton', () => {
       expect(screen.getByText(/Imported data packages and downloaded media/)).toBeInTheDocument();
     });
 
-    it('warns that the user will need to sign in again and that this only affects this device', () => {
+    it('says this only affects this device and that Discrub signs in again from the open tab (row 115)', () => {
       expect(
-        screen.getByText(/sign in again afterward/),
+        screen.getByText(/signs in again from the open Discord tab/),
       ).toBeInTheDocument();
       expect(
         screen.getByText(/only affects this device/),
       ).toBeInTheDocument();
+      expect(screen.getByText('Workspaces and their saved messages')).toBeInTheDocument();
     });
 
     it('Cancel closes the modal without calling resetDiscrubData', async () => {

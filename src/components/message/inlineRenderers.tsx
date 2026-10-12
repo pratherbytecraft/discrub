@@ -1,3 +1,5 @@
+import { formatFixed } from '@/utils/numberFormat';
+import { t as translate } from '@/i18n';
 import { memo, useState } from 'react';
 import {
   Box,
@@ -52,8 +54,8 @@ const isAudioAttachment = (a: Attachment): boolean => {
 const formatFileSize = (bytes: number | undefined): string => {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024) return `${formatFixed(bytes / 1024, 1)} KB`;
+  return `${formatFixed(bytes / (1024 * 1024), 1)} MB`;
 };
 
 /* ───────────────────────── Inline attachments ───────────────────────── */
@@ -79,7 +81,7 @@ export const InlineAttachments = memo(function InlineAttachments({
               key={a.id}
               role={onOpenGallery ? 'button' : undefined}
               tabIndex={onOpenGallery ? 0 : undefined}
-              aria-label={onOpenGallery ? 'View Attachments' : undefined}
+              aria-label={onOpenGallery ? translate('messageActions.viewAttachments') : undefined}
               onClick={onOpenGallery}
               onKeyDown={(e) => {
                 if (onOpenGallery && (e.key === 'Enter' || e.key === ' ')) {

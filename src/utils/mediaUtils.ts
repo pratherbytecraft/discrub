@@ -1,3 +1,4 @@
+import { formatUpTo } from '@/utils/numberFormat';
 import type { Message, Attachment } from 'discrub-core/types/discord-types';
 import { IMAGE_EXTS, VIDEO_EXTS, AUDIO_EXTS } from '@/constants/mediaExtensions';
 import { forEachMessage, type MessageSource } from '@services/messageSource';
@@ -22,7 +23,7 @@ export function formatBytes(bytes: number, decimals = 1): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   const value = bytes / Math.pow(k, i);
 
-  return `${parseFloat(value.toFixed(decimals))} ${sizes[i]}`;
+  return `${formatUpTo(value, decimals)} ${sizes[i]}`;
 }
 
 export function categorizeAttachment(filename: string): MediaCategory {

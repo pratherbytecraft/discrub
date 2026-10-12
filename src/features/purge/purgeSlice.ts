@@ -2024,7 +2024,7 @@ const executeBulkPurge = async (
     const modeLabel = purgeModeLabel(mode);
 
     if (!serverContext) {
-      dispatch(showOperationTip('Purge Operation Queued'));
+      dispatch(showOperationTip(t('operation.queued.purge')));
     }
 
     // Snapshot delay settings at start
@@ -2603,7 +2603,7 @@ export const purgeGuilds = createAsyncThunk<
       return rejectWithValue('No target users specified');
     }
 
-    dispatch(showOperationTip('Purge Operation Queued'));
+    dispatch(showOperationTip(t('operation.queued.purge')));
     dispatch(addStatusEntry({
       level: 'info',
       message: t('status.purge.startingServers', { mode: modeLabel, count: guilds.length }),

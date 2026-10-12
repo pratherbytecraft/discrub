@@ -101,6 +101,7 @@ import ExportDialog from '@containers/ExportView/ExportDialog';
 import { fetchReactingUsers } from '@features/message/messageSlice';
 import { t as translate } from '@/i18n';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 
 /**
  * #271: the delete confirm dialog suggests rehydrating first once the
@@ -873,7 +874,7 @@ const MessageRow = memo(function MessageRow({
   onOpenReactions,
 }: MessageRowProps) {
   const parsedDate = parseDiscordTimestamp(message.timestamp);
-  const displayTime = parsedDate ? parsedDate.toLocaleString() : message.timestamp;
+  const displayTime = parsedDate ? parsedDate.toLocaleString(i18n.language) : message.timestamp;
   const handleChange = useCallback(() => onToggle(message.id), [onToggle, message.id]);
 
   // Rows marked gone (deleted on Discord) are not actionable — they

@@ -1,4 +1,5 @@
 /** The bar's first shelf, and the most the browsers give an extension without a new permission (plan 3.1). */
+import { formatFixed } from '@/utils/numberFormat';
 export const BASE_SHELF_BYTES = 10 * 1024 ** 3;
 
 /** Amber from this share of the browser's allowance. */
@@ -32,7 +33,7 @@ export function segmentPercents(bytes: number[], shelf: number): number[] {
 
 /** "1.4 GB", "490 MB", "12 KB", decimal like the browsers' storage pages. */
 export function formatDiskSize(bytes: number): string {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  if (bytes >= 1e9) return `${formatFixed(bytes / 1e9, 1)} GB`;
   if (bytes >= 1e6) return `${Math.round(bytes / 1e6)} MB`;
   if (bytes >= 1e3) return `${Math.round(bytes / 1e3)} KB`;
   return bytes > 0 ? '1 KB' : '0 MB';

@@ -121,6 +121,7 @@ const Sidebar = ({ open = false, onClose }: SidebarProps) => {
       }}
     >
       <IconButton
+        aria-label={t('sidebar.backToServers')}
         onClick={handleBackToServers}
         size="small"
         sx={{

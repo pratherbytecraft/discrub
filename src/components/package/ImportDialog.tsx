@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Box,
@@ -62,6 +63,7 @@ export function friendlyImportError(raw: string): string {
 }
 
 const ImportDialog = ({ open, onClose, onImported }: ImportDialogProps) => {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const status = useAppSelector(selectPackageStatus);
   const error = useAppSelector(selectPackageError);
@@ -107,19 +109,17 @@ const ImportDialog = ({ open, onClose, onImported }: ImportDialogProps) => {
     <Dialog open={open} onClose={isParsing ? undefined : onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 5 }}>
         <ArchiveIcon color="primary" />
-        Import Discord Data Package
+        {t('package.importDialogTitle')}
         <DialogCloseIcon
           onClose={onClose}
           disabled={isParsing}
-          label="Close import dialog"
+          label={t('package.importDialogClose')}
         />
       </DialogTitle>
 
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Upload the ZIP file from Discord → Settings → Privacy &amp; Safety →
-          Request All of My Data. Your package is processed entirely in your
-          browser — nothing is uploaded.
+          {t('package.importDialogIntro')}
         </Typography>
 
         <Box
@@ -128,7 +128,7 @@ const ImportDialog = ({ open, onClose, onImported }: ImportDialogProps) => {
           onDragLeave={() => setIsDragging(false)}
           onClick={() => !isParsing && inputRef.current?.click()}
           role="button"
-          aria-label="Upload Discord data package"
+          aria-label={t('package.importDialogUpload')}
           tabIndex={isParsing ? -1 : 0}
           sx={{
             border: '2px dashed',
@@ -160,18 +160,18 @@ const ImportDialog = ({ open, onClose, onImported }: ImportDialogProps) => {
               )}
               <Typography variant="body2" color="text.secondary">
                 {importProgress && importProgress.total > 0
-                  ? `Reading package… ${Math.min(100, Math.round((importProgress.read / importProgress.total) * 100))}%`
-                  : 'Parsing package…'}
+                  ? t('package.readingPackage', { pct: Math.min(100, Math.round((importProgress.read / importProgress.total) * 100)) })
+                  : t('package.parsingPackage')}
               </Typography>
             </Box>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
               <UploadIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
               <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                Drop ZIP here or click to browse
+                {t('package.dropZip')}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Only your Discord data package is supported
+                {t('package.onlyPackage')}
               </Typography>
             </Box>
           )}
@@ -195,7 +195,7 @@ const ImportDialog = ({ open, onClose, onImported }: ImportDialogProps) => {
 
       <DialogActions>
         <Button onClick={onClose} disabled={isParsing}>
-          Cancel
+          {t('common.cancel')}
         </Button>
       </DialogActions>
     </Dialog>

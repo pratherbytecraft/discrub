@@ -168,7 +168,7 @@ const selectBaseSummary = createSelector(
           : 0;
         return {
           isRunning: true, isPaused, tier: 'heavy',
-          label: isPaused ? t('operation.pausedExporting') : t('operation.exportingStage', { stage: progress.stage, pct }),
+          label: isPaused ? t('operation.pausedExporting') : t('operation.exportingStage', { stage: t(`operation.stage.${progress.stage}`, { defaultValue: progress.stage }), pct }),
           progress: pct,
         };
       }
@@ -217,8 +217,8 @@ const selectBaseSummary = createSelector(
         return {
           isRunning: true, isPaused, tier: 'heavy',
           label: isPaused
-            ? t('operation.pausedPackageExportStage', { stage: progress.stage })
-            : t('operation.packageExportStagePct', { stage: progress.stage, pct }),
+            ? t('operation.pausedPackageExportStage', { stage: t(`operation.stage.${progress.stage}`, { defaultValue: progress.stage }) })
+            : t('operation.packageExportStagePct', { stage: t(`operation.stage.${progress.stage}`, { defaultValue: progress.stage }), pct }),
           progress: pct,
         };
       }
@@ -226,8 +226,8 @@ const selectBaseSummary = createSelector(
         return {
           isRunning: true, isPaused, tier: 'heavy',
           label: isPaused
-            ? t('operation.pausedPackageExportStage', { stage: progress.stage })
-            : t('operation.packageExportStage', { stage: progress.stage }),
+            ? t('operation.pausedPackageExportStage', { stage: t(`operation.stage.${progress.stage}`, { defaultValue: progress.stage }) })
+            : t('operation.packageExportStage', { stage: t(`operation.stage.${progress.stage}`, { defaultValue: progress.stage }) }),
         };
       }
       return {

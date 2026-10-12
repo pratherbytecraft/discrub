@@ -1,6 +1,7 @@
 import { Box, Button, Typography } from '@mui/material';
 import { FilterList as FiltersIcon, BarChart as AnalyticsIcon, Forum as ThreadIcon, OpenInFull as OpenIcon, CloseFullscreen as BackIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { ChannelType } from 'discrub-core/discord-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { setDialogOpen } from '@features/app/appSlice';
@@ -45,7 +46,7 @@ export const OperatorRecent = () => {
         <Box key={r.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', fontSize: '0.8rem' }}>
           <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'success.main', alignSelf: 'center', flexShrink: 0 }} />
           <Typography variant="body2" noWrap sx={{ flex: 1, fontSize: 'inherit' }}>{r.isBulk ? t('workbench.channelCount', { count: r.channelCount ?? 0 }) : r.channelName}</Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{new Date(r.timestamp).toLocaleDateString()}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{new Date(r.timestamp).toLocaleDateString(i18n.language)}</Typography>
         </Box>
       ))}
     </Box>

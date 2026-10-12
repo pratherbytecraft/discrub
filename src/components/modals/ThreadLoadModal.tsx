@@ -252,7 +252,6 @@ export const sortThreadsForList = (threads: Channel[]): Channel[] => {
   return [...active, ...archived];
 };
 
-const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 
 /**
  * One line of facts under the thread name: message count, member count,
@@ -262,11 +261,11 @@ const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n ==
 export const describeThread = (thread: Channel): string => {
   const parts: string[] = [];
   const messages = thread.total_message_sent ?? thread.message_count;
-  if (typeof messages === 'number') parts.push(plural(messages, 'message'));
-  if (typeof thread.member_count === 'number') parts.push(plural(thread.member_count, 'member'));
+  if (typeof messages === 'number') parts.push(translate('threadLoad.messageCount', { count: messages }));
+  if (typeof thread.member_count === 'number') parts.push(translate('threadLoad.memberCount', { count: thread.member_count }));
   const meta = thread.thread_metadata;
   if (meta?.archived) {
-    parts.push(meta.archive_timestamp ? `archived ${timeAgo(meta.archive_timestamp)}` : 'archived');
+    parts.push(meta.archive_timestamp ? translate('threadLoad.archivedAgo', { ago: timeAgo(meta.archive_timestamp) }) : translate('threadLoad.archived'));
   }
   return parts.length > 0 ? parts.join(' · ') : `ID ${thread.id}`;
 };
@@ -281,7 +280,9 @@ const ThreadRow = ({
   onPick: (thread: Channel) => void;
 }) => {
   const archived = !!thread.thread_metadata?.archived;
-  const locked = thread.type === PRIVATE_THREAD || !!thread.thread_metadata?.locked;
+  // Row 101 (pass 2): the Private chip is for private threads only; a locked public thread keeps the lock icon.
+  const isPrivate = thread.type === PRIVATE_THREAD;
+  const locked = isPrivate || !!thread.thread_metadata?.locked;
   const Icon = archived ? ArchiveOutlinedIcon : locked ? LockOutlinedIcon : ForumOutlinedIcon;
   return (
     <ListItemButton
@@ -321,10 +322,10 @@ const ThreadRow = ({
         sx={{ my: 0 }}
       />
       {archived && (
-        <Chip label="Archived" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+        <Chip label={translate('threadLoad.archivedChip')} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
       )}
-      {!archived && locked && (
-        <Chip label="Private" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+      {!archived && isPrivate && (
+        <Chip label={translate('threadLoad.privateChip')} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
       )}
       <ChevronRightIcon
         className="thread-row-go"

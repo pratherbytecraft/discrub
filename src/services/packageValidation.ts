@@ -1,3 +1,4 @@
+import { t as translate } from '@/i18n';
 import type { ParsedPackage, PackageValidationResult } from '@/features/package/packageTypes';
 
 /** Thrown when a package cannot be read or is missing what Discrub needs. */
@@ -28,9 +29,7 @@ export function validatePackage(
   }
 
   if (!authenticatedUserId) {
-    warnings.push(
-      'Not signed in: analytics and browsing are available, but deleting or editing messages requires authentication.',
-    );
+    warnings.push(translate('package.notSignedInWarning'));
     return { ok: true, readOnly: true, warnings, errors };
   }
 

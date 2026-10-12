@@ -11,6 +11,7 @@ import {
   Select,
   TextField,
   Checkbox,
+  Radio,
   Box,
   Collapse,
   Alert,
@@ -177,7 +178,7 @@ const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, package
                     key={value}
                     value={value}
                     control={
-                      <Checkbox
+                      <Radio
                         checked={exportState.exportFormat === value}
                         onChange={handleFormatChange}
                         value={value}

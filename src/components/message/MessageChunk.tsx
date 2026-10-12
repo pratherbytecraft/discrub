@@ -107,7 +107,8 @@ const MessageChunk = function MessageChunk({
     const timeFmt = settings?.timeFormat || 'h:mm aa';
     headerTimestamp = format(
       new Date(chunk.firstTimestamp),
-      `MMM d, yyyy ${timeFmt}`,
+      // Row 98 (pass 2): the localized medium date, "Oct 10, 2026" in English and "10. Okt. 2026" in German.
+      `PP ${timeFmt}`,
       { locale: getDateLocale() },
     );
   } catch {

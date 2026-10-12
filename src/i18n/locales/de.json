@@ -276,6 +276,23 @@
     "sessionOf": "Sitzung vom {{date}} {{time}}"
   },
   "operation": {
+    "stage": {
+      "avatars": "Avatare",
+      "attachments": "Anhänge",
+      "emojis": "Emojis",
+      "stickers": "Sticker",
+      "roles": "Rollen",
+      "html": "HTML",
+      "finalizing": "Abschluss"
+    },
+    "queued": {
+      "delete": "Löschvorgang eingereiht",
+      "edit": "Bearbeitung eingereiht",
+      "search": "Suche eingereiht",
+      "loadAll": "Alle laden eingereiht",
+      "purge": "Purge eingereiht",
+      "bulkExport": "Sammelexport eingereiht"
+    },
     "serverChannelLabel": "Server {{serverIndex}}/{{serverTotal}} {{serverName}} · Kanal {{channelIndex}}/{{channelTotal}}: {{channelName}}",
     "channelLabel": "Kanal {{channelIndex}}/{{channelTotal}}: {{channelName}}",
     "paused": "Pausiert · {{label}}",
@@ -396,6 +413,7 @@
     }
   },
   "delays": {
+    "effective": "Effektive Verzögerung: {{from}}s bis {{to}}s",
     "searchDelay": "Suchverzögerung",
     "searchDelayHelp": "Grundverzögerung zwischen Such- und Ladevorgängen",
     "deleteDelay": "Lösch-/Bearbeitungsverzögerung",
@@ -547,7 +565,7 @@
     "itemPresets": "Exportvorlagen und letzte Exporte",
     "itemCache": "Zwischengespeicherte Benutzerdaten und Statusprotokoll",
     "itemPackages": "Importierte Datenpakete und heruntergeladene Medien",
-    "outro": "Danach musst du dich erneut anmelden. Das lässt sich nicht rückgängig machen und betrifft nur dieses Gerät.",
+    "outro": "Das kann nicht rückgängig gemacht werden und betrifft nur dieses Gerät. Discrub meldet sich über den offenen Discord-Tab wieder an.",
     "cancel": "Abbrechen",
     "resetting": "Wird zurückgesetzt…",
     "confirm": "Alles zurücksetzen"
@@ -724,23 +742,23 @@
       "title": "Mehrfachauswahl",
       "content": "Klicke hier, um mehrere gleichzeitig auszuwählen. Der Link „Alle auswählen“ nimmt die ganze sichtbare Liste, und verfügbare Sammelaktionen erscheinen unter dem Auswahlzähler."
     },
-    "author-actions": {
+    "author-avatar": {
       "title": "Autor-Aktionen",
       "content": "Klicke im Feed auf Avatar oder Namen eines Autors, um das Profil zu öffnen. Von dort filterst du den Kanal mit einem Klick auf dessen Nachrichten oder auf Nachrichten, die ihn erwähnen."
     },
-    "filters": {
+    "search-filters": {
       "title": "Filter",
       "content": "Zwei Ebenen in einem Dialog: Suche fragt die Discord-API ab (Autor, Inhalt, Datum, Typen, Erwähnungen, angepinnt, Autortyp) und zeigt „X von Y Treffern geladen“, während Ergebnisse eintreffen. Eingrenzen filtert die bereits geladenen Nachrichten rein lokal, ohne API-Aufrufe."
     },
-    "export": {
+    "export-button": {
       "title": "Export",
       "content": "Exportiere Nachrichten als HTML, CSV, JSON oder nur Medien. Wähle eine Vorlage (9 eingebaut) oder nutze deine gespeicherten Einstellungen."
     },
-    "analytics": {
+    "analytics-button": {
       "title": "Statistiken",
       "content": "Sieh Erwähnungshäufigkeit, mit wem du am meisten schreibst und das Engagement über die Zeit. Exportiere die Statistiken als CSV zur weiteren Auswertung."
     },
-    "focus-mode": {
+    "focus-button": {
       "title": "Fokusmodus",
       "content": "Blendet Seitenleiste und Statusbereich für ablenkungsfreies Lesen aus. F schaltet um, Escape beendet."
     },
@@ -748,15 +766,15 @@
       "title": "Nachrichtenfeed",
       "content": "Klicke eine Nachricht an, um sie auszuwählen, und nutze dann die Werkzeugleiste zum Löschen, Bearbeiten oder Verwalten von Anhängen. Klicke auf Antwortleisten oder Anpinn-Hinweise, um zur referenzierten Nachricht zu springen."
     },
-    "refine-vs-search": {
+    "refine-section": {
       "title": "Eingrenzen vs. Suche",
       "content": "Eingrenzen filtert die bereits geladenen Nachrichten im Feed: sofort, lokal, ohne API-Aufrufe. Die Suche oben fragt die Discord-API ab und holt neue Ergebnisse. Nutze Eingrenzen für das Vorhandene und Suche, wenn du mehr finden musst."
     },
-    "quick-filter-buttons": {
+    "profile-quick-filters": {
       "title": "Schnellfilter",
       "content": "Diese Schaltflächen grenzen den Kanal auf Nachrichten dieses Benutzers oder auf Nachrichten ein, die ihn erwähnen. Andere aktive Filter (Datum, Inhalt usw.) bleiben erhalten. Nur der Benutzerbezug ändert sich."
     },
-    "purge-modes": {
+    "purge-mode-toggle": {
       "title": "Bereinigungsmodi",
       "content": "Nachrichten löscht die ganze Nachricht. Nur Anhänge bearbeitet die Nachricht und entfernt ihre Anhänge, ohne den Text zu löschen. Reaktionen entfernt bestimmte Reaktionen. Alle Reaktionen löschen entfernt jede Reaktion (benötigt die Berechtigung „Nachrichten verwalten“). Alle vier sind endgültig, lies also die Zusammenfassung vor dem Bestätigen."
     },
@@ -772,11 +790,11 @@
       "title": "Exportvorlagen",
       "content": "Eine Vorlage ist ein gespeicherter Schnappschuss aller Exporteinstellungen: Format, Seitengröße, Template, Medienoptionen. Wähle eine, um alle Einstellungen auf einmal anzuwenden. Die 9 eingebauten Vorlagen decken gängige Fälle ab (Discord-HTML, Tabelle, nur Medien). Weicht etwas von der Vorlage ab, leert sich die Auswahl."
     },
-    "search-match-count": {
+    "search-match-counter": {
       "title": "Trefferzähler",
       "content": "„X von Y Treffern geladen“ heißt: Discord hat Y passende Nachrichten gefunden, aber erst X sind geladen. Scrolle nach unten (oder klicke Alle laden), um den Rest in Seiten zu je 25 Nachrichten zu holen. Discord begrenzt jede Suche auf 5000 Treffer, aber Alle laden hängt weitere Abfragen automatisch an."
     },
-    "rehydrate": {
+    "package-rehydrate": {
       "title": "Anreichern (vollständige Daten laden)",
       "content": "Dein Datenpaket enthält nur die Grunddaten: Nachrichtentext, Zeitstempel, Anhang-URLs. Die Anreicherung holt aktuelle Nachrichtenobjekte von Discord, sodass du auch Reaktionen, Antwortvorschauen, benannte Erwähnungen, Embeds und frische signierte CDN-Links bekommst. Die Schaltfläche zeigt beim Überfahren eine geschätzte Laufzeit. Eine serverweite Vorab-Suche deckt die meisten Nachrichten in einem Durchgang ab, bevor Einzelabfragen beginnen. Ergebnisse bleiben in IndexedDB, sodass ein angereicherter Kanal sofort wieder öffnet."
     },
@@ -842,6 +860,7 @@
     "noMessagesFound_dm": "Keine Nachrichten in dieser Unterhaltung gefunden"
   },
   "messageActions": {
+    "viewAttachments": "Anhänge anzeigen",
     "deleteLockDm": "In DMs kannst du nur deine eigenen Nachrichten löschen.",
     "deleteLockChannel": "Ohne die Berechtigung „Nachrichten verwalten“ kannst du in diesem Kanal nur deine eigenen Nachrichten löschen.",
     "editLockSystem": "Systemnachrichten (Anpinnen, Beitritte, Boosts usw.) lassen sich nicht bearbeiten.",
@@ -880,6 +899,14 @@
     "startOver": "Neu beginnen"
   },
   "threadLoad": {
+    "messageCount_one": "{{count, number}} Nachricht",
+    "messageCount_other": "{{count, number}} Nachrichten",
+    "memberCount_one": "{{count, number}} Mitglied",
+    "memberCount_other": "{{count, number}} Mitglieder",
+    "archivedAgo": "archiviert {{ago}}",
+    "archived": "archiviert",
+    "archivedChip": "Archiviert",
+    "privateChip": "Privat",
     "title": "Thread laden",
     "threadsInChannel": "Threads in diesem Kanal",
     "refresh": "Threadliste aktualisieren",
@@ -1465,6 +1492,7 @@
     "close": "Ankündigung schließen"
   },
   "profile": {
+    "priority": "PRIORITÄT {{n}}",
     "close": "Profil schließen",
     "filterBy": "Nachrichten von {{name}} filtern",
     "filterMentioning": "Nachrichten filtern, die {{name}} erwähnen",
@@ -1494,6 +1522,16 @@
     "copied": "{{label}} in die Zwischenablage kopiert"
   },
   "package": {
+    "importDialogTitle": "Discord-Datenpaket importieren",
+    "importDialogClose": "Importdialog schließen",
+    "importDialogIntro": "Lade die ZIP-Datei aus Discord hoch: Einstellungen → Datenschutz & Sicherheit → Alle meine Daten anfordern. Dein Paket wird komplett in deinem Browser verarbeitet, nichts wird hochgeladen.",
+    "importDialogUpload": "Discord-Datenpaket hochladen",
+    "readingPackage": "Paket wird gelesen… {{pct}}%",
+    "parsingPackage": "Paket wird ausgewertet…",
+    "dropZip": "ZIP hier ablegen oder klicken zum Auswählen",
+    "onlyPackage": "Nur dein Discord-Datenpaket wird unterstützt",
+    "notSignedInWarning": "Nicht angemeldet: Auswertung und Durchstöbern sind möglich, Löschen oder Bearbeiten von Nachrichten braucht eine Anmeldung.",
+    "groupDm": "Gruppen-DM",
     "importTitle": "Discord-Datenpaket importieren",
     "importIntro": "Werte deinen Nachrichtenverlauf aus, lösche alte Nachrichten anhand der IDs aus dem Paket oder wandle es in einen Discrub-HTML-Export um. Die Verarbeitung läuft komplett in deinem Browser.",
     "chooseZip": "ZIP-Datei wählen",
@@ -1684,6 +1722,7 @@
       "removedAllAttachments": "Alle Anhänge von Nachricht {{id}} entfernt",
       "fetchFailed": "Nachrichten konnten nicht geladen werden",
       "loaded": "{{count}} Nachrichten geladen",
+      "loadedFiltered": "{{count}} gefilterte Nachrichten geladen",
       "fetchMoreFailed": "Weitere Nachrichten konnten nicht geladen werden",
       "loadedMore": "{{count}} weitere Nachrichten geladen",
       "searchStarting": "Suche: Start...",
