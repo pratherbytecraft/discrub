@@ -179,6 +179,27 @@ const MessageChunk = function MessageChunk({
           >
             {displayName}
           </Typography>
+          {(author?.bot || first.webhook_id) && (
+            // Row 99 of the 2.2.5 pass: the feed marks bots and apps the
+            // way the export's user card does.
+            <Box
+              component="span"
+              data-testid="message-chunk-bot-tag"
+              sx={{
+                bgcolor: '#5865f2',
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 600,
+                lineHeight: 1.5,
+                px: 0.75,
+                borderRadius: '3px',
+                textTransform: 'uppercase',
+                flexShrink: 0,
+              }}
+            >
+              {first.webhook_id ? t('feed.appTag') : t('feed.botTag')}
+            </Box>
+          )}
           {roleIcon?.type === 'image' && (
             <Box
               component="img"

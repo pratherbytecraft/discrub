@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getExportService, generatePlainTextReadme } from './exportService';
 import { createMockMessages } from '@/test/fixtures';
@@ -1115,6 +1116,21 @@ describe('exportService', () => {
         formattingContext,
       );
     };
+
+    it('writes the system line in the app language, author first (row 99)', async () => {
+      await i18n.changeLanguage('de');
+      try {
+        const html = runRender({
+          id: 'sys-pin-de', type: 6, timestamp: '2026-06-15T14:30:00.000Z', content: '',
+          author: { id: 'u1', username: 'alice', global_name: 'Alice' }, attachments: [], embeds: [], reactions: [],
+        });
+        expect(html).toContain('hat eine Nachricht in diesem Kanal angepinnt');
+        expect(html).not.toContain('pinned a message');
+        expect(html.indexOf('<strong>Alice</strong>')).toBeGreaterThan(-1);
+      } finally {
+        await i18n.changeLanguage('en');
+      }
+    });
 
     it('renders a CHANNEL_PINNED_MESSAGE (type 6) as a system-message row', () => {
       const msg = {

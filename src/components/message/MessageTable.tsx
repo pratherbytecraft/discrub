@@ -40,7 +40,7 @@ const MessageTable = () => {
   // Until 2026-09-21 an embed-only row (a bot's report) had an empty cell.
   const standIn = useCallback((m: Message, files: number): string => {
     // A call, a pin, a join: the same sentence the feed shows, with the mention markup turned into a plain name.
-    const system = formatSystemMessage(m, { guildName });
+    const system = formatSystemMessage(m, { guildName, translate: (key, params) => t(key, params) });
     if (system?.text) return system.text.replace(/<@!?(\d+)>/g, (_, id: string) => (id === m.author?.id ? (m.author?.global_name || m.author?.username || '@user') : '@user')).replace(/\*\*/g, '');
     if (files) return t('table.attachmentOnly', { count: files });
     const embed = m.embeds?.find((e) => e.title || e.description);

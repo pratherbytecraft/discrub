@@ -53,6 +53,38 @@ describe('MessageChunk row boundary (row 124)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
+  const chunkFor = (m: ReturnType<typeof createMockMessage>) => (
+    <MessageChunk
+      chunk={{ key: 'k', authorId: m.author.id, firstTimestamp: m.timestamp, messages: [m] }}
+      selectedIds={new Set()}
+      formattingContext={{} as any}
+      fullUserMap={{}}
+      cachedUserMap={{}}
+      guildId={null}
+      guildRoles={null}
+      settings={null}
+      onToggleSelect={() => {}}
+      onAuthorClick={() => {}}
+      onMentionClick={() => {}}
+      onOpenAttachments={() => {}}
+      onOpenReactions={() => {}}
+    />
+  );
+
+  it('tags a bot author BOT and a webhook post APP, and a person nothing (row 99)', () => {
+    const person = createMockMessage({ id: 'p' });
+    const { unmount } = renderWithProviders(chunkFor(person));
+    expect(screen.queryByTestId('message-chunk-bot-tag')).toBeNull();
+    unmount();
+    const bot = createMockMessage({ id: 'b', author: { ...person.author, bot: true } });
+    const r2 = renderWithProviders(chunkFor(bot));
+    expect(screen.getByTestId('message-chunk-bot-tag')).toHaveTextContent('BOT');
+    r2.unmount();
+    const hook = createMockMessage({ id: 'w', webhook_id: 'wh1', author: { ...person.author, bot: true } });
+    renderWithProviders(chunkFor(hook));
+    expect(screen.getByTestId('message-chunk-bot-tag')).toHaveTextContent('APP');
+  });
+
   it('shows a line in place of a row that cannot render and keeps the rows around it', () => {
     const good = createMockMessage({ id: 'good', content: 'fine' });
     const bad = createMockMessage({ id: 'bad', content: 'broken' });

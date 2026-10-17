@@ -3,6 +3,7 @@ import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
 import SystemMessageRow from './SystemMessageRow';
 import type { Message } from 'discrub-core/types/discord-types';
+import i18n from '@/i18n';
 
 // Wrapper to mirror the bare @testing-library render signature used
 // throughout this file: returns { container } + has access to screen.
@@ -41,6 +42,19 @@ describe('<SystemMessageRow />', () => {
     expect(row).toHaveAttribute('data-system-kind', 'pin');
     expect(row).toHaveTextContent('Alice');
     expect(row).toHaveTextContent('pinned a message to this channel');
+  });
+
+  it('reads in the app language, with the author still the first bold (row 99)', async () => {
+    await i18n.changeLanguage('de');
+    try {
+      const { container } = render(<SystemMessageRow message={baseMsg(6)} formattingContext={formattingContext} />);
+      const row = screen.getByTestId('system-message-row');
+      expect(row).toHaveTextContent('hat eine Nachricht in diesem Kanal angepinnt');
+      expect(row).not.toHaveTextContent('pinned a message');
+      expect(container.querySelector('strong')?.textContent).toBe('Alice');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('bolds the author via <strong> tags', () => {

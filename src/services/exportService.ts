@@ -95,6 +95,7 @@ import {
   buildExportFooterHtml,
 } from './exportFooter';
 import { getUserRoleColor, getUserRoleIcon } from '@/utils/roleColorUtils';
+import { t as translate } from '@/i18n';
 
 /**
  * Generate a README.html to include in exported ZIPs explaining how to navigate the export.
@@ -935,6 +936,9 @@ class ExportService {
         // thread starter), so we fall through in those cases.
         const systemDescriptor = formatSystemMessage(msg, {
           guildName: formattingContext?.guildName,
+          // Row 99 of the 2.2.5 pass: the export reads in the app language,
+          // the same line the feed shows. The author stays the first bold.
+          translate: (key, params) => translate(key, params),
         });
         if (systemDescriptor) {
           const systemTextRaw = formattingContext

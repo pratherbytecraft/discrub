@@ -81,6 +81,8 @@ const SystemMessageRow = memo(function SystemMessageRow({
   const token = useAppSelector(selectAuthToken);
   const descriptor = formatSystemMessage(message, {
     guildName: guildName ?? formattingContext.guildName,
+    // Row 99 of the 2.2.5 pass: the line reads in the app language.
+    translate: (key, params) => t(key, params),
   });
 
   // Navigation action for the "See all …" link only. Type 6 (pinned)
