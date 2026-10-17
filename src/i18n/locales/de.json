@@ -148,6 +148,7 @@
     "open": "Öffnen",
     "filtersActive": "{{count}} aktiv",
     "filtersNone": "Keine. Alles Geladene wird angezeigt.",
+    "visibleOfLoaded": "{{visible, number}} sichtbar · {{loaded, number}} geladen",
     "logEmpty": "Noch nichts.",
     "searchDms": "Unterhaltung finden"
   },
@@ -398,7 +399,7 @@
     "savedTokenHelp": "Dein Discord-Token ist auf diesem Gerät gespeichert, damit du zwischen Besuchen angemeldet bleibst. Das Vergessen meldet dich jetzt nicht ab, aber beim nächsten Besuch musst du dein Token erneut einfügen.",
     "forgetSavedToken": "Gespeichertes Token vergessen",
     "reset": "Zurücksetzen",
-    "resetHelp": "Löscht alle Daten, die Discrub in deinem Browser speichert. Hilfreich bei anhaltenden Problemen, die Ab- und wieder Anmelden nicht behebt. Danach meldet sich Discrub über den offenen Discord-Tab wieder an.",
+    "resetHelp": "Löscht alle Discrub-Daten in diesem Browser und meldet sich über den offenen Discord-Tab wieder an. Für Probleme, die Ab- und Anmelden nicht behebt.",
     "displayTab": {
       "intro": "Lege fest, wie Datum, Uhrzeit und Listen angezeigt werden.",
       "dateFormat": "Datumsformat",
@@ -570,7 +571,7 @@
     "fallback": "Ein unerwarteter Fehler ist aufgetreten.",
     "tryAgain": "Erneut versuchen",
     "openWithoutRestoring": "Ohne Wiederherstellung öffnen",
-    "openWithoutRestoringHint": "Ohne Wiederherstellung öffnen lädt Discrub neu, ohne zur letzten Unterhaltung zurückzukehren. Daten zurücksetzen löscht alles, was Discrub in diesem Browser speichert."
+    "openWithoutRestoringHint": "Ohne Wiederherstellung öffnen überspringt die letzte Unterhaltung. Daten zurücksetzen löscht alles, was Discrub hier speichert."
   },
   "resetDiscrub": {
     "itemWorkspaces": "Arbeitsbereiche und ihre gespeicherten Nachrichten",
@@ -582,7 +583,7 @@
     "itemPresets": "Exportvorlagen und letzte Exporte",
     "itemCache": "Zwischengespeicherte Benutzerdaten und Statusprotokoll",
     "itemPackages": "Importierte Datenpakete und heruntergeladene Medien",
-    "outro": "Das kann nicht rückgängig gemacht werden und betrifft nur dieses Gerät. Discrub meldet sich über den offenen Discord-Tab wieder an.",
+    "outro": "Nicht rückgängig zu machen, nur dieses Gerät. Discrub meldet sich über den offenen Discord-Tab wieder an.",
     "cancel": "Abbrechen",
     "resetting": "Wird zurückgesetzt…",
     "confirm": "Alles zurücksetzen"
@@ -691,6 +692,9 @@
     "purgeSelectedAria": "Ausgewählte {{noun}} bereinigen",
     "purge": "Bereinigen",
     "copySelectedNamesAria": "Namen der ausgewählten {{noun}} kopieren",
+    "nounChannels": "Kanäle",
+    "nounConversations": "Unterhaltungen",
+    "nounServers": "Server",
     "copy": "Kopieren"
   },
   "dm": {
@@ -870,7 +874,7 @@
     "signInAgain": "Erneut anmelden",
     "signedInAgain": "Erneut angemeldet. Fortsetzen lädt weiter.",
     "signInUnchanged": "Discord hat noch die abgelaufene Anmeldung. Melde dich in diesem Tab bei Discord an und versuche es erneut.",
-    "signInOtherAccount": "Discord ist mit einem anderen Konto angemeldet. Melde dich mit demselben Konto an und versuche es erneut.",
+    "signInOtherAccount": "Discord ist mit einem anderen Konto angemeldet. Melde dich mit demselben an und versuche es erneut.",
     "signInFailed": "Die Anmeldung konnte nicht von Discord gelesen werden. Melde dich in diesem Tab bei Discord an und versuche es erneut.",
     "dismiss": "Ausblenden",
     "noMessagesFound_channel": "Keine Nachrichten in diesem Kanal gefunden",
@@ -1546,13 +1550,13 @@
     "leftServer": "Server verlassen",
     "importDialogTitle": "Discord-Datenpaket importieren",
     "importDialogClose": "Importdialog schließen",
-    "importDialogIntro": "Lade die ZIP-Datei aus Discord hoch: Einstellungen → Datenschutz & Sicherheit → Alle meine Daten anfordern. Dein Paket wird komplett in deinem Browser verarbeitet, nichts wird hochgeladen.",
+    "importDialogIntro": "Zieh die ZIP aus Discord hierher: Einstellungen → Datenschutz & Sicherheit → Alle meine Daten anfordern. Alles bleibt in deinem Browser.",
     "importDialogUpload": "Discord-Datenpaket hochladen",
     "readingPackage": "Paket wird gelesen… {{pct}}%",
     "parsingPackage": "Paket wird ausgewertet…",
     "dropZip": "ZIP hier ablegen oder klicken zum Auswählen",
     "onlyPackage": "Nur dein Discord-Datenpaket wird unterstützt",
-    "notSignedInWarning": "Nicht angemeldet: Auswertung und Durchstöbern sind möglich, Löschen oder Bearbeiten von Nachrichten braucht eine Anmeldung.",
+    "notSignedInWarning": "Nicht angemeldet. Durchstöbern und Auswertung gehen; Löschen und Bearbeiten brauchen eine Anmeldung.",
     "groupDm": "Gruppen-DM",
     "importTitle": "Discord-Datenpaket importieren",
     "importIntro": "Werte deinen Nachrichtenverlauf aus, lösche alte Nachrichten anhand der IDs aus dem Paket oder wandle es in einen Discrub-HTML-Export um. Die Verarbeitung läuft komplett in deinem Browser.",
@@ -1620,8 +1624,8 @@
     "scanMatched_one": "Die Kanalsuche hat {{hits, number}} von {{count, number}} Paketnachricht gefunden.",
     "scanMatched_other": "Die Kanalsuche hat {{hits, number}} von {{count, number}} Paketnachrichten gefunden.",
     "scanForbidden": "Kanalsuche nicht verfügbar (keine Berechtigung). Nachrichten werden einzeln geprüft.",
-    "scanCapped": "Die Kanalsuche hat {{count, number}} Nachrichten geliefert, mehr erlaubt Discord in einer Suche nicht. Der Rest wird einzeln geprüft.",
-    "scanGone": "Dieser Kanal ist auf Discord nicht mehr erreichbar. Du hast den Server vielleicht verlassen, wurdest entfernt, oder der Server wurde gelöscht. Die Paketdaten bleiben unten sichtbar.",
+    "scanCapped": "Die Kanalsuche hat {{count, number}} Nachrichten geliefert, Discords Grenze pro Suche. Der Rest wird einzeln geprüft.",
+    "scanGone": "Dieser Kanal ist auf Discord weg (verlassen, entfernt oder der Server wurde gelöscht). Die Paketdaten bleiben unten sichtbar.",
     "scanFailed": "Kanalsuche fehlgeschlagen. Nachrichten werden einzeln geprüft.",
     "scanUnavailable": "Kanalsuche nicht verfügbar. Nachrichten werden einzeln geprüft.",
     "richDataGone": "Vollständige Daten für „{{channel}}“ konnten nicht geladen werden: Der Kanal ist auf Discord nicht mehr erreichbar.",
@@ -1709,7 +1713,7 @@
     "customIcon": "Eigenes Symbol",
     "useDefault": "Standard verwenden",
     "error": {
-      "accessEnded": "Dein Unterstützerzugang ist abgelaufen. Klicke nach der Verlängerung auf Ko-fi auf Aktualisieren oder füge den neuen Schlüssel aus deiner E-Mail ein.",
+      "accessEnded": "Dein Unterstützerzugang ist abgelaufen. Klicke nach der Verlängerung auf Aktualisieren oder füge den neuen Schlüssel ein.",
       "notFound": "Dieser Schlüssel passt zu keinem aktiven Unterstützerschlüssel.",
       "tooMany": "Zu viele Versuche. Warte etwas und versuche es erneut.",
       "unreachable": "Der Unterstützer-Server ist nicht erreichbar. Versuche es gleich noch einmal.",
@@ -2027,7 +2031,7 @@
     },
     "export": {
       "reactionsProgress": "Reaktionen: {{current}}/{{total}} Nachrichten verarbeitet",
-      "fetchingReactions": "Export: Reaktionsdetails werden geladen: {{messages, number}} Nachrichten, {{reactions, number}} Reaktionen, ~{{reactors, number}} Reagierende insgesamt. Das kann dauern.",
+      "fetchingReactions": "Export: Reaktionen für {{messages, number}} Nachrichten werden geladen ({{reactions, number}} Reaktionen, ~{{reactors, number}} Reagierende)",
       "collectedReactions": "Export: Reaktionsdaten für {{count}} Nachrichten gesammelt",
       "unknownError": "Unbekannter Fehler",
       "reactionsFailed": "Export: Reaktionsdaten konnten nicht geladen werden: {{error}}",
@@ -2054,7 +2058,7 @@
       "completed": "Export: {{name}} abgeschlossen ({{count}} Nachrichten)",
       "cancelled": "Export: Abgebrochen · {{name}}",
       "stoppedKept": "Export: Gestoppt · {{count}} Nachrichten aus {{name}} behalten, älteste vom {{oldest}}",
-      "stoppedNothingKept": "Export: Gestoppt · nichts aus {{name}} behalten, eine Mediendatei wird erst nach dem Download gespeichert",
+      "stoppedNothingKept": "Export: Gestoppt · nichts aus {{name}} behalten, keine Mediendatei war fertig geladen",
       "stoppedKeepFailed": "Export: Gestoppt · die Nachrichten aus {{name}} konnten nicht geschrieben werden ({{error}})",
       "cancelledValue": "Export abgebrochen",
       "failedDefault": "Nachrichten konnten nicht exportiert werden",
@@ -2093,13 +2097,15 @@
       "bulkFromWorkspace": "Sammelexport: {{name}} war bereits fertig, wird aus diesem Arbeitsbereich geschrieben",
       "storageFullInMemory": "Der Browserspeicher ist voll, der Rest dieses Exports bleibt im Arbeitsspeicher",
       "bulkFailedOn": "Sammelexport: Fehler bei {{name}}: {{error}}",
-      "bulkSignInExpired": "Sammelexport: Anmeldung abgelaufen, gestoppt bei {{done}} von {{total}}. Die ZIP-Datei enthält, was exportiert wurde. Nach einer neuen Anmeldung fortsetzen.",
+      "bulkSignInExpired": "Sammelexport: Anmeldung bei {{done}} von {{total}} abgelaufen. Die ZIP enthält, was fertig war. Nach dem Anmelden fortsetzen.",
       "zeroChannels": "Sammelexport: 0 Kanäle exportiert, die ZIP enthält nur die README. Prüfe die Einträge oben auf übersprungene oder fehlgeschlagene Kanäle.",
-      "bulkStartingDm": "Sammelexport: DM {{index}}/{{total}} startet: {{name}}"
+      "bulkStartingDm": "Sammelexport: DM {{index}}/{{total}} startet: {{name}}",
+      "bulkFinished": "Sammelexport: Fertig, {{done}} von {{total}} Kanälen exportiert, {{failed}} fehlgeschlagen",
+      "bulkFinishedDm": "Sammelexport: Fertig, {{done}} von {{total}} Unterhaltungen exportiert, {{failed}} fehlgeschlagen"
     }
   },
   "rateLimit": {
-    "advice": "Discord begrenzt dieses Konto. Warte mindestens 10 Minuten, bevor du einen neuen Vorgang startest.",
+    "advice": "Discord begrenzt dieses Konto. Warte 10 Minuten vor dem nächsten Vorgang.",
     "toast": "Gestoppt: Discord begrenzt dieses Konto. Warte 10 Minuten, bevor du es erneut versuchst.",
     "message": "Discord begrenzt dieses Konto stark. Der Vorgang wurde gestoppt, um dein Konto zu schützen. Warte mindestens 10 Minuten, bevor du einen neuen startest.",
     "detail_one": " (Discord verlangte {{seconds}} s, {{count}} Rate-Limit in Folge)",
@@ -2117,7 +2123,7 @@
   },
   "restBreakBanner": {
     "title": "{{name}} macht eine Pause, geht weiter in {{time}}",
-    "line": "Discrub pausiert nach jeweils {{active}} Minuten Aktivität für {{minutes}} Minuten. Lange Läufe senden so weniger Anfragen pro Tag.",
+    "line": "Discrub ruht nach jeweils {{active}} Minuten für {{minutes}} Minuten, so senden lange Läufe weniger Anfragen.",
     "skip": "Pause überspringen"
   },
   "restBreak": {
@@ -2355,7 +2361,7 @@
     "duplicateBody": "Erstellt eine Kopie mit {{messages}}, etwa {{size}} mehr belegt.",
     "duplicating": "{{name}} wird dupliziert",
     "duplicated": "{{name}} als {{copy}} dupliziert",
-    "switchStuck": "Arbeitsbereich konnte nicht gewechselt werden. Die laufende Aktion hat nicht angehalten, versuche es gleich noch einmal.",
+    "switchStuck": "Wechsel nicht möglich. Die laufende Aktion hat nicht angehalten, versuche es gleich noch einmal.",
     "busy": "Warte, bis die laufende Aktion fertig ist, oder stoppe sie zuerst.",
     "fullTitle": "Der Browserspeicher ist voll",
     "fullLoadAll": "Load All ist bei {{messages}} Nachrichten in {{conversation}} pausiert.",
@@ -2365,7 +2371,7 @@
     "export": "Exportieren",
     "import": "Importieren",
     "exportTitle": "{{name}} exportieren",
-    "exportBody": "Speichert {{messages}} ({{size}}) in einer .discrub-workspace Datei, die Discrub in jedem Browser importieren kann. Die Datei enthält Nachrichteninhalte.",
+    "exportBody": "Speichert {{messages}} ({{size}}) in einer .discrub-workspace Datei für jeden Browser. Sie enthält Nachrichteninhalte.",
     "exporting": "Arbeitsbereich {{name}} wird exportiert",
     "exported": "{{name}} wurde als Arbeitsbereich Datei gespeichert",
     "exportFailed": "{{name}} konnte nicht exportiert werden",
@@ -2374,7 +2380,7 @@
     "imported": "{{name}} mit {{messages}} importiert",
     "importStoppedFull": "Der Browserspeicher ist voll, der Import von {{name}} wurde gestoppt. Was gelesen wurde, bleibt erhalten.",
     "importFailed": "Diese Arbeitsbereich Datei konnte nicht gelesen werden",
-    "resumeSignInExpired": "Die Anmeldung ist während dieses Laufs abgelaufen. Melde dich in diesem Tab bei Discord an, dann klicke auf Erneut anmelden und Fortsetzen.",
+    "resumeSignInExpired": "Die Anmeldung ist abgelaufen. Melde dich in diesem Tab bei Discord an, dann klicke auf Erneut anmelden und Fortsetzen.",
     "signInExpiredToast": "Anmeldung abgelaufen. Der Lauf wurde gestoppt und kann nach einer neuen Anmeldung fortgesetzt werden.",
     "importDropped": "Ein nicht abgeschlossener Import wurde entfernt.",
     "scopeSkipped": "Ohne Wiederherstellung der letzten Unterhaltung geöffnet.",

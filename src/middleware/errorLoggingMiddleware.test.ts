@@ -68,7 +68,7 @@ describe('errorLoggingMiddleware', () => {
     expect(store.dispatch).toHaveBeenCalledWith(
       addStatusEntry({
         level: 'error',
-        message: 'Your supporter access has ended. After renewing on Ko-fi, click Refresh or paste the new key from your email.',
+        message: 'Your supporter access has ended. After renewing, click Refresh or paste the new key.',
       })
     );
   });

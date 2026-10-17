@@ -368,8 +368,10 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
 
       <MultiSelectControls
         active={multiSelectMode && !queue}
+        // Row 169 (pass 4): Select all fills the text channels, so the total is their count; a voice channel ticked on
+        // its own joins both numbers ("61 of 61"), since the bulk actions act on it too.
         selectedCount={selectedChannels.length}
-        totalCount={selectAllChannelsList.length}
+        totalCount={selectAllChannelsList.length + selectedChannels.filter((sel) => !selectAllChannelsList.some((ch) => ch.id === sel.id)).length}
         allSelected={allSelectableSelected}
         onToggleAll={() =>
           dispatch(allSelectableSelected ? deselectAllChannels() : selectAllChannels(selectAllChannelsList))
@@ -378,7 +380,7 @@ const ChannelList = ({ filterText = '', queue }: ChannelListProps) => {
         onPurge={() => setBulkPurgeOpen(true)}
         onEdit={() => setBulkEditOpen(true)}
         onCopyNames={handleCopySelectedNames}
-        noun="channels"
+        noun={t('nav.nounChannels')}
         resume={{ export: bulkExportResumable, purge: purgeResumable, edit: editResumable }}
       />
 

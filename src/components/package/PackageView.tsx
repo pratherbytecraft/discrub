@@ -34,6 +34,7 @@ import ImportDialog from './ImportDialog';
 import PackageAnalytics from './PackageAnalytics';
 import PackageMessageTable from './PackageMessageTable';
 import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 
 /**
  * Main-pane view shown when the "Package" sidebar tab is active.
@@ -148,8 +149,8 @@ const PackageView = () => {
     const caption = selectedChannel.isOrphan
       ? t('package.orphanCaption')
       : selectedChannel.guildName
-        ? t('package.guildCaption', { guild: selectedChannel.guildName, count: remainingCount.toLocaleString() })
-        : t('package.messagesCaption', { count: remainingCount.toLocaleString() });
+        ? t('package.guildCaption', { guild: selectedChannel.guildName, count: remainingCount.toLocaleString(i18next.language) })
+        : t('package.messagesCaption', { count: remainingCount.toLocaleString(i18next.language) });
     const captionNode = (
       <Typography variant="caption" color="text.secondary" noWrap>
         {caption}
@@ -210,7 +211,7 @@ const PackageView = () => {
   const channelsChipLabel =
     channels.length === nonEmptyChannels
       ? t('package.channels', { count: channels.length })
-      : t('package.channelsOf', { shown: nonEmptyChannels.toLocaleString(), total: channels.length.toLocaleString() });
+      : t('package.channelsOf', { shown: nonEmptyChannels.toLocaleString(i18next.language), total: channels.length.toLocaleString(i18next.language) });
 
   return (
     <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
@@ -280,7 +281,7 @@ const PackageView = () => {
         )}
         {totalDeleted > 0 && (
           <Chip
-            label={t('package.previouslyDeleted', { count: totalDeleted.toLocaleString() })}
+            label={t('package.previouslyDeleted', { count: totalDeleted.toLocaleString(i18next.language) })}
             variant="outlined"
             onDelete={() => dispatch(clearPackageDeletedCache())}
             title={t('package.clearDeletedHistory')}

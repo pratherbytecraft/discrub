@@ -889,6 +889,8 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
         });
       });
       expectStatusEntry('Bulk export: Completed Movie Night');
+      // Row 172 (pass 4): the run closes with one line of its own.
+      expectStatusEntry('Bulk export: Finished, 1 of 1 conversations exported, 0 failed');
     });
   });
 

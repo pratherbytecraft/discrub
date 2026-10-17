@@ -2607,6 +2607,42 @@ describe('Stop keeps the messages pulled so far (#276)', () => {
     expect(entries.some((m: string) => m.includes('never-reached'))).toBe(false);
   });
 
+  it('bulk export closes with one finished line that counts the failed channels (pass 4, row 172)', async () => {
+    const { bulkExportChannels } = await import('./exportSlice');
+    const { getDiscordService } = await import('@services/discordService');
+    const exportServiceModule = await import('@services/exportService');
+
+    const testStore = await buildStore();
+    vi.mocked(getDiscordService).mockReturnValue({
+      fetchMessageData: vi.fn().mockImplementation(async (_token: string, _lastId: string, channelId: string) => {
+        if (channelId === 'ch-bad') return { success: false, status: 403 };
+        return { success: true, data: Array.from({ length: 10 }, (_, i) => makeMessage(i + 1, channelId)) };
+      }),
+      fetchSearchMessageData: vi.fn(),
+      iterateSearchResults: async function* () {},
+    } as any);
+    vi.mocked(exportServiceModule.getExportService).mockReturnValue({ exportToZip: vi.fn().mockResolvedValue(undefined) } as any);
+
+    const result = await testStore.dispatch(
+      bulkExportChannels({
+        channels: [{ id: 'ch-ok', name: 'fine' } as any, { id: 'ch-bad', name: 'forbidden' } as any],
+        token: 'token',
+        format: 'json',
+        messagesPerPage: 100,
+        separateThreads: false,
+        includeMedia: false,
+        guildId: 'g-1',
+      }) as any,
+    );
+
+    expect(result.type).toBe('export/bulkExportChannels/fulfilled');
+    const entries = testStore.getState().status.entries;
+    const finished = entries.find((e: any) => e.message.startsWith('Bulk export: Finished'));
+    expect(finished?.message).toBe('Bulk export: Finished, 1 of 2 channels exported, 1 failed');
+    expect(finished?.level).toBe('warning');
+    expect(entries[entries.length - 1].message).toBe(finished?.message);
+  });
+
   it('bulk export stops on an expired sign in, keeps the zip so far and answers signInExpired (row 134)', async () => {
     const { bulkExportChannels } = await import('./exportSlice');
     const { getDiscordService } = await import('@services/discordService');
@@ -2647,7 +2683,7 @@ describe('Stop keeps the messages pulled so far (#276)', () => {
     expect(fetchMessageData.mock.calls.map((c) => c[2])).toEqual(['ch-first', 'ch-expired']);
     expect(testStore.getState().export.signInExpired).toBe(true);
     const entries = testStore.getState().status.entries.map((e: any) => e.message);
-    expect(entries).toContain('Bulk export: Sign in expired, stopped at 1 of 3. The zip holds what was exported. Resume after a new sign in.');
+    expect(entries).toContain('Bulk export: sign in expired at 1 of 3. The zip has what finished. Resume after signing in.');
     expect(entries.some((m: string) => m.includes('never-reached'))).toBe(false);
     expect(entries.some((m: string) => m.includes('Failed on'))).toBe(false);
   });
@@ -2708,7 +2744,7 @@ describe('Stop keeps the messages pulled so far (#276)', () => {
     expect(result.type).toBe('export/exportMessages/rejected');
     expect(exportToZip).not.toHaveBeenCalled();
     const entries = testStore.getState().status.entries.map((e: any) => e.message);
-    expect(entries).toContain('Export: Stopped · nothing kept from test-channel, a media file is only saved once it finished downloading');
+    expect(entries).toContain('Export: Stopped · nothing kept from test-channel, no media file had finished downloading');
     expect(entries).toContain('Export: Cancelled · test-channel');
   });
 

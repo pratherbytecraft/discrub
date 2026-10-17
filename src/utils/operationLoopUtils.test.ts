@@ -317,7 +317,7 @@ describe('withTransientRetry', () => {
 describe('describeAnswer / describeFailure (#266)', () => {
   it('adds the wait advice to a 429 (pass 3, row 132)', () => {
     expect(describeFailure({ status: 429 }, 'fetchAllFailed')).toBe(
-      'Failed to fetch all messages (HTTP 429). Discord is rate limiting this account. Wait at least 10 minutes before starting another run.',
+      'Failed to fetch all messages (HTTP 429). Discord is rate limiting this account. Wait 10 minutes before another run.',
     );
   });
 

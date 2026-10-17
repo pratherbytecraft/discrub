@@ -371,6 +371,25 @@ describe('Supporter platform', () => {
     );
   });
 
+  it('relocks when a manual refresh gets the 410 answer (pass 4, row 177)', () => {
+    visitApp();
+    cy.then(() => signKey()).then((key) => {
+      applyKeyViaDialog(key as string);
+    });
+    cy.get('[data-testid="supporter-status"]').should('be.visible');
+    cy.intercept('POST', '**/supporter/refresh', {
+      statusCode: 410,
+      body: { status: 410, error: 'Your supporter access has ended' },
+    }).as('ended');
+    cy.get('[data-testid="supporter-refresh-key"]').click();
+    cy.wait('@ended');
+    // The rows and the features relock at once, not only on the next boot.
+    cy.get('[data-testid="supporter-status"]').should('contain.text', 'Access ended');
+    cy.get('[data-testid="supporter-lapsed-note"]').should('be.visible');
+    cy.get('[data-testid="supporter-badge"]').should('not.exist');
+    cy.get('[data-testid="supporter-refresh-key"]').should('exist');
+  });
+
   it('accepts a valid pasted key and rejects a tampered one', () => {
     visitApp();
     cy.openThemesHub();

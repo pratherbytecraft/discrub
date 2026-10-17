@@ -176,7 +176,7 @@ describe('a run the sign in expired on (row 134)', () => {
     renderWithProviders(<BulkExportDialog open onClose={vi.fn()} channels={[]} mode="channels" guildId={GUILD_ID} />, {
       preloadedState: stateWith({ kind: 'bulkExport', mode: 'channels', guildId: GUILD_ID, total: 5, doneCount: 2, remaining: 3, signInExpired: true }),
     });
-    expect(await screen.findByTestId('bulk-export-sign-in-again')).toHaveTextContent('The sign in expired during this run. Sign in to Discord in this tab, then click Sign in again and Resume.');
+    expect(await screen.findByTestId('bulk-export-sign-in-again')).toHaveTextContent('The sign in expired. Sign in to Discord in this tab, then click Sign in again and Resume.');
     expect(screen.getByRole('button', { name: 'Sign in again' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Resume'));
   });

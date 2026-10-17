@@ -1662,6 +1662,14 @@ export const bulkExportChannels = createAsyncThunk<
 
       await zipService.finalize();
 
+      // Row 172 (pass 4): one closing line, so the log does not end on a channel's error.
+      if (signInExpiredAt === null && !checkCancelled(getState) && exportedChannels.length > 0) {
+        dispatch(addStatusEntry({
+          level: errors.length > 0 ? 'warning' : 'success',
+          message: t('status.export.bulkFinished', { done: exportedChannels.length, total: expandedChannels.length, failed: errors.length }),
+        }));
+      }
+
       // Record recent export history (even with partial failures).
       // #238: count expanded units (forum posts) so history matches the
       // progress UI and the zip contents.
@@ -1840,6 +1848,14 @@ export const bulkExportDMs = createAsyncThunk<
       }
 
       await zipService.finalize();
+
+      // Row 172 (pass 4): one closing line for the DM run too.
+      if (signInExpiredAt === null && !checkCancelled(getState) && exportedDMs.length > 0) {
+        dispatch(addStatusEntry({
+          level: errors.length > 0 ? 'warning' : 'success',
+          message: t('status.export.bulkFinishedDm', { done: exportedDMs.length, total: channels.length, failed: errors.length }),
+        }));
+      }
 
       // Record recent export history (even with partial failures)
       recordRecentExport(dispatch, getState, {

@@ -47,6 +47,15 @@ describe('Native layout (2.2.0)', () => {
     cy.get('body').type('{esc}');
   });
 
+  // Row 170 (pass 4): under a refine the inspector counts what shows of what is loaded, and the refine as a filter.
+  it('the inspector reports visible of loaded and the refine while a refine is on', () => {
+    cy.get('[data-testid="inspector-filters-edit"]').click();
+    cy.get('[role="dialog"]').find('input[placeholder="Filter by content..."]').scrollIntoView().type('Hello');
+    cy.get('[role="dialog"]').contains('button', 'Apply Refine').click();
+    cy.get('[data-testid="inspector-loaded"]').should('contain.text', 'visible').and('contain.text', 'loaded');
+    cy.contains('1 active').should('be.visible');
+  });
+
   it('opens the status log as a sheet from the inspector and closes it', () => {
     cy.get('[data-tour="status-panel"]').should('not.exist');
     cy.get('[data-testid="inspector-log-open"]').click();

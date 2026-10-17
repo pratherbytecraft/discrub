@@ -2303,6 +2303,24 @@ describe('messageSlice', () => {
       expect(successCalls[0][0].message).toBe('Load All complete: 150 messages');
     });
 
+    it('closes with the rows loaded now when the resumed pages overlap what was there (pass 4, row 171)', async () => {
+      const mockDiscordService = {
+        fetchMessageData: vi.fn()
+          .mockResolvedValueOnce({ success: true, data: createMockMessages(100) })
+          .mockResolvedValueOnce({ success: true, data: [...createMockMessages(50), ...createMockMessages(25).map((m, i) => ({ ...m, id: `older-${i}` }))] }),
+      };
+      vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
+      const testStore = await createStoreWithApp();
+      await testStore.dispatch(fetchMessages({ channelId: 'channel-1', token: 'token' }));
+      vi.mocked(addStatusEntry).mockClear();
+
+      await testStore.dispatch(fetchAllMessages({ channelId: 'channel-1', token: 'token' }));
+
+      const successCalls = vi.mocked(addStatusEntry).mock.calls.filter(([payload]) => payload.level === 'success');
+      expect(successCalls[0][0].message).toBe(`Load All complete: ${testStore.getState().message.rows.length} messages`);
+      expect(testStore.getState().message.rows.length).toBe(125);
+    });
+
     it('should not dispatch info entries below 500-message milestone', async () => {
       const batch1 = createMockMessages(100);
       const batch2 = createMockMessages(50).map((m, i) =>

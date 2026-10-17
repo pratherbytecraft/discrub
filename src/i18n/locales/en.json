@@ -148,6 +148,7 @@
     "open": "Open",
     "filtersActive": "{{count}} active",
     "filtersNone": "None. Everything loaded is shown.",
+    "visibleOfLoaded": "{{visible, number}} visible · {{loaded, number}} loaded",
     "logEmpty": "Nothing yet.",
     "searchDms": "Find a conversation"
   },
@@ -398,7 +399,7 @@
     "savedTokenHelp": "Your Discord token is saved on this device so you stay logged in between visits. Forgetting it won't log you out right now, but you'll need to paste your token again next visit.",
     "forgetSavedToken": "Forget saved token",
     "reset": "Reset",
-    "resetHelp": "Clear all data Discrub stores in your browser. Useful if you're hitting persistent issues that signing out and back in doesn't fix. Discrub then signs in again from the open Discord tab.",
+    "resetHelp": "Clears all Discrub data in this browser, then signs in again from the open Discord tab. For problems that signing out and in doesn't fix.",
     "displayTab": {
       "intro": "Choose how dates, times and lists are shown.",
       "dateFormat": "Date format",
@@ -570,7 +571,7 @@
     "fallback": "An unexpected error occurred.",
     "tryAgain": "Try Again",
     "openWithoutRestoring": "Open without restoring",
-    "openWithoutRestoringHint": "Open without restoring reloads Discrub without going back to the last conversation. Reset data clears everything Discrub stores in this browser."
+    "openWithoutRestoringHint": "Open without restoring skips the last conversation. Reset data clears everything Discrub stores here."
   },
   "resetDiscrub": {
     "itemWorkspaces": "Workspaces and their saved messages",
@@ -582,7 +583,7 @@
     "itemPresets": "Export presets and recent exports",
     "itemCache": "Cached user info and status log",
     "itemPackages": "Imported data packages and downloaded media",
-    "outro": "This cannot be undone, and only affects this device. Discrub signs in again from the open Discord tab.",
+    "outro": "Cannot be undone, this device only. Discrub signs in again from the open Discord tab.",
     "cancel": "Cancel",
     "resetting": "Resetting…",
     "confirm": "Reset everything"
@@ -691,6 +692,9 @@
     "purgeSelectedAria": "Purge selected {{noun}}",
     "purge": "Purge",
     "copySelectedNamesAria": "Copy selected {{noun}} names",
+    "nounChannels": "channels",
+    "nounConversations": "conversations",
+    "nounServers": "servers",
     "copy": "Copy"
   },
   "dm": {
@@ -870,7 +874,7 @@
     "signInAgain": "Sign in again",
     "signedInAgain": "Signed in again. Resume continues the Load All.",
     "signInUnchanged": "Discord still has the expired sign in. Sign in to Discord in this tab, then try again.",
-    "signInOtherAccount": "Discord is signed in to a different account. Sign in to the same account, then try again.",
+    "signInOtherAccount": "Discord is signed in to another account. Sign in to the same one, then try again.",
     "signInFailed": "Could not read a sign in from Discord. Sign in to Discord in this tab, then try again.",
     "dismiss": "Dismiss",
     "noMessagesFound_channel": "No messages found in this channel",
@@ -1546,13 +1550,13 @@
     "leftServer": "Left server",
     "importDialogTitle": "Import Discord Data Package",
     "importDialogClose": "Close import dialog",
-    "importDialogIntro": "Upload the ZIP file from Discord → Settings → Privacy & Safety → Request All of My Data. Your package is processed entirely in your browser, nothing is uploaded.",
+    "importDialogIntro": "Drop the ZIP from Discord → Settings → Privacy & Safety → Request All of My Data. Everything stays in your browser.",
     "importDialogUpload": "Upload Discord data package",
     "readingPackage": "Reading package… {{pct}}%",
     "parsingPackage": "Parsing package…",
     "dropZip": "Drop ZIP here or click to browse",
     "onlyPackage": "Only your Discord data package is supported",
-    "notSignedInWarning": "Not signed in: analytics and browsing are available, but deleting or editing messages requires authentication.",
+    "notSignedInWarning": "Not signed in. You can browse and see analytics; deleting and editing need a sign in.",
     "groupDm": "Group DM",
     "importTitle": "Import a Discord Data Package",
     "importIntro": "Analyze your message history, delete old messages using IDs from the package, or convert it into a Discrub HTML export. Processing happens entirely in your browser.",
@@ -1620,8 +1624,8 @@
     "scanMatched_one": "Channel scan matched {{hits, number}} of {{count, number}} package message.",
     "scanMatched_other": "Channel scan matched {{hits, number}} of {{count, number}} package messages.",
     "scanForbidden": "Channel scan unavailable (no permission). Checking messages one by one.",
-    "scanCapped": "Channel scan returned {{count, number}} messages, the most Discord allows in a single search. Checking the rest one by one.",
-    "scanGone": "This channel is no longer accessible on Discord. You may have left or been removed from this server, or the server was deleted. Package data is still viewable below.",
+    "scanCapped": "Channel scan returned {{count, number}} messages, Discord's limit per search. Checking the rest one by one.",
+    "scanGone": "This channel is gone on Discord (you left, were removed, or the server was deleted). Package data still shows below.",
     "scanFailed": "Channel scan failed. Checking messages one by one.",
     "scanUnavailable": "Channel scan unavailable. Checking messages one by one.",
     "richDataGone": "Couldn't load rich data for \"{{channel}}\": the channel is no longer accessible on Discord.",
@@ -1709,7 +1713,7 @@
     "customIcon": "Custom icon",
     "useDefault": "Use default",
     "error": {
-      "accessEnded": "Your supporter access has ended. After renewing on Ko-fi, click Refresh or paste the new key from your email.",
+      "accessEnded": "Your supporter access has ended. After renewing, click Refresh or paste the new key.",
       "notFound": "That key does not match an active supporter key.",
       "tooMany": "Too many tries. Wait a while and try again.",
       "unreachable": "Could not reach the supporter server. Try again in a moment.",
@@ -2027,7 +2031,7 @@
     },
     "export": {
       "reactionsProgress": "Reactions: {{current}}/{{total}} messages processed",
-      "fetchingReactions": "Export: Fetching reaction details: {{messages, number}} messages, {{reactions, number}} reactions, ~{{reactors, number}} total reactors. This may take a while.",
+      "fetchingReactions": "Export: Fetching reactions for {{messages, number}} messages ({{reactions, number}} reactions, ~{{reactors, number}} reactors)",
       "collectedReactions": "Export: Collected reaction data for {{count}} messages",
       "unknownError": "Unknown error",
       "reactionsFailed": "Export: Could not fetch reaction data: {{error}}",
@@ -2054,7 +2058,7 @@
       "completed": "Export: Completed {{name}} ({{count}} messages)",
       "cancelled": "Export: Cancelled · {{name}}",
       "stoppedKept": "Export: Stopped · kept {{count}} messages from {{name}}, oldest from {{oldest}}",
-      "stoppedNothingKept": "Export: Stopped · nothing kept from {{name}}, a media file is only saved once it finished downloading",
+      "stoppedNothingKept": "Export: Stopped · nothing kept from {{name}}, no media file had finished downloading",
       "stoppedKeepFailed": "Export: Stopped · could not write the messages from {{name}} ({{error}})",
       "cancelledValue": "Export cancelled",
       "failedDefault": "Failed to export messages",
@@ -2093,13 +2097,15 @@
       "bulkFromWorkspace": "Bulk export: {{name}} finished earlier, writing it from this workspace",
       "storageFullInMemory": "Browser storage is full, the rest of this export is kept in memory",
       "bulkFailedOn": "Bulk export: Failed on {{name}}: {{error}}",
-      "bulkSignInExpired": "Bulk export: Sign in expired, stopped at {{done}} of {{total}}. The zip holds what was exported. Resume after a new sign in.",
+      "bulkSignInExpired": "Bulk export: sign in expired at {{done}} of {{total}}. The zip has what finished. Resume after signing in.",
       "zeroChannels": "Bulk export: 0 channels exported, the zip contains only the README. Review the entries above for skipped or failed channels.",
-      "bulkStartingDm": "Bulk export: Starting DM {{index}}/{{total}}: {{name}}"
+      "bulkStartingDm": "Bulk export: Starting DM {{index}}/{{total}}: {{name}}",
+      "bulkFinished": "Bulk export: Finished, {{done}} of {{total}} channels exported, {{failed}} failed",
+      "bulkFinishedDm": "Bulk export: Finished, {{done}} of {{total}} conversations exported, {{failed}} failed"
     }
   },
   "rateLimit": {
-    "advice": "Discord is rate limiting this account. Wait at least 10 minutes before starting another run.",
+    "advice": "Discord is rate limiting this account. Wait 10 minutes before another run.",
     "toast": "Stopped: Discord is rate limiting this account. Wait 10 minutes before trying again.",
     "message": "Discord is rate limiting this account heavily. Stopped the operation to protect your account. Wait at least 10 minutes before starting another one.",
     "detail_one": " (Discord asked for {{seconds}}s, {{count}} rate limit in a row)",
@@ -2117,7 +2123,7 @@
   },
   "restBreakBanner": {
     "title": "{{name}} is on a rest break, resumes in {{time}}",
-    "line": "Discrub pauses for {{minutes}} minutes after every {{active}} minutes of activity. Long runs send fewer requests per day.",
+    "line": "Discrub rests {{minutes}} minutes after every {{active}} minutes, so long runs send fewer requests.",
     "skip": "Skip break"
   },
   "restBreak": {
@@ -2355,7 +2361,7 @@
     "duplicateBody": "Makes a copy with its {{messages}}, about {{size}} more on disk.",
     "duplicating": "Duplicating {{name}}",
     "duplicated": "Duplicated {{name}} as {{copy}}",
-    "switchStuck": "Could not switch workspaces. The running action did not stop, try again in a moment.",
+    "switchStuck": "Could not switch. The running action did not stop, try again in a moment.",
     "busy": "Wait for the running action to finish or stop it first.",
     "fullTitle": "Browser storage is full",
     "fullLoadAll": "Load All is paused at {{messages}} messages in {{conversation}}.",
@@ -2365,7 +2371,7 @@
     "export": "Export",
     "import": "Import",
     "exportTitle": "Export {{name}}",
-    "exportBody": "Saves {{messages}} ({{size}}) to a .discrub-workspace file that Discrub can import on any browser. The file holds message content.",
+    "exportBody": "Saves {{messages}} ({{size}}) to a .discrub-workspace file you can import on any browser. It holds message content.",
     "exporting": "Exporting workspace {{name}}",
     "exported": "Saved {{name}} to a workspace file",
     "exportFailed": "Could not export {{name}}",
@@ -2374,7 +2380,7 @@
     "imported": "Imported {{name}} with {{messages}}",
     "importStoppedFull": "Browser storage is full, the import of {{name}} stopped. What was read is kept.",
     "importFailed": "Could not read this workspace file",
-    "resumeSignInExpired": "The sign in expired during this run. Sign in to Discord in this tab, then click Sign in again and Resume.",
+    "resumeSignInExpired": "The sign in expired. Sign in to Discord in this tab, then click Sign in again and Resume.",
     "signInExpiredToast": "Sign in expired. The run stopped and can be resumed after a new sign in.",
     "importDropped": "An import that did not finish was removed.",
     "scopeSkipped": "Opened without restoring the last conversation.",

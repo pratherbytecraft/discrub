@@ -45,6 +45,7 @@ import {
   type PackageChannelCategory,
 } from '@features/package/packageDisplayUtils';
 import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 import { nameIncludes } from '@utils/nameMatch';
 
 interface PackageChannelListProps {
@@ -288,7 +289,7 @@ const ChannelRow = ({ channel, selected, onSelect }: ChannelRowProps) => {
   const countLabel =
     channel.messageCount === 0
       ? t('package.empty')
-      : remainingCount.toLocaleString();
+      : remainingCount.toLocaleString(i18next.language);
 
   return (
     <ListItemButton

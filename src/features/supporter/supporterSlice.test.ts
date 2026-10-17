@@ -404,6 +404,27 @@ describe('supporterSlice', () => {
       expect(store.getState().supporter.lastCheckedAt).toBeNull();
     });
 
+    it('relocks on a 410 the same way the boot check does (pass 4, row 177)', async () => {
+      stateData[SUPPORTER_KEY_STORAGE_KEY] = 'DSCRB-current';
+      stateData[SUPPORTER_LAST_REFRESH_STORAGE_KEY] = 5;
+      const store = makeStore();
+      store.dispatch({
+        type: refreshSupporterKey.fulfilled.type,
+        payload: { keyStatus: 'valid', payload: { v: 1, kid: 'k', jti: 'j', name: 'Aaron', eh: 'x', ent: { themes: null }, iat: 1, exp: null }, lastRefreshAt: 5, lastCheckedAt: 5 },
+      });
+      mockRequestKey.mockRejectedValue(new MockClaimError('Access ended', 410));
+
+      await store.dispatch(refreshSupporterKey());
+
+      const s = store.getState().supporter;
+      expect(s.claimError).toBe('supporter.error.accessEnded');
+      expect(s.keyStatus).toBe('expired');
+      expect(s.accessEndedNotice === true).toBe(true);
+      expect(s.lastRefreshAt).toBeNull();
+      expect(s.lastCheckedAt).not.toBeNull();
+      expect(stateData[SUPPORTER_LAST_REFRESH_STORAGE_KEY]).toBeUndefined();
+    });
+
     it('errors cleanly when no key is stored', async () => {
       const store = makeStore();
       await store.dispatch(refreshSupporterKey());

@@ -2260,8 +2260,8 @@ export const fetchAllMessages = createAsyncThunk(
         return stopped();
       }
 
-      // Row 165 (pass 3): the closing line counts what is loaded now, not only this run's fetches.
-      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: (continuing ? existingRows.length : 0) + loadedCount }) }));
+      // Row 165 (pass 3) and 171 (pass 4): the closing line counts the rows loaded now, read after the last page.
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: (getState() as RootState).message.rows.length }) }));
       const finalCursor = lastFetchedId ?? (continuing ? lastMessageId : null);
       await persistConversation(api, channelId, {
         complete: true,
@@ -2891,8 +2891,8 @@ export const fetchAllThreadMessages = createAsyncThunk(
           lastMessageId: threadFinalCursor,
         },
       }));
-      // Row 165 (pass 3): the closing line counts what is loaded now, not only this run's fetches.
-      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: (continuing ? existingRows.length : 0) + loadedCount }) }));
+      // Row 165 (pass 3) and 171 (pass 4): the closing line counts the rows loaded now, read after the last page.
+      dispatch(addStatusEntry({ level: 'success', message: t('status.msg.loadAllComplete', { count: (getState() as RootState).message.threadTabs[threadId]?.rows.length ?? loadedCount }) }));
       await persistConversation(api, threadId, {
         complete: true,
         pagination: paginationRecord({ mode: 'all', hasMore: false, lastMessageId: threadFinalCursor }),

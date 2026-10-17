@@ -58,7 +58,7 @@ describe('Workspace file (2.2.5 WP6b)', () => {
       openPopover();
       cy.get('[data-testid="workspace-row-toggle-default"]').click();
       cy.get('[data-testid="workspace-export"]').click();
-      cy.get('[data-testid="workspace-confirm"]').should('contain', 'Export Default').and('contain', 'Saves 200 messages').and('contain', 'The file holds message content.');
+      cy.get('[data-testid="workspace-confirm"]').should('contain', 'Export Default').and('contain', 'Saves 200 messages').and('contain', 'It holds message content.');
       cy.get('[data-testid="workspace-confirm-button"]').click();
       cy.contains('Saved Default to a workspace file', { timeout: 15000 }).should('exist');
       cy.task('downloads:list', null, { timeout: 15000 }).should((files) => {

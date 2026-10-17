@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectSidebarView, setDialogOpen } from '@features/app/appSlice';
 import { selectOperationSummary } from '@features/app/operationSelectors';
-import { selectActiveFilteredRows, selectActivePagination, selectActiveSearchCriteria } from '@features/message/messageSlice';
+import { selectActiveFilteredRows, selectActivePagination, selectActiveRows, selectActiveSearchCriteria } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectStatusEntries } from '@features/status/statusSlice';
@@ -45,6 +45,9 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
   const dm = useAppSelector(selectSelectedDm);
   const sidebarView = useAppSelector(selectSidebarView);
   const messages = useAppSelector(selectActiveFilteredRows);
+  // Row 170 (pass 4): the card says how many are loaded, and counts a refine as a filter.
+  const allRows = useAppSelector(selectActiveRows);
+  const refine = useAppSelector((s) => { const tab = s.message.activeTab; return tab ? s.message.threadTabs[tab]?.refineCriteria ?? null : s.message.refineCriteria; });
   const pagination = useAppSelector(selectActivePagination);
   const criteria = useAppSelector(selectActiveSearchCriteria);
   const summary = useAppSelector(selectOperationSummary);
@@ -53,7 +56,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
   const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
   const isPackage = sidebarView === 'package';
   const running = summary.tier === 'heavy';
-  const filterCount = criteria ? countActiveFilters(criteria) : 0;
+  const filterCount = (criteria ? countActiveFilters(criteria) : 0) + (refine ? countActiveFilters(refine) : 0);
   const peek = entries.slice(-3);
   const open = (dialog: 'loadAll' | 'export' | 'forumExport' | 'threadLoad' | 'analytics' | 'filters') => dispatch(setDialogOpen({ dialog, open: true }));
   const startPurge = () => { if (channel || dm) dispatch(setDialogOpen({ dialog: 'purge', open: true })); };
@@ -75,7 +78,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
       ) : (
         <Card title={isForum ? t('native.thisForum') : dm ? t('native.thisConversation') : t('native.thisChannel')} testId="inspector-actions">
           {/* The loaded count lives here too: the head row hides its strip on a narrow bar so the Scrublings keep their room. */}
-          {!isForum && <Typography variant="caption" noWrap data-testid="inspector-loaded" sx={{ color: 'text.secondary', display: 'block', mb: 0.75 }}>{t('native.loaded', { count: messages.length })}{pagination.hasMore ? ` · ${t('serverView.moreAvailable')}` : ''}</Typography>}
+          {!isForum && <Typography variant="caption" noWrap data-testid="inspector-loaded" sx={{ color: 'text.secondary', display: 'block', mb: 0.75 }}>{messages.length !== allRows.length ? t('native.visibleOfLoaded', { visible: messages.length, loaded: allRows.length }) : t('native.loaded', { count: messages.length })}{pagination.hasMore ? ` · ${t('serverView.moreAvailable')}` : ''}</Typography>}
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75 }}>
             {!isForum && actionBtn(loadAllLabel, <LoadAllIcon />, () => open('loadAll'), { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained', testId: 'inspector-load-all' })}
             {actionBtn(isForum ? bulkExportLabel : exportLabel, <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), { disabled: running || (isForum ? false : messages.length === 0), testId: 'inspector-export' })}

@@ -490,7 +490,7 @@ const DMList = ({ filterText = '', queue }: DMListProps) => {
         onPurge={() => setBulkPurgeOpen(true)}
         onEdit={() => setBulkEditOpen(true)}
         onCopyNames={handleCopySelectedNames}
-        noun="conversations"
+        noun={t('nav.nounConversations')}
         resume={{ export: bulkExportResumable, purge: purgeResumable, edit: editResumable }}
       />
 

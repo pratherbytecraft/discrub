@@ -418,6 +418,22 @@ describe('ChannelList', () => {
       expect(screen.getByTestId('multi-select-toggle-all')).toHaveTextContent('Deselect all');
     });
 
+    it('counts a voice channel ticked on its own in both numbers (pass 4, row 169)', () => {
+      const { store } = renderWithProviders(<ChannelList />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+          guild: { guilds: [accessibleGuild], selectedGuild: accessibleGuild, selectedGuilds: [], roles: [], isLoading: false, error: null, currentMemberRoles: [], memberRolesCache: {}, guildEmojis: [], guildEmojisCache: {} },
+          channel: { channels: [textChannel, voiceChannel], selectedChannel: null, selectedChannels: [], isLoading: false, error: null, forumThreads: [], forumFirstMessages: [], isLoadingForumThreads: false, hasMoreForumThreads: false, forumThreadsTotalResults: 0, forumThreadsNextOffset: 0, discoveredThreadsByChannel: {} },
+        }),
+      });
+      fireEvent.click(screen.getByLabelText('Toggle multi-select'));
+      fireEvent.click(screen.getByTestId('multi-select-toggle-all'));
+      fireEvent.click(screen.getByText('voice-chat').closest('[role="button"]')!);
+      const selectedIds = store.getState().channel.selectedChannels.map((c: { id: string }) => c.id);
+      expect(selectedIds).toEqual(['ch-1', 'ch-3']);
+      expect(screen.getByTestId('multi-select-count')).toHaveTextContent('2 of 2');
+    });
+
     it('counts all text channels as selected when a voice channel is ticked as well', () => {
       renderWithProviders(<ChannelList />, {
         preloadedState: createBaseState({

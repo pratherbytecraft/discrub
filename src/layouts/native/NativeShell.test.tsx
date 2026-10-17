@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/test-utils';
-import { createAuthenticatedState } from '@/test/state-factories';
-import { createMockChannel, createMockGuild } from '@/test/fixtures';
+import { createAuthenticatedState, messageStateWith } from '@/test/state-factories';
+import { createMockChannel, createMockGuild, createMockMessage } from '@/test/fixtures';
 import NativeShell from './NativeShell';
 
 vi.mock('@containers/ServerView/ServerView', () => ({ default: ({ variant }: { variant?: string }) => <div data-testid="serverview" data-variant={variant} /> }));
@@ -87,5 +87,16 @@ describe('<NativeShell />', () => {
     const panel = document.querySelector('[data-tour="status-panel"]') as HTMLElement;
     expect(panel).not.toBeNull();
     expect(panel.getAttribute('data-sheet')).toBe('true');
+  });
+
+  // Row 170 (pass 4): under a refine the inspector says how many of the loaded rows show, and counts the refine as a filter.
+  it('reports visible of loaded and counts the refine in the inspector', () => {
+    const state = withChannel();
+    const msgs = Array.from({ length: 5 }, (_, i) => createMockMessage({ id: `m${i}`, content: i < 2 ? 'tacos' : 'other' }));
+    state.message = messageStateWith(state.message, msgs, { filtered: msgs.slice(0, 2) });
+    state.message.refineCriteria = { searchBeforeDate: null, searchAfterDate: null, searchMessageContents: ['tacos'], selectedHasTypes: [], userIds: [], mentionIds: [], channelIds: [], isPinned: 'null', authorType: null, attachmentExtensions: [], attachmentFilename: null } as any;
+    renderWithProviders(<NativeShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(screen.getByTestId('inspector-loaded')).toHaveTextContent('2 visible · 5 loaded');
+    expect(screen.getByText('1 active')).toBeInTheDocument();
   });
 });

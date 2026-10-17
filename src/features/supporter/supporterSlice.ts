@@ -206,7 +206,7 @@ export const initializeSupporter = createAsyncThunk(
 export const refreshSupporterKey = previewSafe(createAsyncThunk<
   VerifiedKeyState & { lastRefreshAt: number; lastCheckedAt: number },
   void,
-  { rejectValue: string; rejectedMeta: { checkedAt: number | null } }
+  { rejectValue: string; rejectedMeta: { checkedAt: number | null; accessEnded?: boolean } }
 >(
   'supporter/refreshKey',
   async (_, { rejectWithValue }) => {
@@ -231,6 +231,11 @@ export const refreshSupporterKey = previewSafe(createAsyncThunk<
         const key = claimErrorKey(error);
         // A refusal is still an answer from the server; an unreachable one is not.
         const checkedAt = key === 'supporter.error.unreachable' ? null : Date.now();
+        if (error.status === SUPPORTER_ACCESS_ENDED_STATUS) {
+          // Row 177 (pass 4): a 410 on the manual check relocks the same way the boot check does.
+          await storage.state.remove(SUPPORTER_LAST_REFRESH_STORAGE_KEY).catch(() => {});
+          return rejectWithValue(key, { checkedAt, accessEnded: true });
+        }
         return rejectWithValue(key, { checkedAt });
       }
       return rejectWithValue('supporter.error.refreshFailed', { checkedAt: null });
@@ -405,6 +410,11 @@ const supporterSlice = createSlice({
         state.claimInProgress = false;
         state.claimError = action.payload ?? 'supporter.error.refreshFailed';
         if (action.meta.checkedAt) state.lastCheckedAt = action.meta.checkedAt;
+        // Row 177 (pass 4): nothing live behind the key any more, so the rows and the features relock now.
+        if (action.meta.accessEnded && state.payload) {
+          applyKeyStatus(state, 'expired');
+          state.lastRefreshAt = null;
+        }
       })
       .addCase(applyPastedSupporterKey.pending, (state) => {
         state.claimInProgress = true;

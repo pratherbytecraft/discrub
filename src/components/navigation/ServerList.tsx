@@ -187,7 +187,7 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
         }
         onPurge={() => setServerPurgeOpen(true)}
         onCopyNames={handleCopySelectedNames}
-        noun="servers"
+        noun={t('nav.nounServers')}
         resume={{ purge: serverPurgeResume !== null }}
       />
 

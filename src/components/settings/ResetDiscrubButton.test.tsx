@@ -78,7 +78,7 @@ describe('ResetDiscrubButton', () => {
         screen.getByText(/signs in again from the open Discord tab/),
       ).toBeInTheDocument();
       expect(
-        screen.getByText(/only affects this device/),
+        screen.getByText(/this device only/),
       ).toBeInTheDocument();
       expect(screen.getByText('Workspaces and their saved messages')).toBeInTheDocument();
     });

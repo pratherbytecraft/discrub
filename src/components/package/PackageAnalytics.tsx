@@ -223,7 +223,7 @@ const BarList = ({ items, maxValue }: { items: BarItem[]; maxValue: number }) =>
                 )}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {item.value.toLocaleString()}
+                {item.value.toLocaleString(i18next.language)}
               </Typography>
             </Stack>
             <Box
@@ -262,7 +262,7 @@ const TypeStat = ({
 }) => (
   <Box>
     <Typography variant="h6" sx={{ color: tone === 'warning' ? 'warning.main' : 'text.primary' }}>
-      {value.toLocaleString()}
+      {value.toLocaleString(i18next.language)}
     </Typography>
     <Typography variant="caption" color="text.secondary">
       {label}
@@ -329,7 +329,7 @@ const TimelineCharts = ({ stats }: { stats: ReturnType<typeof computeTimelineSta
           {stats.byMonth.map((b) => (
             <Box
               key={b.key}
-              title={`${b.key}: ${b.count.toLocaleString()}`}
+              title={`${b.key}: ${b.count.toLocaleString(i18next.language)}`}
               sx={{
                 flexGrow: 1,
                 minWidth: 4,
@@ -351,7 +351,7 @@ const TimelineCharts = ({ stats }: { stats: ReturnType<typeof computeTimelineSta
           {stats.byHour.map((b) => (
             <Box
               key={b.hour}
-              title={`${b.hour}:00 UTC · ${b.count.toLocaleString()}`}
+              title={`${b.hour}:00 UTC · ${b.count.toLocaleString(i18next.language)}`}
               sx={{
                 flexGrow: 1,
                 height: `${(b.count / maxHour) * 100}%`,
@@ -379,7 +379,7 @@ const TimelineCharts = ({ stats }: { stats: ReturnType<typeof computeTimelineSta
         <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {stats.byYear.map((y) => (
             <Box key={y.year}>
-              <Typography variant="h6">{y.count.toLocaleString()}</Typography>
+              <Typography variant="h6">{y.count.toLocaleString(i18next.language)}</Typography>
               <Typography variant="caption" color="text.secondary">
                 {t('pkgAnalytics.inYear', { year: y.year })}
               </Typography>

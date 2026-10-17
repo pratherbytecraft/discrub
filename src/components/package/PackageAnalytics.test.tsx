@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import i18next from 'i18next';
 import { renderWithProviders, screen } from '@/test/test-utils';
 import PackageAnalytics from './PackageAnalytics';
 import type { ParsedPackage } from '@features/package/packageTypes';
@@ -46,6 +47,19 @@ function makeState(overrides?: Partial<ParsedPackage>): ParsedPackage {
 }
 
 describe('<PackageAnalytics />', () => {
+  afterEach(() => { i18next.changeLanguage('en'); });
+
+  // Row 175 (pass 4): the card numbers follow the app language.
+  it('prints the counts with the app language separators', () => {
+    i18next.changeLanguage('de');
+    const parsed = makeState();
+    parsed.channels[0].messageCount = 1800;
+    renderWithProviders(<PackageAnalytics />, {
+      preloadedState: { package: { status: 'ready', parsed, validation: { ok: true, readOnly: false, warnings: [], errors: [] }, error: null, selectedChannelId: null, loadedChannels: {}, loadedOrder: [], loadingChannelId: null, timelineStatus: 'idle', timelineTimestamps: [], timelineProgress: null, timelineError: null, deleteStatus: 'idle', deleteProgress: null, deleteResult: null, deleteError: null, exportStatus: 'idle', exportError: null, deletedMessageIds: {}, goneMessageIds: {}, enrichmentStatus: {}, enrichmentProgress: {}, enrichedMessages: {}, enrichmentMisses: {}, enrichmentError: {}, enrichmentLastFetched: {}, activeEnrichmentChannelId: null } } as never,
+    });
+    expect(screen.getAllByText('1.800').length).toBeGreaterThan(0);
+  });
+
   it('renders nothing when no package is loaded', () => {
     renderWithProviders(<PackageAnalytics />);
     expect(screen.queryByText(/Top channels/i)).not.toBeInTheDocument();
