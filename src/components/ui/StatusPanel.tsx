@@ -357,6 +357,9 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
             // A long hold line shrinks its sentence instead of pushing the buttons past the edge.
             minWidth: 0,
             overflow: 'hidden',
+            containerType: 'inline-size',
+            // A hold line with its button needs the row more than the word does (2.2.5, Classic with the wall open at 1280).
+            ...(holdHeadline !== '' ? { '@container (max-width: 700px)': { '& .status-log-title': { display: 'none' } } } : {}),
             borderBottom: expanded ? '1px solid #21262d' : 'none',
             cursor: 'pointer',
             userSelect: 'none',
@@ -376,6 +379,7 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
+            className="status-log-title"
           >
             {t('statusPanel.title')}
           </Typography>

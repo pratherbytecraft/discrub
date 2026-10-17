@@ -254,10 +254,10 @@ const PauseResumeControls = ({ label, progress, buttonsOnly = false, wrap = fals
           <Typography variant="caption" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{summary.name}</Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>·</Typography>
           {/* 2.2.5 pass 2 (row 76): the countdown keeps its width and the sentence after it shrinks first; the whole line is the row's tooltip. */}
-          <Typography variant="caption" data-testid="operation-state-headline" sx={{ color: stateHex, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 0, maxWidth: '100%' }}>{headline}</Typography>
+          <Typography variant="caption" data-testid="operation-state-headline" sx={{ color: stateHex, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1, maxWidth: '100%' }}>{headline}</Typography>
           {summary.sentence && (
             // On a narrow row the headline and sentence shorten with an ellipsis; the buttons stay whole.
-            <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{summary.sentence}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 100 }}>{summary.sentence}</Typography>
           )}
           {summary.state === 'retrying' && (
             <Button size="small" onClick={retryNow} sx={{ minWidth: 0, flexShrink: 0, px: 1, py: 0, fontSize: '0.7rem', color: stateHex, whiteSpace: 'nowrap' }}>
