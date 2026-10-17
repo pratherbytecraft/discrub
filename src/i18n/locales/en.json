@@ -1625,6 +1625,7 @@
     "checkedHours_other": "Checked {{count}} hours ago",
     "checkedDays": "Checked {{count}} days ago",
     "imageNotUsable": "That image could not be used.",
+    "accessEndedRow": "Access ended",
     "notIncluded": "Not included",
     "neverExpires": "Never expires",
     "through": "Through {{date}}",

@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback, memo } from 'react';
 import { Drawer, Box, Tabs, Tab, keyframes } from '@mui/material';
-import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { glowLayerSx } from './glowLayer';
-import { selectSetting, selectKofiOverlayOpen, setKofiOverlayOpen } from '@features/app/appSlice';
+import { setKofiOverlayOpen } from '@features/app/appSlice';
 import { useDonations } from './useDonations';
 import { useWallOverlay } from './useWallOverlay';
+import { useDonationDrawerOpen } from './useDonationDrawerOpen';
 import { DonationView } from './donationTypes';
 import DonationFeed from './DonationFeed';
 import DonationLeaderboard from './DonationLeaderboard';
@@ -33,11 +33,7 @@ const DonationDrawer = () => {
   // outside or the Supporter Wall menu item closes it) instead of
   // reserving a 320px column the phone doesn't have.
   const isMobile = useWallOverlay();
-  const showFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
-  const overlayOpen = useAppSelector(selectKofiOverlayOpen);
-  // Desktop follows the persisted setting (a remembered column); mobile
-  // follows a transient flag so the wall never covers the app on load.
-  const open = isMobile ? overlayOpen : showFeed === 'true';
+  const { open } = useDonationDrawerOpen();
   // 2.2.1 perf: the wall's glows and shimmers animate box and text shadows,
   // which repaint every frame. They pause while a heavy operation runs, the
   // same rule as the theme accent strip, so a purge or a Load All does not

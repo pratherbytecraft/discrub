@@ -177,11 +177,24 @@ describe('SupporterPanel', () => {
       renderDialog({ keyStatus: 'expired', payload });
       expect(screen.getByTestId('supporter-lapsed-note')).toBeInTheDocument();
     });
+
+    it('says access ended on every included row once the key is not live, and when it was checked (row 143)', () => {
+      renderDialog({
+        keyStatus: 'expired',
+        payload: { ...payload, ent: { themes: null, hosted: payload.ent.themes } },
+        lastRefreshAt: null,
+        lastCheckedAt: Date.now(),
+      });
+      expect(screen.getByTestId('supporter-access-themes')).toHaveTextContent(/Access ended/);
+      expect(screen.getByTestId('supporter-access-themes')).not.toHaveTextContent(/Never expires/);
+      expect(screen.getByTestId('supporter-access-hosted')).toHaveTextContent(/Access ended/);
+      expect(screen.getByTestId('supporter-checkin-note')).toHaveTextContent(/Checked just now/);
+    });
   });
 
   describe('supporter state', () => {
     it('shows the access card with one row per feature', () => {
-      renderDialog({ keyStatus: 'valid', payload, lastRefreshAt: Date.now() - 3 * 60 * 60 * 1000 });
+      renderDialog({ keyStatus: 'valid', payload, lastCheckedAt: Date.now() - 3 * 60 * 60 * 1000 });
 
       expect(screen.getByText(/issued to Aaron P\./i)).toBeInTheDocument();
       expect(screen.getByTestId('supporter-access-themes')).toHaveAttribute('data-live', 'true');

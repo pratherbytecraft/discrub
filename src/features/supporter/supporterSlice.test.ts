@@ -227,6 +227,8 @@ describe('supporterSlice', () => {
       expect(state.keyStatus).toBe('expired');
       expect(state.payload?.name).toBe('Aaron P.');
       expect(state.lastRefreshAt).toBeNull();
+      // Row 143: the next open checks again, but the hub still says this check ran.
+      expect(state.lastCheckedAt).not.toBeNull();
       expect(stateData[SUPPORTER_LAST_REFRESH_STORAGE_KEY]).toBeUndefined();
       // The key itself stays so Refresh works after a renewal.
       expect(stateData[SUPPORTER_KEY_STORAGE_KEY]).toBe('DSCRB-old');
@@ -387,6 +389,19 @@ describe('supporterSlice', () => {
       await store.dispatch(refreshSupporterKey());
 
       expect(store.getState().supporter.claimError).toBe('supporter.error.notFound');
+      // Row 143: a refusal is an answer, so the hub's checked line moves.
+      expect(store.getState().supporter.lastCheckedAt).not.toBeNull();
+    });
+
+    it('leaves the checked line alone when the server could not be reached', async () => {
+      stateData[SUPPORTER_KEY_STORAGE_KEY] = 'DSCRB-current';
+      mockRequestKey.mockRejectedValue(new MockClaimError('down', 503));
+
+      const store = makeStore();
+      await store.dispatch(refreshSupporterKey());
+
+      expect(store.getState().supporter.claimError).toBe('supporter.error.unreachable');
+      expect(store.getState().supporter.lastCheckedAt).toBeNull();
     });
 
     it('errors cleanly when no key is stored', async () => {

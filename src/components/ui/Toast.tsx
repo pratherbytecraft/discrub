@@ -15,6 +15,10 @@ import { fetchMessages } from '@features/message/messageSlice';
 import { updateSetting } from '@features/app/appSlice';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
+import { DRAWER_WIDTH } from '@components/donations/DonationDrawer';
+import { useDonationDrawerOpen } from '@components/donations/useDonationDrawerOpen';
+
+const TOAST_RIGHT = 24;
 
 const LEVEL_ICONS: Record<string, typeof SuccessIcon> = {
   success: SuccessIcon,
@@ -42,6 +46,10 @@ const Toast = () => {
   const toast = useAppSelector(selectToast);
   const token = useAppSelector(selectAuthToken);
   const { t } = useTranslation();
+  // Row 109 of the 2.2.5 pass: with the supporter wall open as a column the
+  // toast sat on its footer, so it moves left of the column. The phone
+  // overlay is temporary and the toast stays put under it.
+  const { inline: drawerInline } = useDonationDrawerOpen();
 
   useEffect(() => {
     if (!toast.isVisible) return;
@@ -69,7 +77,8 @@ const Toast = () => {
       sx={(theme) => ({
         position: 'fixed',
         bottom: 48,
-        right: 24,
+        right: drawerInline ? TOAST_RIGHT + DRAWER_WIDTH : TOAST_RIGHT,
+        transition: 'right 225ms cubic-bezier(0, 0, 0.2, 1)',
         zIndex: 9999,
         display: 'flex',
         alignItems: 'center',

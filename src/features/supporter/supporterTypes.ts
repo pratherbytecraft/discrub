@@ -45,6 +45,12 @@ export interface SupporterState {
   payload: SupporterKeyPayload | null;
   /** When the key was last checked against the server (ms), null = never. */
   lastRefreshAt: number | null;
+  /**
+   * When the server last answered for this key (ms), for the hub's checked
+   * line only. A 410 clears lastRefreshAt so the next open checks again,
+   * but the check still happened and the hub says so. Not stored.
+   */
+  lastCheckedAt: number | null;
   panelOpen: boolean;
   /** Gift-button attention animation calms permanently once true. */
   giftAttentionSeen: boolean;
@@ -65,6 +71,7 @@ export const initialSupporterState: SupporterState = {
   accessEndedNotice: false,
   payload: null,
   lastRefreshAt: null,
+  lastCheckedAt: null,
   panelOpen: false,
   giftAttentionSeen: false,
   claimInProgress: false,

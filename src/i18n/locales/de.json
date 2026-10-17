@@ -1625,6 +1625,7 @@
     "checkedHours_other": "Vor {{count}} Stunden geprüft",
     "checkedDays": "Vor {{count}} Tagen geprüft",
     "imageNotUsable": "Dieses Bild konnte nicht verwendet werden.",
+    "accessEndedRow": "Beendet",
     "notIncluded": "Nicht enthalten",
     "neverExpires": "Läuft nie ab",
     "through": "Bis {{date}}",

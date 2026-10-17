@@ -3,6 +3,8 @@ import { renderWithProviders, screen, fireEvent, act } from '../../test/test-uti
 import Toast from './Toast';
 import { createBaseState } from '../../test/state-factories';
 import { defaultSettings } from '@features/app/appSlice';
+import { DiscrubSetting } from 'discrub-core/discrub-enum';
+import { DRAWER_WIDTH } from '@components/donations/DonationDrawer';
 
 describe('Toast', () => {
   beforeEach(() => {
@@ -31,6 +33,23 @@ describe('Toast', () => {
     renderToast();
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByText('Operation complete')).toBeInTheDocument();
+  });
+
+  it('sits left of the supporter wall while the wall is open as a column (row 109)', () => {
+    const base = createBaseState();
+    const render = (showFeed: 'true' | 'false') =>
+      renderWithProviders(<Toast />, {
+        preloadedState: {
+          ...base,
+          app: { ...base.app, settings: { ...defaultSettings, [DiscrubSetting.APP_SHOW_KOFI_FEED]: showFeed } },
+          status: { ...base.status, toast: { isVisible: true, level: 'info', message: 'Hi', duration: 3000 } },
+        } as never,
+      });
+    const { unmount } = render('true');
+    expect(screen.getByRole('alert')).toHaveStyle({ right: `${24 + DRAWER_WIDTH}px` });
+    unmount();
+    render('false');
+    expect(screen.getByRole('alert')).toHaveStyle({ right: '24px' });
   });
 
   it('should not render when toast is not visible', () => {

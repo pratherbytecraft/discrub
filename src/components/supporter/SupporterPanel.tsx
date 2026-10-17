@@ -31,7 +31,7 @@ import {
   selectSupporterClaimInProgress,
   selectSupporterClaimError,
   selectSupporterFooter,
-  selectSupporterLastRefreshAt,
+  selectSupporterLastCheckedAt,
   selectIsSupporter,
   selectHasThemes,
   refreshSupporterKey,
@@ -122,7 +122,7 @@ const SupporterPanel = () => {
   const payload = useAppSelector(selectSupporterPayload);
   const claimInProgress = useAppSelector(selectSupporterClaimInProgress);
   const claimError = useAppSelector(selectSupporterClaimError);
-  const lastRefreshAt = useAppSelector(selectSupporterLastRefreshAt);
+  const lastCheckedAt = useAppSelector(selectSupporterLastCheckedAt);
   const isSupporter = useAppSelector(selectIsSupporter);
   const hasThemes = useAppSelector(selectHasThemes);
 
@@ -164,9 +164,12 @@ const SupporterPanel = () => {
 
   const featureLine = (feature: SupporterFeature): string => {
     if (!payload || !(feature in payload.ent)) return t('supporter.notIncluded');
+    // Row 143 of the 2.2.5 pass: once the key itself is no longer live the
+    // dates on it mean nothing, so every included row says access ended.
+    if (keyStatus !== 'valid') return t('supporter.accessEndedRow');
     const exp = payload.ent[feature];
     if (exp === null) return t('supporter.neverExpires');
-    const live = keyStatus === 'valid' && isSupporterFeatureLive(payload, feature);
+    const live = isSupporterFeatureLive(payload, feature);
     return live ? t('supporter.through', { date: formatDate(exp as number) }) : t('supporter.ended', { date: formatDate(exp as number) });
   };
 
@@ -283,7 +286,7 @@ const SupporterPanel = () => {
                 sx={{ color: 'text.secondary', display: 'block', mt: 1 }}
                 data-testid="supporter-checkin-note"
               >
-                {relativeTime(lastRefreshAt)}.
+                {relativeTime(lastCheckedAt)}.
                 {renewsAutomatically
                   ? t('supporter.renewsAutomatically')
                   : ''}

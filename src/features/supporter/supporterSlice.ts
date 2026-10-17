@@ -126,6 +126,7 @@ export const initializeSupporter = createAsyncThunk(
         iconDataUri: typeof footerIcon === 'string' && footerIcon ? footerIcon : null,
       } as SupporterFooterPreferences,
       lastRefreshAt: typeof lastRefreshAt === 'number' ? lastRefreshAt : null,
+      lastCheckedAt: typeof lastRefreshAt === 'number' ? lastRefreshAt : null,
       // The check-in got 410 for a key that was live on this device, so the
       // supporter had access until now and the app says it ended.
       accessEnded: false,
@@ -160,6 +161,7 @@ export const initializeSupporter = createAsyncThunk(
         }
         await storage.state.set(SUPPORTER_LAST_REFRESH_STORAGE_KEY, now);
         base.lastRefreshAt = now;
+        base.lastCheckedAt = now;
       } catch (error) {
         if (
           error instanceof SupporterClaimError &&
@@ -169,6 +171,8 @@ export const initializeSupporter = createAsyncThunk(
           // again on the next open in case a new purchase lands.
           await storage.state.remove(SUPPORTER_LAST_REFRESH_STORAGE_KEY).catch(() => {});
           base.lastRefreshAt = null;
+          // Row 143 of the 2.2.5 pass: the hub still says when this check ran.
+          base.lastCheckedAt = now;
           if (verification.payload) {
             // Every open checks again after a 410, so the notice is shown
             // once per stored key, not on each open.
@@ -199,30 +203,37 @@ export const initializeSupporter = createAsyncThunk(
  * endpoint for a fresh merged one. Works for valid and recently-expired
  * keys alike; the server's entitlement check is the truth.
  */
-export const refreshSupporterKey = previewSafe(createAsyncThunk(
+export const refreshSupporterKey = previewSafe(createAsyncThunk<
+  VerifiedKeyState & { lastRefreshAt: number; lastCheckedAt: number },
+  void,
+  { rejectValue: string; rejectedMeta: { checkedAt: number | null } }
+>(
   'supporter/refreshKey',
   async (_, { rejectWithValue }) => {
     const storedKey = await storage.state.get<string>(SUPPORTER_KEY_STORAGE_KEY);
     if (!storedKey) {
-      return rejectWithValue('supporter.error.noKeyToRefresh');
+      return rejectWithValue('supporter.error.noKeyToRefresh', { checkedAt: null });
     }
     try {
       const result = await requestSupporterKeyRefresh(storedKey);
       const verification = await verifySupporterKey(result.key);
       if (verification.status !== 'valid' || !verification.payload) {
-        return rejectWithValue('supporter.error.cannotVerify');
+        return rejectWithValue('supporter.error.cannotVerify', { checkedAt: Date.now() });
       }
       const now = Date.now();
       await Promise.all([
         storage.state.set(SUPPORTER_KEY_STORAGE_KEY, result.key),
         storage.state.set(SUPPORTER_LAST_REFRESH_STORAGE_KEY, now),
       ]);
-      return { keyStatus: verification.status, payload: verification.payload, lastRefreshAt: now };
+      return { keyStatus: verification.status, payload: verification.payload, lastRefreshAt: now, lastCheckedAt: now };
     } catch (error) {
       if (error instanceof SupporterClaimError) {
-        return rejectWithValue(claimErrorKey(error));
+        const key = claimErrorKey(error);
+        // A refusal is still an answer from the server; an unreachable one is not.
+        const checkedAt = key === 'supporter.error.unreachable' ? null : Date.now();
+        return rejectWithValue(key, { checkedAt });
       }
-      return rejectWithValue('supporter.error.refreshFailed');
+      return rejectWithValue('supporter.error.refreshFailed', { checkedAt: null });
     }
   },
 ));
@@ -253,7 +264,7 @@ export const applyPastedSupporterKey = createAsyncThunk(
           storage.state.set(SUPPORTER_KEY_STORAGE_KEY, result.key),
           storage.state.set(SUPPORTER_LAST_REFRESH_STORAGE_KEY, now),
         ]);
-        return { keyStatus: verification.status, payload: verification.payload, lastRefreshAt: now };
+        return { keyStatus: verification.status, payload: verification.payload, lastRefreshAt: now, lastCheckedAt: now };
       } catch (error) {
         if (error instanceof SupporterClaimError) {
           return rejectWithValue(claimErrorKey(error));
@@ -276,7 +287,7 @@ export const applyPastedSupporterKey = createAsyncThunk(
       storage.state.set(SUPPORTER_KEY_STORAGE_KEY, trimmed),
       storage.state.remove(SUPPORTER_LAST_REFRESH_STORAGE_KEY),
     ]);
-    return { keyStatus: verification.status, payload: verification.payload!, lastRefreshAt: null };
+    return { keyStatus: verification.status, payload: verification.payload!, lastRefreshAt: null, lastCheckedAt: null };
   },
 );
 
@@ -372,6 +383,7 @@ const supporterSlice = createSlice({
         if (action.payload.accessEnded) state.accessEndedNotice = true;
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
+        state.lastCheckedAt = action.payload.lastCheckedAt;
       })
       .addCase(initializeSupporter.rejected, (state) => {
         // Storage failure — behave as a fresh install (free experience).
@@ -387,11 +399,12 @@ const supporterSlice = createSlice({
         applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
+        state.lastCheckedAt = action.payload.lastCheckedAt;
       })
       .addCase(refreshSupporterKey.rejected, (state, action) => {
         state.claimInProgress = false;
-        state.claimError =
-          (action.payload as string) ?? 'supporter.error.refreshFailed';
+        state.claimError = action.payload ?? 'supporter.error.refreshFailed';
+        if (action.meta.checkedAt) state.lastCheckedAt = action.meta.checkedAt;
       })
       .addCase(applyPastedSupporterKey.pending, (state) => {
         state.claimInProgress = true;
@@ -403,6 +416,7 @@ const supporterSlice = createSlice({
         applyKeyStatus(state, action.payload.keyStatus);
         state.payload = action.payload.payload;
         state.lastRefreshAt = action.payload.lastRefreshAt;
+        state.lastCheckedAt = action.payload.lastCheckedAt;
       })
       .addCase(applyPastedSupporterKey.rejected, (state, action) => {
         state.claimInProgress = false;
@@ -414,6 +428,7 @@ const supporterSlice = createSlice({
         state.keyStatus = 'none';
         state.payload = null;
         state.lastRefreshAt = null;
+        state.lastCheckedAt = null;
         state.claimError = null;
       })
       .addCase(updateFooterPreferences.fulfilled, (state, action) => {
@@ -445,6 +460,9 @@ export const selectHasThemes = selectFeature('themes');
 export const selectHasHosted = selectFeature('hosted');
 export const selectSupporterLastRefreshAt = (state: RootState) =>
   state.supporter.lastRefreshAt;
+/** When the server last answered for the stored key, for the hub's checked line. */
+export const selectSupporterLastCheckedAt = (state: RootState) =>
+  state.supporter.lastCheckedAt;
 export const selectSupporterKeyStatus = (state: RootState) => state.supporter.keyStatus;
 export const selectSupporterPayload = (state: RootState) => state.supporter.payload;
 export const selectSupporterPanelOpen = (state: RootState) => state.supporter.panelOpen;

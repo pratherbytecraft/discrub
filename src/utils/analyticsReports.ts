@@ -260,17 +260,21 @@ const mentions: ReportDefinition = {
   description: 'Who gets @mentioned most in the loaded messages.',
   fold({ skipReplies = false }) {
     const counts = new Map<string, number>();
+    // Row 162 of the 2.2.5 pass: each message carries the mentioned users, so
+    // a name is known even when the user is not in the lookup cache.
+    const mentioned = new Map<string, Message['author']>();
     return {
       step(message) {
         if (!message.content || (skipReplies && message.type === REPLY_MESSAGE_TYPE)) return;
         // Code blocks are left out of the count.
         const text = message.content.replace(CODE_PATTERN, '');
         for (const match of text.matchAll(MENTION_PATTERN)) counts.set(match[1], (counts.get(match[1]) ?? 0) + 1);
+        for (const user of message.mentions ?? []) if (!mentioned.has(user.id)) mentioned.set(user.id, user);
       },
       finish({ userMap }) {
         const rows = [...counts.entries()].map(([key, count]) => {
-          const user = userMap[key];
-          return { key, label: user?.nick || user?.displayName || user?.userName || key, count };
+          const user = mentioned.get(key) ?? ({ id: key } as Message['author']);
+          return { key, label: nameOf(user, userMap), count };
         });
         return { rows: sortDesc(rows), empty: 'No mentions found' };
       },

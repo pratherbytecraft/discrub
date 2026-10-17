@@ -70,6 +70,18 @@ describe('mentions', () => {
       { key: '2', label: 'bob', count: 1 },
     ]);
   });
+
+  it('names a mentioned user from the message when the lookup cache has no entry (row 162)', () => {
+    const stranger = user('7', 'stranger', { global_name: 'A Stranger' });
+    const rows = ANALYTICS_REPORTS.mentions.compute(
+      [msg({ content: '<@7> hi', mentions: [stranger] }), msg({ content: '<@7> again' }), msg({ content: '<@8>' })],
+      ctx,
+    ).rows;
+    expect(rows).toEqual([
+      { key: '7', label: 'A Stranger', count: 2 },
+      { key: '8', label: '8', count: 1 },
+    ]);
+  });
 });
 
 describe('members', () => {
