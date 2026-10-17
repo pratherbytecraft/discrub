@@ -300,7 +300,7 @@ describe('BulkPurgeDialog', () => {
         <BulkPurgeDialog open channels={mockChannels} onClose={vi.fn()} mode="channels" guildId="g1" />,
         { preloadedState: stateWithUser },
       );
-      expect(screen.getByRole('button', { name: /Purge 3 Ch\.s/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Purge 3 channels/ })).toBeInTheDocument();
     });
 
     it('confirm button shows "Strip Attachments" label in Attachments Only mode', () => {
@@ -309,7 +309,7 @@ describe('BulkPurgeDialog', () => {
         { preloadedState: stateWithUser },
       );
       fireEvent.click(screen.getByRole('button', { name: 'Attachments Only' }));
-      expect(screen.getByRole('button', { name: /Strip Attachments \(3 Ch\.s\)/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Strip Attachments \(3 channels\)/ })).toBeInTheDocument();
     });
 
     it('calls onClose when Cancel is clicked', () => {
@@ -327,7 +327,7 @@ describe('BulkPurgeDialog', () => {
         <BulkPurgeDialog open channels={mockChannels} onClose={vi.fn()} mode="channels" guildId="g1" />,
         { preloadedState: stateWithUser },
       );
-      expect(screen.getByRole('button', { name: /Purge 3 Ch\.s/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Purge 3 channels/ })).toBeDisabled();
     });
   });
 
@@ -670,7 +670,7 @@ describe('BulkPurgeDialog', () => {
         { preloadedState: stateWithUser },
       );
       // With no filter applied the target is empty → purge disabled.
-      expect(screen.getByRole('button', { name: /Purge 3 Ch\.s/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Purge 3 channels/ })).toBeDisabled();
       // Filter modal button is the entry point for setting targets.
       expect(screen.getByRole('button', { name: 'Add filters' })).toBeInTheDocument();
     });
@@ -818,7 +818,7 @@ describe('BulkPurgeDialog', () => {
         screen.getByText('You can only target your own messages without Manage Messages permission in the selected channels.'),
       ).toBeInTheDocument();
       // Auto-targets self → confirm enabled even with no filters set
-      expect(screen.getByRole('button', { name: /Purge 3 Ch\.s/ })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /Purge 3 channels/ })).not.toBeDisabled();
     });
 
     it('locks target picker when MANAGE missing in some selected channels and lists names', () => {
@@ -913,7 +913,7 @@ describe('BulkPurgeDialog', () => {
         <BulkPurgeDialog open channels={mockChannels} onClose={vi.fn()} mode="channels" guildId="guild-123" />,
         { preloadedState: stateWithUserNoManage },
       );
-      fireEvent.click(screen.getByRole('button', { name: /Purge 3 Ch\.s/ }));
+      fireEvent.click(screen.getByRole('button', { name: /Purge 3 channels/ }));
       expect(bulkPurgeChannels).toHaveBeenCalledWith(
         expect.objectContaining({
           config: expect.objectContaining({

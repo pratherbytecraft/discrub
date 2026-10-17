@@ -113,14 +113,14 @@ describe('Bulk Edit Channels (#215)', () => {
     });
 
     it('disables the confirm button until content is entered', () => {
-      cy.get('[role="dialog"]').contains('button', /Edit \d+ Ch/).should('be.disabled');
+      cy.get('[role="dialog"]').contains('button', /Edit \d+ ch/).should('be.disabled');
       cy.get('[role="dialog"]').find('textarea').first().type('redacted');
-      cy.get('[role="dialog"]').contains('button', /Edit \d+ Ch/).should('not.be.disabled');
+      cy.get('[role="dialog"]').contains('button', /Edit \d+ ch/).should('not.be.disabled');
     });
 
     it('keeps confirm disabled for whitespace-only content', () => {
       cy.get('[role="dialog"]').find('textarea').first().type('   ');
-      cy.get('[role="dialog"]').contains('button', /Edit \d+ Ch/).should('be.disabled');
+      cy.get('[role="dialog"]').contains('button', /Edit \d+ ch/).should('be.disabled');
     });
 
     it('closes on Cancel without making requests', () => {
@@ -143,7 +143,7 @@ describe('Bulk Edit Channels (#215)', () => {
       selectChannels('general');
       openEditDialog();
       cy.get('[role="dialog"]').find('textarea').first().type('redacted by owner');
-      cy.get('[role="dialog"]').contains('button', /Edit \d+ Ch/).click();
+      cy.get('[role="dialog"]').contains('button', /Edit \d+ ch/).click();
 
       // Dialog closes and the search + PATCH flow runs.
       cy.get('[role="dialog"]').should('not.exist');
@@ -166,7 +166,7 @@ describe('Bulk Edit Channels (#215)', () => {
       selectChannels('general');
       openEditDialog();
       cy.get('[role="dialog"]').find('textarea').first().type('redacted');
-      cy.get('[role="dialog"]').contains('button', /Edit \d+ Ch/).click();
+      cy.get('[role="dialog"]').contains('button', /Edit \d+ ch/).click();
 
       cy.wait('@searchMessages').then((interception) => {
         // The author filter is always the current user (111222333444555666).
@@ -178,7 +178,7 @@ describe('Bulk Edit Channels (#215)', () => {
       selectChannels('general', 'dev-chat');
       openEditDialog();
       cy.get('[role="dialog"]').find('textarea').first().type('redacted');
-      cy.get('[role="dialog"]').contains('button', /Edit \d+ Ch/).click();
+      cy.get('[role="dialog"]').contains('button', /Edit \d+ ch/).click();
       cy.get('[role="dialog"]').should('not.exist');
 
       cy.wait('@editMessage');

@@ -398,7 +398,7 @@ const BulkPurgeDialog = ({ open, onClose, channels: selectedChannels, mode, guil
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
           {resuming && (
             <Typography variant="body2" data-testid="purge-resume-note">
-              {t('workspace.resumePurgeNote')}
+              {t('workspace.resumePurgeNote', { context: bulkResume?.signInExpired ? 'signin' : undefined })}
             </Typography>
           )}
           {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="purge-sign-in-again" />}

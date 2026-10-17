@@ -181,7 +181,7 @@ const PackageView = () => {
           </Box>
           {selectedChannel.isOrphan && (
             <>
-              <Chip label="Read only · left server" size="small" color="warning" variant="outlined" />
+              <Chip label={t('package.readOnlyLeftServer')} size="small" color="warning" variant="outlined" />
               <Button
                 size="small"
                 variant="outlined"

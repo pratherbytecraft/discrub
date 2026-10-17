@@ -92,10 +92,14 @@ const PackageAnalytics = () => {
         <BarList
           items={guildBreakdown.map((g) => ({
             key: g.guildName,
-            label: g.guildName,
-            sub: `${g.channelCount} channels`,
+            label:
+              g.kind === 'dms' ? t('pkgAnalytics.directMessages')
+                : g.kind === 'leftServers' ? t('pkgAnalytics.leftServers')
+                  : g.kind === 'unknown' ? t('pkgAnalytics.unknownServer')
+                    : g.guildName,
+            sub: t('pkgAnalytics.channelCount', { count: g.channelCount }),
             value: g.messageCount,
-            tone: g.guildName === 'Left servers' ? 'warning' : 'primary',
+            tone: g.kind === 'leftServers' ? 'warning' : 'primary',
           }))}
           maxValue={maxGuildMessages}
         />
@@ -214,7 +218,7 @@ const BarList = ({ items, maxValue }: { items: BarItem[]; maxValue: number }) =>
                     color="text.secondary"
                     sx={{ ml: 0.75 }}
                   >
-                    · {item.sub}
+                    {'\u00a0· '}{item.sub}
                   </Typography>
                 )}
               </Typography>

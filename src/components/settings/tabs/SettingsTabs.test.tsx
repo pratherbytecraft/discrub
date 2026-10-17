@@ -294,7 +294,7 @@ describe('DisplayTab', () => {
   it('should display default format values', () => {
     render(<DisplayTab formValues={defaultSettings} onChange={vi.fn()} />);
     expect(screen.getByText('MM/DD/YYYY')).toBeInTheDocument();
-    expect(screen.getByText('12 Hour (AM/PM)')).toBeInTheDocument();
+    expect(screen.getByText('12 hour (AM/PM)')).toBeInTheDocument();
   });
 
   it('should call onChange when Date Format select is changed', () => {

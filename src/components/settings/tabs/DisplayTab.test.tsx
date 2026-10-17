@@ -28,7 +28,7 @@ describe('DisplayTab', () => {
     expect(selects.length).toBe(4);
 
     // Description text
-    expect(screen.getByText(/Customize how dates, times/)).toBeInTheDocument();
+    expect(screen.getByText(/Choose how dates, times/)).toBeInTheDocument();
 
     // Layouts, themes and Scrublings live in the Appearance menu; this tab only says so.
     expect(screen.queryByTestId('theme-picker')).not.toBeInTheDocument();
@@ -46,7 +46,7 @@ describe('DisplayTab', () => {
   it('displays default time format value', () => {
     render(<DisplayTab formValues={defaultSettings} onChange={onChange} />);
     // Default is _12HOUR
-    expect(screen.getByText('12 Hour (AM/PM)')).toBeInTheDocument();
+    expect(screen.getByText('12 hour (AM/PM)')).toBeInTheDocument();
   });
 
   it('date format select shows both options', () => {
@@ -69,10 +69,10 @@ describe('DisplayTab', () => {
     // "12 Hour (AM/PM)" appears twice (select trigger + selected menu item), so use getAllByRole
     const options = screen.getAllByRole('option');
     expect(options.length).toBe(4);
-    expect(options[0]).toHaveTextContent('12 Hour (AM/PM)');
-    expect(options[1]).toHaveTextContent('24 Hour');
-    expect(options[2]).toHaveTextContent('12 Hour with Seconds');
-    expect(options[3]).toHaveTextContent('24 Hour with Seconds');
+    expect(options[0]).toHaveTextContent('12 hour (AM/PM)');
+    expect(options[1]).toHaveTextContent('24 hour');
+    expect(options[2]).toHaveTextContent('12 hour with seconds');
+    expect(options[3]).toHaveTextContent('24 hour with seconds');
   });
 
   it('changing date format calls onChange with correct key', () => {
@@ -87,7 +87,7 @@ describe('DisplayTab', () => {
     render(<DisplayTab formValues={defaultSettings} onChange={onChange} />);
     const selects = screen.getAllByRole('combobox');
     fireEvent.mouseDown(selects[2]);
-    fireEvent.click(screen.getByText('24 Hour'));
+    fireEvent.click(screen.getByText('24 hour'));
     expect(onChange).toHaveBeenCalledWith(DiscrubSetting.TIME_FORMAT, expect.any(String));
   });
 
@@ -95,7 +95,7 @@ describe('DisplayTab', () => {
     render(<DisplayTab formValues={defaultSettings} onChange={onChange} />);
     const selects = screen.getAllByRole('combobox');
     fireEvent.mouseDown(selects[2]);
-    fireEvent.click(screen.getByText('12 Hour with Seconds'));
+    fireEvent.click(screen.getByText('12 hour with seconds'));
     expect(onChange).toHaveBeenCalledWith(DiscrubSetting.TIME_FORMAT, expect.any(String));
   });
 
@@ -103,7 +103,7 @@ describe('DisplayTab', () => {
     render(<DisplayTab formValues={defaultSettings} onChange={onChange} />);
     const selects = screen.getAllByRole('combobox');
     fireEvent.mouseDown(selects[2]);
-    fireEvent.click(screen.getByText('24 Hour with Seconds'));
+    fireEvent.click(screen.getByText('24 hour with seconds'));
     expect(onChange).toHaveBeenCalledWith(DiscrubSetting.TIME_FORMAT, expect.any(String));
   });
 
@@ -146,17 +146,17 @@ describe('DisplayTab', () => {
       [DiscrubSetting.TIME_FORMAT]: TimeFormat._24HOUR,
     };
     render(<DisplayTab formValues={settings} onChange={onChange} />);
-    expect(screen.getByText('24 Hour')).toBeInTheDocument();
+    expect(screen.getByText('24 hour')).toBeInTheDocument();
   });
 
   it('renders helper text for date format', () => {
     render(<DisplayTab formValues={defaultSettings} onChange={onChange} />);
-    expect(screen.getByText('How dates are formatted throughout the application')).toBeInTheDocument();
+    expect(screen.getByText('How dates are written in exported files.')).toBeInTheDocument();
   });
 
   it('renders helper text for time format', () => {
     render(<DisplayTab formValues={defaultSettings} onChange={onChange} />);
-    expect(screen.getByText('How times are formatted throughout the application')).toBeInTheDocument();
+    expect(screen.getByText('How times are written in exported files.')).toBeInTheDocument();
   });
 
   describe('language picker (#124)', () => {

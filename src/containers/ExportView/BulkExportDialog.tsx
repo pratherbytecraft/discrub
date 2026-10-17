@@ -217,7 +217,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           {resuming && bulkResume && (
             <Typography variant="body2" data-testid="bulk-export-resume-note">
-              {t('workspace.resumeBulkExportNote', { done: bulkResume.doneCount, count: bulkResume.total, context: mode === 'dms' ? 'dm' : undefined })}
+              {t('workspace.resumeBulkExportNote', { done: bulkResume.doneCount, count: bulkResume.total, context: [mode === 'dms' ? 'dm' : '', bulkResume.signInExpired ? 'signin' : ''].filter(Boolean).join('_') || undefined })}
             </Typography>
           )}
           {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="bulk-export-sign-in-again" />}

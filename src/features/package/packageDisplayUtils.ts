@@ -88,7 +88,7 @@ export function getPackageChannelLabel(channel: PackageChannel): string {
  */
 export function getPackageChannelSubtitle(channel: PackageChannel): string {
   if (channel.isOrphan) {
-    return channel.name ? 'Left server' : `Left server · ${channel.id}`;
+    return channel.name ? translate('package.leftServer') : `${translate('package.leftServer')} · ${channel.id}`;
   }
   if (channel.guildName) return channel.guildName;
   if (channel.type === PACKAGE_CHANNEL_TYPE.DM) return translate('common.directMessage');

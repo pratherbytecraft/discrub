@@ -21,7 +21,7 @@ const head = { fontSize: 11, fontWeight: 600, letterSpacing: '.08em', textTransf
  */
 const TimelineSide = ({ onPicked }: { onPicked?: () => void }) => {
   perfCount('TimelineSide');
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const theme = useTheme();
   const pagination = useAppSelector(selectActivePagination);
   const channel = useAppSelector(selectSelectedChannel);
@@ -43,11 +43,11 @@ const TimelineSide = ({ onPicked }: { onPicked?: () => void }) => {
         {model.months.map((m, i) => (
           <ButtonBase key={m.key} onClick={() => { jumpTo(m.newestId); onPicked?.(); }} data-testid="timeline-month" sx={{ display: 'flex', width: '100%', justifyContent: 'space-between', px: 1, py: 0.75, borderRadius: 1, fontSize: 13, fontWeight: i === 0 ? 600 : 400, backgroundColor: i === 0 ? alpha(theme.palette.primary.main, 0.14) : 'transparent', '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.2) } }}>
             <span>{format(dayKeyToDate(`${m.key}-01`), 'LLL yyyy', { locale })}</span>
-            <Box component="span" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{m.count.toLocaleString()}</Box>
+            <Box component="span" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{m.count.toLocaleString(i18n.language)}</Box>
           </ButtonBase>
         ))}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 1, pt: 0.75, mt: 0.5, borderTop: '1px solid', borderColor: 'divider', fontSize: 13, fontWeight: 600 }}>
-          <span>{t('timeline.total')}</span><span data-testid="timeline-total">{model.total.toLocaleString()}</span>
+          <span>{t('timeline.total')}</span><span data-testid="timeline-total">{model.total.toLocaleString(i18n.language)}</span>
         </Box>
         {pagination.hasMore && <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.75 }}>{t('timeline.countsAreLoaded')}</Typography>}
       </Box>

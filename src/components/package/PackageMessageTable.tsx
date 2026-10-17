@@ -936,7 +936,7 @@ const MessageRow = memo(function MessageRow({
         onClick={(e) => e.stopPropagation()}
         disabled={disabled || !rowSelectable}
         sx={{ mt: 0.25 }}
-        inputProps={{ 'aria-label': `Select message ${message.id}` }}
+        inputProps={{ 'aria-label': translate('pkgTable.selectMessage', { id: message.id }) }}
       />
       <Avatar
         src={avatarSrc}
@@ -1209,14 +1209,14 @@ const MessageKindChip = memo(function MessageKindChip({
             gap: 0.25,
           }}
         >
-          <EnrichedIcon sx={{ fontSize: 12 }} /> enriched
+          <EnrichedIcon sx={{ fontSize: 12 }} /> {translate('pkgTable.enrichedTag')}
         </Typography>
       </Tooltip>
     );
   }
   return (
     <Typography variant="caption" color="text.disabled" sx={{ fontStyle: 'italic' }}>
-      source
+      {translate('pkgTable.sourceTag')}
     </Typography>
   );
 });
@@ -1300,7 +1300,7 @@ const ReactionsRow = memo(function ReactionsRow({
             key={key}
             role={clickable ? 'button' : undefined}
             tabIndex={clickable ? 0 : undefined}
-            aria-label={clickable ? `View reactors for ${emoji?.name ?? 'emoji'}` : undefined}
+            aria-label={clickable ? translate('pkgTable.viewReactors', { emoji: emoji?.name ?? 'emoji' }) : undefined}
             data-testid="package-reaction-chip"
             onClick={clickable ? (e) => { e.stopPropagation(); onReactionClick(); } : undefined}
             onKeyDown={
@@ -1509,8 +1509,8 @@ const EnrichmentBanner = memo(function EnrichmentBanner({
   // A Retry after cancel/failure must force a re-run (bypass any
   // partial cache) — otherwise the short-circuit would immediately
   // resurrect whatever partial data the previous run saved.
-  const verb = status === 'cancelled' || status === 'failed' ? t('pkgTable.retry') : t('pkgTable.load');
-  const retryOrStart = status === 'cancelled' || status === 'failed' ? onRefresh : onStart;
+  const retrying = status === 'cancelled' || status === 'failed';
+  const retryOrStart = retrying ? onRefresh : onStart;
   return (
     <Stack
       direction="row"
@@ -1548,7 +1548,7 @@ const EnrichmentBanner = memo(function EnrichmentBanner({
             disabled={!canEnrich}
             onClick={retryOrStart}
           >
-            {t('pkgTable.richDataButton', { verb, eta: formatRehydrateEta(messageCount, searchDelayMs) })}
+            {t(retrying ? 'pkgTable.richDataRetry' : 'pkgTable.richDataLoad', { eta: formatRehydrateEta(messageCount, searchDelayMs) })}
           </Button>
         </span>
       </Tooltip>

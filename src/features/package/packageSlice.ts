@@ -455,7 +455,7 @@ export const recheckLeftServers = createAsyncThunk<
   if (found.size === 0) {
     dispatch(addStatusEntry({
       level: 'info',
-      message: `Left Servers: rechecked ${orphans.length} channel${orphans.length === 1 ? '' : 's'}, none are in a Server you are in now`,
+      message: t('packageCopy.leftServersNone', { count: orphans.length }),
     }));
     return { channels: parsed.channels, guilds: parsed.guilds, moved: 0 };
   }
@@ -480,7 +480,7 @@ export const recheckLeftServers = createAsyncThunk<
   }
   dispatch(addStatusEntry({
     level: 'info',
-    message: `Left Servers: ${found.size} channel${found.size === 1 ? '' : 's'} moved back under a Server you rejoined`,
+    message: t('packageCopy.leftServersMoved', { count: found.size }),
   }));
   return { channels, guilds, moved: found.size };
 });
@@ -1392,14 +1392,14 @@ export const enrichPackageChannel = createAsyncThunk<
   ) => {
     const state = getState();
     const token = state.auth.token;
-    if (!token) return rejectWithValue('Not authenticated');
+    if (!token) return rejectWithValue(t('packageCopy.notSignedIn'));
 
     const parsed = state.package.parsed;
-    if (!parsed) return rejectWithValue('No package loaded');
+    if (!parsed) return rejectWithValue(t('packageCopy.noPackageLoaded'));
 
     const userId = parsed.user.id;
     const channel = parsed.channels.find((c) => c.id === channelId);
-    if (!channel) return rejectWithValue('Channel not found in package');
+    if (!channel) return rejectWithValue(t('packageCopy.channelNotInPackage'));
 
     // Belt-and-suspenders reset: the MainLayout `isOperationRunning`
     // effect also resets this flag when the previous op finished, but
@@ -1430,10 +1430,10 @@ export const enrichPackageChannel = createAsyncThunk<
     if (!messages) {
       await dispatch(loadPackageChannelMessages(channelId));
       messages = getState().package.loadedChannels[channelId];
-      if (!messages) return rejectWithValue('Failed to load channel messages');
+      if (!messages) return rejectWithValue(t('packageCopy.failedToLoadMessages'));
     }
     if (messages.length === 0) {
-      return rejectWithValue('Channel has no messages to rehydrate');
+      return rejectWithValue(t('packageCopy.noMessagesToRehydrate'));
     }
 
     const searchDelay = selectSearchDelay(getState());
@@ -1608,10 +1608,7 @@ export const enrichPackageChannel = createAsyncThunk<
           dispatch(
             addStatusEntry({
               level: 'info',
-              message:
-                `Channel scan matched ${preflight.packageHitsTotal.toLocaleString()} ` +
-                `of ${messages.length.toLocaleString()} package ` +
-                `${messages.length === 1 ? 'message' : 'messages'}.`,
+              message: t('packageCopy.scanMatched', { hits: preflight.packageHitsTotal, count: messages.length }),
             }),
           );
         }
@@ -1619,18 +1616,14 @@ export const enrichPackageChannel = createAsyncThunk<
           dispatch(
             addStatusEntry({
               level: 'info',
-              message:
-                "Channel scan unavailable (no permission). " +
-                'Checking messages one-by-one.',
+              message: t('packageCopy.scanForbidden'),
             }),
           );
         } else if (preflight.status === 'cap-exceeded') {
           dispatch(
             addStatusEntry({
               level: 'warning',
-              message:
-                'Channel scan returned 5,000 messages, the most Discord allows in a single search. ' +
-                'Checking the rest one-by-one.',
+              message: t('packageCopy.scanCapped', { count: 5000 }),
             }),
           );
         } else if (preflight.status === 'not-found') {
@@ -1642,18 +1635,14 @@ export const enrichPackageChannel = createAsyncThunk<
           dispatch(
             addStatusEntry({
               level: 'error',
-              message:
-                "This channel is no longer accessible on Discord. You may have " +
-                'left or been removed from this server, or the server was ' +
-                'deleted. Package data is still viewable below.',
+              message: t('packageCopy.scanGone'),
             }),
           );
         } else if (preflight.status === 'error') {
           dispatch(
             addStatusEntry({
               level: 'warning',
-              message:
-                'Channel scan failed. Checking messages one-by-one.',
+              message: t('packageCopy.scanFailed'),
             }),
           );
         }
@@ -1665,8 +1654,7 @@ export const enrichPackageChannel = createAsyncThunk<
         dispatch(
           addStatusEntry({
             level: 'info',
-            message:
-              'Channel scan unavailable. Checking messages one-by-one.',
+            message: t('packageCopy.scanUnavailable'),
           }),
         );
       }
@@ -1841,9 +1829,7 @@ export const enrichPackageChannel = createAsyncThunk<
       dispatch(
         addStatusEntry({
           level: 'error',
-          message:
-            `Couldn't load rich data for "${channelLabel}": ` +
-            `the channel is no longer accessible on Discord.`,
+          message: t('packageCopy.richDataGone', { channel: channelLabel }),
         }),
       );
     } else if (cancelled && !shouldPersist) {
@@ -1853,9 +1839,7 @@ export const enrichPackageChannel = createAsyncThunk<
       dispatch(
         addStatusEntry({
           level: 'info',
-          message:
-            `Refresh cancelled for "${channelLabel}". ` +
-            `Kept the previous rich data (${keptCount.toLocaleString()} ${keptCount === 1 ? 'message' : 'messages'}).`,
+          message: t('packageCopy.refreshCancelled', { channel: channelLabel, count: keptCount }),
         }),
       );
     } else {
@@ -2303,8 +2287,7 @@ const packageSlice = createSlice({
         // 'done') and release the serialization lock.
         if (channelInaccessible) {
           state.enrichmentStatus[channelId] = 'failed';
-          state.enrichmentError[channelId] =
-            `Channel no longer accessible on Discord (HTTP ${inaccessibleStatus ?? 404})`;
+          state.enrichmentError[channelId] = t('packageCopy.channelGoneHttp', { status: inaccessibleStatus ?? 404 });
         } else if (cancelled) {
           state.enrichmentStatus[channelId] = 'cancelled';
         }
@@ -2314,7 +2297,7 @@ const packageSlice = createSlice({
         const channelId = action.meta.arg.channelId;
         state.enrichmentStatus[channelId] = 'failed';
         state.enrichmentError[channelId] =
-          action.payload ?? action.error.message ?? 'Enrichment failed';
+          action.payload ?? action.error.message ?? t('packageCopy.enrichmentFailed');
         state.activeEnrichmentChannelId = null;
       });
   },

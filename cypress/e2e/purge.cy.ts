@@ -197,7 +197,7 @@ const addUserById = (userId: string) => {
 
 /**
  * Click the confirm button in BulkPurgeDialog.
- * Covers all four mode button labels: "Purge N Ch.s", "Strip Attachments (N)",
+ * Covers all four mode button labels: "Purge N channels", "Strip Attachments (N)",
  * "Remove Reactions (N)", "Clear Reactions (N)".
  */
 const confirmPurge = () => {
@@ -495,7 +495,7 @@ describe('Bulk Purge Operations', () => {
 
       // Confirm the locked target dispatches with current user (no Add-filters required)
       cy.get('[role="dialog"]')
-        .contains('button', /Purge 2 Ch\.s/)
+        .contains('button', /Purge 2 channels/)
         .should('not.be.disabled');
     });
 

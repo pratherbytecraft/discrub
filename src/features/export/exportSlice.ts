@@ -736,8 +736,8 @@ async function fetchAllChannelMessages(
 
         if (!silent && page.aggregatedCount >= milestoneThreshold) {
           const totalLabel = page.totalResults > 0
-            ? t('status.export.ofTotal', { fetched: page.aggregatedCount.toLocaleString(), total: page.totalResults.toLocaleString() })
-            : `${page.aggregatedCount.toLocaleString()}`;
+            ? t('status.export.ofTotal', { fetched: page.aggregatedCount.toLocaleString(i18n.language), total: page.totalResults.toLocaleString(i18n.language) })
+            : `${page.aggregatedCount.toLocaleString(i18n.language)}`;
           dispatch(addStatusEntry({
             level: 'info',
             message: t('status.export.fetchedMatching', { count: totalLabel, label }),
@@ -764,7 +764,7 @@ async function fetchAllChannelMessages(
       const missing = Math.max(0, lastPage.totalResults - lastPage.aggregatedCount);
       dispatch(addStatusEntry({
         level: 'warning',
-        message: t('status.export.stoppedReturning', { fetched: lastPage.aggregatedCount.toLocaleString(), total: lastPage.totalResults.toLocaleString(), label, count: missing }),
+        message: t('status.export.stoppedReturning', { fetched: lastPage.aggregatedCount.toLocaleString(i18n.language), total: lastPage.totalResults.toLocaleString(i18n.language), label, count: missing }),
       }));
     }
 
@@ -884,7 +884,7 @@ async function fetchAllChannelMessages(
         dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: sink.count }));
         dispatch(addStatusEntry({
           level: 'warning',
-          message: t('status.export.loadPaused', { label, answer: describeAnswer(response), count: sink.count.toLocaleString() }),
+          message: t('status.export.loadPaused', { label, answer: describeAnswer(response), count: sink.count.toLocaleString(i18n.language) }),
         }));
         continue;
       }
@@ -899,7 +899,7 @@ async function fetchAllChannelMessages(
     if (!silent && sink.count >= nextLogBoundary) {
       dispatch(addStatusEntry({
         level: 'info',
-        message: t('status.export.loadedFrom', { count: sink.count.toLocaleString(), label }),
+        message: t('status.export.loadedFrom', { count: sink.count.toLocaleString(i18n.language), label }),
       }));
       nextLogBoundary = sink.count + 500 - (sink.count % 500);
     }
@@ -1159,7 +1159,7 @@ async function keepStoppedMessages(opts: {
     message: t('status.export.stoppedKept', {
       name: label,
       count: source.count.toLocaleString(i18n.language),
-      oldest: Number.isFinite(oldest) ? new Date(oldest).toLocaleDateString(i18n.language) : 'unknown',
+      oldest: Number.isFinite(oldest) ? new Date(oldest).toLocaleDateString(i18n.language) : t('status.export.oldestUnknown'),
     }),
   }));
   return true;

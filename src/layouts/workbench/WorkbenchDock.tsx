@@ -18,7 +18,7 @@ type DockTab = 'progress' | 'runs' | 'log';
  */
 const WorkbenchDock = ({ onOpenLog }: { onOpenLog: () => void }) => {
   perfCount('WorkbenchDock');
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [tab, setTab] = useState<DockTab>('progress');
   const summary = useAppSelector(selectOperationSummary);
   const runs = useAppSelector(selectRecentExports);
@@ -62,7 +62,7 @@ const WorkbenchDock = ({ onOpenLog }: { onOpenLog: () => void }) => {
                 <Box key={r.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', fontSize: '0.8rem' }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 'inherit' }}>{t('serverView.export')}</Typography>
                   <Typography variant="body2" noWrap sx={{ color: 'text.secondary', fontSize: 'inherit', flex: 1 }}>{r.isBulk ? t('workbench.channelCount', { count: r.channelCount ?? 0 }) : r.channelName}</Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{new Date(r.timestamp).toLocaleString()}</Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{new Date(r.timestamp).toLocaleString(i18n.language)}</Typography>
                 </Box>
               ))}
             </Box>

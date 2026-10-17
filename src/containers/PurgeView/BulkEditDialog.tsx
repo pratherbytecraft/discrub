@@ -145,7 +145,7 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
           {resuming && (
             <Typography variant="body2" data-testid="bulk-edit-resume-note">
-              {t('workspace.resumeEditNote')}
+              {t('workspace.resumeEditNote', { context: bulkResume?.signInExpired ? 'signin' : undefined })}
             </Typography>
           )}
           {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="bulk-edit-sign-in-again" />}

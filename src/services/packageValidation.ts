@@ -24,7 +24,7 @@ export function validatePackage(
   const errors: string[] = [];
 
   if (!parsed.user?.id) {
-    errors.push('Package is missing user identity (account/user.json).');
+    errors.push(translate('package.missingUser'));
     return { ok: false, readOnly: true, warnings, errors };
   }
 
@@ -34,9 +34,7 @@ export function validatePackage(
   }
 
   if (parsed.user.id !== authenticatedUserId) {
-    warnings.push(
-      `This package belongs to a different user (${parsed.user.username}). Read-only mode: deletion and editing are disabled.`,
-    );
+    warnings.push(translate('package.differentUser', { name: parsed.user.username }));
     return { ok: true, readOnly: true, warnings, errors };
   }
 

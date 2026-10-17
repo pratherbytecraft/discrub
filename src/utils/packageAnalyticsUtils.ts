@@ -15,9 +15,13 @@ export interface ChannelStat {
   isOrphan: boolean;
 }
 
+export type GuildBreakdownKind = 'guild' | 'dms' | 'leftServers' | 'unknown';
+
 export interface GuildBreakdownEntry {
   guildId: string | null;
+  /** English label; the view names the dms, leftServers and unknown rows itself. */
   guildName: string;
+  kind: GuildBreakdownKind;
   messageCount: number;
   channelCount: number;
 }
@@ -60,10 +64,14 @@ export function computeGuildBreakdown(
     const name = isDm
       ? 'Direct Messages'
       : channel.guildName ?? (channel.isOrphan ? 'Left servers' : 'Unknown server');
+    const kind: GuildBreakdownKind = isDm
+      ? 'dms'
+      : channel.guildName ? 'guild' : channel.isOrphan ? 'leftServers' : 'unknown';
 
     const existing = byGuild.get(key) ?? {
       guildId: isDm ? null : channel.guildId ?? null,
       guildName: name,
+      kind,
       messageCount: 0,
       channelCount: 0,
     };
