@@ -318,12 +318,12 @@ describe('Feature Showcase — Documentation Screenshots', () => {
       hideDonationDrawer();
       cy.contains('button', 'Export').click();
       cy.wait(PAUSE);
-      // The Format selector is a checkbox list (one selected acts as
-      // radio). Click the "Plain Text" entry to switch formats.
+      // The Format selector is a radio list. Click the "Plain Text" entry
+      // to switch formats.
       cy.get('[role="dialog"]')
         .contains(/^Plain Text/)
         .closest('label')
-        .find('input[type="checkbox"]')
+        .find('input')
         .click({ force: true });
       cy.wait(PAUSE);
       // The "Plain text options" accordion appears below; expand if

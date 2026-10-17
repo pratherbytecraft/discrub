@@ -175,13 +175,20 @@ describe('Scrublings (2.2.0)', () => {
   });
 
   it('keeps the phone slot for a character: the Bots icon leaves the bar in Native, Simple and Operator', () => {
+    // Native's phone head also holds the Workspaces pill (row 167, 2.2.5), so with a
+    // channel open there is no slot left there; the pill wins (owner, 2026-10-17).
+    const expected: Record<string, string> = { native: '0', simple: '1', operator: '1' };
+    // Simple and Operator are supporter layouts; without a key the card opens the hub
+    // and the bar stays Native's.
+    giveKey();
     for (const key of ['native', 'simple', 'operator']) {
       cy.viewport(1280, 800);
       setLayout(key);
+      cy.window().its('__store__').invoke('getState').its('app.settings.appLayout').should('eq', key);
       cy.get('[data-testid="bots-button"]').should('be.visible');
       cy.viewport(390, 844);
       cy.get('[data-testid="bots-button"]').should('not.exist');
-      cy.get('[data-testid="scrublings-stage"]').should('have.attr', 'data-count', '1');
+      cy.get('[data-testid="scrublings-stage"]').should('have.attr', 'data-count', expected[key]);
     }
   });
 });

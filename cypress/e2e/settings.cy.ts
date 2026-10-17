@@ -64,17 +64,11 @@ describe('Settings', () => {
   }
 
   it('Reset Discrub deletes the Discrub-workspaces database', () => {
-    // Seed a row in the database boot already created.
+    // Seed a row in the database boot already created. No version: the app
+    // owns the schema (version 2 since the slim rows), the spec only writes.
     cy.window({ log: false }).then((win) => {
       return new Cypress.Promise<void>((resolve, reject) => {
-        const req = win.indexedDB.open('Discrub-workspaces', 1);
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          const rows = db.createObjectStore('rows', { keyPath: ['wid', 'cid', 'id'] });
-          rows.createIndex('byAuthor', ['wid', 'cid', 'authorId', 'id'], { unique: false });
-          db.createObjectStore('workspaces', { keyPath: 'wid' });
-          db.createObjectStore('meta');
-        };
+        const req = win.indexedDB.open('Discrub-workspaces');
         req.onsuccess = () => {
           const db = req.result;
           const tx = db.transaction('rows', 'readwrite');

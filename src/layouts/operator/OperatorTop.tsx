@@ -58,7 +58,8 @@ const OperatorTop = () => {
         {leaf && <Typography variant="body2" sx={{ color: 'text.secondary', flexShrink: 0 }}>/</Typography>}
         {leaf && <Typography variant="body2" noWrap sx={{ fontWeight: 600, minWidth: 0 }}>{leaf}</Typography>}
       </Box>
-      <Box data-testid="operator-stage" sx={{ flex: '1 1 0', alignSelf: 'stretch', position: 'relative', minWidth: phone ? 0 : stageRoom }}><ScrublingsStage /></Box>
+      {/* A phone keeps one slot for one character, as Simple does; the crumb ellipsizes instead. */}
+      <Box data-testid="operator-stage" sx={phone ? { flex: '0 0 44px', alignSelf: 'stretch', position: 'relative' } : { flex: '1 1 0', alignSelf: 'stretch', position: 'relative', minWidth: stageRoom }}><ScrublingsStage /></Box>
       <AppearanceButton onOpenSettings={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} />
       <BotsButton label={false} hideOnPhone />
       <SupporterWallToggle />
