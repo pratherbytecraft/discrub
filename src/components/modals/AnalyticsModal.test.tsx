@@ -224,7 +224,7 @@ describe('AnalyticsModal', () => {
 
     const createElement = document.createElement.bind(document);
     let downloadName = '';
-    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
       const el = createElement(tag);
       if (tag === 'a') {
         el.click = () => { downloadName = (el as HTMLAnchorElement).download; mockClick(); };
@@ -245,7 +245,9 @@ describe('AnalyticsModal', () => {
 
     URL.createObjectURL = originalCreateObjectURL;
     URL.revokeObjectURL = originalRevokeObjectURL;
-    vi.restoreAllMocks();
+    // restoreAllMocks would also empty the module storage mocks, and the status
+    // log flush timer still runs after this test.
+    createElementSpy.mockRestore();
   });
 
   it('shows the Retrostat nudge only when there are results', () => {

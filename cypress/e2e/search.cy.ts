@@ -888,6 +888,9 @@ describe('Search & Filters', () => {
 
       // Clear the search, then re-select: the plain first page is fetched again.
       cy.get('[aria-label="Clear all filters"]').click();
+      // The clear itself fetches the plain first page; count from after it lands,
+      // or the re-open below reads as two fetches.
+      cy.contains('[data-testid="message-feed-row"]', 'Hello everyone').should('exist');
       // The saved rows are dropped by a thunk after the dispatch; wait for it.
       const rowsGone = (tries = 40): Cypress.Chainable<void> =>
         cy.window({ log: false }).then((win) =>
@@ -1933,6 +1936,10 @@ describe('Search & Filters', () => {
 
       searchViaModal('project');
       cy.wait('@guildSearch');
+      // The thunk writes the search set before it shows the rows, so a visible
+      // result means the set is on disk; switching straight after the network
+      // wait raced that write and the return below fetched a plain page.
+      cy.contains('Check out this cool project').should('be.visible');
 
       // Switch conversations: the new feed must start unfiltered and the
       // modal must show empty criteria.
