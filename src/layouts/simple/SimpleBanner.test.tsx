@@ -42,7 +42,7 @@ describe('SimpleBanner', () => {
     });
     const card = screen.getByTestId('simple-banner');
     expect(card).toHaveTextContent('Resumes in 9:32');
-    expect(card).toHaveTextContent('pauses for 10 minutes after every 45 minutes');
+    expect(card).toHaveTextContent('rests 10 minutes after every 45 minutes');
     expect(card).not.toHaveTextContent('Discord may ask us to wait');
     fireEvent.click(screen.getByTestId('rest-break-skip'));
     expect(store.getState().app.discrubPaused).toBe(false);

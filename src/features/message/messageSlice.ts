@@ -4336,6 +4336,16 @@ const mainCidOf = (state: RootState): string | null =>
   state.channel?.selectedChannel?.id ?? state.dm?.selectedDm?.id ?? null;
 
 /**
+ * The container showing a conversation: null for the main feed, the thread
+ * id for an open thread tab, undefined when the conversation is not open.
+ * A purge uses it to drop what it deleted from the rows on screen.
+ */
+export const openContainerFor = (state: RootState, cid: string): string | null | undefined => {
+  if (state.message?.threadTabs?.[cid]) return cid;
+  return mainCidOf(state) === cid ? null : undefined;
+};
+
+/**
  * Applies a refine to the open conversation. A refine on row fields is
  * applied at once; one with a content or attachment name part scans the
  * message objects first (plan section 11).

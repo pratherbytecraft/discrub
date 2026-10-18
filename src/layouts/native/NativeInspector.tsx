@@ -1,4 +1,4 @@
-import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
+import { useLoadAllAvailable, useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { useResumeLabels } from '@/hooks/useResume';
 import { memo } from 'react';
 import { Box, Button, Typography, alpha, useTheme } from '@mui/material';
@@ -38,6 +38,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
   perfCount('NativeInspector');
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
+  const loadAllAvailable = useLoadAllAvailable();
   const { exportLabel, bulkExportLabel, purgeLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const theme = useTheme();
@@ -80,7 +81,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
           {/* The loaded count lives here too: the head row hides its strip on a narrow bar so the Scrublings keep their room. */}
           {!isForum && <Typography variant="caption" noWrap data-testid="inspector-loaded" sx={{ color: 'text.secondary', display: 'block', mb: 0.75 }}>{messages.length !== allRows.length ? t('native.visibleOfLoaded', { visible: messages.length, loaded: allRows.length }) : t('native.loaded', { count: messages.length })}{pagination.hasMore ? ` · ${t('serverView.moreAvailable')}` : ''}</Typography>}
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75 }}>
-            {!isForum && actionBtn(loadAllLabel, <LoadAllIcon />, () => open('loadAll'), { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained', testId: 'inspector-load-all' })}
+            {!isForum && actionBtn(loadAllLabel, <LoadAllIcon />, () => open('loadAll'), { disabled: running || !loadAllAvailable, color: 'primary', variant: 'contained', testId: 'inspector-load-all' })}
             {actionBtn(isForum ? bulkExportLabel : exportLabel, <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), { disabled: running || (isForum ? false : messages.length === 0), testId: 'inspector-export' })}
             {!isForum && actionBtn(purgeLabel, <PurgeIcon />, startPurge, { disabled: running, color: 'error', testId: 'inspector-purge' })}
             {!isForum && actionBtn(t('serverView.analytics'), <AnalyticsIcon />, () => open('analytics'), { disabled: messages.length === 0, testId: 'inspector-analytics' })}

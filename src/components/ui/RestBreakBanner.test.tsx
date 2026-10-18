@@ -39,7 +39,7 @@ describe('RestBreakBanner', () => {
       }),
     });
     expect(screen.getByTestId('rest-break-banner')).toHaveTextContent('Export is on a rest break, resumes in 9:32');
-    expect(screen.getByTestId('rest-break-banner')).toHaveTextContent('pauses for 10 minutes after every 45 minutes');
+    expect(screen.getByTestId('rest-break-banner')).toHaveTextContent('rests 10 minutes after every 45 minutes');
     fireEvent.click(screen.getByTestId('rest-break-skip'));
     expect(store.getState().app.discrubPaused).toBe(false);
   });

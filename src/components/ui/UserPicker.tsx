@@ -230,7 +230,7 @@ const UserPicker = ({
           getOptionLabel={(option) => {
             if (isLookupOption(option)) return option.displayName;
             return option.isCurrentUser
-              ? `${option.displayName} (You)`
+              ? t('userPicker.you', { name: option.displayName })
               : option.displayName;
           }}
           getOptionKey={(option) => option.id}
@@ -272,7 +272,7 @@ const UserPicker = ({
                         variant="caption"
                         sx={{ ml: 0.5, color: 'primary.main' }}
                       >
-                        (You)
+                        {t('userPicker.youSuffix')}
                       </Typography>
                     )}
                   </Typography>

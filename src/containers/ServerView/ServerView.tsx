@@ -1,4 +1,4 @@
-import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
+import { useLoadAllAvailable, useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { useResumeLabels } from '@/hooks/useResume';
 import { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
 import { Box, Typography, Paper, Button, Alert, AlertTitle, Chip } from '@mui/material';
@@ -61,7 +61,6 @@ import {
   selectActiveLoadAllCancelled,
   selectActiveLoadAllFailed,
   selectActiveLoadAllSignInExpired,
-  selectRestored,
   selectActivePagination,
   selectActiveTab,
   selectRows,
@@ -158,6 +157,7 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   perfCount('ServerView');
   const { t, i18n } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
+  const loadAllAvailable = useLoadAllAvailable();
   const { exportLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
@@ -190,7 +190,6 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
     dispatch(addStatusEntry({ level: result === 'signedIn' ? 'success' : 'warning', message: messages[result] }));
     if (result === 'signedIn') dispatch(dismissLoadAllCancelled());
   };
-  const restored = useAppSelector(selectRestored);
   const token = useAppSelector(selectAuthToken);
   const pagination = useAppSelector(selectActivePagination);
   const restoredSearchShowing = useAppSelector((state) => state.message.pagination.mode === 'search' && !!state.message.restored);
@@ -1081,8 +1080,8 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
           </Box>
           {/* Capped at the card's width at every size: the column can be 580 px wide in a 900 px window, and uncapped the row pushed Export off the edge. */}
           <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap', maxWidth: '100%', whiteSpace: 'nowrap' }}>
-            {/* 2.2.5: a restored conversation keeps the button even when complete, so Start over can refresh it. A running or stopped Load All keeps it too (rows 5 and 59: the button left with mode 'all'). */}
-            {!isForumChannel && (pagination.hasMore || restored !== null || pagination.isLoadingAll) && (
+            {/* 2.2.5: a restored or saved conversation keeps the button even when complete, so Start over can refresh it (useLoadAllAvailable). A running or stopped Load All keeps it too (rows 5 and 59: the button left with mode 'all'). */}
+            {!isForumChannel && loadAllAvailable && (
               <HotkeyTooltip actionId="loadAll" label={t('serverView.loadAllMessages')} arrow>
                 <Button
                   variant="outlined"

@@ -690,6 +690,39 @@ describe('Bulk Purge Operations', () => {
       // Verify completion status log
       verifyStatusEntry(/Purge: Complete.*2 channel/);
     });
+
+    // 2.2.5: a purge of the channel on screen drops what it deleted from the
+    // feed as it goes, and the plain Purge complete toast is the only toast.
+    it('removes the deleted messages from the open feed', () => {
+      interceptMessagesPurge({ searchFixture: 'bulk-purge-search-feed-results.json' });
+      // The purge helper's empty final-pass page is registered last and wins, so
+      // the open channel gets its first page here; later calls (the final pass) read nothing.
+      let pageCalls = 0;
+      cy.fixture('messages.json').then((messages) => {
+        cy.intercept('GET', `${API}/channels/*/messages?*`, (req) => {
+          pageCalls++;
+          req.reply({ statusCode: 200, body: pageCalls === 1 ? messages : [] });
+        }).as('getMessages');
+      });
+      cy.selectChannel('general');
+      cy.contains('13 messages').should('be.visible');
+      cy.contains('[data-testid="message-feed-row"]', 'Hello everyone!').should('exist');
+
+      cy.get('[aria-label="Toggle multi-select"]').first().click();
+      cy.get('[data-testid="channel-row"]').contains('general').click();
+      openPurgeDialog();
+      addUserById('111222333444555666');
+      cy.wait('@lookupUser');
+      confirmPurge();
+      waitForPurgeComplete();
+
+      cy.get('@deleteMessage.all').should('have.length', 3);
+      cy.contains('[data-testid="message-feed-row"]', 'Hello everyone!').should('not.exist');
+      cy.contains('[data-testid="message-feed-row"]', 'Nice screenshot!').should('not.exist');
+      cy.contains('10 messages').should('be.visible');
+      cy.contains('Purge complete').should('be.visible');
+      cy.contains('Reload feed').should('not.exist');
+    });
   });
 
   describe('Messages Mode — Deleted-Account History Scan (#223)', () => {

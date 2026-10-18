@@ -238,6 +238,18 @@ export async function persistConversation(
  */
 const bothSets = (cid: string): string[] => [plainCidOf(cid), searchCid(plainCidOf(cid))];
 
+/** The fields an edit can change. Reactions and reply parents stay as enriched. */
+const EDIT_FIELDS: Array<keyof Message> = ['content', 'edited_timestamp', 'attachments', 'embeds', 'mentions', 'flags', 'components', 'pinned'];
+
+/** The row patch for an edited message, for the stored rows of its conversation. */
+export function editPatch(message: Message): RowPatch {
+  const patch: Partial<Message> = {};
+  for (const field of EDIT_FIELDS) {
+    if (message[field] !== undefined) (patch as Record<string, unknown>)[field] = message[field];
+  }
+  return { id: message.id, patch };
+}
+
 export async function persistRowPatches(api: PersistApi, cid: string, patches: RowPatch[]): Promise<PersistOutcome> {
   const wid = selectCurrentWid(api.getState());
   if (!wid || patches.length === 0) return 'skipped';

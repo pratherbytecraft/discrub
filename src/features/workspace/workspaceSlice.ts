@@ -360,6 +360,13 @@ export const selectStorageFigures = (state: RootState): StorageFigures | null =>
 /** The pill's dot: true when any workspace has unfinished work (plan 5.1). */
 export const selectAnyUnfinishedWork = (state: RootState): boolean =>
   selectHasUnfinishedWork(state) || selectWorkspaceList(state).some((w) => w.work !== null);
+/** How many messages the open workspace holds for a conversation (its row in the list), 0 when none. */
+export const selectConversationSavedCount = (cid: string | null | undefined) => (state: RootState): number => {
+  if (!cid) return 0;
+  const wid = selectCurrentWid(state);
+  const summary = selectWorkspaceList(state).find((w) => w.wid === wid);
+  return summary?.conversations.find((c) => c.cid === cid)?.count ?? 0;
+};
 /** The unfinished action recorded for a conversation, if any. */
 export const selectConversationAction = (cid: string | null | undefined) => (state: RootState): UnfinishedAction | null =>
   cid ? selectUnfinishedActions(state)[cid] ?? null : null;

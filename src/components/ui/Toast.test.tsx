@@ -129,16 +129,16 @@ describe('Toast', () => {
 
     it('renders an action button when action is present', () => {
       renderToast({
-        action: { type: 'reloadChannel', channelId: '999', label: 'Reload feed' },
+        action: { type: 'switchLanguage', language: 'de', label: 'Switch' },
       });
-      expect(screen.getByRole('button', { name: 'Reload feed' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Switch' })).toBeInTheDocument();
     });
 
     it('clicking the action button hides the toast and clears the action', () => {
       const { store } = renderToast({
-        action: { type: 'reloadChannel', channelId: '999', label: 'Reload feed' },
+        action: { type: 'switchLanguage', language: 'de', label: 'Switch' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Reload feed' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Switch' }));
       expect(store.getState().status.toast.isVisible).toBe(false);
       expect(store.getState().status.toast.action).toBeUndefined();
     });

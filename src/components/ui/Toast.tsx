@@ -10,8 +10,6 @@ import {
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectToast, hideToast } from '@features/status/statusSlice';
-import { selectAuthToken } from '@features/auth/authSlice';
-import { fetchMessages } from '@features/message/messageSlice';
 import { updateSetting } from '@features/app/appSlice';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
@@ -44,7 +42,6 @@ const Toast = () => {
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const toast = useAppSelector(selectToast);
-  const token = useAppSelector(selectAuthToken);
   const { t } = useTranslation();
   // Row 109 of the 2.2.5 pass: with the supporter wall open as a column the
   // toast sat on its footer, so it moves left of the column. The phone
@@ -63,9 +60,7 @@ const Toast = () => {
   const color = getLevelColor(toast.level, theme);
 
   const handleAction = () => {
-    if (toast.action?.type === 'reloadChannel' && token) {
-      dispatch(fetchMessages({ channelId: toast.action.channelId, token }));
-    } else if (toast.action?.type === 'switchLanguage') {
+    if (toast.action?.type === 'switchLanguage') {
       dispatch(updateSetting({ key: DiscrubSetting.APP_LANGUAGE, value: toast.action.language }));
     }
     dispatch(hideToast());

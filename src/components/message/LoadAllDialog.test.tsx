@@ -106,8 +106,36 @@ describe('LoadAllDialog', () => {
       renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={onStartOver} />, {
         preloadedState: createBaseState({ message: { ...base.message, pagination: { ...base.message.pagination, hasMore: false } } }),
       });
-      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('12,480 loaded so far in this workspace.');
-      expect(screen.getByTestId('load-all-restored-line')).not.toHaveTextContent('Resume continues');
+      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('All 12,480 messages in this channel are saved in this workspace. Start over fetches the channel again and picks up anything posted since.');
+      expect(screen.queryByTestId('load-all-confirm')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('load-all-start-over'));
+      expect(onStartOver).toHaveBeenCalledTimes(1);
+    });
+
+    // 2.2.5 B: a Load All that finished this session left nothing restored, but the
+    // conversation is on disk, so the dialog still offers Start over for what was posted since.
+    it('offers Start over for a conversation the open workspace holds even when nothing was restored', () => {
+      const onStartOver = vi.fn();
+      const base = createBaseState();
+      const channel = createMockChannel({ id: 'saved-1', name: 'general' });
+      renderWithProviders(<LoadAllDialog {...defaultProps} contextLabel="conversation" onStartOver={onStartOver} />, {
+        preloadedState: createBaseState({
+          message: {
+            ...base.message,
+            ...messageStateWith(base.message, [createMockMessage({ id: '1' })]),
+            restored: null,
+            pagination: { ...base.message.pagination, hasMore: false },
+          },
+          channel: { ...base.channel, selectedChannel: channel },
+          workspace: {
+            ...initialWorkspaceState,
+            ready: true,
+            currentWid: 'w1',
+            list: [{ wid: 'w1', name: 'Default', color: '', bytes: 10, count: 200, conversationCount: 1, lastOpened: 0, openable: true, appVersion: '2.2.5', heldElsewhere: false, isDefault: true, work: null, conversations: [{ cid: 'saved-1', kind: 'channel', name: 'general', guildName: null, parentName: null, count: 200, bytes: 10 }] }],
+          } as never,
+        }),
+      });
+      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('All 200 messages in this conversation are saved in this workspace.');
       expect(screen.queryByTestId('load-all-confirm')).not.toBeInTheDocument();
       fireEvent.click(screen.getByTestId('load-all-start-over'));
       expect(onStartOver).toHaveBeenCalledTimes(1);

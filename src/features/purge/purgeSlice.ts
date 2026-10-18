@@ -9,8 +9,7 @@ import { selectCurrentUser } from '@features/user/userSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { selectSearchDelay, selectDeleteDelay, selectDelayModifier, setDiscrubPaused } from '@features/app/appSlice';
 import { getDiscordService } from '@services/discordService';
-import { addStatusEntry, showOperationTip, showToast } from '@features/status/statusSlice';
-import { selectSelectedChannel } from '@features/channel/channelSlice';
+import { addStatusEntry, showOperationTip } from '@features/status/statusSlice';
 import {
   waitWhilePaused,
   checkCancelled,
@@ -30,6 +29,7 @@ import { isMessageChannel } from '@utils/channelTypeUtils';
 import { canAccessChannel } from '@/utils/permissionUtils';
 import { t } from '@/i18n';
 import { notePackageDeletions } from '@features/package/packageDeletedCache';
+import { applyPurgeDeletions, applyPurgeEdits } from './purgeFeedSync';
 
 /** Progress throttle — dispatch progress every N messages in messages mode */
 const PROGRESS_THROTTLE_MESSAGES = 10;
@@ -786,23 +786,38 @@ async function purgeChannelMessages(
     finalPass: totalFinalPass,
   });
 
-  // #271: deletions in a channel the loaded package also holds are fed to
-  // the package deleted cache, batched so a long run does not write IDB
-  // per message. Flushed at channel end (the finally below) as well.
+  // Deletions and edits are applied as the run goes, batched so a long run
+  // does not touch Redux or IDB per message, and flushed at channel end (the
+  // finally below). Two readers: the open feed and the workspace rows
+  // (2.2.5, so a purge no longer leaves what it deleted on screen, on disk
+  // and in the next export), and the package deleted cache for a channel the
+  // loaded package also holds (#271).
   const packageChannelIds = new Set(getState().package?.parsed?.channels.map((c) => c.id) ?? []);
   const liveDeletions = new Map<string, string[]>();
+  const liveEdits = new Map<string, Message[]>();
   const flushLiveDeletions = () => {
     for (const [liveChannelId, ids] of liveDeletions) {
-      void notePackageDeletions(getState, dispatch, liveChannelId, ids);
+      if (packageChannelIds.has(liveChannelId)) void notePackageDeletions(getState, dispatch, liveChannelId, ids);
+      applyPurgeDeletions(getState, dispatch, liveChannelId, ids);
     }
     liveDeletions.clear();
+    for (const [liveChannelId, edited] of liveEdits) {
+      applyPurgeEdits(getState, dispatch, liveChannelId, edited);
+    }
+    liveEdits.clear();
   };
   const noteLiveDeletion = (liveChannelId: string, id: string) => {
-    if (!packageChannelIds.has(liveChannelId)) return;
     const ids = liveDeletions.get(liveChannelId) ?? [];
     ids.push(id);
     liveDeletions.set(liveChannelId, ids);
     if (ids.length >= LIVE_DELETION_BATCH) flushLiveDeletions();
+  };
+  const noteLiveEdit = (liveChannelId: string, edited: Message | undefined) => {
+    if (!edited) return;
+    const list = liveEdits.get(liveChannelId) ?? [];
+    list.push(edited);
+    liveEdits.set(liveChannelId, list);
+    if (list.length >= LIVE_DELETION_BATCH) flushLiveDeletions();
   };
 
   // Threads we un-archived during this run. The finally block re-archives
@@ -1227,6 +1242,7 @@ async function purgeChannelMessages(
             if (response.success) {
               totalEditedAttachmentsOnly++;
               failureStreak = 0;
+              noteLiveEdit(targetChannelId, response.data as Message | undefined);
             } else {
               // Don't count as "stripped". Log once per miss so the user
               // can audit; keep Discord's status for diagnostics.
@@ -1255,6 +1271,7 @@ async function purgeChannelMessages(
             if (response.success) {
               totalSkipped++;
               failureStreak = 0;
+              noteLiveEdit(targetChannelId, response.data as Message | undefined);
             } else {
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
@@ -2536,21 +2553,6 @@ const executeBulkPurge = async (
           dispatch(addStatusEntry({
             level: 'success',
             message: t('status.purge.completeDetail', { mode: modeLabel, label: completeLabel, scope: t('status.purge.scope', { count: channels.length, context: isDm ? 'dm' : 'channel' }), detail: totalDetail }),
-          }));
-        }
-
-        // If the user is still looking at a channel that was part of the
-        // target set, the loaded feed is now a stale snapshot. Surface a
-        // toast with a one-click "Reload feed" action. Checking at
-        // completion time means a user who navigated away during the
-        // purge correctly gets no toast.
-        const selectedChannel = selectSelectedChannel(getState());
-        if (selectedChannel && channels.some((c) => c.id === selectedChannel.id)) {
-          dispatch(showToast({
-            level: 'success',
-            message: t('status.purge.completeToast', { mode: modeLabel }),
-            duration: 10000,
-            action: { type: 'reloadChannel', channelId: selectedChannel.id, label: 'Reload feed' },
           }));
         }
       }

@@ -1,4 +1,4 @@
-import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
+import { useLoadAllAvailable, useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { useResumeLabels } from '@/hooks/useResume';
 import { memo } from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
@@ -8,7 +8,7 @@ import { ChannelType } from 'discrub-core/discord-enum';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectFocusedView, selectSidebarView, setDialogOpen, toggleFocusedView } from '@features/app/appSlice';
 import { selectOperationSummary } from '@features/app/operationSelectors';
-import { selectActiveFilteredRows, selectActivePagination } from '@features/message/messageSlice';
+import { selectActiveFilteredRows } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
@@ -28,6 +28,7 @@ const COMPACT = '@container (max-width: 700px)';
 const WorkbenchToolbar = () => {
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
+  const loadAllAvailable = useLoadAllAvailable();
   const { exportLabel, bulkExportLabel, purgeLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
@@ -35,7 +36,6 @@ const WorkbenchToolbar = () => {
   const sidebarView = useAppSelector(selectSidebarView);
   const focusedView = useAppSelector(selectFocusedView);
   const messages = useAppSelector(selectActiveFilteredRows);
-  const pagination = useAppSelector(selectActivePagination);
   const summary = useAppSelector(selectOperationSummary);
   const running = summary.tier === 'heavy';
   const isPackage = sidebarView === 'package';
@@ -49,7 +49,7 @@ const WorkbenchToolbar = () => {
     <Box data-testid="workbench-toolbar" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, height: 44, borderBottom: '1px solid', borderColor: 'divider', backgroundColor: 'background.paper', flexShrink: 0, overflowX: 'auto', containerType: 'inline-size' }}>
       {hasContext ? (
         <>
-          {!isForum && btn(loadAllLabel, <LoadAllIcon />, () => open('loadAll'), 'wb-load-all', { disabled: running || !pagination.hasMore, color: 'primary', variant: 'contained' })}
+          {!isForum && btn(loadAllLabel, <LoadAllIcon />, () => open('loadAll'), 'wb-load-all', { disabled: running || !loadAllAvailable, color: 'primary', variant: 'contained' })}
           {btn(isForum ? bulkExportLabel : exportLabel, <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), 'wb-export', { disabled: running || (!isForum && messages.length === 0), tour: 'export-button' })}
           {!isForum && btn(purgeLabel, <PurgeIcon />, () => open('purge'), 'wb-purge', { disabled: running, color: 'error' })}
           {!isForum && btn(t('serverView.filters'), <FilterIcon />, () => open('filters'), 'wb-filters', { tour: 'search-filters' })}

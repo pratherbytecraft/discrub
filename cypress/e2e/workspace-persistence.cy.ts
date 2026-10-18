@@ -140,6 +140,34 @@ describe('Workspace persistence (2.2.5)', () => {
     });
   });
 
+  // 2.2.5 B: a Load All that finishes in the session leaves the conversation on
+  // disk, so the button stays and the dialog offers Start over for what was
+  // posted since. Before this the button went away with the last page.
+  it('keeps the Load All button after a finished Load All and Start over fetches the channel again', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      interceptPagedChannel(messages[0], { freshFirstPageOnCall: 4 });
+      cy.contains(CHANNEL).click();
+      cy.wait('@pagedMessages');
+      cy.contains('button', 'Load All').click();
+      cy.get('[data-testid="load-all-confirm"]').click();
+      cy.contains('All loaded', { timeout: 15000 }).should('be.visible');
+      cy.contains('200 messages').should('be.visible');
+      countWorkspaceRows().should('eq', 200);
+
+      // The list refresh follows the writes, so the button comes back within a moment.
+      cy.contains('button', 'Load All', { timeout: 10000 }).should('be.visible').and('not.be.disabled').click();
+      cy.get('[data-testid="load-all-restored-line"]').should('contain', 'All 200 messages in this channel are saved in this workspace');
+      cy.get('[data-testid="load-all-confirm"]').should('not.exist');
+      cy.get('[data-testid="load-all-start-over"]').click();
+
+      // Fresh first page (call 4), then Load All continues from it (call 5, nothing more).
+      cy.contains('All loaded', { timeout: 15000 }).should('be.visible');
+      cy.get('@pagedMessages.all').should('have.length', 5);
+      cy.contains('100 messages').should('be.visible');
+      countWorkspaceRows().should('eq', 100);
+    });
+  });
+
   /* ─────────────── 2.2.5 WP4a: scope, action records, switching ─────────────── */
 
   type WorkspaceHooks = {

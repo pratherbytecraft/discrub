@@ -1,4 +1,4 @@
-import { useLoadAllLabel } from '@/hooks/useLoadAllLabel';
+import { useLoadAllAvailable, useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { useResumeLabels } from '@/hooks/useResume';
 import { Box, Button, LinearProgress, Typography, alpha } from '@mui/material';
 import { CloudDownload as LoadAllIcon, FileDownload as ExportIcon, DeleteSweep as PurgeIcon } from '@mui/icons-material';
@@ -11,7 +11,6 @@ import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectSelectedChannel, selectSelectedChannels } from '@features/channel/channelSlice';
 import { selectSelectedDm, selectSelectedDms } from '@features/dm/dmSlice';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
-import { selectActivePagination } from '@features/message/messageSlice';
 import PauseResumeControls, { useOperationHeadline } from '@components/ui/PauseResumeControls';
 import { getDmName } from '@/utils/dmListUtils';
 import { useSteadyValue } from '@/hooks/useSteadyValue';
@@ -31,6 +30,7 @@ const STATE_HEX: Record<string, string> = { neutral: '#8b949e', success: '#3fb95
 const OperatorRunCard = () => {
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
+  const loadAllAvailable = useLoadAllAvailable();
   const { bulkExportLabel, purgeLabel, bulkExportResumable, purgeResumable } = useResumeLabels();
   const dispatch = useAppDispatch();
   // The counters move with every delete; drawing each one kept the card repainting for a whole purge.
@@ -41,7 +41,6 @@ const OperatorRunCard = () => {
   const dm = useAppSelector(selectSelectedDm);
   const selectedChannels = useAppSelector(selectSelectedChannels);
   const selectedDms = useAppSelector(selectSelectedDms);
-  const pagination = useAppSelector(selectActivePagination);
   const sidebarView = useAppSelector(selectSidebarView);
   const headline = useOperationHeadline();
   const running = summary.tier === 'heavy';
@@ -103,7 +102,7 @@ const OperatorRunCard = () => {
       ) : (
         <>
           <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap' }}>
-            {tile(<LoadAllIcon fontSize="small" />, loadAllLabel, openName ? t('operator.loadAllIn', { name: openName }) : t('operator.loadAllNone'), () => open('loadAll'), { disabled: !openName || isForum || !pagination.hasMore, testId: 'op-load-all' })}
+            {tile(<LoadAllIcon fontSize="small" />, loadAllLabel, openName ? t('operator.loadAllIn', { name: openName }) : t('operator.loadAllNone'), () => open('loadAll'), { disabled: !openName || isForum || !loadAllAvailable, testId: 'op-load-all' })}
             {tile(<ExportIcon fontSize="small" />, bulkExportLabel, queued > 0 ? t('operator.queueCount', { count: queued }) : t('operator.queueNone'), () => open('bulkExport'), { disabled: queued === 0 && !bulkExportResumable, testId: 'op-export' })}
             {tile(<PurgeIcon fontSize="small" />, purgeLabel, queued > 0 ? t('operator.queueCount', { count: queued }) : t('operator.queueNone'), () => open('purge'), { disabled: queued === 0 && !purgeResumable, color: 'error', testId: 'op-purge' })}
           </Box>

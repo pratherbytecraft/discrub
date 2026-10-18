@@ -49,13 +49,14 @@ import {
   persistConversation,
   persistRowDeletes,
   persistRowPatches,
+  editPatch,
   persistRowUpdates,
   persistSelection,
   persistThreadTabs,
   threadSeedFromState,
   type PersistApi,
 } from '@features/message/messagePersistence';
-import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, refreshConversationNames, searchCid, updateWorkspace, type RowPatch } from '@services/workspaceStore';
+import { BULK_RUN_PREFIX, deleteConversationsWithPrefix, refreshConversationNames, searchCid, updateWorkspace } from '@services/workspaceStore';
 import { fetchGuilds, setSelectedGuild } from '@features/guild/guildSlice';
 import { fetchChannels, setSelectedChannel } from '@features/channel/channelSlice';
 import { fetchDMs, setSelectedDm } from '@features/dm/dmSlice';
@@ -96,16 +97,8 @@ const activeContainerId = (state: RootState): string | null => {
 const cidFor = (state: RootState, containerId: string | null): string | null =>
   containerDiskCid(state, containerId);
 
-/** The fields an edit can change. Reactions and reply parents stay as enriched. */
-const EDIT_FIELDS: Array<keyof Message> = ['content', 'edited_timestamp', 'attachments', 'embeds', 'mentions', 'flags', 'components', 'pinned'];
-
-export function editPatch(message: Message): RowPatch {
-  const patch: Partial<Message> = {};
-  for (const field of EDIT_FIELDS) {
-    if (message[field] !== undefined) (patch as Record<string, unknown>)[field] = message[field];
-  }
-  return { id: message.id, patch };
-}
+// The edit patch lives with the persistence helpers so the purge can use it too (2.2.5).
+export { editPatch };
 
 /* ─────────────────── Debounced record rewrites ─────────────────── */
 

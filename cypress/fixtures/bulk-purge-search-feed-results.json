@@ -1,0 +1,78 @@
+{
+  "messages": [
+    [
+      {
+        "id": "700000000000000001",
+        "channel_id": "801000000000000001",
+        "author": {
+          "id": "111222333444555666",
+          "username": "discrub_tester",
+          "discriminator": "0",
+          "avatar": "abc123avatar",
+          "global_name": "Discrub Tester"
+        },
+        "content": "Hello everyone! Welcome to the server.",
+        "timestamp": "2026-02-01T10:00:00.000Z",
+        "edited_timestamp": null,
+        "tts": false,
+        "mention_everyone": false,
+        "mentions": [],
+        "attachments": [],
+        "embeds": [],
+        "reactions": [],
+        "pinned": false,
+        "type": 0
+      }
+    ],
+    [
+      {
+        "id": "700000000000000004",
+        "channel_id": "801000000000000001",
+        "author": {
+          "id": "111222333444555666",
+          "username": "discrub_tester",
+          "discriminator": "0",
+          "avatar": "abc123avatar",
+          "global_name": "Discrub Tester"
+        },
+        "content": "Sure! Let me finish this code first.",
+        "timestamp": "2026-02-01T11:30:00.000Z",
+        "edited_timestamp": null,
+        "tts": false,
+        "mention_everyone": false,
+        "mentions": [],
+        "attachments": [],
+        "embeds": [],
+        "reactions": [],
+        "pinned": false,
+        "type": 0
+      }
+    ],
+    [
+      {
+        "id": "700000000000000007",
+        "channel_id": "801000000000000001",
+        "author": {
+          "id": "111222333444555666",
+          "username": "discrub_tester",
+          "discriminator": "0",
+          "avatar": "abc123avatar",
+          "global_name": "Discrub Tester"
+        },
+        "content": "Nice screenshot! The UI looks great.",
+        "timestamp": "2026-02-01T13:15:00.000Z",
+        "edited_timestamp": null,
+        "tts": false,
+        "mention_everyone": false,
+        "mentions": [],
+        "attachments": [],
+        "embeds": [],
+        "reactions": [],
+        "pinned": false,
+        "type": 0
+      }
+    ]
+  ],
+  "total_results": 3,
+  "threads": []
+}

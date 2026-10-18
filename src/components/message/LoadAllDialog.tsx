@@ -22,6 +22,8 @@ import { countActiveFilters } from 'discrub-core/filtering';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { Trans } from 'react-i18next';
 import { useLoadAllUnfinished } from '@/hooks/useLoadAllLabel';
+import { selectConversationSavedCount } from '@features/workspace/workspaceSlice';
+import { selectActiveCid } from '@features/message/messageSlice';
 import { useTranslation } from 'react-i18next';
 
 interface LoadAllDialogProps {
@@ -45,20 +47,24 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
   // saved cursor (plan section 6). Thread tabs keep the plain dialog.
   const searchCriteria = useAppSelector(selectActiveSearchCriteria);
   const pagination = useAppSelector(selectActivePagination);
+  // A conversation whose Load All finished this session is on disk too, so
+  // Start over stays offered (2.2.5 B) even though nothing was restored.
+  const cid = useAppSelector(selectActiveCid);
+  const savedOnDisk = useAppSelector(selectConversationSavedCount(cid));
   // A search shows its own set (fix C, row 45), so the plain conversation's
   // restored figures and Start over belong to the plain view only.
-  const resumable = !activeTab && restored !== null && !!onStartOver && pagination.mode !== 'search';
+  const resumable = !activeTab && (restored !== null || savedOnDisk > 0) && !!onStartOver && pagination.mode !== 'search';
   // An unfinished Load All recorded in the workspace (a thread tab too) also reads Resume.
   const unfinished = useLoadAllUnfinished();
   // Nothing left to resume once the saved walk reached the end: Start over
   // is the only action, and it is what refreshes a complete conversation.
   const completeOnDisk = resumable && !pagination.hasMore;
-  const resumeDate = resumable && restored.oldestTimestamp
+  const resumeDate = resumable && restored?.oldestTimestamp
     ? new Date(restored.oldestTimestamp).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' })
     : null;
   // Pass 2 (row 93): the restored figure is from when the conversation opened; runs since then
   // wrote every page they loaded, so the larger of the two is what is saved now.
-  const savedCount = Math.max(restored?.count ?? 0, messages.length);
+  const savedCount = Math.max(restored?.count ?? 0, savedOnDisk, messages.length);
   const scope = activeTab ? 'thread' : contextLabel === 'conversation' ? 'dm' : 'channel';
 
   const isFilteredSearch =
@@ -91,9 +97,11 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
         {resumable && (
           <DialogContentText sx={{ mt: 1 }} data-testid="load-all-restored-line">
             {/* "Resume continues from" only when a Load All was cut (row 35). */}
-            {resumeDate && !completeOnDisk && unfinished
-              ? t('loadAll.restoredLine', { count: savedCount.toLocaleString(i18n.language), date: resumeDate })
-              : t('loadAll.restoredLineNoDate', { count: savedCount.toLocaleString(i18n.language) })}
+            {completeOnDisk
+              ? t('loadAll.completeLine', { count: savedCount.toLocaleString(i18n.language), context: scope })
+              : resumeDate && unfinished
+                ? t('loadAll.restoredLine', { count: savedCount.toLocaleString(i18n.language), date: resumeDate })
+                : t('loadAll.restoredLineNoDate', { count: savedCount.toLocaleString(i18n.language) })}
           </DialogContentText>
         )}
         <DialogContentText sx={{ mt: 1 }}>

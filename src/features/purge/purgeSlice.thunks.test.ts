@@ -21,6 +21,11 @@ import channelReducer from '@features/channel/channelSlice';
 import packageReducer, { initialPackageState } from '@features/package/packageSlice';
 import { storage } from '@/extension/storage';
 import cacheReducer from '@features/cache/cacheSlice';
+import messageReducer from '@features/message/messageSlice';
+import { createBaseState, messageStateWith } from '@/test/state-factories';
+import { createMockMessage } from '@/test/fixtures';
+import { RowFlag } from '@features/message/messageRows';
+import { getCachedMessage, MAIN_CONTAINER } from '@features/message/messageCache';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -2578,17 +2583,44 @@ describe('purgeSlice thunks', () => {
     });
   });
 
-  // ── Stale-feed toast (#120) ──────────────────────────────────────────────
+  // ── Open feed and workspace rows (2.2.5) ────────────────────────────────
 
-  describe('bulkPurgeChannels — stale-feed toast', () => {
-    it('shows Reload feed toast when the currently-selected channel was targeted', async () => {
+  describe('bulkPurgeChannels — open feed and workspace rows (2.2.5)', () => {
+    const feedStore = (selected: Channel | null, rows: Message[]): TestStore => {
+      const base = createBaseState();
+      return createTestStore(
+        {
+          purge: purgeReducer,
+          auth: authReducer,
+          user: userReducer,
+          app: appReducer,
+          status: statusReducer,
+          channel: channelReducer,
+          package: packageReducer,
+          message: messageReducer,
+        },
+        {
+          auth: { token: TOKEN, isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false },
+          user: { currentUser: CURRENT_USER, isLoading: false, error: null },
+          channel: { ...base.channel, selectedChannel: selected },
+          message: messageStateWith(base.message, rows),
+        },
+      );
+    };
+    const feedRows = () => [
+      createMockMessage({ id: 'm1', channel_id: 'ch1' }),
+      createMockMessage({ id: 'm2', channel_id: 'ch1' }),
+      createMockMessage({ id: 'm3', channel_id: 'ch1' }),
+    ];
+    const rowIds = (s: TestStore) => (s.getState().message.rows as Array<{ id: string }>).map((r) => r.id);
+
+    it('drops the deleted messages from the feed when the open channel was purged, with no stale feed toast', async () => {
       const selected = mockChannel('ch1', 'general');
-      store.dispatch({ type: 'channel/setSelectedChannel', payload: selected });
-
-      setupSearchResults([[mockMessage('m1')]]);
+      const feed = feedStore(selected, feedRows());
+      setupSearchResults([[mockMessage('m1'), mockMessage('m3')]]);
       mockDeleteMessage.mockResolvedValue({ success: true, status: 204 });
 
-      await store.dispatch(
+      await feed.dispatch(
         bulkPurgeChannels({
           channels: [selected],
           config: messagesConfig([CURRENT_USER.id]),
@@ -2596,23 +2628,16 @@ describe('purgeSlice thunks', () => {
         }),
       );
 
-      const toast = store.getState().status.toast;
-      expect(toast.isVisible).toBe(true);
-      expect(toast.action).toEqual({
-        type: 'reloadChannel',
-        channelId: 'ch1',
-        label: 'Reload feed',
-      });
+      expect(rowIds(feed)).toEqual(['m2']);
+      expect(feed.getState().status.toast.isVisible).toBe(false);
     });
 
-    it('does not show a toast when the selected channel was not in the target set', async () => {
-      const other = mockChannel('ch-other', 'unrelated');
-      store.dispatch({ type: 'channel/setSelectedChannel', payload: other });
-
+    it('leaves the feed alone when another channel was purged', async () => {
+      const feed = feedStore(mockChannel('ch-other', 'unrelated'), feedRows());
       setupSearchResults([[mockMessage('m1')]]);
       mockDeleteMessage.mockResolvedValue({ success: true, status: 204 });
 
-      await store.dispatch(
+      await feed.dispatch(
         bulkPurgeChannels({
           channels: [mockChannel('ch1', 'general')],
           config: messagesConfig([CURRENT_USER.id]),
@@ -2620,22 +2645,28 @@ describe('purgeSlice thunks', () => {
         }),
       );
 
-      expect(store.getState().status.toast.isVisible).toBe(false);
+      expect(rowIds(feed)).toEqual(['m1', 'm2', 'm3']);
     });
 
-    it('does not show a toast when no channel is selected', async () => {
-      setupSearchResults([[mockMessage('m1')]]);
-      mockDeleteMessage.mockResolvedValue({ success: true, status: 204 });
+    it('patches a message the purge edited in the open feed (attachments only)', async () => {
+      const selected = mockChannel('ch1', 'general');
+      const withFile = createMockMessage({ id: 'm1', channel_id: 'ch1', attachments: [{ id: 'a1', filename: 'f.png' } as never] });
+      const feed = feedStore(selected, [withFile, createMockMessage({ id: 'm2', channel_id: 'ch1' })]);
+      setupSearchResults([[mockMessage('m1', 0, [{ id: 'a1', filename: 'f.png' }])]]);
+      mockEditMessage.mockResolvedValue({ success: true, status: 200, data: { ...withFile, attachments: [] } });
 
-      await store.dispatch(
+      await feed.dispatch(
         bulkPurgeChannels({
-          channels: [mockChannel('ch1', 'general')],
-          config: messagesConfig([CURRENT_USER.id]),
+          channels: [selected],
+          config: messagesConfig([CURRENT_USER.id], false, true),
           guildId: 'guild1',
         }),
       );
 
-      expect(store.getState().status.toast.isVisible).toBe(false);
+      expect(rowIds(feed)).toEqual(['m1', 'm2']);
+      const row = (feed.getState().message.rows as Array<{ id: string; flags: number }>)[0];
+      expect(row.flags & RowFlag.IMAGE).toBe(0);
+      expect(getCachedMessage(MAIN_CONTAINER, 'm1')?.attachments).toEqual([]);
     });
   });
 

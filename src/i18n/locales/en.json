@@ -916,6 +916,9 @@
     "confirm": "Load All",
     "restoredLine": "{{count}} loaded so far in this workspace. Resume continues from {{date}}.",
     "restoredLineNoDate": "{{count}} loaded so far in this workspace.",
+    "completeLine_channel": "All {{count}} messages in this channel are saved in this workspace. Start over fetches the channel again and picks up anything posted since.",
+    "completeLine_dm": "All {{count}} messages in this conversation are saved in this workspace. Start over fetches the conversation again and picks up anything posted since.",
+    "completeLine_thread": "All {{count}} messages in this thread are saved in this workspace. Start over fetches the thread again and picks up anything posted since.",
     "resume": "Resume",
     "startOver": "Start over"
   },
@@ -1372,7 +1375,8 @@
     "lookupFailed": "Lookup failed. Try again.",
     "lookUpId": "Look up ID \"{{query}}\"",
     "placeholder": "Type to search or paste a User ID",
-    "you": "{{name}} (You)"
+    "you": "{{name}} (You)",
+    "youSuffix": "(You)"
   },
   "emojiPicker": {
     "search": "Search emojis by name…",
@@ -2013,7 +2017,6 @@
       "scope_dm_other": "{{count}} conversations",
       "completeReactions": "{{mode}}: {{label}} · {{scope}}, {{count}} reactions removed",
       "completeDetail": "{{mode}}: {{label}} · {{scope}}, {{detail}}",
-      "completeToast": "{{mode}} complete (feed may be out of date)",
       "failedToast": "{{mode}} failed: {{error}}",
       "startingServers_one": "{{mode}}: Starting operation across {{count}} server",
       "startingServers_other": "{{mode}}: Starting operation across {{count}} servers",

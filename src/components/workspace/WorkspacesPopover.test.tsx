@@ -153,7 +153,7 @@ describe('WorkspacesPopover (2.2.5 WP5)', () => {
       fireEvent.click(screen.getByTestId('workspace-export'));
       const confirm = screen.getByTestId('workspace-confirm');
       expect(within(confirm).getByText('Export Raid archive')).toBeInTheDocument();
-      expect(within(confirm).getByText(/The file holds message content\./)).toBeInTheDocument();
+      expect(within(confirm).getByText(/It holds message content\./)).toBeInTheDocument();
       fireEvent.click(screen.getByTestId('workspace-confirm-button'));
       await waitFor(() => expect(exportWorkspaceFile).toHaveBeenCalledWith('w2'));
     });

@@ -916,6 +916,9 @@
     "confirm": "Alle laden",
     "restoredLine": "{{count}} bisher in diesem Arbeitsbereich geladen. Fortsetzen macht ab {{date}} weiter.",
     "restoredLineNoDate": "{{count}} bisher in diesem Arbeitsbereich geladen.",
+    "completeLine_channel": "Alle {{count}} Nachrichten in diesem Kanal sind in diesem Arbeitsbereich gespeichert. Neu beginnen lädt den Kanal erneut und holt alles nach, was seitdem geschrieben wurde.",
+    "completeLine_dm": "Alle {{count}} Nachrichten in dieser Unterhaltung sind in diesem Arbeitsbereich gespeichert. Neu beginnen lädt die Unterhaltung erneut und holt alles nach, was seitdem geschrieben wurde.",
+    "completeLine_thread": "Alle {{count}} Nachrichten in diesem Thread sind in diesem Arbeitsbereich gespeichert. Neu beginnen lädt den Thread erneut und holt alles nach, was seitdem geschrieben wurde.",
     "resume": "Fortsetzen",
     "startOver": "Neu beginnen"
   },
@@ -1372,7 +1375,8 @@
     "lookupFailed": "Nachschlagen fehlgeschlagen. Versuche es erneut.",
     "lookUpId": "ID \"{{query}}\" nachschlagen",
     "placeholder": "Tippe zum Suchen oder füge eine Benutzer-ID ein",
-    "you": "{{name}} (Du)"
+    "you": "{{name}} (Du)",
+    "youSuffix": "(Du)"
   },
   "emojiPicker": {
     "search": "Emojis nach Name suchen…",
@@ -2013,7 +2017,6 @@
       "scope_dm_other": "{{count}} Unterhaltungen",
       "completeReactions": "{{mode}}: {{label}} · {{scope}}, {{count}} Reaktionen entfernt",
       "completeDetail": "{{mode}}: {{label}} · {{scope}}, {{detail}}",
-      "completeToast": "{{mode}} abgeschlossen (Feed ist womöglich veraltet)",
       "failedToast": "{{mode}} fehlgeschlagen: {{error}}",
       "startingServers_one": "{{mode}}: Vorgang startet in {{count}} Server",
       "startingServers_other": "{{mode}}: Vorgang startet in {{count}} Servern",
