@@ -22,22 +22,38 @@ const setBrowserLanguage = (win: Window, languages: string[]) => {
   Object.defineProperty(win.navigator, 'language', { value: languages[0], configurable: true });
 };
 
-/** Remove the resolved language key so the next boot behaves like a pre-2.1.4 install. */
-const forgetStoredLanguage = () =>
+/**
+ * Remove the resolved language key so the next boot behaves like a pre-2.1.4
+ * install. The settings save that precedes it can still land a late write,
+ * so the key is deleted, left alone for a beat, deleted again and then read
+ * back; a key that came back would pin English and the boot would never
+ * suggest German (tier 3, 2026-10-18).
+ */
+const withSettingsDb = <T,>(win: Window, run: (store: IDBObjectStore) => IDBRequest<T>, onDone: (value: T | undefined) => void) => {
+  const req = win.indexedDB.open('Discrub-settings');
+  req.onsuccess = () => {
+    const db = req.result;
+    if (!db.objectStoreNames.contains('keyval')) { db.close(); onDone(undefined); return; }
+    const tx = db.transaction('keyval', 'readwrite');
+    const request = run(tx.objectStore('keyval'));
+    tx.oncomplete = () => { db.close(); onDone(request.result); };
+    tx.onerror = () => { db.close(); onDone(undefined); };
+  };
+  req.onerror = () => onDone(undefined);
+};
+const deleteStoredLanguage = () =>
   cy.window({ log: false }).then((win) =>
-    new Cypress.Promise<void>((resolve) => {
-      const req = win.indexedDB.open('Discrub-settings');
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains('keyval')) { db.close(); resolve(); return; }
-        const tx = db.transaction('keyval', 'readwrite');
-        tx.objectStore('keyval').delete('appLanguage');
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); resolve(); };
-      };
-      req.onerror = () => resolve();
-    }),
+    new Cypress.Promise<void>((resolve) => withSettingsDb(win, (store) => store.delete('appLanguage'), () => resolve())),
   );
+const forgetStoredLanguage = () => {
+  deleteStoredLanguage();
+  cy.wait(500, { log: false });
+  deleteStoredLanguage();
+  cy.window({ log: false })
+    // Wrapped, since a Cypress `then` that resolves to undefined keeps the window as its subject.
+    .then((win) => new Cypress.Promise<{ stored: unknown }>((resolve) => withSettingsDb(win, (store) => store.get('appLanguage'), (stored) => resolve({ stored }))))
+    .then(({ stored }) => { expect(stored, 'stored language after the reset').to.be.undefined; });
+};
 
 describe('Localization (#124)', () => {
   describe('Display tab picker', () => {
