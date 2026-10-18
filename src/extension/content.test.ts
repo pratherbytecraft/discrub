@@ -148,6 +148,21 @@ describe('Content Script', () => {
       expect(document.getElementById('discrub-overlay')).not.toBeNull();
     });
 
+    it('tears down when the runtime dies between the port drop and the reconnect (row 56)', () => {
+      openOverlay();
+      vi.useFakeTimers();
+
+      disconnectListeners[0]();
+      expect(document.getElementById('discrub-overlay')).not.toBeNull();
+      delete (mockChrome.runtime as any).id;
+      vi.advanceTimersByTime(1000);
+      vi.useRealTimers();
+
+      expect(document.getElementById('discrub-overlay')).toBeNull();
+      expect(document.getElementById('discrub-floating-button')).toBeNull();
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('updated or reloaded'));
+    });
+
     it('button click on an orphaned script removes the dead UI instead of opening', () => {
       delete (mockChrome.runtime as any).id;
       const button = document.getElementById('discrub-floating-button')!;

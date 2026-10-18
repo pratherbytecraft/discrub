@@ -169,7 +169,14 @@ function teardownOrphanedUi(): void {
  */
 const RECONNECT_DELAY_MS = 1000;
 function watchForExtensionReload(): void {
-  if (!isExtensionContextValid() || typeof chrome.runtime.connect !== 'function') return;
+  // Row 56 (2.2.5 pass): Chrome can drop the port a beat before it clears
+  // the runtime id, so the reconnect is where a reload is often first seen.
+  // Returning quietly here left the old app frame running and writing.
+  if (!isExtensionContextValid()) {
+    teardownOrphanedUi();
+    return;
+  }
+  if (typeof chrome.runtime.connect !== 'function') return;
   let port: chrome.runtime.Port;
   try {
     port = chrome.runtime.connect({ name: 'discrub-content' });
