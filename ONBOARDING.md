@@ -28,7 +28,8 @@ Discrub 2.0 is the next major version. These features were not in Discrub Classi
 
 ### Major New Features
 
-- **Discord-Style Chunked Feed**: Messages render inline in a Discord-style feed with hover-only gutter timestamps and virtualization for large channels. No separate Preview modal.
+- **Workspaces**: Every conversation Discrub loads past its first page is kept in your browser. Close the tab, reload, or come back the next day and it opens from disk with the same filters, sort, selection, thread tabs and scroll position. Load All, Export, Purge and Bulk Edit pick up where they stopped. The workspace pill at the bottom opens the list, where a workspace can be renamed, cleared, exported to a file and imported on any browser. Signing out clears every workspace.
+- **Discord-Style Chunked Feed**: Messages render inline in a Discord-style feed with hover-only gutter timestamps and virtualization for large channels. No separate Preview modal. Scrolling faster than the feed can draw shows placeholder rows that fade into the messages.
 - **System Messages**: Pinned, joined, boosted, thread-created and other Discord system events render as compact notices instead of blank rows.
 - **Click-to-Jump Navigation**: Click a reply bar, pinned-message notice or thread-created notice to jump to the referenced message. The target row flashes amber.
 - **Inline Filter-by-User**: Click an author's avatar or name to open their profile, then filter the channel to messages by them or messages mentioning them. Other active filters are kept.
@@ -37,7 +38,7 @@ Discrub 2.0 is the next major version. These features were not in Discrub Classi
 - **Tour Mode + Targeted Help**: A guided tour runs once for new users. Small `?` icons next to the trickier controls (multi-select, filters, focus, purge mode, pause/resume, operation delays, export presets) open a short explanation on click.
 - **Stale-Feed Reload Toast**: After a purge that targets the channel you are viewing, a toast offers to reload the feed so you see Discord's post-purge state.
 - **Discord Layout HTML Exports**: Exported HTML wraps in a Discord-like shell with server sidebar, channel navigation and theme toggle, so you can browse between channels in one export.
-- **Data Package Import & Rehydration**: Import Discord's "Request All of My Data" ZIP to browse, analyze and re-export your full message history, including servers you have left. The importer reads the ZIP in pieces, so large packages (multi-gigabyte, ZIP64 archives) open without being loaded whole, and it handles packages exported in any Discord locale (French, German, Spanish, Simplified Chinese, Cyrillic and others). Multi-attachment messages render every attachment. Imports decompress once into IndexedDB, and a reload resumes the package without a re-import. A Filter button on the package message table opens a modal with Content and Date controls that applies locally, and exports honor the active filter. Per-channel Tier 2 rehydration fetches live reactions, mentions, embeds and fresh CDN URLs, with an estimated runtime shown first and a server-wide search preflight that covers most messages in one pass. Once enriched, clicking a reaction chip opens the live ReactionModal to show who reacted.
+- **Data Package Import & Rehydration**: Import Discord's "Request All of My Data" ZIP to browse, analyze and re-export your full message history, including servers you have left. The importer reads the ZIP in pieces, so large packages (multi-gigabyte, ZIP64 archives) open without being loaded whole, and it handles packages exported in any Discord locale (French, German, Spanish, Simplified Chinese, Cyrillic and others). Multi-attachment messages render every attachment. Imports decompress once into IndexedDB, and a reload resumes the package without a re-import. A Filter button on the package message table opens a modal with Content and Date controls that applies locally, and exports honor the active filter. Per-channel Tier 2 rehydration fetches live reactions, mentions, embeds and fresh CDN URLs, with an estimated runtime shown first and a server-wide search preflight that covers most messages in one pass. Once enriched, clicking a reaction chip opens the live ReactionModal to show who reacted. A package can be read without signing in, from the **Browse a data package** button on the sign-in page. Servers you have rejoined since the package was made leave its Left Servers group, and a Move out button moves a channel by hand.
 - **Forum Channel Support**: Discord forum and media channels. Browse active and archived threads, load thread messages, and export them one at a time.
 - **Voice and Stage Channel Chat**: The text chat in voice and stage channels can be browsed, exported and purged like any text channel.
 - **Thread Discoverability**: The Load Thread modal lists active and archived threads in the current channel. Threads whose starter message was deleted are still reachable without a thread ID.
@@ -188,6 +189,8 @@ All operations report in the status log at the bottom of the screen instead of i
 - Pause, resume and cancel controls in the status bar
 - A downloadable log file for debugging
 
+A run that is cut short by a closed tab, a reload or a crash is kept in your workspace. Open Discrub again and the button reads Resume; the dialog says where it will continue from, with Start over beside it.
+
 ![Status Log](docs/screenshots/ui/status-log.png)
 
 ---
@@ -203,6 +206,10 @@ All operations report in the status log at the bottom of the screen instead of i
 4. **Purge**: Enter multi-select mode (toggle button on the channel list header), select channels, click the purge icon. The dialog supports Messages, Reactions and Clear All Reactions modes.
 
 5. **Search**: Click "Advanced Search & Filters" above the message table. It works as before, with more criteria and automatic continuation past 5,000 results.
+
+6. **Come back later**: What you loaded is still there. The conversation reopens from your workspace, and a run that was cut short offers Resume.
+
+7. **Read a data package**: On the sign-in page, click **Browse a data package** to open Discrub with the Package tab only, no token needed.
 
 ---
 

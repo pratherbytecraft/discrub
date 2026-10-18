@@ -51,7 +51,7 @@ It runs as a **web app** (manual token entry) and as a **Chrome/Firefox extensio
 
 Servers show their channel categories. Channels you cannot view carry a lock icon, and channels granted to you by a member-specific permission, such as ticket channels, show as open. DMs list display names. Voice and Stage channels are clickable rows; select one to read its text chat like any text channel.
 
-Multi-select mode works on the Server, Channel and DM lists, with a Copy button for names or IDs. Shift+Click selects a range. Server multi-select has a Purge action that clears your own messages from every selected server in one run.
+Multi-select mode works on the Server, Channel and DM lists, with a Copy button for names or IDs. Shift+Click selects a range, and Select all skips voice channels. Server multi-select has a Purge action that clears your own messages from every selected server in one run. The Server, Channel and DM filters match names written in fancy Unicode fonts by their plain letters.
 
 Group DMs carry a Group chip in the DM list, show the group's own name when one is set, and purge confirmations label them as groups.
 
@@ -65,6 +65,8 @@ Group DMs carry a Group chip in the DM list, show the group's own name when one 
 A Discord-style chunked feed with inline rendering, role-colored author names, role icons, reply indicators, hover-only gutter timestamps, virtualization for large channels, and system messages (pins, joins, boosts, thread-created) rendered as compact notices. Stickers render as images and polls as vote-bar cards. Forwarded messages render their full content (text, attachments, embeds). System and pinned messages can be selected for bulk actions. Bare image and GIF links render as inline media in the feed and in HTML exports.
 
 To select many messages, click a checkbox and drag (the feed scrolls at the edge), or Shift+Click to extend a selection. Both work in thread tabs.
+
+When you scroll a long conversation faster than the feed can draw it, the rows that have not rendered yet show as placeholders and fade into the real messages as the scroll settles. The messages already on screen stay put.
 
 **Filters** has two layers in one modal:
 
@@ -152,7 +154,7 @@ Two HTML templates. **Discord Layout** (default) wraps the export in a Discord-l
 
 ### Purge
 
-Delete messages and reactions across one or more channels, with user targeting. If 25 requests in a row fail, the run pauses itself so you can check the log and resume or stop.
+Delete messages and reactions across one or more channels, with user targeting. If 25 requests in a row fail, the run pauses itself so you can check the log and resume or stop. When the purged channel is open in the feed, the deleted messages drop out as the run goes, and the saved copy in your workspace drops them too.
 
 - **Messages Mode**: search-based deletion with per-user targeting, plus an optional **"Also delete system messages"** section for chosen categories (pins, joins, boosts)
 - **Attachments Only**: strip attachments without deleting the text (own messages only, a Discord API limit). The running count shows stripped and failed messages, and the status log says how many messages had no uploaded file
@@ -220,7 +222,7 @@ Nine reports over the loaded messages: Overview (the headline numbers), Most men
 
 ### Data Package Import & Rehydration
 
-Import the ZIP from Discord's "Request All of My Data" export and browse, analyze, bulk-edit, bulk-delete or re-export your full message history, including servers you have left. Processing happens in your browser; the package file never leaves your device.
+Import the ZIP from Discord's "Request All of My Data" export and browse, analyze, bulk-edit, bulk-delete or re-export your full message history, including servers you have left. Processing happens in your browser; the package file never leaves your device. You do not need to sign in to read a package: the sign-in page has a Browse a data package button that opens Discrub with only the Package tab, so a package can be imported, read, filtered and exported without a Discord token. Delete and the other account features turn on once you sign in.
 
 The importer reads the ZIP in pieces, so a full package of several gigabytes opens without the file ever being loaded whole, and the Activity folders that make up most of it are skipped without being unpacked. A progress bar shows how much of the file has been read. Packages exported in any Discord locale (French, German, Spanish, Simplified Chinese, Cyrillic and others) work, and archives with tens of thousands of entries (ZIP64) too. Multi-attachment messages render every attachment. After an import the status log says how many channels and messages were read, and warns when a folder had to be skipped. Channels whose type Discord did not spell out are worked out from the rest of the record (recipients, server, name); anything that still cannot be placed is listed under Other.
 
@@ -229,6 +231,8 @@ The importer reads the ZIP in pieces, so a full package of several gigabytes ope
 **Analytics on your full message history.** Per-server and per-channel counts, channel-type breakdown, and an optional timeline view (monthly activity and hour-of-day patterns).
 
 ![Package analytics](docs/screenshots/package/package-analytics.png)
+
+**Left Servers.** The package lists the servers you had left when it was made. After a package loads, Discrub checks each of those channels against the servers you are in now and moves the ones you have rejoined back under their server. The Left Servers header has a button to run the check again, and a channel's header has a Move out button to move it by hand. Both are remembered across a reload.
 
 **Browse the messages.** Imports decompress once into IndexedDB; per-channel reads come from IDB and never re-decompress the ZIP. Deleting from a package tells 404s apart from real deletions: messages that were already gone on Discord (removed earlier by a live purge, for example) are counted as "already gone", wait only a short moment instead of the full delete delay, and a run that removed nothing ends on a warning. Messages you delete with the live Purge or from the message list are remembered for the loaded package, so a later package purge skips them. Reload the page and the package resumes without a re-import. Messages render with markdown, mention chips, custom emoji and auto-linked URLs. Attachment placeholders keep the original CDN URL. Older packages with unquoted snowflake IDs parse without precision loss across user, server, channel and message metadata.
 
@@ -282,6 +286,8 @@ A run that is cut short, such as Load All, Export, Bulk Export, Purge or Bulk Ed
 The workspace pill opens the Workspaces list. From there you can rename, duplicate, clear or delete a workspace, clear a single conversation, and export a workspace to a `.discrub-workspace` file that imports on any browser. The thin bar on the bottom edge shows how much browser storage Discrub uses and how much is left. If storage fills up during Load All, the run pauses so you can clear room and Resume.
 
 Everyone has one workspace, Default. Supporters can keep more than one. A workspace is open in one window at a time. Signing out clears every workspace.
+
+On a conversation that is complete on disk, Load All offers Start over, which fetches the newer messages. If your sign in expires during a run, the run stops and stays ready to Resume after you sign in again.
 
 ### Themes
 
@@ -360,6 +366,8 @@ Both versions use the same codebase and make the same API calls from your browse
    - Find the `Authorization` header value; that's your token
 3. Paste your token on the Discrub landing page
 4. Browse your servers and export
+
+To read a Discord data package without signing in, click **Browse a data package** on the sign-in page instead of pasting a token. Discrub opens with the Package tab only; sign in later to turn on the account features.
 
 ### Finding your Discord token
 
