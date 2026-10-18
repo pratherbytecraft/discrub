@@ -14,6 +14,7 @@ import { selectIsSupporter } from '@features/supporter/supporterSlice';
 import AppearanceButton from '@components/appearance/AppearanceButton';
 import BotsButton from '@components/welcome/BotsButton';
 import SupporterWallToggle from '@components/donations/SupporterWallToggle';
+import OverlayControls from '@components/overlay/OverlayControls';
 import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import { selectStageRoom } from '@features/scrublings/selectors';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
@@ -88,6 +89,7 @@ const SimpleTop = ({ onOpenPicker }: { onOpenPicker: () => void }) => {
       <Tooltip title={t('topbar.settings')} enterDelay={0} arrow>
         <IconButton size="small" aria-label={t('topbar.settings')} onClick={() => dispatch(setDialogOpen({ dialog: 'settings', open: true }))} data-testid="simple-settings"><SettingsIcon /></IconButton>
       </Tooltip>
+      <OverlayControls size="small" />
       {!phone && <Box
         data-tour="user-profile"
         data-testid="simple-user-chip"

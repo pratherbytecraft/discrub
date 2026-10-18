@@ -13,6 +13,7 @@ import AppearanceButton from '@components/appearance/AppearanceButton';
 import { NATIVE_HEAD_HEIGHT } from './NativeColumn';
 import BotsButton from '@components/welcome/BotsButton';
 import SupporterWallToggle from '@components/donations/SupporterWallToggle';
+import OverlayControls from '@components/overlay/OverlayControls';
 import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import { selectStageRoom } from '@features/scrublings/selectors';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
@@ -124,6 +125,7 @@ const NativeHead = ({ inspectorOpen, canToggleInspector, onToggleInspector, show
       {/* The supporter wall is the column at the far right, so its switch sits at the far right of the bar. */}
       <BotsButton label={false} hideOnPhone />
       <SupporterWallToggle />
+      <OverlayControls size="small" />
     </Box>
   );
 };

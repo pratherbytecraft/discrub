@@ -1,19 +1,16 @@
 import { useState, memo } from 'react';
 import {
   AppBar, Toolbar, Avatar, Typography, IconButton, Box, Tooltip, Button,
-  Dialog, DialogContent, Menu, MenuItem, ListItemIcon, ListItemText,
+  Menu, MenuItem, ListItemIcon, ListItemText,
   alpha, useMediaQuery, useTheme, Divider,
 } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import {
   Logout as LogoutIcon,
   Settings as SettingsIcon,
-  Minimize as MinimizeIcon,
-  Close as CloseIcon,
   Campaign as AnnouncementIcon,
   EmojiObjects as IdeasIcon,
   Reddit as RedditIcon,
-  WarningAmber as WarningIcon,
   MoreVert as MoreIcon,
   SmartToy as BotsIcon,
   Menu as MenuIcon,
@@ -26,16 +23,14 @@ import { leaveGuestMode, selectIsGuestMode } from '@features/auth/authSlice';
 import { setSelectedGuild } from '@features/guild/guildSlice';
 import { setSelectedChannel } from '@features/channel/channelSlice';
 import { setSelectedDm } from '@features/dm/dmSlice';
-import { selectSetting, updateSetting, setMinimized, setKofiOverlayOpen,
+import { selectSetting, updateSetting, setKofiOverlayOpen,
   setDialogOpen,
 } from '@features/app/appSlice';
 import BotsButton, { BotsPopover } from '@components/welcome/BotsButton';
 import ScrublingsStage from '@components/scrublings/ScrublingsStage';
 import { selectStageRoom } from '@features/scrublings/selectors';
 import { useWallOverlay } from '@components/donations/useWallOverlay';
-import { selectIsHeavyOperationRunning, selectOperationSummary } from '@features/app/operationSelectors';
 import { reopenAnnouncement, fetchAnnouncementMarkdownThunk } from '@features/announcement/announcementSlice';
-import { isOverlayMode, closeOverlay, minimizeOverlay } from '@/extension/messaging';
 import {
   selectIsSupporter,
 } from '@features/supporter/supporterSlice';
@@ -47,11 +42,9 @@ import { isBleedingEdgeBuild } from '@services/hostedGate';
 import ProfileWindow from '@components/modals/ProfileWindow';
 import SignOutConfirmDialog from '@components/modals/SignOutConfirmDialog';
 import { useSignOut } from '@/hooks/useSignOut';
-import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import IdeasContactDialog from '@components/dialogs/IdeasContactDialog';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
-import { useHotkey } from '@features/hotkeys/HotkeyProvider';
-import { selectIsMinimized } from '@features/app/appSlice';
+import OverlayControls from '@components/overlay/OverlayControls';
 import { useTranslation } from 'react-i18next';
 
 interface TopBarProps {
@@ -89,15 +82,12 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
   // #275: a guest has no profile chip, a Sign in button sits there instead.
   const isGuest = useAppSelector(selectIsGuestMode);
   const showKofiFeed = useAppSelector(selectSetting(DiscrubSetting.APP_SHOW_KOFI_FEED));
-  const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);
-  const operationSummary = useAppSelector(selectOperationSummary);
   const isSupporter = useAppSelector(selectIsSupporter);
   const [compatOpen, setCompatOpen] = useState(false);
   const [compatAnchor, setCompatAnchor] = useState<null | HTMLElement>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   // Row 112: the sign out flow is shared with the profile window the other layouts open.
   const { requestSignOut: requestLogout, signOut: handleLogout, confirmOpen: signOutConfirmOpen, closeConfirm: closeSignOutConfirm, stored } = useSignOut();
-  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [ideasOpen, setIdeasOpen] = useState(false);
   const [moreMenuAnchor, setMoreMenuAnchor] = useState<null | HTMLElement>(null);
   const [botsAnchor, setBotsAnchor] = useState<null | HTMLElement>(null);
@@ -129,31 +119,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
 
   const handleProfileClick = () => {
     setProfileModalOpen(true);
-  };
-
-  const handleMinimize = async () => {
-    dispatch(setMinimized(true));
-    try {
-      await minimizeOverlay();
-    } catch {
-      dispatch(setMinimized(false));
-    }
-  };
-
-  // Wire #144 hotkeys for the topbar. Settings toggles open/close —
-  // pressing mod+, again while Settings is open closes the dialog,
-  // matching how F toggles focus mode. Minimize is one-shot (no
-  // restore-from-minimized hotkey in v1, see backlog).
-  const isMinimized = useAppSelector(selectIsMinimized);
-  useHotkey('minimize', handleMinimize, isOverlayMode() && !isMinimized);
-
-  const handleCloseConfirm = async () => {
-    setCloseDialogOpen(false);
-    try {
-      await closeOverlay();
-    } catch {
-      // closeOverlay already logs errors internally
-    }
   };
 
   return (
@@ -274,26 +239,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
                 </IconButton>
               </HotkeyTooltip>
             </Box>
-            {isOverlayMode() && <SectionDivider />}
-            {isOverlayMode() && (
-              <HotkeyTooltip actionId="minimize" label={t('topbar.minimizeToDiscord')} enterDelay={0} arrow>
-                <IconButton color="inherit" onClick={handleMinimize} aria-label={t('topbar.minimizeDiscrub')}>
-                  <MinimizeIcon />
-                </IconButton>
-              </HotkeyTooltip>
-            )}
-            {isOverlayMode() && (
-              <Tooltip title={t('topbar.closeDiscrub')} enterDelay={0} arrow>
-                <IconButton
-                  color="inherit"
-                  onClick={() => isOperationRunning ? setCloseDialogOpen(true) : handleCloseConfirm()}
-                  aria-label={t('topbar.closeDiscrub')}
-                  sx={{ transition: 'background-color 200ms ease', '&:hover': { backgroundColor: 'rgba(240, 71, 71, 0.15)' } }}
-                >
-                  <CloseIcon />
-                </IconButton>
-              </Tooltip>
-            )}
+            <OverlayControls divider />
           </Box>
         )}
         {currentUser && (
@@ -543,37 +489,7 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
             <BotsPopover anchor={botsAnchor} onClose={() => setBotsAnchor(null)} />
 
             {/* Logout lives in the profile dialog the avatar opens (2.2.4); on a phone it also sits in the More menu. */}
-            {isOverlayMode() && <SectionDivider />}
-
-            {isOverlayMode() && (
-              <HotkeyTooltip actionId="minimize" label={t('topbar.minimizeToDiscord')} enterDelay={0} arrow>
-                <IconButton
-                  color="inherit"
-                  onClick={handleMinimize}
-                  aria-label={t('topbar.minimizeDiscrub')}
-                >
-                  <MinimizeIcon />
-                </IconButton>
-              </HotkeyTooltip>
-            )}
-
-            {isOverlayMode() && (
-              <Tooltip title={t('topbar.closeDiscrub')} enterDelay={0} arrow>
-                <IconButton
-                  color="inherit"
-                  onClick={() => isOperationRunning ? setCloseDialogOpen(true) : handleCloseConfirm()}
-                  aria-label={t('topbar.closeDiscrub')}
-                  sx={{
-                    transition: 'background-color 200ms ease',
-                    '&:hover': {
-                      backgroundColor: 'rgba(240, 71, 71, 0.15)',
-                    },
-                  }}
-                >
-                  <CloseIcon />
-                </IconButton>
-              </Tooltip>
-            )}
+            <OverlayControls divider />
           </Box>
         )}
       </Toolbar>
@@ -583,45 +499,6 @@ const TopBar = ({ onMenuClick }: TopBarProps = {}) => {
       <ProfileWindow open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
       <SignOutConfirmDialog open={signOutConfirmOpen} onClose={closeSignOutConfirm} onConfirm={handleLogout} stored={stored} />
 
-      <Dialog
-        open={closeDialogOpen}
-        onClose={() => setCloseDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { bgcolor: 'background.paper' } }}
-      >
-        <DialogContent sx={{ textAlign: 'center', py: 4, px: 3, position: 'relative' }}>
-          <DialogCloseIcon onClose={() => setCloseDialogOpen(false)} />
-
-          <WarningIcon sx={{ fontSize: 40, color: 'warning.main', mb: 1 }} />
-
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-            {t('topbar.operationInProgress')}
-          </Typography>
-
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            {operationSummary.label}
-          </Typography>
-          <Typography variant="body2" color="warning.main" sx={{ mb: 3 }}>
-            {t('topbar.closingCancels')}
-          </Typography>
-
-          <Box
-            component="button"
-            onClick={handleCloseConfirm}
-            sx={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5,
-              px: 2, py: 1.25, borderRadius: 1, border: 'none', cursor: 'pointer',
-              bgcolor: 'action.hover', color: 'text.secondary', width: '100%',
-              transition: 'background-color 150ms ease',
-              '&:hover': { bgcolor: 'rgba(240, 71, 71, 0.15)', color: 'error.main' },
-            }}
-          >
-            <CloseIcon sx={{ fontSize: 18, color: 'error.main' }} />
-            <Typography variant="body2">{t('topbar.closeAnyway')}</Typography>
-          </Box>
-        </DialogContent>
-      </Dialog>
 
       <IdeasContactDialog open={ideasOpen} onClose={() => setIdeasOpen(false)} />
     </AppBar>
