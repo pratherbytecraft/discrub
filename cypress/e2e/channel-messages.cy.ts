@@ -61,6 +61,57 @@ describe('Channel Messages', () => {
     cy.contains('(no content)').should('not.exist');
   });
 
+  // A bot embed's description renders Discord markdown, mentions, subtext
+  // lines and timestamps in the feed the same way the HTML export does.
+  it('renders markdown, mentions, subtext and timestamps inside an inline embed', () => {
+    cy.intercept('GET', '**/api/v10/channels/*/messages?*', {
+      statusCode: 200,
+      body: [
+        {
+          id: '700000000000000998',
+          channel_id: '801000000000000001',
+          author: {
+            id: '111222333444555666',
+            username: 'discrub_tester',
+            discriminator: '0',
+            avatar: 'abc123avatar',
+            global_name: 'Discrub Tester',
+          },
+          content: '',
+          timestamp: '2026-02-24T00:00:00.000Z',
+          edited_timestamp: null,
+          tts: false,
+          mention_everyone: false,
+          mentions: [],
+          attachments: [],
+          embeds: [
+            {
+              type: 'rich',
+              color: 7139930,
+              title: 'Most reactions given',
+              description: '**1.** <@111222333444555666> · **5**\n-# 🎉 2 · <t:1788287560:R>',
+            },
+          ],
+          reactions: [],
+          pinned: false,
+          type: 0,
+        },
+      ],
+    }).as('getEmbedMsg');
+
+    cy.contains('general').click();
+    cy.wait('@getEmbedMsg');
+    cy.contains('[data-testid="message-feed-row"]', 'Most reactions given').within(() => {
+      cy.get('strong').contains('1.').should('exist');
+      cy.get('.user-mention').should('contain.text', '@Discrub Tester');
+      cy.get('.subtext').should('contain.text', '🎉 2');
+      cy.get('.subtext .timestamp-mention').should('have.attr', 'data-unix', '1788287560');
+    });
+    cy.contains('-#').should('not.exist');
+    cy.contains('<t:').should('not.exist');
+    cy.contains('<@').should('not.exist');
+  });
+
   it('shows "Load All" button when there may be more messages', () => {
     // Override messages intercept to return exactly 100 messages (signals hasMore=true)
     const manyMessages = Array.from({ length: 100 }, (_, i) => ({

@@ -556,6 +556,49 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
       expectStatusEntry('Export: Completed general');
     });
 
+    it('HTML export renders markdown and mentions inside a bot embed the way Discord does', () => {
+      cy.task('downloads:clean');
+
+      openChannelWithMessages([
+        makeMessage({
+          id: '900000000000000111',
+          content: '',
+          embeds: [
+            {
+              type: 'rich',
+              color: 7139930,
+              title: 'Most reactions given',
+              description: '<#801000000000000001> · Sep 1 to Sep 30\n\n**1.** <@111222333444555666> · **5**\n-# 🎉 2 · <t:1788287560:R>',
+              fields: [{ name: '__Scanned__', value: '*5 reactions* on 3 messages' }],
+            },
+          ],
+        }),
+      ]);
+      cy.get('[data-testid="message-feed-row"]').should('exist');
+
+      cy.contains('button', 'Export').click();
+      cy.get('[role="dialog"]').contains('button', /^Export$/).click();
+
+      cy.waitForDownload(/^general\.zip$/i).then((zipName) => {
+        cy.task<string>('zip:read', {
+          fileName: zipName,
+          entry: 'general/general-page-1.html',
+        }).then((page) => {
+          const description = page.slice(page.indexOf('class="embed-description"'), page.indexOf('class="embed-fields"'));
+          expect(description).to.contain('<strong>1.</strong>');
+          expect(description).to.contain('<strong>5</strong>');
+          expect(description).to.contain('class="user-mention" data-user-id="111222333444555666">@Discrub Tester</span>');
+          expect(description).to.contain('class="channel-mention" data-channel-id="801000000000000001"># general</span>');
+          expect(description).to.not.contain('&lt;@');
+          expect(description).to.contain('<span class="subtext">🎉 2 · <span class="timestamp-mention" data-unix="1788287560"');
+          expect(description).to.not.contain('-#');
+          expect(page).to.contain('<div class="embed-field-name"><u>Scanned</u></div>');
+          expect(page).to.contain('<div class="embed-field-value"><em>5 reactions</em> on 3 messages</div>');
+        });
+      });
+      expectStatusEntry('Export: Completed general');
+    });
+
     it('CSV export writes a message whose stored timestamp is not a date, dated from its id (row 124)', () => {
       cy.task('downloads:clean');
 

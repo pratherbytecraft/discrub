@@ -284,6 +284,16 @@ export const InlineEmbeds = memo(function InlineEmbeds({
       borderRadius: '3px',
       fontWeight: 500,
     },
+    '& .timestamp-mention': {
+      background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      padding: '0 2px',
+      borderRadius: '3px',
+    },
+    '& .subtext': {
+      display: 'block',
+      fontSize: '0.8em',
+      color: theme.palette.text.secondary,
+    },
     '& .custom-emoji': {
       width: 18,
       height: 18,

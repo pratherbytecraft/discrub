@@ -556,3 +556,31 @@ describe('formatEmbedContent', () => {
     });
   });
 });
+
+describe('formatEmbedContent subtext and timestamps', () => {
+  const ctx = { userMap: { '1541': { displayName: 'Prather Bytecraft' } }, channelMap: { '345': { name: 'general' } } };
+
+  it('renders a subtext line as a block span and drops its newline', () => {
+    const html = formatEmbedContent('**Top**\n-# <#345> · by <@1541>\nnext', ctx);
+    expect(html).toContain('<strong>Top</strong><br><span class="subtext"><span class="channel-mention">#general</span> · by <span class="user-mention">@Prather Bytecraft</span></span>next');
+    expect(html).not.toContain('-#');
+  });
+
+  it('renders a Discord timestamp as an absolute date with the full date in the title', () => {
+    const html = formatEmbedContent('-# 🎉 2 · <t:1788287560:R>', ctx);
+    const date = new Date(1788287560 * 1000);
+    const text = date.toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    expect(html).toContain(`class="timestamp-mention" data-unix="1788287560"`);
+    expect(html).toContain(`>${text}</span>`);
+    expect(html).not.toContain('&lt;t:');
+  });
+});
+
+describe('formatEmbedContent underscore italics', () => {
+  const ctx = { userMap: {} };
+  it('renders _text_ as italic and leaves snake_case alone', () => {
+    expect(formatEmbedContent('_Counted from the links._', ctx)).toBe('<em>Counted from the links.</em>');
+    expect(formatEmbedContent('see my_var_name here', ctx)).toBe('see my_var_name here');
+    expect(formatEmbedContent('a _b_ c', ctx)).toBe('a <em>b</em> c');
+  });
+});

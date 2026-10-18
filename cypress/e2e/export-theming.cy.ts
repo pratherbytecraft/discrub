@@ -127,6 +127,11 @@ function openGeneralAndExport() {
   cy.get('[role="dialog"]').contains('button', /^Export$/).click();
 }
 
+// Outside every holiday season, so a free export carries exactly the free six.
+const OFF_SEASON = new Date(2026, 5, 15, 12).getTime();
+// Inside Halloween '26 (October 1 to November 2).
+const IN_SEASON = new Date(2026, 9, 10, 12).getTime();
+
 describe('Export theming (slot E)', () => {
   before(() => {
     cy.wrap(makeFixturePair());
@@ -134,6 +139,7 @@ describe('Export theming (slot E)', () => {
 
   it('a free theme bakes as the export default with only free themes embedded', () => {
     cy.task('downloads:clean');
+    cy.clock(OFF_SEASON, ['Date']);
     visitApp();
     saveTheme('terminal');
 
@@ -158,6 +164,35 @@ describe('Export theming (slot E)', () => {
       }).then((shell) => {
         expect(shell).to.contain('<option value="terminal" selected>');
         expect(shell).to.contain('.shell-theme-terminal {');
+        expect(shell).to.not.contain('shell-theme-synthwave');
+      });
+    });
+  });
+
+  it('a holiday theme in season embeds for everyone and bakes as the export default', () => {
+    cy.task('downloads:clean');
+    cy.clock(IN_SEASON, ['Date']);
+    visitApp();
+    saveTheme('halloween-26');
+
+    openGeneralAndExport();
+    cy.waitForDownload(/^general\.zip$/i, 60000).then((zipName) => {
+      cy.task<string>('zip:read', {
+        fileName: zipName,
+        entry: 'general/general-page-1.html',
+      }).then((page) => {
+        expect(page).to.contain('class="export-theme-halloween-26"');
+        expect(page).to.contain('<option value="halloween-26" selected>');
+        expect(page).to.not.contain('synthwave');
+        // The free six plus the one holiday theme in season.
+        expect(page.match(/<option value="/g)).to.have.length(7);
+      });
+      cy.task<string>('zip:read', {
+        fileName: zipName,
+        entry: 'general/shell.html',
+      }).then((shell) => {
+        expect(shell).to.contain('<option value="halloween-26" selected>');
+        expect(shell).to.contain('.shell-theme-halloween-26 {');
         expect(shell).to.not.contain('shell-theme-synthwave');
       });
     });

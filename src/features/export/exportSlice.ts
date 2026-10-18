@@ -431,6 +431,37 @@ export const applyExportThemeSetFromState = (state: RootState) => {
 };
 
 /**
+ * Bake the channel names an export resolves `<#id>` mentions with: the
+ * current Server's channels and loaded forum threads, the open DMs, and
+ * the channels handed to a bulk export. Same never-fail contract as the
+ * theme helper.
+ */
+export const applyExportChannelNamesFromState = (state: RootState, extra: Channel[] = []) => {
+  const names: Record<string, string> = {};
+  const add = (list: unknown) => {
+    if (!Array.isArray(list)) return;
+    list.forEach((c) => {
+      const channel = c as { id?: string; name?: string | null };
+      if (channel?.id && channel.name) names[channel.id] = channel.name;
+    });
+  };
+  try {
+    add(state.channel?.channels);
+    add(state.channel?.forumThreads);
+    add(state.dm?.dms);
+    add(extra);
+  } catch {
+    /* partial stores (unit tests) */
+  }
+  try {
+    getExportService().setExportChannelNames(names);
+  } catch {
+    /* minimal service mocks (tests) may lack the setter */
+  }
+  return names;
+};
+
+/**
  * Bake the export footer (slot F) alongside the theme set: default
  * branding for everyone, supporter customization only with a valid key
  * right now. Same never-fail contract as the theme helper.
@@ -486,6 +517,7 @@ export const exportMessages = createAsyncThunk<
     try {
       const exportService = getExportService();
       applyExportThemeSetFromState(getState());
+      applyExportChannelNamesFromState(getState());
       await applyExportFooterFromState(getState());
 
       // Get cached user map from state
@@ -1407,6 +1439,7 @@ export const bulkExportChannels = createAsyncThunk<
     // Snapshot settings at start — prevents mid-operation changes from causing inconsistency
     const initialState = getState();
     const exportThemeSet = applyExportThemeSetFromState(initialState);
+    applyExportChannelNamesFromState(initialState, channels);
     await applyExportFooterFromState(initialState);
     const searchDelay = selectSearchDelay(initialState);
     const delayModifier = selectDelayModifier(initialState);
@@ -1715,6 +1748,7 @@ export const bulkExportDMs = createAsyncThunk<
     // Snapshot settings at start — prevents mid-operation changes from causing inconsistency
     const initialState = getState();
     const exportThemeSet = applyExportThemeSetFromState(initialState);
+    applyExportChannelNamesFromState(initialState, channels);
     await applyExportFooterFromState(initialState);
     const searchDelay = selectSearchDelay(initialState);
     const delayModifier = selectDelayModifier(initialState);

@@ -1,4 +1,5 @@
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
+import { renderTimestampHtml, renderSubtextHtml } from 'discrub-core/html-formatting-utils';
 
 /**
  * Escapes HTML special characters to prevent XSS attacks
@@ -98,6 +99,8 @@ export const formatEmbedContent = (
   formatted = formatted.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // _italic_ too, but not an underscore inside a word (snake_case stays)
+  formatted = formatted.replace(/(^|[^\w])_([^_\n]+?)_(?=[^\w]|$)/gm, '$1<em>$2</em>');
   formatted = formatted.replace(/__(.+?)__/g, '<u>$1</u>');
   formatted = formatted.replace(/~~(.+?)~~/g, '<s>$1</s>');
   formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -154,6 +157,15 @@ export const formatEmbedContent = (
     const extension = animated ? 'gif' : 'png';
     return `<img src="https://cdn.discordapp.com/emojis/${id}.${extension}?size=32" class="custom-emoji" alt=":${emojiName}:" title=":${emojiName}:" />`;
   });
+
+  // Discord timestamps <t:unix> and <t:unix:style>, same markup as the export
+  // After escape: &lt;t:123:R&gt;
+  formatted = formatted.replace(/&lt;t:(\d{1,13})(?::([tTdDfFR]))?&gt;/g, (_match, unix, style) =>
+    renderTimestampHtml(Number(unix), style));
+
+  // Subtext lines (-# text), small muted; the line's own newline goes with it
+  // since the span is a block.
+  formatted = formatted.replace(/^-#\s+(.+?)(\n|$)/gm, (_match, text) => renderSubtextHtml(text));
 
   // Newlines to <br>
   formatted = formatted.replace(/\n/g, '<br>');

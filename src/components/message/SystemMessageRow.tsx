@@ -278,6 +278,16 @@ const SystemMessageRow = memo(function SystemMessageRow({
               padding: '0 3px',
               borderRadius: '3px',
             },
+            '& .timestamp-mention': {
+              background: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+              padding: '0 3px',
+              borderRadius: '3px',
+            },
+            '& .subtext': {
+              display: 'block',
+              fontSize: '0.8em',
+              color: theme.palette.text.secondary,
+            },
           }}
           dangerouslySetInnerHTML={{ __html: html }}
         />
@@ -305,6 +315,7 @@ const SystemMessageRow = memo(function SystemMessageRow({
                   renderEmbedAsHtml(e, {
                     includeImages: true,
                     includeVideos: true,
+                    formattingContext,
                   }),
                 )
                 .join(''),

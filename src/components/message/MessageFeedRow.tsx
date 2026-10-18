@@ -212,6 +212,16 @@ const MessageFeedRow = function MessageFeedRow({
       borderRadius: '3px',
       fontWeight: 600,
     },
+    '& .timestamp-mention': {
+      background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+      padding: '0 3px',
+      borderRadius: '3px',
+    },
+    '& .subtext': {
+      display: 'block',
+      fontSize: '0.8em',
+      color: theme.palette.text.secondary,
+    },
     '& .custom-emoji': {
       width: 20,
       height: 20,

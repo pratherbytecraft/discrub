@@ -22,6 +22,7 @@ import {
   DISCORD_LIGHT_ID,
   type ThemeDescriptor,
 } from '@/theme/theme';
+import { isUnlocked } from '@features/appearance/groups';
 
 export interface ExportTheme {
   id: string;
@@ -190,21 +191,23 @@ function toExportTheme(d: ThemeDescriptor): ExportTheme {
 // ── Set resolution ───────────────────────────────────────────────
 
 /**
- * Build the theme set an export should embed. The free six always
- * embed; the supporter eight only for a verified supporter. The baked
- * default is the app's effective theme (same resolution as
- * ThemeWrapper, including the locked-supporter-theme fallback), so an
- * export always opens looking like the app that produced it.
+ * Build the theme set an export should embed: every theme the app
+ * itself would let this user pick right now (`isUnlocked`), so the
+ * free themes always, the supporter themes with a key, and a holiday
+ * theme inside its season for everyone. The baked default is the
+ * app's effective theme (same resolution as ThemeWrapper, including
+ * the locked-supporter-theme fallback), so an export always opens
+ * looking like the app that produced it.
  */
 export function resolveExportThemeSet(options: {
   /** Raw APP_THEME_MODE setting value ('auto', id, or legacy alias). */
   themeSetting: string | undefined;
   isSupporter: boolean;
+  /** The export's clock, for the holiday season check. Defaults to now. */
+  now?: Date;
 }): ExportThemeSet {
-  const { themeSetting, isSupporter } = options;
-  const descriptors = THEME_DESCRIPTORS.filter(
-    (d) => d.tier === 'free' || isSupporter,
-  );
+  const { themeSetting, isSupporter, now = new Date() } = options;
+  const descriptors = THEME_DESCRIPTORS.filter((d) => isUnlocked(d, isSupporter, now));
 
   let defaultId = resolveThemeIdFromSetting(themeSetting);
   if (!descriptors.some((d) => d.id === defaultId)) {
@@ -216,9 +219,12 @@ export function resolveExportThemeSet(options: {
   return { defaultId, themes: descriptors.map(toExportTheme) };
 }
 
-/** The pre-slot-E behavior: free themes only, Discord Dark default. */
+/** The pre-slot-E behavior: free themes only (no season check), Discord Dark default. */
 export function defaultExportThemeSet(): ExportThemeSet {
-  return resolveExportThemeSet({ themeSetting: DISCORD_DARK_ID, isSupporter: false });
+  return {
+    defaultId: DISCORD_DARK_ID,
+    themes: THEME_DESCRIPTORS.filter((d) => d.tier === 'free').map(toExportTheme),
+  };
 }
 
 // ── CSS / JS emission helpers ────────────────────────────────────

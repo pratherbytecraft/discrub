@@ -12,6 +12,10 @@ import { THEME_DESCRIPTORS, DISCORD_DARK_ID, DISCORD_LIGHT_ID } from '@/theme/th
 
 const FREE_COUNT = THEME_DESCRIPTORS.filter((d) => d.tier === 'free').length;
 const TOTAL_COUNT = THEME_DESCRIPTORS.length;
+// Outside every holiday season, so the free count is the plain tier split.
+const OFF_SEASON = new Date(2026, 5, 15);
+// Inside Halloween '26 (October 1 to November 2).
+const HALLOWEEN = new Date(2026, 9, 19);
 
 const CONTENT_VAR_NAMES = [
   '--bg-primary', '--bg-secondary', '--bg-tertiary', '--bg-hover',
@@ -88,9 +92,23 @@ describe('exportThemes', () => {
 
   describe('resolveExportThemeSet', () => {
     it('embeds only free themes for non-supporters', () => {
-      const set = resolveExportThemeSet({ themeSetting: DISCORD_DARK_ID, isSupporter: false });
+      const set = resolveExportThemeSet({ themeSetting: DISCORD_DARK_ID, isSupporter: false, now: OFF_SEASON });
       expect(set.themes).toHaveLength(FREE_COUNT);
       expect(set.themes.map((t) => t.id)).not.toContain('synthwave');
+      expect(set.themes.map((t) => t.id)).not.toContain('halloween-26');
+    });
+
+    it('embeds a holiday theme for everyone inside its season and bakes it as the default', () => {
+      const set = resolveExportThemeSet({ themeSetting: 'halloween-26', isSupporter: false, now: HALLOWEEN });
+      expect(set.themes).toHaveLength(FREE_COUNT + 1);
+      expect(set.themes.map((t) => t.id)).toContain('halloween-26');
+      expect(set.defaultId).toBe('halloween-26');
+    });
+
+    it('a holiday theme after its season falls back like any supporter theme', () => {
+      const set = resolveExportThemeSet({ themeSetting: 'halloween-26', isSupporter: false, now: OFF_SEASON });
+      expect(set.themes.map((t) => t.id)).not.toContain('halloween-26');
+      expect(set.defaultId).toBe(DISCORD_DARK_ID);
     });
 
     it('embeds the full roster for supporters', () => {
@@ -116,9 +134,9 @@ describe('exportThemes', () => {
     });
 
     it('a supporter theme without a valid key falls back by base', () => {
-      const darkFallback = resolveExportThemeSet({ themeSetting: 'synthwave', isSupporter: false });
+      const darkFallback = resolveExportThemeSet({ themeSetting: 'synthwave', isSupporter: false, now: OFF_SEASON });
       expect(darkFallback.defaultId).toBe(DISCORD_DARK_ID);
-      const lightFallback = resolveExportThemeSet({ themeSetting: 'nekonoir', isSupporter: false });
+      const lightFallback = resolveExportThemeSet({ themeSetting: 'nekonoir', isSupporter: false, now: OFF_SEASON });
       expect(lightFallback.defaultId).toBe(DISCORD_LIGHT_ID);
     });
 

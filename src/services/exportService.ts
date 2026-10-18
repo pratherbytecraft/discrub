@@ -271,6 +271,23 @@ class ExportService {
   }
 
   /**
+   * Channel names for `<#id>` mentions in message bodies and embed text,
+   * baked from app state before each export the same way as the theme
+   * set. The channels and threads of the current Server, the open DMs,
+   * and the export's own threads on top. Unknown ids still render as
+   * "unknown-channel".
+   */
+  private exportChannelNames: Record<string, string> = {};
+
+  setExportChannelNames(names: Record<string, string>): void {
+    this.exportChannelNames = names;
+  }
+
+  getExportChannelNames(): Record<string, string> {
+    return this.exportChannelNames;
+  }
+
+  /**
    * Footer baked into generated HTML (slot F) — same baked-field
    * pattern and lifecycle as the theme set above.
    */
@@ -417,7 +434,7 @@ class ExportService {
       let formattingContext: HtmlFormattingContext | null = null;
       if (exportFormat === 'html') {
         formattingContext = await this.buildFormattingContext(
-          everything, guild, cachedUserMap, guildId, mediaMaps, sanitizedName, guildRoles
+          everything, guild, cachedUserMap, guildId, mediaMaps, sanitizedName, guildRoles, threads
         );
       }
 
@@ -793,6 +810,7 @@ class ExportService {
     mediaMaps?: MediaMaps | null,
     sanitizedName?: string,
     externalGuildRoles?: any[],
+    threads?: Channel[],
   ): Promise<HtmlFormattingContext> {
     // Build userMap from cached data and message authors
     const userMap: Record<string, { userName?: string; displayName?: string; nick?: string }> = {};
@@ -830,9 +848,15 @@ class ExportService {
       }
     });
 
-    // channelMap is empty for now since Guild type doesn't include channels
-    // Channel mentions will fall back to 'unknown-channel' in formatContentAsHtml
+    // Channel names baked from app state, with this export's own threads
+    // on top. Anything else falls back to 'unknown-channel'.
     const channelMap: Record<string, { name: string }> = {};
+    Object.entries(this.exportChannelNames).forEach(([id, name]) => {
+      if (name) channelMap[id] = { name };
+    });
+    (threads ?? []).forEach((thread) => {
+      if (thread?.id && thread.name) channelMap[thread.id] = { name: thread.name };
+    });
 
     // Get guild roles: prefer explicitly passed roles, fall back to guild object
     const guildRoles = externalGuildRoles?.length ? externalGuildRoles : (guild?.roles || []);
@@ -990,6 +1014,7 @@ class ExportService {
                       includeImages: true,
                       includeVideos: true,
                       mediaMap: mediaMaps?.mediaMap,
+                      formattingContext: formattingContext ?? undefined,
                     }),
                   )
                   .join('')}</div>`
@@ -1153,6 +1178,7 @@ class ExportService {
                  includeImages: true,
                  includeVideos: true,
                  mediaMap: mediaMaps?.mediaMap,
+                 formattingContext: formattingContext ?? undefined,
                })).join('')}
              </div>`
           : '';
@@ -1265,6 +1291,7 @@ class ExportService {
                   includeImages: true,
                   includeVideos: true,
                   mediaMap: mediaMaps?.mediaMap,
+                  formattingContext: formattingContext ?? undefined,
                 }))
                 .join('')}</div>`
             : '';
@@ -1606,6 +1633,22 @@ ${buildContentThemeCSS(themeSet)}
 
     .channel-mention:hover {
       background: rgba(60, 66, 112, 0.7);
+    }
+
+    /* Discord timestamps <t:unix:style> */
+    .timestamp-mention {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      padding: 0 4px;
+      border-radius: 3px;
+      cursor: default;
+    }
+
+    /* Discord subtext (-# text) */
+    .subtext {
+      display: block;
+      font-size: 0.8em;
+      color: var(--text-muted);
     }
 
     /* Discord headings */
@@ -2721,6 +2764,10 @@ ${buildContentThemeCSS(themeSet)}
 
     .light-theme .channel-mention:hover {
       background: rgba(88, 101, 242, 0.2);
+    }
+
+    .light-theme .timestamp-mention {
+      background: rgba(0, 0, 0, 0.06);
     }
 
     /* Code */

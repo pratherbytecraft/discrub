@@ -1015,6 +1015,16 @@ const MessageRow = memo(function MessageRow({
                 borderRadius: '3px',
                 fontWeight: 500,
               },
+              '& .timestamp-mention': {
+                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                padding: '0 4px',
+                borderRadius: '3px',
+              },
+              '& .subtext': {
+                display: 'block',
+                fontSize: '0.8em',
+                color: theme.palette.text.secondary,
+              },
               '& .channel-mention': {
                 background: isDark ? 'rgba(60, 66, 112, 0.5)' : 'rgba(60, 66, 112, 0.15)',
                 color: isDark ? '#b5c7ff' : theme.palette.primary.dark,
