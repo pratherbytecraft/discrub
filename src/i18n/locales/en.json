@@ -1662,7 +1662,7 @@
       "hosted": "Bleeding Edge"
     },
     "blurb": {
-      "themes": "Supporter layouts, themes and Scrublings, the themes in exports too, animated accents, custom export footer, more than one workspace",
+      "themes": "Supporter layouts, themes and Scrublings, the themes in exports too, animated accents, custom export footer",
       "hosted": "Hosted early-access build with new features before they clear store review"
     },
     "hostedPlanBlurb": "Everything in Supporter, plus the hosted early-access build with new features before they clear store review",
@@ -2337,7 +2337,6 @@
     "more": "{{count}} more",
     "onDisk": "{{size}} on disk",
     "remaining": "{{size}} remaining",
-    "supporterOnly": "Supporter only",
     "atCap": "{{count}} of {{count}} workspaces.",
     "atCapImport": "Discrub keeps {{count}} workspaces. Delete one, then import the file.",
     "workLoadAll": "Load All {{count}}",
@@ -2390,7 +2389,6 @@
     "notWorkspaceFile": "This file is not a Discrub workspace",
     "needsVersionFile": "This workspace file needs Discrub {{version}}",
     "alreadyHereTitle": "Workspace already here",
-    "replaceTitle": "Replace {{name}}",
     "here": "Here",
     "inTheFile": "In the file",
     "exportedOn": "Exported {{date}}",

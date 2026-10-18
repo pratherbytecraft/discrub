@@ -63,17 +63,18 @@ describe('WorkspacesPopover (2.2.5 WP5)', () => {
     expect(screen.getByTestId('workspace-remaining')).toHaveTextContent('9.1 GB remaining');
   });
 
-  it('free accounts see the supporter lock on New and Duplicate (not Import, row 3) and the Supporter only row', () => {
+  it('free accounts see no lock, no Supporter only row, and no Delete on Default (2.2.6: workspaces for everyone)', () => {
     render(false);
-    expect(screen.getByTestId('workspace-supporter-only')).toHaveTextContent('Supporter only');
+    expect(screen.queryByTestId('workspace-supporter-only')).toBeNull();
     fireEvent.click(screen.getByTestId('workspace-row-toggle-default'));
-    expect(screen.getAllByTestId('workspace-lock')).toHaveLength(3);
+    expect(screen.queryAllByTestId('workspace-lock')).toHaveLength(0);
+    expect(screen.getByTestId('workspace-duplicate')).toBeEnabled();
     expect(screen.queryByTestId('workspace-delete')).toBeNull();
   });
 
-  it('a supporter at 8 workspaces cannot make another: New and Duplicate wait, one plain line (rows 33, 34)', () => {
+  it('a free account at 8 workspaces cannot make another: New and Duplicate wait, one plain line (rows 33, 34)', () => {
     const eight = [ws({ isDefault: true }), ...Array.from({ length: 7 }, (_, i) => ws({ wid: `w${i + 2}`, name: `Workspace ${i + 2}` }))];
-    render(true, { list: eight });
+    render(false, { list: eight });
     expect(screen.getByTestId('workspace-new')).toBeDisabled();
     expect(screen.getByTestId('workspace-at-cap')).toHaveTextContent('8 of 8 workspaces.');
     fireEvent.click(screen.getByTestId('workspace-row-toggle-w2'));
@@ -100,18 +101,16 @@ describe('WorkspacesPopover (2.2.5 WP5)', () => {
     expect(screen.getByTestId('workspace-rename')).toBeDisabled();
   });
 
-  it('supporters see no lock and Delete on workspaces other than Default', () => {
+  it('Delete shows on workspaces other than Default', () => {
     render(true);
-    expect(screen.queryByTestId('workspace-supporter-only')).toBeNull();
     fireEvent.click(screen.getByTestId('workspace-row-toggle-w2'));
-    expect(screen.queryAllByTestId('workspace-lock')).toHaveLength(0);
     expect(screen.getByTestId('workspace-delete')).toBeInTheDocument();
   });
 
-  it('a free New opens the supporter hub instead of making a workspace', () => {
+  it('a free New makes a workspace and starts its rename', async () => {
     const { store } = render(false);
     fireEvent.click(screen.getByTestId('workspace-new'));
-    expect(store.getState().supporter.panelOpen).toBe(true);
+    expect(store.getState().supporter.panelOpen).toBe(false);
   });
 
   it('rename edits inline and Escape leaves the name alone', () => {
@@ -187,26 +186,14 @@ describe('WorkspacesPopover (2.2.5 WP5)', () => {
       expect(target.wid).not.toBe('w2');
     });
 
-    it('a supporter importing a new workspace gets it in its own slot without a dialog', async () => {
+    it('a new workspace from a file lands in its own slot without a dialog, free account too', async () => {
       vi.mocked(readWorkspaceManifest).mockResolvedValue(manifest({ wid: 'elsewhere', name: 'Old raids' }));
       vi.mocked(importWorkspaceFile).mockClear();
-      render(true);
+      render(false);
       pick();
       await waitFor(() => expect(importWorkspaceFile).toHaveBeenCalled());
       expect(screen.queryByTestId('workspace-import-dialog')).toBeNull();
       expect(vi.mocked(importWorkspaceFile).mock.calls[0][1]).toMatchObject({ wid: 'elsewhere', name: 'Old raids' });
-    });
-
-    it('a free account is asked before Default is replaced, and Keep both opens the supporter hub', async () => {
-      vi.mocked(readWorkspaceManifest).mockResolvedValue(manifest({ wid: 'elsewhere', name: 'Old raids' }));
-      vi.mocked(importWorkspaceFile).mockClear();
-      const { store } = render(false);
-      pick();
-      const dialog = await screen.findByTestId('workspace-import-dialog');
-      expect(within(dialog).getByText('Replace Default')).toBeInTheDocument();
-      fireEvent.click(screen.getByTestId('workspace-import-keep-both'));
-      expect(store.getState().supporter.panelOpen).toBe(true);
-      expect(importWorkspaceFile).not.toHaveBeenCalled();
     });
 
     it('a file from a newer Discrub names the version it needs', async () => {

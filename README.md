@@ -285,7 +285,7 @@ A run that is cut short, such as Load All, Export, Bulk Export, Purge or Bulk Ed
 
 The workspace pill opens the Workspaces list. From there you can rename, duplicate, clear or delete a workspace, clear a single conversation, and export a workspace to a `.discrub-workspace` file that imports on any browser. The thin bar on the bottom edge shows how much browser storage Discrub uses and how much is left. If storage fills up during Load All, the run pauses so you can clear room and Resume.
 
-Everyone has one workspace, Default. Supporters can keep more than one. A workspace is open in one window at a time. Signing out clears every workspace.
+Everyone starts with one workspace, Default, and can keep up to eight. A workspace is open in one window at a time. Signing out clears every workspace.
 
 On a conversation that is complete on disk, Load All offers Start over, which fetches the newer messages. If your sign in expires during a run, the run stops and stays ready to Resume after you sign in again.
 
@@ -301,7 +301,7 @@ Everything about how Discrub looks is under **Appearance** in the top bar: Layou
 
 **Scrublings.** Small pixel characters walk along the top bar and react to what Discrub is doing. While something runs they say what it is, such as how far a Purge or Load All has got or how long a wait has left, and on a phone they say a shorter version. Suds, the Mage and the Cat are free, six more come with supporter access, and up to three can be out at once. Hover, click or drag one. The Scrublings tab has a switch to hide them all. A commissioned Scrubling is added for everyone once it's drawn.
 
-To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free. Supporters get more layouts, themes and Scrublings, and can keep more than one workspace.
+To use a supporter key, open Appearance, then Supporter, and paste the key from your Ko-fi email. Every Discrub feature stays free. Supporters get more layouts, themes and Scrublings.
 
 ![Dark Theme](docs/screenshots/ui/theme-dark.png)
 ![Light Theme](docs/screenshots/ui/theme-light.png)

@@ -66,7 +66,7 @@ Privacy
 - One optional exception. If you apply a supporter key, the extension checks in with api.pratherbytecraft.com about once a day to keep that key current. Only the key itself is sent, never an email address or any Discord data, and removing your key stops this entirely.
 
 Supporters
-- Every feature is free, with one workspace that holds everything. Supporters unlock more layouts, themes and Scrublings, the small pixel characters on the top bar, and can keep more than one workspace.
+- Every feature is free, workspaces included. Supporters unlock more layouts, themes and Scrublings, the small pixel characters on the top bar.
 
 Additional
 - Interface in English or German, auto-detected on first run and switchable in Settings

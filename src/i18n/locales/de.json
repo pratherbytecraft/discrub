@@ -1662,7 +1662,7 @@
       "hosted": "Bleeding Edge"
     },
     "blurb": {
-      "themes": "Supporter-Layouts, Designs und Scrublings, die Designs auch in Exporten, animierte Akzente, eigene Exportfußzeile, mehr als ein Arbeitsbereich",
+      "themes": "Supporter-Layouts, Designs und Scrublings, die Designs auch in Exporten, animierte Akzente, eigene Exportfußzeile",
       "hosted": "Gehostete Vorabversion mit neuen Funktionen, bevor sie die Store-Prüfung durchlaufen"
     },
     "hostedPlanBlurb": "Alles aus Unterstützer, plus die gehostete Vorabversion mit neuen Funktionen, bevor sie die Store-Prüfung durchlaufen",
@@ -2337,7 +2337,6 @@
     "more": "{{count}} weitere",
     "onDisk": "{{size}} belegt",
     "remaining": "{{size}} frei",
-    "supporterOnly": "Nur für Unterstützer",
     "atCap": "{{count}} von {{count}} Arbeitsbereichen.",
     "atCapImport": "Discrub behält {{count}} Arbeitsbereiche. Lösche einen und importiere die Datei dann.",
     "workLoadAll": "Alle laden {{count}}",
@@ -2390,7 +2389,6 @@
     "notWorkspaceFile": "Diese Datei ist kein Discrub Arbeitsbereich",
     "needsVersionFile": "Diese Arbeitsbereich Datei braucht Discrub {{version}}",
     "alreadyHereTitle": "Arbeitsbereich schon vorhanden",
-    "replaceTitle": "{{name}} ersetzen",
     "here": "Hier",
     "inTheFile": "In der Datei",
     "exportedOn": "Exportiert am {{date}}",

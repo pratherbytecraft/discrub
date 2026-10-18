@@ -83,11 +83,7 @@ describe('Workspace file (2.2.5 WP6b)', () => {
     });
   });
 
-  it('a supporter importing a workspace already here can keep both', () => {
-    const payload = { v: 1, kid: 'k', jti: 'j', name: 'Aaron', eh: 'x', ent: { themes: null }, iat: 1, exp: null };
-    cy.window().its('__store__').invoke('getState').its('supporter.initialized').should('be.true').then(() => cy.window()).then((win) => {
-      (win as any).__store__.dispatch({ type: 'supporter/refreshKey/fulfilled', payload: { keyStatus: 'valid', payload, lastRefreshAt: 1 } });
-    });
+  it('importing a workspace already here can keep both (2.2.6: free account)', () => {
     cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
       interceptPagedChannel(messages[0]);
       cy.contains(CHANNEL).click();

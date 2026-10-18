@@ -16,7 +16,6 @@ import { Add as NewIcon, FileDownloadOutlined as ImportIcon } from '@mui/icons-m
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectIsOperationRunning } from '@features/app/operationSelectors';
-import { selectHasThemes, setSupporterPanelOpen } from '@features/supporter/supporterSlice';
 import { refreshWorkspaces, selectCurrentWid, selectStorageFigures, selectWorkspaceImporting, selectWorkspaceDuplicating, selectWorkspaceList } from '@features/workspace/workspaceSlice';
 import {
   clearConversationThunk,
@@ -38,7 +37,6 @@ import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import WorkspaceSwitchDialog from './WorkspaceSwitchDialog';
 import WorkspaceRow from './WorkspaceRow';
 import WorkspaceImportDialog from './WorkspaceImportDialog';
-import LockMark from './LockMark';
 import { countLabel } from './workspaceFormat';
 
 /** Eight rows show before the list scrolls (plan 5.2). */
@@ -55,7 +53,6 @@ interface Confirm {
 interface PendingImport {
   file: Blob;
   manifest: WorkspaceManifest;
-  mode: 'conflict' | 'replaceDefault';
   here: WorkspaceSummary;
 }
 
@@ -69,10 +66,8 @@ interface WorkspacesPopoverProps {
 
 /**
  * The Workspaces popover (plan 5.2): New and Import in the header, one row per
- * workspace, and the disk line and bar in the footer. Free accounts keep
- * Default only, so New, Import and Duplicate carry the supporter lock (New
- * and Duplicate open the supporter hub; Import still reads the file and can
- * replace Default), and a faint struck "Supporter only" row sits under the list.
+ * workspace, and the disk line and bar in the footer. Every account keeps up
+ * to MAX_WORKSPACES (2.2.6: workspaces are no longer a supporter perk).
  */
 const WorkspacesPopover = ({
   anchorEl,
@@ -87,7 +82,6 @@ const WorkspacesPopover = ({
   const list = useAppSelector(selectWorkspaceList);
   const storage = useAppSelector(selectStorageFigures);
   const currentWid = useAppSelector(selectCurrentWid);
-  const supporter = useAppSelector(selectHasThemes);
   const importing = useAppSelector(selectWorkspaceImporting);
   const duplicating = useAppSelector(selectWorkspaceDuplicating);
   // Row 9: an import holds the popover busy like a running action.
@@ -103,17 +97,12 @@ const WorkspacesPopover = ({
     if (open) void dispatch(refreshWorkspaces());
   }, [open, dispatch]);
 
-  const openHub = () => {
-    onClose();
-    dispatch(setSupporterPanelOpen(true));
-  };
   const size = (w: { bytes: number }) => formatDiskSize(w.bytes);
   const messages = (count: number) => countLabel('messages', count, locale);
 
-  // Rows 33 and 34: a supporter's workspaces stop at MAX_WORKSPACES.
-  const atCap = supporter && list.length >= MAX_WORKSPACES;
+  // Rows 33 and 34: workspaces stop at MAX_WORKSPACES.
+  const atCap = list.length >= MAX_WORKSPACES;
   const onNew = async () => {
-    if (!supporter) return openHub();
     if (atCap) return;
     const wid = await dispatch(createNewWorkspace()).unwrap();
     setExpanded(null);
@@ -124,8 +113,7 @@ const WorkspacesPopover = ({
     onClose();
     requestSwitch(w.wid);
   };
-  const onDuplicate = (w: WorkspaceSummary) => {
-    if (!supporter) return openHub();
+  const onDuplicate = (w: WorkspaceSummary) =>
     setConfirm({
       title: t('workspace.duplicateTitle', { name: w.name }),
       body: t('workspace.duplicateBody', { messages: messages(w.count), size: size(w) }),
@@ -133,7 +121,6 @@ const WorkspacesPopover = ({
       danger: false,
       run: () => dispatch(duplicateWorkspaceThunk({ wid: w.wid })),
     });
-  };
   const onExport = (w: WorkspaceSummary) =>
     setConfirm({
       title: t('workspace.exportTitle', { name: w.name }),
@@ -146,8 +133,7 @@ const WorkspacesPopover = ({
   /**
    * Import (plan section 8): the manifest is read first. The file's
    * workspace already here asks Cancel, Keep both or Replace. A new one
-   * goes into its own slot for supporters; a free account's only slot is
-   * Default, so the same dialog asks before replacing it.
+   * goes into its own slot.
    */
   const onFile = async (file: File) => {
     let manifest: WorkspaceManifest;
@@ -161,19 +147,13 @@ const WorkspacesPopover = ({
       return;
     }
     const match = list.find((w) => w.wid === manifest.wid);
-    if (match) return setPendingImport({ file, manifest, mode: 'conflict', here: match });
+    if (match) return setPendingImport({ file, manifest, here: match });
     if (atCap) return void dispatch(showToast({ level: 'warning', message: t('workspace.atCapImport', { count: MAX_WORKSPACES }) }));
-    if (supporter) return void dispatch(importWorkspaceThunk({ file, manifest, mode: 'new' }));
-    const defaultWorkspace = list.find((w) => w.isDefault);
-    if (defaultWorkspace) setPendingImport({ file, manifest, mode: 'replaceDefault', here: defaultWorkspace });
+    void dispatch(importWorkspaceThunk({ file, manifest, mode: 'new' }));
   };
   const keepBoth = () => {
     const pending = pendingImport;
     if (!pending) return;
-    if (!supporter) {
-      setPendingImport(null);
-      return openHub();
-    }
     if (atCap) return;
     setPendingImport(null);
     void dispatch(importWorkspaceThunk({ file: pending.file, manifest: pending.manifest, mode: 'new' }));
@@ -232,7 +212,6 @@ const WorkspacesPopover = ({
             >
               {t('workspace.new')}
             </Button>
-            {!supporter && <LockMark sx={{ position: 'absolute', top: -6, right: -6 }} />}
           </Box>
           <Box sx={{ position: 'relative', display: 'inline-flex' }}>
             <Button
@@ -290,7 +269,6 @@ const WorkspacesPopover = ({
               current={w.wid === currentWid}
               expanded={expanded === w.wid}
               renaming={renaming === w.wid}
-              locked={!supporter}
               atCap={atCap}
               busy={busy}
               duplicating={duplicating !== null}
@@ -316,19 +294,6 @@ const WorkspacesPopover = ({
               }
             />
           ))}
-          {!supporter && (
-            <Box
-              role="button"
-              tabIndex={0}
-              onClick={openHub}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHub(); } }}
-              data-testid="workspace-supporter-only"
-              sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mx: 1.75, mt: 0.75, mb: 0.5, px: 1.5, py: 1, border: '1px dashed', borderColor: 'divider', borderRadius: 1.5, color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, opacity: 0.5, cursor: 'pointer' }}
-            >
-              <LockMark />
-              <Box component="span" sx={{ textDecoration: 'line-through' }}>{t('workspace.supporterOnly')}</Box>
-            </Box>
-          )}
         </Box>
         <Box sx={{ px: 1.75, pt: 1, pb: 1.25, borderTop: '1px solid', borderColor: 'divider', fontSize: '0.71875rem', fontWeight: 500, color: 'text.secondary' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.625 }}>
@@ -345,10 +310,8 @@ const WorkspacesPopover = ({
       <WorkspaceSwitchDialog {...dialogProps} />
       {pendingImport && (
         <WorkspaceImportDialog
-          mode={pendingImport.mode}
           here={pendingImport.here}
           file={pendingImport.manifest}
-          locked={!supporter}
           atCap={atCap}
           onCancel={() => setPendingImport(null)}
           onKeepBoth={keepBoth}

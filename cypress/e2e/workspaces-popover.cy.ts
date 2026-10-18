@@ -1,7 +1,8 @@
 /**
  * Workspaces 2.2.5 WP5: the pill, the Workspaces popover and the disk bar.
- * Free account: New and Duplicate carry the supporter lock, Clear, Rename,
- * switching and Delete work for everyone.
+ * 2.2.6: every account keeps up to eight workspaces, no supporter lock,
+ * no Supporter only row. New, Duplicate, Clear, Rename, switching and
+ * Delete work for everyone.
  */
 
 const CHANNEL = 'general';
@@ -41,11 +42,6 @@ function loadTwoPages() {
   cy.contains('200 messages').should('be.visible');
 }
 
-const payload = { v: 1, kid: 'k', jti: 'j', name: 'Aaron', eh: 'x', ent: { themes: null }, iat: 1, exp: null };
-// Wait for the app's own supporter init first, or it lands after this and puts 'none' back.
-const unlock = () => cy.window().its('__store__').invoke('getState').its('supporter.initialized').should('be.true').then(() => cy.window()).then((win) => {
-  (win as any).__store__.dispatch({ type: 'supporter/refreshKey/fulfilled', payload: { keyStatus: 'valid', payload, lastRefreshAt: 1 } });
-});
 
 const openPopover = () => {
   cy.get('[data-testid="workspace-pill"]').first().click();
@@ -58,7 +54,7 @@ describe('Workspaces popover (2.2.5 WP5)', () => {
     cy.selectServer('Cypress Test Server');
   });
 
-  it('shows the open workspace, its figures and the supporter marks, and clears a conversation', () => {
+  it('shows the open workspace, its figures and no supporter marks, and clears a conversation', () => {
     cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
       interceptPagedChannel(messages[0]);
       loadTwoPages();
@@ -67,11 +63,11 @@ describe('Workspaces popover (2.2.5 WP5)', () => {
       cy.get('[data-testid="disk-bar"]').should('exist');
       openPopover();
       cy.get('[data-testid="workspace-row-default"]').should('contain', 'Open now').and('contain', '1 conversation · 200 messages');
-      cy.get('[data-testid="workspace-supporter-only"]').should('contain', 'Supporter only');
-      cy.get('[data-testid="workspace-new"]').parent().find('[data-testid="workspace-lock"]').should('exist');
+      cy.get('[data-testid="workspace-supporter-only"]').should('not.exist');
+      cy.get('[data-testid="workspace-lock"]').should('not.exist');
 
       cy.get('[data-testid="workspace-row-toggle-default"]').click();
-      cy.get('[data-testid="workspace-duplicate"]').parent().find('[data-testid="workspace-lock"]').should('exist');
+      cy.get('[data-testid="workspace-duplicate"]').should('be.enabled');
       cy.get('[data-testid="workspace-delete"]').should('not.exist');
       cy.get('[data-testid^="workspace-conversation-"]').first().should('contain', '# general · Cypress Test Server');
       cy.get('[data-testid^="workspace-conversation-clear-"]').first().click();
@@ -109,10 +105,8 @@ describe('Workspaces popover (2.2.5 WP5)', () => {
     cy.contains('[data-testid^="workspace-row-"]', 'Raid archive').should('not.exist');
   });
 
-  it('a supporter makes a new workspace, names it, and duplicates one', () => {
-    unlock();
+  it('a free account makes a new workspace, names it, and duplicates one', () => {
     openPopover();
-    cy.get('[data-testid="workspace-supporter-only"]').should('not.exist');
     cy.get('[data-testid="workspace-new"]').click();
     cy.get('[data-testid="workspace-rename-input"]').should('have.value', 'Workspace 2').type('Mod cleanup{enter}');
     cy.contains('[data-testid^="workspace-row-"]', 'Mod cleanup').should('exist');

@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 import type { ConversationSummary, WorkspaceSummary } from '@features/workspace/workspaceSummary';
 import { formatDiskSize } from '@features/workspace/diskBarScale';
 import { timeAgo } from '@/utils/timeAgo';
-import LockMark from './LockMark';
 import { countLabel, workLabel } from './workspaceFormat';
 
 /** Conversations listed under an open row before "N more". */
@@ -24,9 +23,7 @@ export interface WorkspaceRowProps {
   current: boolean;
   expanded: boolean;
   renaming: boolean;
-  /** Free accounts see Duplicate with the supporter lock. */
-  locked: boolean;
-  /** A supporter at the workspace cap: Duplicate waits until one is deleted. */
+  /** At the workspace cap: Duplicate waits until one is deleted. */
   atCap?: boolean;
   /** Clear and Delete wait while an action runs in the open workspace. */
   busy: boolean;
@@ -58,7 +55,6 @@ const WorkspaceRow = ({
   current,
   expanded,
   renaming,
-  locked,
   atCap = false,
   busy,
   duplicating = false,
@@ -120,7 +116,7 @@ const WorkspaceRow = ({
   ) : null;
 
   const commit = () => onRenameEnd(draft);
-  const act = (label: string, icon: React.ReactNode, onClick: () => void, opts: { danger?: boolean; lock?: boolean; disabled?: boolean; testid: string }) => (
+  const act = (label: string, icon: React.ReactNode, onClick: () => void, opts: { danger?: boolean; disabled?: boolean; testid: string }) => (
     <Box sx={{ position: 'relative', display: 'inline-flex' }}>
       <Button
         size="small"
@@ -134,7 +130,6 @@ const WorkspaceRow = ({
       >
         {label}
       </Button>
-      {opts.lock && <LockMark sx={{ position: 'absolute', top: -6, right: -6 }} />}
     </Box>
   );
 
@@ -204,7 +199,7 @@ const WorkspaceRow = ({
         <>
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', pt: 0.25, pb: 1, pl: 4.375, pr: 1.75 }}>
             {act(t('workspace.rename'), <RenameIcon />, onRenameStart, { testid: 'workspace-rename', disabled: !w.openable })}
-            {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', lock: locked, disabled: !w.openable || atCap || duplicating })}
+            {act(t('workspace.duplicate'), <DuplicateIcon />, onDuplicate, { testid: 'workspace-duplicate', disabled: !w.openable || atCap || duplicating })}
             {act(t('workspace.export'), <ExportIcon />, onExport, { testid: 'workspace-export', disabled: !w.openable })}
             {act(t('workspace.clear'), <ClearIcon />, onClear, { testid: 'workspace-clear', disabled: (current && busy) || w.count === 0 })}
             {!w.isDefault && act(t('workspace.delete'), <DeleteIcon />, onDelete, { testid: 'workspace-delete', danger: true, disabled: (current && busy) || w.heldElsewhere })}

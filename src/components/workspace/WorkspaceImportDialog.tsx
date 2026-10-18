@@ -4,17 +4,13 @@ import { useTranslation } from 'react-i18next';
 import type { WorkspaceSummary } from '@features/workspace/workspaceSummary';
 import type { WorkspaceManifest } from '@services/workspaceArchive';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
-import LockMark from './LockMark';
 import { countLabel, workLabel } from './workspaceFormat';
 
 interface WorkspaceImportDialogProps {
-  /** `conflict`: the file's workspace is already here. `replaceDefault`: a free account's one slot. */
-  mode: 'conflict' | 'replaceDefault';
+  /** The workspace already here under the file's id. */
   here: WorkspaceSummary;
   file: WorkspaceManifest;
-  /** Free accounts: Keep both needs a second slot and opens the supporter hub. */
-  locked: boolean;
-  /** A supporter at the workspace cap: Keep both needs a free slot. */
+  /** At the workspace cap: Keep both needs a free slot. */
   atCap?: boolean;
   onCancel: () => void;
   onKeepBoth: () => void;
@@ -32,12 +28,11 @@ const Panel = ({ label, name, lines, testid }: { label: string; name: string; li
 );
 
 /**
- * Asked before an import writes over anything (plan section 8): what is
- * here beside what is in the file, no sentence, then Cancel, Keep both or
- * Replace. A free account importing a different workspace sees the same
- * dialog over Default, its only slot.
+ * Asked before an import writes over a workspace already here (plan
+ * section 8): what is here beside what is in the file, no sentence, then
+ * Cancel, Keep both or Replace.
  */
-const WorkspaceImportDialog = ({ mode, here, file, locked, atCap = false, onCancel, onKeepBoth, onReplace }: WorkspaceImportDialogProps) => {
+const WorkspaceImportDialog = ({ here, file, atCap = false, onCancel, onKeepBoth, onReplace }: WorkspaceImportDialogProps) => {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
   const exported = new Date(file.exportedAt).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
@@ -50,7 +45,7 @@ const WorkspaceImportDialog = ({ mode, here, file, locked, atCap = false, onCanc
     <Dialog open onClose={onCancel} maxWidth="xs" fullWidth data-testid="workspace-import-dialog">
       <DialogTitle sx={{ pr: 5, display: 'flex', alignItems: 'center', gap: 1 }}>
         <WorkspaceIcon sx={{ color: 'primary.main' }} />
-        {mode === 'conflict' ? t('workspace.alreadyHereTitle') : t('workspace.replaceTitle', { name: here.name })}
+        {t('workspace.alreadyHereTitle')}
         <DialogCloseIcon onClose={onCancel} />
       </DialogTitle>
       <DialogContent dividers sx={{ display: 'flex', gap: 1.25 }}>
@@ -68,12 +63,9 @@ const WorkspaceImportDialog = ({ mode, here, file, locked, atCap = false, onCanc
       </DialogContent>
       <DialogActions>
         <Button color="inherit" onClick={onCancel} data-testid="workspace-import-cancel">{t('common.cancel')}</Button>
-        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
-          <Button variant="outlined" color="inherit" onClick={onKeepBoth} disabled={atCap} data-testid="workspace-import-keep-both" sx={{ borderColor: 'divider' }}>
-            {t('workspace.keepBoth')}
-          </Button>
-          {locked && <LockMark sx={{ position: 'absolute', top: -6, right: -6 }} />}
-        </Box>
+        <Button variant="outlined" color="inherit" onClick={onKeepBoth} disabled={atCap} data-testid="workspace-import-keep-both" sx={{ borderColor: 'divider' }}>
+          {t('workspace.keepBoth')}
+        </Button>
         <Button variant="contained" color="primary" onClick={onReplace} data-testid="workspace-import-replace">{t('workspace.replace')}</Button>
       </DialogActions>
     </Dialog>
