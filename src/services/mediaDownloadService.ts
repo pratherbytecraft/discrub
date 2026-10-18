@@ -1,5 +1,5 @@
 import { getDiscordService } from '@services/discordService';
-import type { RateLimitInfo } from 'discrub-core/discord-service';
+import { rateLimitWaitFloor, type RateLimitInfo } from 'discrub-core/discord-service';
 import { wait } from 'discrub-core/common-utils';
 import { EmbedType } from 'discrub-core/discord-enum';
 import filenamify from 'filenamify';
@@ -122,12 +122,16 @@ export async function streamDownloadWithStallGuard(
         }
         const { maxWaitSecs, maxConsecutive } = discordService.rateLimit;
         const capped = retryAfterSecs > maxWaitSecs;
+        // #279: the same wait floor per consecutive 429 as the lib.
+        const floor = rateLimitWaitFloor(discordService.rateLimit, consecutive429);
+        const floored = !capped && retryAfterSecs < floor;
         const info: RateLimitInfo = {
-          retryAfter: capped ? maxWaitSecs : retryAfterSecs,
+          retryAfter: capped ? maxWaitSecs : floored ? floor : retryAfterSecs,
           global,
           source,
           consecutive: consecutive429,
           capped,
+          floored,
         };
         if (capped || consecutive429 >= maxConsecutive) {
           discordService.onRateLimitExceeded?.(info);

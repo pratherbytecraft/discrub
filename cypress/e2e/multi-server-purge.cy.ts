@@ -211,7 +211,8 @@ describe('Multi-server purge (#255)', () => {
     cy.contains('button', 'Purge 2 Servers').click();
 
     cy.wait(['@deleteMessage', '@deleteMessage'], { timeout: 20000 });
-    cy.contains(/Stopped: Discord is rate limiting this account/i, { timeout: 20000 }).should('exist');
+    // #279: the five 429s wait a floored 1, 2, 4 and 8 s between them before the stop.
+    cy.contains(/Stopped: Discord is rate limiting this account/i, { timeout: 30000 }).should('exist');
     expandLog();
     cy.contains(/Stopped the operation to protect your account/i).should('exist');
     cy.contains(/Purge: Cancelled · /, { timeout: 15000 }).should('exist');

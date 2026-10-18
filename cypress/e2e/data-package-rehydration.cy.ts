@@ -257,7 +257,8 @@ describe('Data package rehydration (Tier 2)', () => {
 
     cy.contains('button', /Load rich data/i).click();
 
-    cy.contains(/Stopped: Discord is rate limiting this account/i, { timeout: 15000 }).should('exist');
+    // #279: the five 429s wait a floored 1, 2, 4 and 8 s between them before the stop.
+    cy.contains(/Stopped: Discord is rate limiting this account/i, { timeout: 30000 }).should('exist');
     cy.get('[aria-label="Expand log"]').click();
     cy.contains(/Stopped the operation to protect your account/i, { timeout: 10000 }).should('exist');
     // The storm never turned into a success count.

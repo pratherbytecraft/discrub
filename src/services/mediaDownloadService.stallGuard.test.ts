@@ -18,7 +18,7 @@ const mockDiscordService = {
   calculateRandomNumber: vi.fn((max: number, _min: number) => max),
   onRateLimit: vi.fn() as ((retryAfter: number, info?: unknown) => void) | undefined,
   onRateLimitExceeded: vi.fn() as ((info: unknown) => void) | undefined,
-  rateLimit: { maxWaitSecs: 60, maxConsecutive: 5, defaultWaitSecs: 5 },
+  rateLimit: { maxWaitSecs: 60, maxConsecutive: 5, defaultWaitSecs: 5, waitFloorSecs: [1, 2, 4, 8, 16] },
 };
 
 vi.mock('@services/discordService', () => ({
@@ -81,7 +81,7 @@ beforeEach(() => {
   mockDiscordService.delayModifierSecs = 0;
   mockDiscordService.onRateLimit = vi.fn();
   mockDiscordService.onRateLimitExceeded = vi.fn();
-  mockDiscordService.rateLimit = { maxWaitSecs: 60, maxConsecutive: 5, defaultWaitSecs: 5 };
+  mockDiscordService.rateLimit = { maxWaitSecs: 60, maxConsecutive: 5, defaultWaitSecs: 5, waitFloorSecs: [1, 2, 4, 8, 16] };
 });
 
 afterEach(() => {
@@ -176,6 +176,41 @@ describe('#232 streamDownloadWithStallGuard', () => {
     expect(mockDiscordService.onRateLimit).toHaveBeenCalledWith(3, expect.objectContaining({ source: 'header', consecutive: 1 }));
   });
 
+  it('floors a sub second 429 wait at 1 s and the second at 2 s (#279, lib parity)', async () => {
+    let call = 0;
+    const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      call++;
+      if (call <= 2) {
+        return Promise.resolve({
+          ok: false,
+          status: 429,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => ({ retry_after: 0.2 }),
+          body: null,
+        } as unknown as Response);
+      }
+      return Promise.resolve(
+        makeStreamingResponse({ chunkDelaysMs: [100] }, init!.signal as AbortSignal)
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const promise = streamDownloadWithStallGuard('https://cdn.discordapp.com/floored.png');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const result = await promise;
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(mockDiscordService.onRateLimit).toHaveBeenNthCalledWith(1, 1, expect.objectContaining({ source: 'json', consecutive: 1, floored: true }));
+    expect(mockDiscordService.onRateLimit).toHaveBeenNthCalledWith(2, 2, expect.objectContaining({ consecutive: 2, floored: true }));
+  });
+
   it('applies the jittered searchDelay pacing before fetching (lib parity)', async () => {
     mockDiscordService.searchDelaySecs = 2;
     const fetchMock = mockFetchStreaming({ chunkDelaysMs: [10] });
@@ -251,7 +286,8 @@ describe('#232 streamDownloadWithStallGuard', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const promise = streamDownloadWithStallGuard('https://cdn.discordapp.com/very-busy.png');
-    await vi.advanceTimersByTimeAsync(10_000);
+    // #279: the floored waits are 1, 2, 4 and 8 s.
+    await vi.advanceTimersByTimeAsync(20_000);
     const result = await promise;
 
     // The old cap (2 retries) turned the 3rd consecutive 429 into a
@@ -272,7 +308,8 @@ describe('#232 streamDownloadWithStallGuard', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const promise = streamDownloadWithStallGuard('https://cdn.discordapp.com/storm.png');
-    await vi.advanceTimersByTimeAsync(10_000);
+    // #279: the floored waits are 1, 2, 4 and 8 s before the fifth 429.
+    await vi.advanceTimersByTimeAsync(20_000);
     const result = await promise;
 
     expect(result).toEqual({ success: false, data: null, status: 429 });
