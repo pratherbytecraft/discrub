@@ -558,6 +558,14 @@ export const bulkEditChannels = createAsyncThunk<
                 stats.skipped++;
                 continue;
               }
+              // A message that already carries the text was edited by the
+              // run this one resumes (the record is per channel, so the
+              // channel in hand starts over); editing it again would only
+              // spend a request. The search answers the current content.
+              if (message.content === content) {
+                stats.skipped++;
+                continue;
+              }
 
               try {
                 // Call the service directly rather than dispatching the

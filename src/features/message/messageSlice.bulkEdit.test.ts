@@ -85,6 +85,17 @@ describe('bulkEditChannels (#215)', () => {
     expect(searchPagination.iterateSearchMessagesRedux).toHaveBeenCalledTimes(2);
   });
 
+  it('leaves a message that already carries the text alone, so a resumed run does not edit the channel in hand twice (2.2.6)', async () => {
+    yieldPage([
+      { ...ownMsg('m1'), content: 'redacted' } as Message,
+      { ...ownMsg('m2'), content: 'hello' } as Message,
+    ]);
+    const result = await store.dispatch(bulkEditChannels({ channels: [channel('c1', 'general')], content: 'redacted', guildId: 'g1' })).unwrap();
+    expect(mockDiscordService.editMessage).toHaveBeenCalledTimes(1);
+    expect(mockDiscordService.editMessage).toHaveBeenCalledWith('tok', 'm2', { content: 'redacted' }, expect.anything());
+    expect(result).toMatchObject({ edited: 1, skipped: 1, failed: 0 });
+  });
+
   it('scopes the per-channel search to the current user (own messages only)', async () => {
     yieldPage([ownMsg('m1')]);
 
