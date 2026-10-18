@@ -132,6 +132,8 @@ describe('packageSlice — Left Servers recheck (#273)', () => {
     const moved = store.getState().package.parsed!.channels.find((c) => c.id === '400')!;
     expect(moved.isOrphan).toBe(false);
     expect(moved.guildName).toBe('Rejoined Guild');
+    // pkg-notice: the list it fetched reaches the guild slice, so the Left Servers notice compares against it.
+    expect(store.getState().guild.guilds.map((g) => g.id)).toEqual(['g2']);
   });
 
   it('starts idle after an import and only asks Discord about Left Servers channels', async () => {

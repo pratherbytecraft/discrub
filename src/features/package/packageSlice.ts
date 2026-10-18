@@ -31,6 +31,7 @@ import {
 import type { MediaDownloadProgress } from '@features/export/exportTypes';
 import { calculateRandomDelay } from '@/utils/delayUtils';
 import { addStatusEntry } from '@features/status/statusSlice';
+import { fetchGuilds } from '@features/guild/guildSlice';
 import {
   selectDelayModifier,
   selectDeleteDelay,
@@ -430,13 +431,15 @@ export const recheckLeftServers = createAsyncThunk<
   }
 
   const discordService = getDiscordService();
-  // The Server list only loads on the Servers tab, so a person who signed
-  // in on the Package tab has none yet; fetch it here so a moved channel
-  // gets its live Server name.
+  // A person who signed in on the Package tab may have no Server list yet;
+  // load it through the guild slice so a moved channel gets its live Server
+  // name and the Left Servers notice compares against the real list
+  // (pkg-notice: it used to count every package Server until the Servers
+  // tab loaded, because the list fetched here never reached the store).
   let guildList: Array<{ id?: string; name?: string }> = state.guild.guilds;
   if (guildList.length === 0) {
-    const guildsResponse = await discordService.fetchGuilds(token);
-    if (guildsResponse.success && guildsResponse.data) guildList = guildsResponse.data;
+    await dispatch(fetchGuilds(token));
+    guildList = getState().guild.guilds;
   }
   const liveGuilds = new Map<string, string>();
   for (const g of guildList) if (g.id && g.name) liveGuilds.set(g.id, g.name);

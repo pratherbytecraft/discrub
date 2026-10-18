@@ -28,6 +28,7 @@ import {
 import { formatProvenanceTooltip } from '@features/package/packageStatusCopy';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { selectIsGuestMode } from '@features/auth/authSlice';
+import { useLoadGuilds } from '@/hooks/useLoadGuilds';
 import { selectGuilds } from '@features/guild/guildSlice';
 import { getPackageChannelLabel, getPackageChannelCategory } from '@features/package/packageDisplayUtils';
 import ImportDialog from './ImportDialog';
@@ -96,9 +97,14 @@ const PackageView = () => {
     void dispatch(recheckLeftServers());
   }, [dispatch, parsed, token, recheckStatus]);
 
+  // pkg-notice: the Server list used to load only on the Servers tab, so a
+  // sign in on this tab compared the package against an empty list and the
+  // notice counted every Server. Load it here like the Server surfaces do.
+  useLoadGuilds();
   const leftGuilds = useMemo(() => {
-    // #275: a guest has no Server list, so there is nothing to compare.
-    if (!parsed || !liveGuilds || !token) return [];
+    // #275: a guest has no Server list, so there is nothing to compare, and
+    // an empty list means it has not loaded yet (pkg-notice).
+    if (!parsed || !token || liveGuilds.length === 0) return [];
     const live = new Set(liveGuilds.map((g) => g.id));
     return parsed.guilds.filter((g) => !live.has(g.id));
   }, [parsed, liveGuilds, token]);

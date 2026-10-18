@@ -192,6 +192,16 @@ describe('<PackageView /> — Left Servers (#273)', () => {
     expect(store.getState().package.leftServersRecheckStatus).not.toBe('idle');
   });
 
+  it('holds the Left Servers notice until the Server list is in, then counts only the Servers not in it (pkg-notice)', async () => {
+    const state = stateWithOrphan('tok');
+    state.package.parsed = { ...parsed, guilds: [{ id: 'g1', name: 'Guild A' }, { id: 'g9', name: 'Gone Guild' }], channels: [channel] };
+    state.guild = { ...state.guild, guilds: [] };
+    const { store } = renderWithProviders(<PackageView />, { preloadedState: state });
+    expect(screen.queryByText(/You are no longer in/)).toBeNull();
+    store.dispatch({ type: 'guild/fetchGuilds/fulfilled', payload: [{ id: 'g1', name: 'Guild A' }] });
+    expect(await screen.findByText(/You are no longer in 1 server from this package \(Gone Guild\)/)).toBeInTheDocument();
+  });
+
   it('leaves the recheck alone when signed out', () => {
     const { store } = renderWithProviders(<PackageView />, { preloadedState: stateWithOrphan(null) });
     expect(store.getState().package.leftServersRecheckStatus).toBe('idle');
