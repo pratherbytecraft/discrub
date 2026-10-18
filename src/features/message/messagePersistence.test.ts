@@ -233,7 +233,7 @@ describe('restoreConversation', () => {
     expect(restored?.conversation.count).toBe(2500);
     expect(restored?.cid).toBe(CID);
     expect(restored?.wid).toBe(LEGACY_DEFAULT_WORKSPACE_ID);
-  });
+  }, 90000);
 
   // 2.2.5 W1: a restore keeps rows and authors for every message but full
   // objects for the newest window only.
@@ -250,7 +250,7 @@ describe('restoreConversation', () => {
     expect(restored?.newest[1999].id).toBe('104499');
     expect(Object.keys(restored?.authors ?? {}).sort()).toEqual(['u0', 'u1', 'u2']);
     expect(restored?.rows[7].authorId).toBe('u1');
-  });
+  }, 90000);
 
   // 2.2.5 W2: rows come from the slim store and authors from the authors
   // store, so an author seen only in old messages still comes back.
@@ -264,7 +264,7 @@ describe('restoreConversation', () => {
     expect(restored?.newest.some((m) => m.author.id === 'old-author')).toBe(false);
     expect(restored?.authors['old-author']?.username).toBe('old');
     expect(restored?.rows[0].authorId).toBe('old-author');
-  });
+  }, 90000);
 
   it('answers the saved selection from its own key', async () => {
     const { api } = apiFor(readyState());

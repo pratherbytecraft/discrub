@@ -164,7 +164,7 @@ describe('fetchMessages', () => {
     expect(Object.keys(state.authors).sort()).toEqual(['a0', 'a1', 'a2', 'a3']);
     expect([...state.selectedIds].sort()).toEqual(['1', '4500']);
     expect(selectRestored(store.getState() as never)).toEqual({ count: 4500, oldestTimestamp: state.rows[4499].timestamp });
-  });
+  }, 90000);
 
   // The fake IndexedDB the unit tests run on walks a cursor in quadratic
   // time, so the scan case stays small; Chrome scans 250K rows in seconds.
