@@ -431,10 +431,13 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
               {operationSummary.label}
             </Typography>
           )}
-          <PauseResumeControls
-            label={operationSummary.tier === 'heavy' ? operationSummary.label : undefined}
-            progress={operationSummary.tier === 'heavy' ? operationSummary.progress : undefined}
-          />
+          {/* Row 83 (2.2.5 pass): the bar keeps its dark palette in every theme, so the buttons take its text colour instead of the page's. */}
+          <Box sx={{ color: '#c9d1d9', display: 'inline-flex', minWidth: 0 }}>
+            <PauseResumeControls
+              label={operationSummary.tier === 'heavy' ? operationSummary.label : undefined}
+              progress={operationSummary.tier === 'heavy' ? operationSummary.progress : undefined}
+            />
+          </Box>
           <Box sx={{ flexGrow: 1 }} />
           {count > 0 && (
             <>

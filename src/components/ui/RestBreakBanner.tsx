@@ -25,7 +25,8 @@ const RestBreakBanner = () => {
   return (
     <Paper
       data-testid="rest-break-banner"
-      sx={{ p: 1.5, backgroundColor: 'warning.dark', mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}
+      // Row 83 (2.2.5 pass): dark orange under dark text read heavy on a light page.
+      sx={{ p: 1.5, backgroundColor: (theme) => (theme.palette.mode === 'light' ? 'warning.light' : 'warning.dark'), mb: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}
     >
       <HoldIcon sx={{ color: 'warning.contrastText', flexShrink: 0 }} />
       <Box sx={{ flex: 1, color: 'warning.contrastText', fontSize: '0.875rem', minWidth: 0 }}>
