@@ -35,6 +35,7 @@ const WorkspacePill = ({ variant, yieldRoom = false, opensDown = false }: { vari
       <ButtonBase
         ref={ref}
         data-testid="workspace-pill"
+        data-tour="workspace-pill"
         aria-haspopup="dialog"
         aria-label={`${t('workspace.title')}: ${name ?? ''}`}
         onClick={(e) => {

@@ -56,6 +56,10 @@ export const tourCatalog: Record<string, TourCatalogEntry> = {
     title: 'Status Log',
     content: 'All operations show real-time progress here. Expand for full details, or download the log file.',
   },
+  'workspace-pill': {
+    title: 'Workspaces',
+    content: 'Messages you load are kept in your browser in a workspace, so a reload or a closed tab picks up where you left off. Open the list to switch, rename, export or clear one.',
+  },
   'user-profile': {
     title: 'Your Profile',
     content: "Click to view your account details, or to sign out when you're done. Signing out clears your token, including any saved copy on this device.",
@@ -182,6 +186,7 @@ export const buildShellTourSteps = (t: TFunction = defaultT): Step[] => [
   step('theme', '[data-testid="gift-button"]', {}, t),
   step('more', '[data-tour="topbar-extras"]', {}, t),
   step('status-panel', '[data-tour="status-panel"]', { placement: 'top' }, t),
+  step('workspace-pill', '[data-tour="workspace-pill"]', { placement: 'top' }, t),
   step('user-profile', '[data-tour="user-profile"]', {}, t),
 ];
 

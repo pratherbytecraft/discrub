@@ -35,6 +35,8 @@ const KNOWN_SAFE_SELECTORS: readonly string[] = [
   '[data-tour="user-profile"]',
   // StatusPanel — always in MainLayout
   '[data-tour="status-panel"]',
+  // The workspace pill sits in every layout's bar (2.2.6).
+  '[data-tour="workspace-pill"]',
   // Multi-select — both ChannelList and DMList must carry this
   '[data-tour="multi-select-toggle"]',
   // Channel/DM message-view elements (ServerView)

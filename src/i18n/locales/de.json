@@ -755,6 +755,10 @@
       "title": "Statusprotokoll",
       "content": "Alle Vorgänge zeigen hier ihren Fortschritt in Echtzeit. Klappe es für Details aus oder lade die Logdatei herunter."
     },
+    "workspace-pill": {
+      "title": "Arbeitsbereiche",
+      "content": "Geladene Nachrichten werden in deinem Browser in einem Arbeitsbereich aufbewahrt, sodass ein Neuladen oder ein geschlossener Tab dort weitermacht, wo du aufgehört hast. Öffne die Liste, um einen Arbeitsbereich zu wechseln, umzubenennen, zu exportieren oder zu leeren."
+    },
     "user-profile": {
       "title": "Dein Profil",
       "content": "Klicke hier, um deine Kontodaten zu sehen oder dich abzumelden, wenn du fertig bist. Beim Abmelden wird dein Token gelöscht, auch eine gespeicherte Kopie auf diesem Gerät."
