@@ -1002,7 +1002,8 @@
       "sound": "sound",
       "poll": "poll",
       "sticker": "sticker",
-      "forward": "forward"
+      "forward": "forward",
+      "snapshot": "forward"
     },
     "pinned": "Pinned",
     "true": "True",

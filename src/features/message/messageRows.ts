@@ -63,6 +63,8 @@ const HAS_TYPE_FLAG: Record<string, number> = {
   [HasType.STICKER]: RowFlag.STICKER,
   [HasType.POLL]: RowFlag.POLL,
   [HasType.FORWARD]: RowFlag.FORWARD,
+  // Criteria saved before core 1.0.16 carry the old forward value.
+  forward: RowFlag.FORWARD,
 };
 
 const REPLY_MESSAGE_TYPE = 19;

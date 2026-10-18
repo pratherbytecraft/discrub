@@ -1592,7 +1592,7 @@ describe('Search & Filters', () => {
 
       cy.wait(['@guildSearch', '@guildSearch']).then((calls) => {
         const hasParams = calls.map((c) => new URL(c.request.url).searchParams.getAll('has'));
-        expect(hasParams).to.deep.equal([['image'], ['forward']]);
+        expect(hasParams).to.deep.equal([['image'], ['snapshot']]);
       });
     });
 
@@ -1609,7 +1609,8 @@ describe('Search & Filters', () => {
       cy.get('body').type('{esc}');
       cy.get('[role="dialog"]').find('button[class*="contained"]').contains('Search').click();
 
-      cy.wait('@guildSearch').its('request.url').should('include', 'has=forward');
+      // Discord's search enum calls a forwarded message a snapshot (found live 2026-10-19).
+      cy.wait('@guildSearch').its('request.url').should('include', 'has=snapshot');
     });
   });
 

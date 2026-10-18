@@ -1002,7 +1002,8 @@
       "sound": "Audio",
       "poll": "Umfrage",
       "sticker": "Sticker",
-      "forward": "Weiterleitung"
+      "forward": "Weiterleitung",
+      "snapshot": "Weiterleitung"
     },
     "pinned": "Angepinnt",
     "true": "Ja",

@@ -76,6 +76,7 @@ export const messageHasType = (msg: Message, type: HasType): boolean => {
     case HasType.POLL:
       return !!(msg as Record<string, unknown>).poll;
     case HasType.FORWARD:
+    case 'forward' as HasType:
       // #197: the load-bearing field is `message_snapshots`. Older
       // code checked `msg.type === 1` (which is RECIPIENT_ADD, not
       // a forward) plus a truthy probe of message_reference.type
