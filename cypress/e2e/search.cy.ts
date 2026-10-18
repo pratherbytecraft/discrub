@@ -1576,6 +1576,26 @@ describe('Search & Filters', () => {
       cy.wait('@guildSearch').its('request.url').should('include', 'has=poll');
     });
 
+    it('searches each has type on its own when several are picked, so Images + Forwards finds either (has-or)', () => {
+      cy.intercept('GET', `${API}/guilds/*/messages/search*`, {
+        fixture: 'search-results.json',
+      }).as('guildSearch');
+
+      cy.contains('button', 'Filters').click();
+      cy.get('[role="dialog"]').within(() => {
+        cy.get('[data-testid="has-filter-select"]').first().click();
+      });
+      cy.get('.MuiMenu-list').contains('image').click();
+      cy.get('.MuiMenu-list').contains('forward').click();
+      cy.get('body').type('{esc}');
+      cy.get('[role="dialog"]').find('button[class*="contained"]').contains('Search').click();
+
+      cy.wait(['@guildSearch', '@guildSearch']).then((calls) => {
+        const hasParams = calls.map((c) => new URL(c.request.url).searchParams.getAll('has'));
+        expect(hasParams).to.deep.equal([['image'], ['forward']]);
+      });
+    });
+
     it('sends has=forward in search URL', () => {
       cy.intercept('GET', `${API}/guilds/*/messages/search*`, {
         fixture: 'search-results.json',

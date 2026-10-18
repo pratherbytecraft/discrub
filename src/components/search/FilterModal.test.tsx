@@ -28,7 +28,7 @@ describe('FilterModal', () => {
       renderWithProviders(<FilterModal {...defaultProps} />);
       const help = screen.getAllByTestId('has-filter-help');
       expect(help.length).toBeGreaterThan(0);
-      expect(help[0]).toHaveTextContent('Discord matches messages that have every selected type.');
+      expect(help[0]).toHaveTextContent('Messages that have any of the selected types.');
     });
 
     it('should not render content when closed', () => {

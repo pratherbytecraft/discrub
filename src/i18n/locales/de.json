@@ -991,7 +991,7 @@
     "after": "Nach",
     "during": "Am",
     "has": "Enthält",
-    "hasHelp": "Discord findet nur Nachrichten, die jeden ausgewählten Typ enthalten.",
+    "hasHelp": "Nachrichten mit mindestens einem der ausgewählten Typen.",
     "anyContent": "Beliebiger Inhalt",
     "hasType": {
       "image": "Bild",

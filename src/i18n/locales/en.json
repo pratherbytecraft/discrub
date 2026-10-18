@@ -991,7 +991,7 @@
     "after": "After",
     "during": "During",
     "has": "Has",
-    "hasHelp": "Discord matches messages that have every selected type.",
+    "hasHelp": "Messages that have any of the selected types.",
     "anyContent": "Any content",
     "hasType": {
       "image": "image",
