@@ -39,6 +39,8 @@ export interface ReportRow {
   count: number;
   /** Optional secondary line under the label (emoji breakdown, parent channel, "12 before"…). */
   detail?: string;
+  /** The detail column's CSV value when it differs from what is shown (a bare username, not "@name · bot"). */
+  csvDetail?: string;
   /** Message rows: a short excerpt of the message text. */
   excerpt?: string;
   /** Message rows: the channel the message lives in (for jump links later). */
@@ -332,7 +334,7 @@ const people: ReportDefinition = {
         const rows = sortDesc([...counts.entries()].map(([key, count]) => {
           const held = authors.get(key);
           const username = held?.author?.username || userMap[key]?.userName || key;
-          return { key, label: nameOf(held?.author, userMap), count, detail: held?.bot ? `@${username} · bot` : `@${username}` };
+          return { key, label: nameOf(held?.author, userMap), count, detail: held?.bot ? `@${username} · bot` : `@${username}`, csvDetail: username };
         }));
         return { rows, empty: 'No messages in this feed.' };
       },
@@ -679,7 +681,7 @@ export function exportReportCSV(report: AnalyticsReport, rows: ReportRow[]): str
   const hasExcerpt = rows.some((r) => r.excerpt);
   const header = [report.subjectLabel, 'ID', report.valueLabel, ...(hasDetail ? [report.detailLabel ?? 'Detail'] : []), ...(hasExcerpt ? ['Message'] : [])];
   const lines = rows.map((r) =>
-    [r.label, r.key, r.count, ...(hasDetail ? [r.detail ?? ''] : []), ...(hasExcerpt ? [r.excerpt ?? ''] : [])].map(csvCell).join(','),
+    [r.label, r.key, r.count, ...(hasDetail ? [r.csvDetail ?? r.detail ?? ''] : []), ...(hasExcerpt ? [r.excerpt ?? ''] : [])].map(csvCell).join(','),
   );
   return [header.join(','), ...lines].join('\n');
 }

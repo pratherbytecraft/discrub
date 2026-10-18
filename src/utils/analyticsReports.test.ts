@@ -109,15 +109,20 @@ describe('people (author-list-export, 2.2.6)', () => {
       ctx,
     ).rows;
     expect(rows).toEqual([
-      { key: '1', label: 'Ali', count: 2, detail: '@alice' },
-      { key: '2', label: 'bob', count: 2, detail: '@bob' },
-      { key: '9', label: 'statsbot', count: 1, detail: '@statsbot · bot' },
+      { key: '1', label: 'Ali', count: 2, detail: '@alice', csvDetail: 'alice' },
+      { key: '2', label: 'bob', count: 2, detail: '@bob', csvDetail: 'bob' },
+      { key: '9', label: 'statsbot', count: 1, detail: '@statsbot · bot', csvDetail: 'statsbot' },
     ]);
   });
 
   it('exports User, ID, Messages and Username columns', () => {
     const rows = ANALYTICS_REPORTS.people.compute([msg()], ctx).rows;
-    expect(exportReportCSV(ANALYTICS_REPORTS.people, rows)).toBe('User,ID,Messages,Username\nAli,1,1,@alice');
+    expect(exportReportCSV(ANALYTICS_REPORTS.people, rows)).toBe('User,ID,Messages,Username\nAli,1,1,alice');
+  });
+
+  it('writes the bare username to the CSV, without the @ or the bot tag shown on screen', () => {
+    const rows = ANALYTICS_REPORTS.people.compute([msg({ author: bot })], ctx).rows;
+    expect(exportReportCSV(ANALYTICS_REPORTS.people, rows)).toBe('User,ID,Messages,Username\nstatsbot,9,1,statsbot');
   });
 });
 
