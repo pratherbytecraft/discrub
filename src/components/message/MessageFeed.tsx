@@ -643,6 +643,40 @@ const MessageFeed = ({
     token,
   ]);
 
+  // Row 63 (2.2.5 pass): the browser's own End lands short on a long feed,
+  // because the rows that come into view measure taller than their estimate
+  // after the jump and the list grows under the viewport. End and Home go
+  // through the virtualizer instead, and End seats itself again for a few
+  // frames until the scroll position stops moving.
+  const endSeatRef = useRef(0);
+  const handleFeedKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((e.key !== 'End' && e.key !== 'Home') || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const count = chunksRef.current.length;
+    if (count === 0) return;
+    e.preventDefault();
+    if (e.key === 'Home') {
+      rowVirtualizer.scrollToIndex(0, { align: 'start' });
+      return;
+    }
+    const last = count - 1;
+    const seat = ++endSeatRef.current;
+    let frames = 0;
+    let previous = -1;
+    const settle = () => {
+      if (seat !== endSeatRef.current) return;
+      const el = parentRef.current;
+      const top = el ? el.scrollTop : 0;
+      if (top === previous || frames >= 8) return;
+      previous = top;
+      frames += 1;
+      rowVirtualizer.scrollToIndex(last, { align: 'end' });
+      requestAnimationFrame(settle);
+    };
+    settle();
+  }, [rowVirtualizer]);
+
   // Infinite scroll: trigger load-more when scrolled near the bottom.
   // Latches off during Load All (#181) — the dialog promises this; before
   // this gate, a concurrent infinite-scroll fetch could race the Load All
@@ -686,10 +720,14 @@ const MessageFeed = ({
           ref={parentRef}
           data-testid="message-feed-scroller"
           onMouseMove={handleDragAutoScroll}
+          onKeyDown={handleFeedKeyDown}
+          // A click inside focuses the scroller, so End and Home reach it (row 63).
+          tabIndex={-1}
           sx={(theme) => ({
             flex: 1,
             minHeight: 0,
             overflow: 'auto',
+            outline: 'none',
             // Rows read this width: in a narrow feed (Operator's peek column) they give up their right gutter. See MessageFeedRow.
             containerType: 'inline-size',
             '&::-webkit-scrollbar': { width: 8 },

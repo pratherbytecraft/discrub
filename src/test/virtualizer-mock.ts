@@ -25,6 +25,9 @@ const itemsFor = (count: number) =>
 /** Tests of the fast scroll layer set this to mount only the first n items while the cache keeps them all. */
 export const virtualizerWindow = { size: Infinity };
 
+/** One spy shared by every mocked instance, so a test can see what the component asked to scroll to. */
+export const virtualizerScrollToIndex = vi.fn();
+
 export const virtualizerMock = {
   useVirtualizer: ({ count }: { count: number }) => ({
     getVirtualItems: () => itemsFor(count).slice(0, virtualizerWindow.size),
@@ -33,7 +36,7 @@ export const virtualizerMock = {
     measurementsCache: itemsFor(count),
     getVirtualItemForOffset: (offset: number) => (count > 0 ? itemsFor(count)[Math.max(0, Math.min(count - 1, Math.floor(offset / ROW)))] : undefined),
     scrollOffset: 0,
-    scrollToIndex: vi.fn(),
+    scrollToIndex: virtualizerScrollToIndex,
     scrollToOffset: vi.fn(),
     measureElement: vi.fn(),
   }),

@@ -5,7 +5,7 @@ import { renderWithProviders } from '@/test/test-utils';
 import { createAuthenticatedState, messageStateWith } from '@/test/state-factories';
 import { toMessageRows } from '@features/message/messageRows';
 import { createMockMessage, createMockUser, createMockDmChannel } from '@/test/fixtures';
-import { virtualizerMock, virtualizerWindow } from '@/test/virtualizer-mock';
+import { virtualizerMock, virtualizerWindow, virtualizerScrollToIndex } from '@/test/virtualizer-mock';
 import MessageFeed from './MessageFeed';
 import { SortDirection } from 'discrub-core/common-enum';
 
@@ -990,5 +990,48 @@ describe('Fast scroll skeletons (2.2.5)', () => {
     expect(during).toEqual(['translateY(53px)', 'translateY(106px)']);
     expect(screen.getAllByTestId('message-chunk-skeleton')[0]).toHaveStyle({ height: '53px' });
     expect((screen.getByTestId('message-chunk').closest('[data-index]') as HTMLElement).style.transform).toBe('translateY(0px)');
+  });
+});
+
+describe('End and Home keys (row 63, 2.2.6)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    virtualizerScrollToIndex.mockClear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  const threeChunks = () => [
+    createMockMessage({ id: 'm1', author: createMockUser({ id: 'a', username: 'alice' }), content: 'one', timestamp: '2026-04-19T15:00:00.000Z' }),
+    createMockMessage({ id: 'm2', author: createMockUser({ id: 'b', username: 'bob' }), content: 'two', timestamp: '2026-04-19T15:10:00.000Z' }),
+    createMockMessage({ id: 'm3', author: createMockUser({ id: 'c', username: 'carol' }), content: 'three', timestamp: '2026-04-19T15:20:00.000Z' }),
+  ];
+
+  it('End seats the last row at the bottom through the virtualizer and seats it again until the position rests', () => {
+    renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: stateWithMessages(threeChunks()) });
+    const scroller = screen.getByTestId('message-feed-scroller');
+    let top = 0;
+    Object.defineProperty(scroller, 'scrollTop', { configurable: true, get: () => top, set: (v: number) => { top = v; } });
+    virtualizerScrollToIndex.mockImplementation(() => { if (top < 200) top += 100; });
+
+    act(() => { fireEvent.keyDown(scroller, { key: 'End' }); });
+    expect(virtualizerScrollToIndex).toHaveBeenCalledWith(2, { align: 'end' });
+    // The rows measured taller after the jump; the next frames seat the end again, then stop once the position holds.
+    act(() => { vi.advanceTimersByTime(16 * 6); });
+    expect(virtualizerScrollToIndex).toHaveBeenCalledTimes(3);
+    expect(top).toBe(200);
+  });
+
+  it('Home goes to the first row, and neither key acts inside a text field', () => {
+    renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: stateWithMessages(threeChunks()) });
+    const scroller = screen.getByTestId('message-feed-scroller');
+    act(() => { fireEvent.keyDown(scroller, { key: 'Home' }); });
+    expect(virtualizerScrollToIndex).toHaveBeenCalledWith(0, { align: 'start' });
+
+    virtualizerScrollToIndex.mockClear();
+    const input = document.createElement('input');
+    scroller.appendChild(input);
+    act(() => { fireEvent.keyDown(input, { key: 'End' }); });
+    expect(virtualizerScrollToIndex).not.toHaveBeenCalled();
   });
 });
