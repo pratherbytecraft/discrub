@@ -15,6 +15,7 @@ import type { Message, User } from 'discrub-core/types/discord-types';
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
 import type { ExportUserMap } from 'discrub-core/types/discrub-types';
 import { formatContentAsHtml } from 'discrub-core/html-formatting-utils';
+import { getContentHtml } from '@/utils/contentHtmlCache';
 import { getMessageContent } from 'discrub-core/discrub-utils';
 import { formatMessageContentLight } from '@/utils/messageLightFormatting';
 import { getUserRoleColor } from '@/utils/roleColorUtils';
@@ -131,15 +132,13 @@ const MessageFeedRow = function MessageFeedRow({
 
   const hasAnyBody = !!rawContent || hasInlineBody || hasSticker || hasPoll;
 
-  // #190 phase 2: cache the markdown→HTML transformation per row. Before
-  // this, formatContentAsHtml ran on every render even though the row is
-  // wrapped in React.memo at the export boundary — because the call sat
-  // outside any useMemo. With formattingContext stabilized at the
-  // ServerView level (memoized userMap/channelMap/guildRoles), this
-  // useMemo only recomputes when the actual message content changes.
+  // #190 phase 2: the markdown to HTML conversion runs once per content and
+  // formatting context for the life of the row. Since 2.2.5 the result also
+  // lives in a module cache keyed by message, so a chunk scrolled out of the
+  // virtual window and back again only paints (scroll skeletons).
   const contentHtml = useMemo(
-    () => (rawContent ? formatContentAsHtml(rawContent, formattingContext) : ''),
-    [rawContent, formattingContext],
+    () => getContentHtml(message.id, message.edited_timestamp, rawContent, formattingContext),
+    [message.id, message.edited_timestamp, rawContent, formattingContext],
   );
 
   // #219: a bare image/GIF URL that Discord unfurled into its embed is not

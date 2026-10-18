@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { screen, fireEvent, act } from '@testing-library/react';
+import { FAST_SCROLL_REST_MS, FAST_SCROLL_SETTLE_MS } from '@/hooks/useFastScroll';
 import { renderWithProviders } from '@/test/test-utils';
 import { createAuthenticatedState, messageStateWith } from '@/test/state-factories';
 import { toMessageRows } from '@features/message/messageRows';
 import { createMockMessage, createMockUser, createMockDmChannel } from '@/test/fixtures';
-import { virtualizerMock } from '@/test/virtualizer-mock';
+import { virtualizerMock, virtualizerWindow } from '@/test/virtualizer-mock';
 import MessageFeed from './MessageFeed';
 import { SortDirection } from 'discrub-core/common-enum';
 
@@ -892,5 +893,102 @@ describe('<MessageFeed />', () => {
       // 24-hour clock string is HH:mm — two digits, colon, two digits.
       expect(gutter?.textContent).toMatch(/^\d{2}:\d{2}$/);
     });
+  });
+});
+
+// 2.2.5 scroll skeletons: while the scroller moves faster than the rows can
+// render, every chunk draws as a skeleton; once it rests the real chunks fade
+// in under a fading skeleton, then the skeletons go.
+describe('Fast scroll skeletons (2.2.5)', () => {
+  let now = 0;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    now = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    virtualizerWindow.size = Infinity;
+  });
+
+  const threeChunks = () => [
+    createMockMessage({ id: 'm1', author: createMockUser({ id: 'a', username: 'alice' }), content: 'one', timestamp: '2026-04-19T15:00:00.000Z' }),
+    createMockMessage({ id: 'm2', author: createMockUser({ id: 'b', username: 'bob' }), content: 'two', timestamp: '2026-04-19T15:10:00.000Z' }),
+    createMockMessage({ id: 'm3', author: createMockUser({ id: 'c', username: 'carol' }), content: 'three', timestamp: '2026-04-19T15:20:00.000Z' }),
+  ];
+
+  const scrollBy = (el: HTMLElement, px: number, afterMs = 16) => {
+    now += afterMs;
+    Object.defineProperty(el, 'scrollTop', { value: (el.scrollTop || 0) + px, writable: true, configurable: true });
+    fireEvent.scroll(el);
+  };
+
+  it('keeps the rows that were on screen, draws skeletons for the rest, and cross-fades only those back', () => {
+    // Two of the three chunks are mounted before the scroll; the third has never rendered.
+    virtualizerWindow.size = 2;
+    renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: stateWithMessages(threeChunks()) });
+    const scroller = screen.getByTestId('message-feed-scroller');
+    expect(screen.getAllByTestId('message-chunk')).toHaveLength(2);
+
+    act(() => { scrollBy(scroller, 600); scrollBy(scroller, 600); });
+    expect(screen.getByTestId('message-feed-fast-layer')).toBeInTheDocument();
+    expect(screen.getAllByTestId('message-chunk')).toHaveLength(2);
+    expect(screen.getByText('alice')).toBeInTheDocument();
+    expect(screen.getByText('bob')).toBeInTheDocument();
+    const skeletons = screen.getAllByTestId('message-chunk-skeleton');
+    expect(skeletons).toHaveLength(1);
+    expect((skeletons[0].closest('[data-index]') as HTMLElement).dataset.index).toBe('2');
+
+    // Rest: the never-rendered row mounts under a fading skeleton; the kept rows get no overlay.
+    virtualizerWindow.size = Infinity;
+    act(() => { vi.advanceTimersByTime(FAST_SCROLL_REST_MS + 1); });
+    expect(screen.queryByTestId('message-feed-fast-layer')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('message-chunk')).toHaveLength(3);
+    const fading = screen.getAllByTestId('message-chunk-skeleton-fading');
+    expect(fading).toHaveLength(1);
+    expect((fading[0].closest('[data-index]') as HTMLElement).dataset.index).toBe('2');
+    expect(screen.getAllByTestId('message-chunk')[0].closest('[data-index]')).not.toHaveClass('feed-chunk-settling');
+
+    act(() => { vi.advanceTimersByTime(FAST_SCROLL_SETTLE_MS + 1); });
+    expect(screen.getAllByTestId('message-chunk')).toHaveLength(3);
+    expect(screen.queryByTestId('message-chunk-skeleton-fading')).not.toBeInTheDocument();
+  });
+
+  it('with every row already on screen a fast scroll changes nothing visible', () => {
+    renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: stateWithMessages(threeChunks()) });
+    const scroller = screen.getByTestId('message-feed-scroller');
+    act(() => { scrollBy(scroller, 600); scrollBy(scroller, 600); });
+    expect(screen.getByTestId('message-feed-fast-layer')).toBeInTheDocument();
+    expect(screen.getAllByTestId('message-chunk')).toHaveLength(3);
+    expect(screen.queryByTestId('message-chunk-skeleton')).not.toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(FAST_SCROLL_REST_MS + FAST_SCROLL_SETTLE_MS + 2); });
+    expect(screen.queryByTestId('message-chunk-skeleton-fading')).not.toBeInTheDocument();
+  });
+
+  it('a single jump, like the scroll anchor restore, keeps the real rows', () => {
+    renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: stateWithMessages(threeChunks()) });
+    const scroller = screen.getByTestId('message-feed-scroller');
+    act(() => { scrollBy(scroller, 50000); });
+    expect(screen.getAllByTestId('message-chunk')).toHaveLength(3);
+    expect(screen.queryByTestId('message-chunk-skeleton')).not.toBeInTheDocument();
+  });
+
+  it('wheel scrolling stays on the real rows', () => {
+    renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: stateWithMessages(threeChunks()) });
+    const scroller = screen.getByTestId('message-feed-scroller');
+    act(() => { scrollBy(scroller, 30); scrollBy(scroller, 30); scrollBy(scroller, 30); });
+    expect(screen.getAllByTestId('message-chunk')).toHaveLength(3);
+  });
+
+  it('skeletons take the row box positions so the list does not shift', () => {
+    virtualizerWindow.size = 1;
+    renderWithProviders(<MessageFeed {...baseProps} />, { preloadedState: stateWithMessages(threeChunks()) });
+    const scroller = screen.getByTestId('message-feed-scroller');
+    act(() => { scrollBy(scroller, 600); scrollBy(scroller, 600); });
+    const during = screen.getAllByTestId('message-chunk-skeleton').map((c) => (c.closest('[data-index]') as HTMLElement).style.transform);
+    expect(during).toEqual(['translateY(53px)', 'translateY(106px)']);
+    expect(screen.getAllByTestId('message-chunk-skeleton')[0]).toHaveStyle({ height: '53px' });
+    expect((screen.getByTestId('message-chunk').closest('[data-index]') as HTMLElement).style.transform).toBe('translateY(0px)');
   });
 });

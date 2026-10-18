@@ -1,5 +1,5 @@
-import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
-import { Box, Button, Paper, Skeleton, alpha } from '@mui/material';
+import { memo, useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { Box, Button, Paper, Skeleton, alpha, keyframes } from '@mui/material';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Message, User, Attachment } from 'discrub-core/types/discord-types';
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
@@ -44,6 +44,8 @@ import { chunkMessages, messageDayKey, type MessageChunk as MessageChunkType } f
 import type { MessageRow } from '@features/message/messageRows';
 import { getCachedMessage, useHydratedMessages } from '@features/message/messageCache';
 import { createChunkSizeEstimator } from '@/utils/chunkSizeEstimator';
+import { useFastScroll } from '@/hooks/useFastScroll';
+import MessageChunkSkeleton from './MessageChunkSkeleton';
 import { listHeight, rowShift, scaledScrollOptions } from '@/utils/scaledScroll';
 import MessageChunk from './MessageChunk';
 import MessageFeedToolbar from './MessageFeedToolbar';
@@ -60,6 +62,56 @@ function firstVisibleItem(virtualizer: { scrollOffset: number | null; getVirtual
   const offset = virtualizer.scrollOffset ?? 0;
   return virtualizer.getVirtualItems().find((item) => item.end > offset);
 }
+
+/** The real chunk fading in under its fading skeleton once a fast scroll rests (2.2.5). */
+const settleIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
+/** The fast scroll layer as a whole: up over a short beat, then the placeholders' pulse. */
+const layerPulse = keyframes`
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+`;
+
+/**
+ * Fast scroll cover (2.2.5 scroll skeletons). While the feed scrolls fast the
+ * skeleton layer is drawn once per block of travel rather than on every
+ * scroll event, covering the viewport, one viewport behind and up to half a
+ * second of travel ahead, so the compositor scrolls into rows that are
+ * already painted. The cover edges round to the block so the memoised layer
+ * skips most events.
+ */
+const FAST_COVER_BLOCK = 4000;
+const FAST_COVER_LOOKAHEAD_MS = 500;
+const FAST_COVER_MAX_AHEAD = 16000;
+
+interface FastSkeletonLayerProps {
+  virtualizer: { getVirtualItemForOffset: (offset: number) => { index: number } | undefined; measurementsCache: Array<{ index: number; key: string | number | bigint; start: number; size: number }> };
+  coverStart: number;
+  coverEnd: number;
+  shift: number;
+  /** Chunks that stay as real rows (they were on screen when the fast scroll began); the layer leaves their boxes alone. */
+  kept: ReadonlySet<number>;
+}
+
+/** Skeleton rows for every chunk whose box falls inside the cover and is not a kept row, at the virtualizer's own positions. */
+const FastSkeletonLayer = memo(function FastSkeletonLayer({ virtualizer, coverStart, coverEnd, shift, kept }: FastSkeletonLayerProps) {
+  const first = virtualizer.getVirtualItemForOffset(coverStart);
+  const last = virtualizer.getVirtualItemForOffset(coverEnd);
+  if (!first || !last) return null;
+  const items = virtualizer.measurementsCache.slice(first.index, last.index + 1).filter((item) => !kept.has(item.index));
+  // One animated wrapper (fade in, then the pulse) over static rows; see MessageChunkSkeleton.
+  return (
+    <div className="feed-fast-layer" data-testid="message-feed-fast-layer">
+      {items.map((item) => (
+        <div key={item.key} data-index={item.index} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start + shift}px)` }}>
+          <MessageChunkSkeleton height={item.size} seed={item.index} animated={false} />
+        </div>
+      ))}
+    </div>
+  );
+});
 
 /** How long scrolling rests before the first visible message is saved. */
 const FEED_ANCHOR_REST_MS = 2000;
@@ -180,11 +232,34 @@ const MessageFeed = ({
     estimatorRef.current!.reset();
   }, [contextId]);
 
+  // Scroll skeletons (2.2.5). While the scroller moves faster than the rows
+  // can render, every chunk on screen draws as a skeleton at its known
+  // height and the measure ref stays off, so the measured heights survive.
+  // The skeleton layer below is drawn per block of travel, not per scroll
+  // event, so the compositor scrolls into painted rows. For a short beat
+  // after the scroll rests the real chunks fade in under a fading skeleton.
+  const { fast: fastScroll, settling, velocityRef } = useFastScroll(parentRef);
+
   const estimateSize = useCallback(() => estimatorRef.current!.estimate(), []);
+  // Each measured height goes to the estimator on its way to the virtualizer.
+  // The ResizeObserver entry carries the box size, so attaching a row costs
+  // no synchronous layout read (2.2.5 scroll skeletons); the fallback is the
+  // library's own.
+  const measureElement = useCallback((el: Element, entry: ResizeObserverEntry | undefined) => {
+    perfCount('measureChunk');
+    const box = entry?.borderBoxSize?.[0];
+    const height = box ? Math.round(box.blockSize) : (el as HTMLElement).offsetHeight;
+    const idxAttr = el.getAttribute('data-index');
+    const idx = idxAttr != null ? Number(idxAttr) : NaN;
+    const key = Number.isNaN(idx) ? undefined : chunksRef.current[idx]?.key;
+    if (key) estimatorRef.current!.record(key, height);
+    return height;
+  }, []);
   const rowVirtualizer = useVirtualizer({
     count: chunks.length,
     getScrollElement: () => parentRef.current,
     estimateSize,
+    measureElement,
     overscan: 20,
     getItemKey: useCallback((index: number) => chunksRef.current[index]?.key ?? index, []),
     // Past the browser's element height cap the list scrolls scaled (1M finding).
@@ -192,6 +267,46 @@ const MessageFeed = ({
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
   const shift = rowShift(rowVirtualizer);
+  // The rows on screen when a fast scroll begins stay real for as long as
+  // they are inside the cover: they are already drawn, so only positions
+  // that were never rendered get a skeleton, and the rows the user was
+  // looking at never flicker (owner, 2026-10-18). The set is taken from the
+  // last render before the flag flipped and cleared once the feed is idle.
+  const keptRef = useRef<Set<number>>(new Set());
+  const lastItemsRef = useRef(virtualItems);
+  const wasFastRef = useRef(false);
+  if (fastScroll && !wasFastRef.current) keptRef.current = new Set(lastItemsRef.current.map((item) => item.index));
+  if (!fastScroll && !settling && keptRef.current.size > 0) keptRef.current = new Set();
+  wasFastRef.current = fastScroll;
+  if (!fastScroll) lastItemsRef.current = virtualItems;
+  const kept = keptRef.current;
+  // The cover for the fast scroll layer, rounded to the block.
+  let coverStart = 0;
+  let coverEnd = 0;
+  if (fastScroll) {
+    const offset = rowVirtualizer.scrollOffset ?? 0;
+    const viewport = parentRef.current?.clientHeight || 600;
+    const velocity = velocityRef.current;
+    const ahead = Math.min(FAST_COVER_MAX_AHEAD, Math.abs(velocity) * FAST_COVER_LOOKAHEAD_MS);
+    const lo = offset - viewport - (velocity < 0 ? ahead : 0);
+    const hi = offset + viewport * 2 + (velocity > 0 ? ahead : 0);
+    coverStart = Math.max(0, Math.floor(lo / FAST_COVER_BLOCK) * FAST_COVER_BLOCK);
+    coverEnd = Math.ceil(hi / FAST_COVER_BLOCK) * FAST_COVER_BLOCK;
+  }
+  // While fast, the real rows are the kept ones still inside the cover, at
+  // the positions the layer uses; otherwise the virtualizer's own items.
+  const renderedItems = useMemo(() => {
+    if (!fastScroll) return virtualItems;
+    const cache = rowVirtualizer.measurementsCache;
+    const out: typeof virtualItems = [];
+    for (const index of kept) {
+      const item = cache[index];
+      if (item && item.end >= coverStart && item.start <= coverEnd) out.push(item);
+    }
+    return out.sort((a, b) => a.index - b.index);
+    // The cache is read on each cover change; the set is stable while fast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fastScroll, virtualItems, kept, coverStart, coverEnd]);
   useEffect(() => { perfCount('virtualizer identity'); }, [rowVirtualizer]);
 
   // The objects for the chunks on screen. Keyed on the first and last
@@ -199,13 +314,14 @@ const MessageFeed = ({
   const visibleRange = virtualItems.length > 0 ? `${virtualItems[0].index}:${virtualItems[virtualItems.length - 1].index}` : '';
   const visibleIds = useMemo(() => {
     const ids: string[] = [];
-    for (const item of virtualItems) {
+    // Skeleton rows need no objects; while fast only the kept rows ask.
+    for (const item of fastScroll ? renderedItems : virtualItems) {
       const chunk = chunks[item.index];
       if (chunk) for (const row of chunk.messages) ids.push(row.id);
     }
     return ids;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chunks, visibleRange]);
+  }, [chunks, visibleRange, fastScroll, renderedItems]);
   const hydrated = useHydratedMessages(containerKey, hydrationSource, visibleIds);
   // A chunk of objects per row chunk, kept while its objects are the same
   // ones, so the memoised chunk row skips renders the way it did with
@@ -269,22 +385,6 @@ const MessageFeed = ({
     return () => clearTimeout(timer);
   }, [firstVisibleId, activeTab, dispatch]);
 
-  // Record each measured height into the estimator, then delegate to the
-  // virtualizer's own measureElement. Kept ref-stable so rows don't re-attach.
-  const measureChunk = useCallback(
-    (el: Element | null) => {
-      perfCount(el ? 'measureChunk' : 'measureChunk:detach');
-      if (el) {
-        const idxAttr = el.getAttribute('data-index');
-        const idx = idxAttr != null ? Number(idxAttr) : NaN;
-        const key = Number.isNaN(idx) ? undefined : chunksRef.current[idx]?.key;
-        const height = (el as HTMLElement).offsetHeight;
-        if (key) estimatorRef.current!.record(key, height);
-      }
-      rowVirtualizer.measureElement(el);
-    },
-    [rowVirtualizer],
-  );
 
   // Deep-link scroll-to-message (#123 Phase 1). When navigateToMessage
   // sets highlightedMessageId, find the chunk that contains it, scroll
@@ -584,6 +684,7 @@ const MessageFeed = ({
 
         <Box
           ref={parentRef}
+          data-testid="message-feed-scroller"
           onMouseMove={handleDragAutoScroll}
           sx={(theme) => ({
             flex: 1,
@@ -607,9 +708,19 @@ const MessageFeed = ({
             sx={{
               position: 'relative',
               width: '100%',
+              '& .feed-chunk-settling > :not([data-testid="message-chunk-skeleton-fading"])': {
+                animation: `${settleIn} 220ms ease-out both`,
+                '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+              },
+              '& .feed-fast-layer': {
+                animation: `${settleIn} 160ms ease-out both, ${layerPulse} 1.8s ease-in-out 160ms infinite`,
+                '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+              },
             }}
           >
-            {virtualItems.map((virtualRow) => {
+            {fastScroll && <FastSkeletonLayer virtualizer={rowVirtualizer} coverStart={coverStart} coverEnd={coverEnd} shift={shift} kept={kept} />}
+            {renderedItems.map((virtualRow) => {
+              const wasSkeleton = settling && !kept.has(virtualRow.index);
               const chunk = chunks[virtualRow.index];
               if (!chunk) return null;
               const shown = hydrateChunk(chunk);
@@ -623,7 +734,8 @@ const MessageFeed = ({
                 <div
                   key={chunk.key}
                   data-index={virtualRow.index}
-                  ref={measureChunk}
+                  ref={rowVirtualizer.measureElement}
+                  className={wasSkeleton ? 'feed-chunk-settling' : undefined}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -632,6 +744,7 @@ const MessageFeed = ({
                     transform: `translateY(${virtualRow.start + shift}px)`,
                   }}
                 >
+                  {wasSkeleton && <MessageChunkSkeleton height={virtualRow.size} seed={virtualRow.index} fade="out" overlay data-testid="message-chunk-skeleton-fading" />}
                   {startsDay && (
                     <MessageDayHeading
                       dayKey={dayKey}
@@ -661,13 +774,7 @@ const MessageFeed = ({
                     onOpenThread={onOpenThread}
                   />
                   ) : (
-                    <Box data-testid="message-chunk-pending" sx={{ display: 'flex', gap: 1.25, px: 1.25, py: 0.75, minHeight: 56 }}>
-                      <Skeleton variant="circular" width={40} height={40} />
-                      <Box sx={{ flex: 1 }}>
-                        <Skeleton variant="text" width={120} height={16} />
-                        <Skeleton variant="text" width="60%" height={14} />
-                      </Box>
-                    </Box>
+                    <MessageChunkSkeleton data-testid="message-chunk-pending" />
                   )}
                 </div>
               );
