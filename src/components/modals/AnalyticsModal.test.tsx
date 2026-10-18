@@ -126,7 +126,7 @@ describe('AnalyticsModal', () => {
   it('shows one tab per report', () => {
     render([createMessage('hi')]);
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Mentions', 'Members', 'Reactions', 'Best Of', 'Threads', 'Keywords', 'Links', 'Media', 'Overview']);
+    expect(tabs).toEqual(['Mentions', 'Members', 'Users', 'Reactions', 'Best Of', 'Threads', 'Keywords', 'Links', 'Media', 'Overview']);
   });
 
   it('should display mention count and message count', () => {

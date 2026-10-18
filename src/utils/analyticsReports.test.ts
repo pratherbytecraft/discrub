@@ -102,6 +102,25 @@ describe('members', () => {
   });
 });
 
+describe('people (author-list-export, 2.2.6)', () => {
+  it('lists everyone seen, bots included, with the username as the detail', () => {
+    const rows = ANALYTICS_REPORTS.people.compute(
+      [msg(), msg(), msg({ author: bob }), msg({ author: bot }), msg({ author: bob, type: 7 })],
+      ctx,
+    ).rows;
+    expect(rows).toEqual([
+      { key: '1', label: 'Ali', count: 2, detail: '@alice' },
+      { key: '2', label: 'bob', count: 2, detail: '@bob' },
+      { key: '9', label: 'statsbot', count: 1, detail: '@statsbot · bot' },
+    ]);
+  });
+
+  it('exports User, ID, Messages and Username columns', () => {
+    const rows = ANALYTICS_REPORTS.people.compute([msg()], ctx).rows;
+    expect(exportReportCSV(ANALYTICS_REPORTS.people, rows)).toBe('User,ID,Messages,Username\nAli,1,1,@alice');
+  });
+});
+
 describe('reactions', () => {
   it('sums reactions received per author and ignores zero-count reactions', () => {
     const result = ANALYTICS_REPORTS.reactions.compute(

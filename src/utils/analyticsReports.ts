@@ -22,6 +22,7 @@ export type UserMap = Record<string, { userName?: string; displayName?: string; 
 export type ReportId =
   | 'mentions'
   | 'members'
+  | 'people'
   | 'reactions'
   | 'bestof'
   | 'threads'
@@ -30,7 +31,7 @@ export type ReportId =
   | 'media'
   | 'overview';
 
-export const REPORT_IDS: ReportId[] = ['mentions', 'members', 'reactions', 'bestof', 'threads', 'keywords', 'links', 'media', 'overview'];
+export const REPORT_IDS: ReportId[] = ['mentions', 'members', 'people', 'reactions', 'bestof', 'threads', 'keywords', 'links', 'media', 'overview'];
 
 export interface ReportRow {
   key: string;
@@ -105,6 +106,8 @@ export interface AnalyticsReport {
   subjectLabel: string;
   /** Column heading for the count. */
   valueLabel: string;
+  /** CSV heading for the detail column, when the rows carry one that is not a plain note. */
+  detailLabel?: string;
   /** Short description shown under the heading. */
   description: string;
   /** A fold over messages one at a time (2.2.5 W4). */
@@ -297,6 +300,41 @@ const members: ReportDefinition = {
       },
       finish({ userMap }) {
         return { rows: tally.rows(userMap), empty: 'No messages from people in this feed.' };
+      },
+    };
+  },
+};
+
+/**
+ * Everyone seen in the feed, bots included, with the username next to the
+ * display name so the CSV is a people list (author-list-export, 2.2.6).
+ */
+const people: ReportDefinition = {
+  id: 'people',
+  label: 'Users',
+  title: 'Everyone who posted',
+  subjectLabel: 'User',
+  valueLabel: 'Messages',
+  detailLabel: 'Username',
+  description: 'Every user seen in this feed with their username and ID. Bots included.',
+  fold() {
+    const counts = new Map<string, number>();
+    const authors = new Map<string, { author: Author; at: string; bot: boolean }>();
+    return {
+      step(message) {
+        const author = message.author;
+        if (!author?.id) return;
+        counts.set(author.id, (counts.get(author.id) ?? 0) + 1);
+        const held = authors.get(author.id);
+        if (!held || newer(message.id, held.at)) authors.set(author.id, { author, at: message.id, bot: isBot(message) });
+      },
+      finish({ userMap }) {
+        const rows = sortDesc([...counts.entries()].map(([key, count]) => {
+          const held = authors.get(key);
+          const username = held?.author?.username || userMap[key]?.userName || key;
+          return { key, label: nameOf(held?.author, userMap), count, detail: held?.bot ? `@${username} · bot` : `@${username}` };
+        }));
+        return { rows, empty: 'No messages in this feed.' };
       },
     };
   },
@@ -617,6 +655,7 @@ function withCompute(definition: ReportDefinition): AnalyticsReport {
 export const ANALYTICS_REPORTS: Record<ReportId, AnalyticsReport> = {
   mentions: withCompute(mentions),
   members: withCompute(members),
+  people: withCompute(people),
   reactions: withCompute(reactions),
   bestof: withCompute(bestof),
   threads: withCompute(threads),
@@ -638,7 +677,7 @@ function csvCell(value: string | number): string {
 export function exportReportCSV(report: AnalyticsReport, rows: ReportRow[]): string {
   const hasDetail = rows.some((r) => r.detail);
   const hasExcerpt = rows.some((r) => r.excerpt);
-  const header = [report.subjectLabel, 'ID', report.valueLabel, ...(hasDetail ? ['Detail'] : []), ...(hasExcerpt ? ['Message'] : [])];
+  const header = [report.subjectLabel, 'ID', report.valueLabel, ...(hasDetail ? [report.detailLabel ?? 'Detail'] : []), ...(hasExcerpt ? ['Message'] : [])];
   const lines = rows.map((r) =>
     [r.label, r.key, r.count, ...(hasDetail ? [r.detail ?? ''] : []), ...(hasExcerpt ? [r.excerpt ?? ''] : [])].map(csvCell).join(','),
   );

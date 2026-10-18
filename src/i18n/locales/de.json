@@ -1442,6 +1442,13 @@
         "value": "Nachrichten",
         "description": "Gesendete Nachrichten pro Person. Bots sind ausgenommen."
       },
+      "people": {
+        "label": "Nutzer",
+        "title": "Alle, die geschrieben haben",
+        "subject": "Nutzer",
+        "value": "Nachrichten",
+        "description": "Jeder Nutzer in diesem Feed mit Benutzername und ID. Bots eingeschlossen."
+      },
       "reactions": {
         "label": "Reaktionen",
         "title": "Meiste erhaltene Reaktionen",

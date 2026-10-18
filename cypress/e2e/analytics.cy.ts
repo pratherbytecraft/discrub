@@ -17,7 +17,7 @@ describe('Analytics', () => {
       cy.contains('button', 'Analytics').click();
       cy.get('[role="dialog"]').should('be.visible');
       cy.get('[data-testid="analytics-title"]').should('have.text', 'Most mentioned');
-      cy.get('[data-testid="analytics-tabs"]').find('[role="tab"]').should('have.length', 9);
+      cy.get('[data-testid="analytics-tabs"]').find('[role="tab"]').should('have.length', 10);
     });
   });
 
@@ -78,6 +78,13 @@ describe('Analytics', () => {
       cy.get('[data-testid="analytics-row"]').should('have.length.at.least', 3);
       cy.get('[data-testid="analytics-row"]').first().invoke('text').should('match', /\d/);
       cy.get('[role="dialog"]').contains('Skip replies').should('not.exist');
+    });
+
+    it('Users lists everyone seen with their username under the name (2.2.6)', () => {
+      openTab('Users');
+      cy.get('[data-testid="analytics-title"]').should('have.text', 'Everyone who posted');
+      cy.get('[data-testid="analytics-row"]').should('have.length.at.least', 3);
+      cy.get('[data-testid="analytics-row"]').first().invoke('text').should('match', /@\w/);
     });
 
     it('Best Of lists the reacted message with its emoji breakdown', () => {

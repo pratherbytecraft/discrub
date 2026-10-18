@@ -1442,6 +1442,13 @@
         "value": "Messages",
         "description": "Messages sent per person. Bots are left out."
       },
+      "people": {
+        "label": "Users",
+        "title": "Everyone who posted",
+        "subject": "User",
+        "value": "Messages",
+        "description": "Every user seen in this feed with their username and ID. Bots included."
+      },
       "reactions": {
         "label": "Reactions",
         "title": "Most reactions received",
