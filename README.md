@@ -21,7 +21,7 @@ It runs as a **web app** (manual token entry) and as a **Chrome/Firefox extensio
   - [User Profiles & Quick Filters](#user-profiles--quick-filters)
   - [Click-to-Jump Navigation](#click-to-jump-navigation)
   - [Focus Mode](#focus-mode)
-  - [Tour Mode & Targeted Help](#tour-mode--targeted-help)
+  - [Targeted Help](#targeted-help)
   - [Export](#export)
   - [Purge](#purge)
   - [Reactions](#reactions)
@@ -68,9 +68,11 @@ To select many messages, click a checkbox and drag (the feed scrolls at the edge
 
 When you scroll a long conversation faster than the feed can draw it, the rows that have not rendered yet show as placeholders and fade into the real messages as the scroll settles. The messages already on screen stay put.
 
+Click in the feed, then press End or Home to reach the last or first loaded message.
+
 **Filters** has two layers in one modal:
 
-- **Search** calls Discord's API. Filter by content (one term, or several matched any-of: type a term and press Enter, or separate terms with commas), author, mentions, has-types (image, video, link, file, embed, sound, sticker, snapshot, poll, forward), attachment file type (png, pdf, any list of extensions), exact attachment file name, date range (before, after, or between two dates) with time-of-day precision, pinned status, and author type (human, bot, webhook). Results load as you scroll, the channel header shows `X of Y matches loaded`, and Load All continues past Discord's 5,000-result cap. Load All renders pages as they arrive, retries transient network failures with backoff, and pauses if retries run out so you can Resume. If Discord reports that a channel's search index is still being built, Discrub waits and tries the page again, and a page that comes back short does not end Load All early.
+- **Search** calls Discord's API. Filter by content (one term, or several matched any-of: type a term and press Enter, or separate terms with commas), author, mentions, has-types (image, video, link, file, embed, sound, sticker, poll, forward; picking more than one finds messages with any of them), attachment file type (png, pdf, any list of extensions), exact attachment file name, date range (before, after, or between two dates) with time-of-day precision, pinned status, and author type (human, bot, webhook). Results load as you scroll, the channel header shows `X of Y matches loaded`, and Load All continues past Discord's 5,000-result cap. Load All renders pages as they arrive, retries transient network failures with backoff, and pauses if retries run out so you can Resume. If Discord reports that a channel's search index is still being built, Discrub waits and tries the page again, and a page that comes back short does not end Load All early.
 - **Refine** narrows the loaded messages locally with no API calls. Content terms match any-of here too. It keeps applying after Load more, and a status entry appears when a new page matched nothing. It has a system-message control to **show only** or **hide** a chosen type (pins, joins, boosts), plus attachment file type and partial file-name match.
 
 Search and Refine criteria clear when you switch to another channel or DM.
@@ -93,9 +95,7 @@ Click a **reply bar**, **pinned-message notice** or **thread-created notice** to
 
 Hides the sidebar and status panel for a full-width feed. Press `F` to toggle, `Escape` to exit, or use the Focus button in the channel toolbar.
 
-### Tour Mode & Targeted Help
-
-First-time users get a **guided tour**: server browsing, multi-select, filters, exports, focus mode and the message feed. It can be skipped, does not block, and is tracked per version so later changes can show only the relevant steps.
+### Targeted Help
 
 Small **`?` icons** sit next to these controls:
 - Multi-select toggle (in channel and DM lists)
@@ -108,7 +108,7 @@ Small **`?` icons** sit next to these controls:
 - Operation Delays setting
 - Export preset dropdown
 
-Click a `?` for a short explanation of the feature. It works independently of the tour.
+Click a `?` for a short explanation of the feature.
 
 ### Export
 
@@ -133,6 +133,8 @@ Two HTML templates. **Discord Layout** (default) wraps the export in a Discord-l
 - Any other zip path collision is renamed on the fly instead of aborting the export
 - Forwarded-message media (attachments and embedded images) is downloaded and rewritten to local copies
 - Stickers and polls render in HTML exports
+- Bot embeds keep their formatting, mentions, small text and timestamps, and channel mentions show the channel's name
+- A holiday theme carries into the HTML export while its season is on
 - Reaction user data in HTML exports
 - Media breakdown bar with file counts and sizes
 - Artist mode (media organized by author)
@@ -216,7 +218,7 @@ The **Load Thread** modal lists active and archived threads in the current chann
 
 ### Analytics
 
-Nine reports over the loaded messages: Overview (the headline numbers), Most mentioned, Most active members, Most reactions received, Most reacted messages, Most active threads, Keyword mentions, Most linked domains, and Most attachments shared. Every ranked report has a chart and a CSV export. A "Skip Replies" option excludes reply mentions from mention counts.
+Ten reports over the loaded messages: Overview (the headline numbers), Most mentioned, Most active members, Most reactions received, Most reacted messages, Most active threads, Keyword mentions, Most linked domains, Most attachments shared, and Users (everyone seen in the conversation, with their username). Every ranked report has a chart and a CSV export, and the Users CSV has a Username column. A "Skip Replies" option excludes reply mentions from mention counts.
 
 ![Analytics](docs/screenshots/analytics/analytics-modal.png)
 
@@ -283,7 +285,7 @@ Every conversation Discrub loads past its first page is kept in your browser, in
 
 A run that is cut short, such as Load All, Export, Bulk Export, Purge or Bulk Edit, leaves a record behind. Its button reads Resume, and the dialog opens with the same settings. A resumed Bulk Export skips the channels that finished and writes a new zip.
 
-The workspace pill opens the Workspaces list. From there you can rename, duplicate, clear or delete a workspace, clear a single conversation, and export a workspace to a `.discrub-workspace` file that imports on any browser. The thin bar on the bottom edge shows how much browser storage Discrub uses and how much is left. If storage fills up during Load All, the run pauses so you can clear room and Resume.
+The workspace pill opens the Workspaces list. From there you can start a new workspace, rename, duplicate, clear or delete one, clear a single conversation, and export a workspace to a `.discrub-workspace` file that imports on any browser. The thin bar on the bottom edge shows how much browser storage Discrub uses and how much is left. If storage fills up during Load All, the run pauses so you can clear room and Resume.
 
 Everyone starts with one workspace, Default, and can keep up to eight. A workspace is open in one window at a time. Signing out clears every workspace.
 
@@ -315,7 +317,7 @@ Discrub runs in English or German. A fresh install follows the browser language.
 - **Donation Wall**: Ko-Fi supporter feed with tiers and a leaderboard
 - **Ideas & Contact**: links to email and GitHub issues
 - **Announcements**: in-app announcements rendered from GitHub-hosted markdown, shown once per version, with a list of every previous announcement in the same dialog
-- **Bots**: a button on the top bar that lists the developer's Discord bots (Retrostat, Scour and Vested)
+- **Apps**: a button on the top bar that lists the developer's Discord bots (Retrostat, Scour and Vested). On a Mac it also lists Startbar and Filedrawer, and Hide removes that section
 - **Role Colors & Icons**: author names colored by highest-position role, with role icons next to author names in the feed and user profiles
 - **Copy to Clipboard**: copy server, channel or DM lists
 - **Reset Discrub Data**: a Settings button that wipes Discrub's local IndexedDB databases, for recovering from corrupted state without uninstalling the extension
@@ -331,7 +333,7 @@ Discrub runs in English or German. A fresh install follows the browser language.
 | Authentication | Manual token entry | Auto-retrieves from Discord |
 | "Other files" media type | Not available | Available |
 | Overlay on Discord | No | Yes (iframe overlay) |
-| Minimize to floating tab | No | Yes |
+| Minimize to floating tab | No | Yes, in every layout; drag the tab anywhere on the page |
 | Settings storage | localStorage | Browser extension storage |
 | Installation | None (visit URL) | Install from Web Store / Add-ons |
 | Auto-update | Always latest | Browser auto-updates |
