@@ -604,7 +604,6 @@
   "welcome": {
     "title": "Willkommen bei Discrub",
     "subtitle": "Ein leistungsstarkes Tool zum Exportieren, Durchsuchen und Verwalten deiner Discord-Nachrichten, Reaktionen und Medien.",
-    "takeTour": "Rundgang starten",
     "exploreFeatures": "Funktionen entdecken",
     "comingFromClassic": "Von Classic gewechselt?",
     "starOnGithub": "Auf GitHub markieren",
@@ -731,69 +730,17 @@
   },
   "tour": {
     "help": "Hilfe: {{title}}",
-    "servers-tab": {
-      "title": "Server",
-      "content": "Hier erscheinen deine Discord-Server. Klicke einen an, um seine Kanäle zu durchstöbern."
-    },
-    "dms-tab": {
-      "title": "Direktnachrichten",
-      "content": "Wechsle hierher, um deine Direktnachrichten und Gruppenchats zu durchstöbern."
-    },
-    "sidebar-search": {
-      "title": "Suche",
-      "content": "Filtere Server, Kanäle oder DMs nach Name."
-    },
-    "settings": {
-      "title": "Einstellungen",
-      "content": "Passe Verzögerungen, Exportstandards, Anzeigeeinstellungen und mehr an."
-    },
-    "theme": {
-      "title": "Designs",
-      "content": "Wähle aus allen Designs, unterstütze Discrub und aktiviere einen Unterstützerschlüssel, alles an einem Ort."
-    },
-    "more": {
-      "title": "Apps, Unterstützerwand und Mehr",
-      "content": "Sieh dir die Prather-Bytecraft-Bots und Mac-Apps an, blende die Unterstützerwand ein und öffne das Menü „Mehr“ für Ideen & Kontakt, Kompatibilität, r/discrub und die letzte Ankündigung."
-    },
-    "status-panel": {
-      "title": "Statusprotokoll",
-      "content": "Alle Vorgänge zeigen hier ihren Fortschritt in Echtzeit. Klappe es für Details aus oder lade die Logdatei herunter."
-    },
-    "workspace-pill": {
-      "title": "Arbeitsbereiche",
-      "content": "Geladene Nachrichten werden in deinem Browser in einem Arbeitsbereich aufbewahrt, sodass ein Neuladen oder ein geschlossener Tab dort weitermacht, wo du aufgehört hast. Öffne die Liste, um einen Arbeitsbereich zu wechseln, umzubenennen, zu exportieren oder zu leeren."
-    },
-    "user-profile": {
-      "title": "Dein Profil",
-      "content": "Klicke hier, um deine Kontodaten zu sehen oder dich abzumelden, wenn du fertig bist. Beim Abmelden wird dein Token gelöscht, auch eine gespeicherte Kopie auf diesem Gerät."
-    },
     "multi-select-toggle": {
       "title": "Mehrfachauswahl",
       "content": "Klicke hier, um mehrere gleichzeitig auszuwählen. Der Link „Alle auswählen“ nimmt die ganze sichtbare Liste, und verfügbare Sammelaktionen erscheinen unter dem Auswahlzähler."
-    },
-    "author-avatar": {
-      "title": "Autor-Aktionen",
-      "content": "Klicke im Feed auf Avatar oder Namen eines Autors, um das Profil zu öffnen. Von dort filterst du den Kanal mit einem Klick auf dessen Nachrichten oder auf Nachrichten, die ihn erwähnen."
     },
     "search-filters": {
       "title": "Filter",
       "content": "Zwei Ebenen in einem Dialog: Suche fragt die Discord-API ab (Autor, Inhalt, Datum, Typen, Erwähnungen, angepinnt, Autortyp) und zeigt „X von Y Treffern geladen“, während Ergebnisse eintreffen. Eingrenzen filtert die bereits geladenen Nachrichten rein lokal, ohne API-Aufrufe."
     },
-    "export-button": {
-      "title": "Export",
-      "content": "Exportiere Nachrichten als HTML, CSV, JSON oder nur Medien. Wähle eine Vorlage (9 eingebaut) oder nutze deine gespeicherten Einstellungen."
-    },
-    "analytics-button": {
-      "title": "Statistiken",
-      "content": "Sieh Erwähnungshäufigkeit, mit wem du am meisten schreibst und das Engagement über die Zeit. Exportiere die Statistiken als CSV zur weiteren Auswertung."
-    },
     "focus-button": {
       "title": "Fokusmodus",
       "content": "Blendet Seitenleiste und Statusbereich für ablenkungsfreies Lesen aus. F schaltet um, Escape beendet."
-    },
-    "message-feed": {
-      "title": "Nachrichtenfeed",
-      "content": "Klicke eine Nachricht an, um sie auszuwählen, und nutze dann die Werkzeugleiste zum Löschen, Bearbeiten oder Verwalten von Anhängen. Klicke auf Antwortleisten oder Anpinn-Hinweise, um zur referenzierten Nachricht zu springen."
     },
     "refine-section": {
       "title": "Eingrenzen vs. Suche",

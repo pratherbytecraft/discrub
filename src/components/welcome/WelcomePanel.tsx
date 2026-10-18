@@ -13,7 +13,6 @@ import {
   Terminal as StatusIcon,
   PauseCircle as PauseIcon,
   Favorite as DonationIcon,
-  Explore as TourIcon,
   ArrowForward as ArrowIcon,
   GitHub as GitHubIcon,
   Star as StarIcon,
@@ -22,10 +21,6 @@ import {
 import { useTranslation } from 'react-i18next';
 
 const GITHUB_REPO_URL = 'https://github.com/prathercc/discrub';
-
-interface WelcomePanelProps {
-  onStartTour: () => void;
-}
 
 interface FeatureCard {
   icon: React.ReactNode;
@@ -86,7 +81,7 @@ const FEATURE_CARDS: FeatureCard[] = [
   },
 ];
 
-const WelcomePanel = ({ onStartTour }: WelcomePanelProps) => {
+const WelcomePanel = () => {
   const { t } = useTranslation();
   const featureCardsRef = useRef<HTMLDivElement>(null);
   const v1Ref = useRef<HTMLDivElement>(null);
@@ -131,15 +126,6 @@ const WelcomePanel = ({ onStartTour }: WelcomePanelProps) => {
         <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Button
             variant="contained"
-            startIcon={<TourIcon />}
-            onClick={onStartTour}
-            data-tour="start-tour"
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            {t('welcome.takeTour')}
-          </Button>
-          <Button
-            variant="outlined"
             onClick={() => scrollTo(featureCardsRef)}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >

@@ -27,7 +27,7 @@ import { PerfProfiler } from '@/utils/PerfProfiler';
  * a shell owns only the frame. Every layout added in 2.2.0 implements the
  * same ShellProps.
  */
-const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen, onStartShellTour }: ShellProps) => {
+const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen }: ShellProps) => {
   perfCount('ClassicShell');
   const sidebarView = useAppSelector(selectSidebarView);
   const theme = useTheme();
@@ -65,7 +65,7 @@ const ClassicShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose,
               {sidebarView === 'package' ? (
                 <PerfProfiler id="PackageView"><PackageView /></PerfProfiler>
               ) : (
-                <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} /></PerfProfiler>
+                <PerfProfiler id="ServerView"><ServerView /></PerfProfiler>
               )}
             </Box>
             {/* The open sheet is fixed to the window, so it takes the wall's width as its right inset while the wall is open (2.2.1). */}

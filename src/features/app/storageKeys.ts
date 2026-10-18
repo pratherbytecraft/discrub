@@ -101,7 +101,8 @@ export const defaultSettings: AppSettings = {
   [DiscrubSetting.CACHED_USER_MAP]: '{}',
   [DiscrubSetting.CACHED_ANNOUNCEMENT_REV]: '0',
 
-  // Tour State
+  // Tour State. The guided tours were removed in 2.2.6; the markers stay
+  // so values already saved keep routing to Discrub-state.
   [DiscrubSetting.APP_TOUR_SHELL_COMPLETED]: 'false',
   [DiscrubSetting.APP_TOUR_CONTEXTUAL_COMPLETED]: 'false',
 };

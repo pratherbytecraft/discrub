@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useWorkspaceScopeRestore } from '@/hooks/useWorkspaceScopeRestore';
 import { Box } from '@mui/material';
-import { Joyride } from 'react-joyride';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useAppSelector, useAppDispatch } from '@/app/hooks';
 import {
@@ -54,10 +53,7 @@ import { useRestoreListener } from '@/hooks/useRestoreListener';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useOperationThrottleOptOut } from '@/hooks/useOperationThrottleOptOut';
 import { useRestBreaks } from '@/hooks/useRestBreaks';
-import { useTour } from '@/hooks/useTour';
 import Toast from '@components/ui/Toast';
-import TourTooltip from '@components/welcome/TourTooltip';
-import { buildShellTourSteps } from '@components/welcome/tourSteps';
 import { HotkeyProvider, useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { resolveShell } from '@/layouts/registry';
 import { selectIsGuestMode } from '@features/auth/authSlice';
@@ -205,13 +201,6 @@ const MainLayout = () => {
     );
   }, [suggestedLanguage, dispatch, t]);
 
-  // Shell tour is user-initiated (via WelcomePanel "Take a Tour"),
-  // so we DON'T mark it completed on a missing target — let the user
-  // retry. All shell tour steps target global chrome (Sidebar/TopBar/
-  // StatusPanel) that always renders, so a miss here is exceptional.
-  const shellTourSteps = useMemo(() => buildShellTourSteps(t), [t]);
-  const shellTour = useTour('shell', { steps: shellTourSteps });
-
   useBeforeUnloadWarning();
   useGlobalErrorHandler();
   useOperationStatusBroadcast();
@@ -290,27 +279,6 @@ const MainLayout = () => {
 
   return (
     <Box sx={{ height: '100%', width: '100%', position: 'relative' }}>
-      <Joyride
-        steps={shellTourSteps}
-        run={shellTour.running}
-        stepIndex={shellTour.stepIndex}
-        onEvent={shellTour.handleEvent}
-        continuous
-        scrollToFirstStep
-        tooltipComponent={TourTooltip}
-        options={{
-          // User escape hatch: clicking the overlay closes the tour.
-          // Previously `false` (clicks ignored) — if Joyride ever got
-          // stuck with an orphan overlay, users had no way out without
-          // opening DevTools. Default Joyride behavior is 'close'; we
-          // restore that explicitly.
-          overlayClickAction: 'close',
-          blockTargetInteraction: true,
-          overlayColor: 'rgba(0, 0, 0, 0.6)',
-          zIndex: 10000,
-          skipBeacon: true,
-        }}
-      />
       <Box data-testid="shell-frame" sx={{ display: 'contents' }} {...(previewing ? { inert: '' } : {})}>
         <PerfProfiler id="Shell"><Shell
           focusedView={focusedView}
@@ -318,7 +286,6 @@ const MainLayout = () => {
           onSidebarOpen={openSidebar}
           onSidebarClose={closeSidebar}
           drawerOpen={drawerOpen}
-          onStartShellTour={shellTour.start}
         /></PerfProfiler>
       </Box>
       <PreviewBar />

@@ -382,15 +382,11 @@ describe('DMList', () => {
   });
 
   /**
-   * Bug fix: the contextual tour's step 1 targets
-   * `[data-tour="multi-select-toggle"]`. When the user lands in DM view
-   * directly on cold boot, the ChannelList (which had the attribute) is
-   * NOT rendered — without the same attribute on DMList's toggle, the
-   * tour would fire with a missing target and leave an orphaned gray
-   * overlay blocking all clicks.
+   * The `data-tour` anchors outlived the guided tours (removed in 2.2.6);
+   * tests still find the multi-select toggle by it in both lists.
    */
   describe('Tour target attribute', () => {
-    it('multi-select toggle carries the data-tour attribute for Joyride', () => {
+    it('multi-select toggle carries the data-tour attribute', () => {
       const dm = createMockChannel({ id: 'dm-1', name: null, type: 1 });
       renderWithProviders(<DMList filterText="" />, {
         preloadedState: createBaseState({

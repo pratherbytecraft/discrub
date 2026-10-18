@@ -3,7 +3,7 @@ import { renderWithProviders, screen, userEvent } from '@/test/test-utils';
 import { createAuthenticatedState } from '@/test/state-factories';
 import ClassicShell from './ClassicShell';
 
-const props = { sidebarOpen: false, onSidebarOpen: vi.fn(), onSidebarClose: vi.fn(), drawerOpen: false, onStartShellTour: vi.fn() };
+const props = { sidebarOpen: false, onSidebarOpen: vi.fn(), onSidebarClose: vi.fn(), drawerOpen: false };
 
 describe('<ClassicShell />', () => {
   it('shows the top bar, the sidebar and the status panel at rest', () => {

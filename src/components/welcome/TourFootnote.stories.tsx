@@ -58,7 +58,7 @@ export const ManyOnOneRow: Story = {
         Refine<TourFootnote stepKey="refine-section" />
       </Typography>
       <Typography variant="body2">
-        Export<TourFootnote stepKey="export-button" />
+        Presets<TourFootnote stepKey="export-presets" />
       </Typography>
     </Stack>
   ),

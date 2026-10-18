@@ -93,8 +93,8 @@ export const WithLeadingButton: Story = {
 export const ButtonRow: Story = {
   render: () => (
     <Stack direction="row" spacing={2} sx={{ p: 4 }}>
-      <TourButton stepKey="export-button">Export</TourButton>
-      <TourButton stepKey="analytics-button">Analytics</TourButton>
+      <TourButton stepKey="search-filters">Filters</TourButton>
+      <TourButton stepKey="export-presets">Presets</TourButton>
       <TourButton stepKey="focus-button">Focus</TourButton>
     </Stack>
   ),

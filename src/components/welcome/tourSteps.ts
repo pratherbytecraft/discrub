@@ -1,18 +1,15 @@
-import type { Step } from 'react-joyride';
 import type { TFunction } from 'i18next';
 import { t as defaultT } from '@/i18n';
 
 /**
  * Catalog entry: a piece of explanatory copy keyed by a stable
- * identifier. Used by both the auto-running joyride tours (via
- * `shellTourSteps` / `contextualTourSteps` below) and the family of
- * inline help components — `<TourButton>`, `<TourFootnote>`, and
- * `<TourCaption>` — that render a `?` affordance keyed to a stepKey.
+ * identifier. Used by the family of inline help components —
+ * `<TourButton>`, `<TourFootnote>`, and `<TourCaption>` — that render
+ * a `?` affordance keyed to a stepKey. The guided walk-throughs that
+ * also read this catalog were removed in 2.2.6.
  *
  * Adding a new entry here is the single source of truth — drop the
- * appropriate inline component next to a feature for individual help,
- * or include the key in one of the tour arrays for orientation
- * walkthroughs.
+ * appropriate inline component next to a feature for individual help.
  */
 export interface TourCatalogEntry {
   /** Heading shown at the top of the tooltip / popover. */
@@ -27,75 +24,21 @@ export interface TourCatalogEntry {
  * so renaming is safe but should still be deliberate.
  */
 export const tourCatalog: Record<string, TourCatalogEntry> = {
-  // ── Shell (always-rendered chrome) ────────────────────────────────
-  'servers-tab': {
-    title: 'Servers',
-    content: 'Your Discord servers appear here. Click one to browse its channels.',
-  },
-  'dms-tab': {
-    title: 'Direct Messages',
-    content: 'Switch here to browse your direct messages and group chats.',
-  },
-  'sidebar-search': {
-    title: 'Search',
-    content: 'Filter servers, channels, or DMs by name.',
-  },
-  settings: {
-    title: 'Settings',
-    content: 'Customize operation delays, export defaults, display preferences, and more.',
-  },
-  theme: {
-    title: 'Themes',
-    content: 'Pick from the full theme roster, support Discrub, and apply a supporter key, all in one place.',
-  },
-  more: {
-    title: 'Apps, Supporter Wall and More',
-    content: 'See the Prather Bytecraft bots and Mac apps, toggle the Supporter Wall, and open the More menu for Ideas & Contact, Compatibility, r/discrub and the latest announcement.',
-  },
-  'status-panel': {
-    title: 'Status Log',
-    content: 'All operations show real-time progress here. Expand for full details, or download the log file.',
-  },
-  'workspace-pill': {
-    title: 'Workspaces',
-    content: 'Messages you load are kept in your browser in a workspace, so a reload or a closed tab picks up where you left off. Open the list to switch, rename, export or clear one.',
-  },
-  'user-profile': {
-    title: 'Your Profile',
-    content: "Click to view your account details, or to sign out when you're done. Signing out clears your token, including any saved copy on this device.",
-  },
-
-  // ── Contextual (channel-view) ──────────────────────────────────────
+  // ── Channel view ───────────────────────────────────────────────────
   'multi-select-toggle': {
     title: 'Multi-Select Mode',
     content: "Click to select more than one at a time. A \"Select all\" link picks the full visible list, and any bulk actions available for the list appear below the selection count.",
-  },
-  'author-avatar': {
-    title: 'Author Actions',
-    content: "Click any author's avatar or name in the feed to open their profile. From there, you can filter the channel to just their messages, or to messages that mention them, with one click.",
   },
   'search-filters': {
     title: 'Filters',
     content: 'Two layers in one modal: Search hits Discord\'s API (author, content, date, has-types, mentions, pinned, author type) and shows "X of Y matches loaded" as results stream in. Refine narrows the already-loaded messages purely client-side, with no API calls.',
   },
-  'export-button': {
-    title: 'Export',
-    content: 'Export messages in HTML, CSV, JSON, or media-only. Pick a preset (9 built-in) or roll your own with your saved settings.',
-  },
-  'analytics-button': {
-    title: 'Analytics',
-    content: 'See mention frequency, who you talk to most, engagement over time. Export the analytics to CSV for further crunching.',
-  },
   'focus-button': {
     title: 'Focus Mode',
     content: 'Hides the sidebar and status panel for distraction-free reading. Press F to toggle, Escape to exit.',
   },
-  'message-feed': {
-    title: 'Message Feed',
-    content: 'Click a message to select it, then use the toolbar to delete, edit, or manage attachments. Click reply bars or pinned-message notices to jump to the referenced message.',
-  },
 
-  // ── Tier 1 inline-only entries (not part of any walkthrough) ──
+  // ── Tier 1 inline-only entries ─────────────────────────────────────
   'refine-section': {
     title: 'Refine vs Search',
     content: "Refine narrows the messages already loaded in your feed: instant, client-side, no API calls. Search above hits Discord's API and pulls fresh results. Use Refine to slice what you have, and Search when you need to find more.",
@@ -137,26 +80,6 @@ export const tourCatalog: Record<string, TourCatalogEntry> = {
 };
 
 /**
- * Helper that turns a catalog key + extra Joyride options into a Step.
- * Keeps the tour arrays terse without losing the catalog as the
- * single source of truth for copy.
- */
-function step(
-  key: keyof typeof tourCatalog,
-  target: string,
-  extra: Partial<Step> = {},
-  t: TFunction = defaultT,
-): Step {
-  const entry = getTourEntry(key, t) ?? tourCatalog[key];
-  return {
-    target,
-    title: entry.title,
-    content: entry.content,
-    ...extra,
-  };
-}
-
-/**
  * Localized catalog entry (#124). The catalog above stays the English
  * source; translations live under `tour.<key>` and fall back to it.
  * Components pass their `useTranslation()` `t` so they re-render on a
@@ -173,44 +96,3 @@ export function getTourEntry(
     content: t(`tour.${key}.content`, { defaultValue: entry.content }),
   };
 }
-
-/**
- * Phase 1: Shell tour — visible on the idle screen before any server is selected.
- * Triggered from WelcomePanel "Take a Tour" button.
- */
-export const buildShellTourSteps = (t: TFunction = defaultT): Step[] => [
-  step('servers-tab', '[data-tour="servers-tab"]', { placement: 'right' }, t),
-  step('dms-tab', '[data-tour="dms-tab"]', { placement: 'right' }, t),
-  step('sidebar-search', '[data-tour="sidebar-search"]', { placement: 'right' }, t),
-  step('settings', '[aria-label="Settings"]', {}, t),
-  step('theme', '[data-testid="gift-button"]', {}, t),
-  step('more', '[data-tour="topbar-extras"]', {}, t),
-  step('status-panel', '[data-tour="status-panel"]', { placement: 'top' }, t),
-  step('workspace-pill', '[data-tour="workspace-pill"]', { placement: 'top' }, t),
-  step('user-profile', '[data-tour="user-profile"]', {}, t),
-];
-
-/** English snapshot; components build a localized copy via `buildShellTourSteps(t)`. */
-export const shellTourSteps: Step[] = buildShellTourSteps();
-
-/**
- * Phase 2: Contextual tips — shown once after the user first loads messages.
- * Covers features only visible when a channel is selected.
- *
- * Refreshed for 2.0.2: replaced broken message-table anchor (deleted in
- * #111) with message-feed; added Author actions step (covers profile
- * + #129 inline filters); added Focus mode step. Search filters copy
- * mentions Search vs Refine and the lazy "X of Y" pagination.
- */
-export const buildContextualTourSteps = (t: TFunction = defaultT): Step[] => [
-  step('multi-select-toggle', '[data-tour="multi-select-toggle"]', { placement: 'right' }, t),
-  step('author-avatar', '[data-tour="author-avatar"]', { placement: 'right' }, t),
-  step('search-filters', '[data-tour="search-filters"]', {}, t),
-  step('export-button', '[data-tour="export-button"]', {}, t),
-  step('analytics-button', '[data-tour="analytics-button"]', {}, t),
-  step('focus-button', '[data-tour="focus-button"]', {}, t),
-  step('message-feed', '[data-tour="message-feed"]', { placement: 'top' }, t),
-];
-
-/** English snapshot; components build a localized copy via `buildContextualTourSteps(t)`. */
-export const contextualTourSteps: Step[] = buildContextualTourSteps();

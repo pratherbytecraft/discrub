@@ -26,7 +26,7 @@ import { PerfProfiler } from '@/utils/PerfProfiler';
  * hides the sidebar, the dock and the status bar; the top bar stays. Below md
  * the sidebar rides in its drawer and the dock folds into the status bar.
  */
-const WorkbenchShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen, onStartShellTour }: ShellProps) => {
+const WorkbenchShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen }: ShellProps) => {
   perfCount('WorkbenchShell');
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('md'));
@@ -50,7 +50,7 @@ const WorkbenchShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClos
           <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', backgroundColor: 'background.default' }}>
             <PerfProfiler id="WorkbenchToolbar"><WorkbenchToolbar /></PerfProfiler>
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 1.5, pb: 1 }}>
-              {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} variant="workbench" /></PerfProfiler>}
+              {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView variant="workbench" /></PerfProfiler>}
             </Box>
             {showDock && <WorkbenchDock onOpenLog={openLog} />}
           </Box>

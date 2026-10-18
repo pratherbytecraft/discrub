@@ -7,9 +7,6 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
   },
-  args: {
-    onStartTour: () => alert('Tour started!'),
-  },
 } satisfies Meta<typeof WelcomePanel>;
 
 export default meta;

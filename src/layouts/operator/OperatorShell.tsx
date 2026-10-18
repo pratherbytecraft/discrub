@@ -33,7 +33,7 @@ type PhoneTab = 'queue' | 'run' | 'feed' | 'recent';
  * Focus (A2). Tablet keeps the peek; a phone shows one panel at a time
  * from a tab bar.
  */
-const OperatorShell = ({ drawerOpen, onStartShellTour }: ShellProps) => {
+const OperatorShell = ({ drawerOpen }: ShellProps) => {
   perfCount('OperatorShell');
   const { t } = useTranslation();
   const theme = useTheme();
@@ -67,7 +67,7 @@ const OperatorShell = ({ drawerOpen, onStartShellTour }: ShellProps) => {
   }, [bulk, queue]);
   const runProgress = bulk ? { done: bulk.currentIndex, total: bulk.totalChannels } : null;
 
-  const feed = <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} variant="operator" /></PerfProfiler>;
+  const feed = <PerfProfiler id="ServerView"><ServerView variant="operator" /></PerfProfiler>;
   const middle = isPackage ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : feedOpen ? (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, height: '100%', minHeight: 0 }}>
       {hasContext && <OperatorFeedToolbar feedOpen onToggleFeed={closeFeed} />}

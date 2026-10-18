@@ -27,7 +27,7 @@ export const SIMPLE_COLUMN = 1120;
  * hotkey hint bar and the collapsed status log bar. Focus keeps the top bar
  * and the feed and hides the rest.
  */
-const SimpleShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen, onStartShellTour }: ShellProps) => {
+const SimpleShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen }: ShellProps) => {
   perfCount('SimpleShell');
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('md'));
@@ -48,7 +48,7 @@ const SimpleShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, 
             {!focusedView && sidebarView !== 'package' && <SimpleSearchCard />}
             <PerfProfiler id="SimpleBanner"><SimpleBanner /></PerfProfiler>
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} variant="simple" /></PerfProfiler>}
+              {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView variant="simple" /></PerfProfiler>}
             </Box>
           </Box>
         </Box>

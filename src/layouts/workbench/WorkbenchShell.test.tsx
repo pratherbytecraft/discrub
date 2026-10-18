@@ -9,7 +9,7 @@ vi.mock('@components/package/PackageView', () => ({ default: () => <div data-tes
 vi.mock('@components/navigation/Sidebar', () => ({ default: () => <div data-testid="sidebar" /> }));
 vi.mock('@containers/MainLayout/TopBar', () => ({ default: () => <div data-testid="topbar" /> }));
 
-const props = { sidebarOpen: false, onSidebarOpen: vi.fn(), onSidebarClose: vi.fn(), drawerOpen: false, onStartShellTour: vi.fn() };
+const props = { sidebarOpen: false, onSidebarOpen: vi.fn(), onSidebarClose: vi.fn(), drawerOpen: false };
 const guild = createMockGuild({ id: 'g1', name: 'Cypress Test Server' });
 const channel = createMockChannel({ id: 'c1', name: 'general' });
 const withChannel = () => {

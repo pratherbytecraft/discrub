@@ -38,8 +38,6 @@ export interface ShellProps {
   onSidebarClose: () => void;
   /** The Ko-fi drawer is showing on the right (desktop, feed setting on, not in Focus). */
   drawerOpen: boolean;
-  /** Starts the shell tour; shells pass it to the welcome panel. */
-  onStartShellTour: () => void;
 }
 
 export type LayoutShell = ComponentType<ShellProps>;

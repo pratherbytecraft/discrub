@@ -30,7 +30,7 @@ export const TIMELINE_SIDE = 300;
  * month list. Below the lg width the month list opens from the action row.
  * Focus keeps the top bar and the feed and hides the rest.
  */
-const TimelineShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen, onStartShellTour }: ShellProps) => {
+const TimelineShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose, drawerOpen }: ShellProps) => {
   perfCount('TimelineShell');
   const theme = useTheme();
   const phone = useMediaQuery(theme.breakpoints.down('md'));
@@ -61,7 +61,7 @@ const TimelineShell = ({ focusedView, sidebarOpen, onSidebarOpen, onSidebarClose
           <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 1, px: phone ? 1 : 2.5, pt: 1 }}>
             <PerfProfiler id="SimpleBanner"><SimpleBanner /></PerfProfiler>
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-              {isPackage ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} variant="timeline" /></PerfProfiler>}
+              {isPackage ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView variant="timeline" /></PerfProfiler>}
             </Box>
           </Box>
           {daysShown && !narrow && (

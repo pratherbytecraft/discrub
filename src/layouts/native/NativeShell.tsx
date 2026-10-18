@@ -24,7 +24,7 @@ import { PerfProfiler } from '@/utils/PerfProfiler';
  * Focus hides the rail, the column and the inspector; the head row stays.
  * The status log opens as a sheet over the feed from the inspector.
  */
-const NativeShell = ({ focusedView, drawerOpen, sidebarOpen, onSidebarOpen, onSidebarClose, onStartShellTour }: ShellProps) => {
+const NativeShell = ({ focusedView, drawerOpen, sidebarOpen, onSidebarOpen, onSidebarClose }: ShellProps) => {
   perfCount('NativeShell');
   const theme = useTheme();
   // Three tiers (2.2.0): desktop keeps everything in place; below lg the inspector becomes a slide-over
@@ -67,7 +67,7 @@ const NativeShell = ({ focusedView, drawerOpen, sidebarOpen, onSidebarOpen, onSi
             onMenu={onSidebarOpen}
           /></PerfProfiler>
           <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', position: 'relative' }}>
-            {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView onStartShellTour={onStartShellTour} variant="native" /></PerfProfiler>}
+            {sidebarView === 'package' ? <PerfProfiler id="PackageView"><PackageView /></PerfProfiler> : <PerfProfiler id="ServerView"><ServerView variant="native" /></PerfProfiler>}
           </Box>
         </Box>
         {inspectorInline && <NativeInspector onOpenLog={openLog} />}

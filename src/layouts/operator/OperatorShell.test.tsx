@@ -7,7 +7,7 @@ import OperatorShell from './OperatorShell';
 vi.mock('@containers/ServerView/ServerView', () => ({ default: ({ variant }: { variant?: string }) => <div data-testid="serverview" data-variant={variant} /> }));
 vi.mock('@components/package/PackageView', () => ({ default: () => <div data-testid="packageview" /> }));
 
-const props = { sidebarOpen: false, onSidebarOpen: vi.fn(), onSidebarClose: vi.fn(), drawerOpen: false, onStartShellTour: vi.fn() };
+const props = { sidebarOpen: false, onSidebarOpen: vi.fn(), onSidebarClose: vi.fn(), drawerOpen: false };
 const guild = createMockGuild({ id: 'g1', name: 'Cypress Test Server' });
 const general = createMockChannel({ id: 'c1', name: 'general' });
 const random = createMockChannel({ id: 'c2', name: 'random' });

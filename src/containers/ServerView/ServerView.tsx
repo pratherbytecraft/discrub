@@ -2,7 +2,6 @@ import { useLoadAllAvailable, useLoadAllLabel } from '@/hooks/useLoadAllLabel';
 import { useResumeLabels } from '@/hooks/useResume';
 import { useState, useRef, useMemo, useEffect, useCallback, memo } from 'react';
 import { Box, Typography, Paper, Button, Alert, AlertTitle, Chip } from '@mui/material';
-import { Joyride } from 'react-joyride';
 import {
   FileDownload as ExportIcon,
   CloudDownload as LoadAllIcon,
@@ -18,11 +17,8 @@ import {
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import type { FeedDialog } from '@features/app/appTypes';
 import WelcomePanel from '@components/welcome/WelcomePanel';
-import TourTooltip from '@components/welcome/TourTooltip';
 import TourButton from '@components/welcome/TourButton';
 import TourFootnote from '@components/welcome/TourFootnote';
-import { buildContextualTourSteps } from '@components/welcome/tourSteps';
-import { useTour } from '@/hooks/useTour';
 import { HotkeyTooltip } from '@components/ui/HotkeyTooltip';
 import DmAvatar from '@components/ui/DmAvatar';
 import ChannelAvatar from '@components/ui/ChannelAvatar';
@@ -141,7 +137,6 @@ import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
 
 interface ServerViewProps {
-  onStartShellTour?: () => void;
   /**
    * Which shell hosts the view (2.2.0). Classic keeps the channel header with
    * its action buttons; Native draws its own head row and inspector, so the
@@ -153,7 +148,7 @@ interface ServerViewProps {
 /**
  * ServerView container - displays messages for selected channel or DM
  */
-const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) => {
+const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   perfCount('ServerView');
   const { t, i18n } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
@@ -355,35 +350,6 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
   const setShowPartialResultsWarning = (show: boolean) => {
     setPartialResultsWarnings((prev) => ({ ...prev, [activeTab ?? 'main']: show }));
   };
-
-  // The hook itself now validates the first-step target on `.start()`
-  // and marks the tour completed if missing — so we don't keep auto-
-  // triggering every session on a cold-boot-to-DM user.
-  const contextualTourSteps = useMemo(() => buildContextualTourSteps(t), [t]);
-  const contextualTour = useTour('contextual', {
-    steps: contextualTourSteps,
-    markCompletedOnMissingTarget: true,
-  });
-  const contextualTourTriggered = useRef(false);
-
-  // Trigger contextual tour once after first message load.
-  // Skip in Cypress test environment to avoid blocking interactions.
-  useEffect(() => {
-    if (
-      messages.length > 0 &&
-      !isLoading &&
-      !contextualTour.completed &&
-      !contextualTour.running &&
-      !contextualTourTriggered.current &&
-      !(window as unknown as { Cypress?: unknown }).Cypress
-    ) {
-      contextualTourTriggered.current = true;
-      // Small delay to let the UI settle before start() checks targets.
-      const timer = setTimeout(() => contextualTour.start(), 800);
-      return () => clearTimeout(timer);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional trigger set
-  }, [messages.length, isLoading, contextualTour.completed, contextualTour.running, contextualTour.start]);
 
   // Store dispatch results so we can abort operations
   const loadAllAbortController = useRef<{ abort: () => void } | null>(null);
@@ -954,28 +920,12 @@ const ServerView = ({ onStartShellTour, variant = 'classic' }: ServerViewProps) 
 
   if (!currentContext) {
     return (
-      <WelcomePanel onStartTour={onStartShellTour ?? (() => {})} />
+      <WelcomePanel />
     );
   }
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 2 }}>
-      <Joyride
-        steps={contextualTourSteps}
-        run={contextualTour.running}
-        stepIndex={contextualTour.stepIndex}
-        onEvent={contextualTour.handleEvent}
-        continuous
-        scrollToFirstStep
-        tooltipComponent={TourTooltip}
-        options={{
-          overlayClickAction: false,
-          blockTargetInteraction: true,
-          overlayColor: 'rgba(0, 0, 0, 0.6)',
-          zIndex: 10000,
-          skipBeacon: true,
-        }}
-      />
       {variant === 'classic' && (
       <Paper sx={{ p: 2, mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>

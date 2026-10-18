@@ -106,7 +106,7 @@ describe('ServerView', () => {
         }),
       });
       expect(screen.getByText('Welcome to Discrub')).toBeInTheDocument();
-      expect(screen.getByText('Take a Tour')).toBeInTheDocument();
+      expect(screen.queryByText('Take a Tour')).not.toBeInTheDocument();
       expect(screen.getByText('Getting Started')).toBeInTheDocument();
       expect(screen.getByText('Features')).toBeInTheDocument();
     });
