@@ -590,12 +590,16 @@
   },
   "bots": {
     "analyticsNudge": "Want this every week, server-wide, without exporting? {{name}} does that.",
-    "button": "Bots",
-    "title": "Bots From The Developer",
+    "button": "Apps",
+    "title": "Apps From The Developer",
     "learnMore": "Learn more",
     "addToDiscord": "Add to Discord",
     "follow": "Follow @{{handle}}",
-    "idea": "Have an idea for a bot?"
+    "idea": "Have an idea for a bot?",
+    "sectionBots": "Discord bots",
+    "sectionMac": "For Mac",
+    "get": "Get",
+    "hide": "Hide"
   },
   "welcome": {
     "title": "Welcome to Discrub",
@@ -748,8 +752,8 @@
       "content": "Pick from the full theme roster, support Discrub, and apply a supporter key, all in one place."
     },
     "more": {
-      "title": "Bots, Supporter Wall and More",
-      "content": "See the Prather Bytecraft bots, toggle the Supporter Wall, and open the More menu for Ideas & Contact, Compatibility, r/discrub and the latest announcement."
+      "title": "Apps, Supporter Wall and More",
+      "content": "See the Prather Bytecraft bots and Mac apps, toggle the Supporter Wall, and open the More menu for Ideas & Contact, Compatibility, r/discrub and the latest announcement."
     },
     "status-panel": {
       "title": "Status Log",

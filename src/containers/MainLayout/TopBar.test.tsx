@@ -635,7 +635,7 @@ describe('TopBar wide layout (md and up)', () => {
   it('keeps Bots and the Supporter Wall inline and puts the rest in the More menu', () => {
     render();
     expect(screen.getByLabelText('Supporter Wall')).toBeInTheDocument();
-    expect(screen.getByTestId('bots-button')).toHaveTextContent('Bots');
+    expect(screen.getByTestId('bots-button')).toHaveTextContent('Apps');
     expect(screen.getByLabelText('Settings')).toBeInTheDocument();
     expect(screen.queryByTestId('topbar-ideas')).toBeNull();
     expect(screen.queryByTestId('topbar-reddit')).toBeNull();

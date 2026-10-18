@@ -49,8 +49,8 @@ export const tourCatalog: Record<string, TourCatalogEntry> = {
     content: 'Pick from the full theme roster, support Discrub, and apply a supporter key, all in one place.',
   },
   more: {
-    title: 'Bots, Supporter Wall and More',
-    content: 'See the Prather Bytecraft bots, toggle the Supporter Wall, and open the More menu for Ideas & Contact, Compatibility, r/discrub and the latest announcement.',
+    title: 'Apps, Supporter Wall and More',
+    content: 'See the Prather Bytecraft bots and Mac apps, toggle the Supporter Wall, and open the More menu for Ideas & Contact, Compatibility, r/discrub and the latest announcement.',
   },
   'status-panel': {
     title: 'Status Log',

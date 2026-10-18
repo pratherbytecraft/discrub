@@ -590,12 +590,16 @@
   },
   "bots": {
     "analyticsNudge": "Willst du das jede Woche für den ganzen Server, ohne Export? {{name}} macht das.",
-    "button": "Bots",
-    "title": "Bots vom Entwickler",
+    "button": "Apps",
+    "title": "Apps vom Entwickler",
     "learnMore": "Mehr erfahren",
     "addToDiscord": "Zu Discord hinzufügen",
     "follow": "@{{handle}} folgen",
-    "idea": "Eine Idee für einen Bot?"
+    "idea": "Eine Idee für einen Bot?",
+    "sectionBots": "Discord-Bots",
+    "sectionMac": "Für Mac",
+    "get": "Holen",
+    "hide": "Ausblenden"
   },
   "welcome": {
     "title": "Willkommen bei Discrub",
@@ -748,8 +752,8 @@
       "content": "Wähle aus allen Designs, unterstütze Discrub und aktiviere einen Unterstützerschlüssel, alles an einem Ort."
     },
     "more": {
-      "title": "Bots, Unterstützerwand und Mehr",
-      "content": "Sieh dir die Prather-Bytecraft-Bots an, blende die Unterstützerwand ein und öffne das Menü „Mehr“ für Ideen & Kontakt, Kompatibilität, r/discrub und die letzte Ankündigung."
+      "title": "Apps, Unterstützerwand und Mehr",
+      "content": "Sieh dir die Prather-Bytecraft-Bots und Mac-Apps an, blende die Unterstützerwand ein und öffne das Menü „Mehr“ für Ideen & Kontakt, Kompatibilität, r/discrub und die letzte Ankündigung."
     },
     "status-panel": {
       "title": "Statusprotokoll",
