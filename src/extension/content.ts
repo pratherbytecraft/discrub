@@ -479,6 +479,7 @@ function restoreFullscreenOverlay(): void {
   overlayState.isAnimating = true;
 
   const tab = overlayState.floatingTabElement;
+  const origin = floatingTabOrigin();
   if (tab) {
     tab.style.willChange = 'transform, opacity';
     tab.style.animation =
@@ -498,7 +499,7 @@ function restoreFullscreenOverlay(): void {
           dialog.style.willChange = 'transform, opacity';
           dialog.style.display = '';
           dialog.showModal();
-          dialog.style.transformOrigin = 'bottom right';
+          dialog.style.transformOrigin = origin;
           dialog.style.animation =
             'discrub-expand-from-tab 250ms cubic-bezier(0.4, 0, 0.2, 1) forwards';
 
@@ -562,6 +563,150 @@ function ensureAnimationStyles(): void {
   document.head.appendChild(style);
 }
 
+
+// ---------------------------------------------------------------------------
+// Floating tab position (floating-tab-drag, 2.2.6)
+//
+// The minimized tab used to sit at the bottom right for good, where it covered
+// Discord's own search result page arrows. It can now be dragged anywhere and
+// the spot is kept in chrome.storage.local so it comes back next time. A plain
+// click (under the drag threshold) still restores the overlay.
+// ---------------------------------------------------------------------------
+
+const FLOATING_TAB_POSITION_KEY = 'floatingTabPosition';
+const FLOATING_TAB_DRAG_THRESHOLD = 4;
+const FLOATING_TAB_MARGIN = 4;
+
+interface FloatingTabPosition {
+  left: number;
+  top: number;
+}
+
+function isTabPosition(value: unknown): value is FloatingTabPosition {
+  return (
+    typeof value === 'object' && value !== null &&
+    Number.isFinite((value as FloatingTabPosition).left) &&
+    Number.isFinite((value as FloatingTabPosition).top)
+  );
+}
+
+/** Keep the whole tab inside the viewport. */
+function clampTabPosition(pos: FloatingTabPosition, tab: HTMLElement): FloatingTabPosition {
+  const width = tab.offsetWidth || 180;
+  const height = tab.offsetHeight || 40;
+  const maxLeft = Math.max(FLOATING_TAB_MARGIN, window.innerWidth - width - FLOATING_TAB_MARGIN);
+  const maxTop = Math.max(FLOATING_TAB_MARGIN, window.innerHeight - height - FLOATING_TAB_MARGIN);
+  return {
+    left: Math.min(Math.max(FLOATING_TAB_MARGIN, pos.left), maxLeft),
+    top: Math.min(Math.max(FLOATING_TAB_MARGIN, pos.top), maxTop),
+  };
+}
+
+async function readFloatingTabPosition(): Promise<FloatingTabPosition | null> {
+  try {
+    const items = await chrome.storage?.local?.get(FLOATING_TAB_POSITION_KEY);
+    const value = items?.[FLOATING_TAB_POSITION_KEY];
+    return isTabPosition(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveFloatingTabPosition(pos: FloatingTabPosition): void {
+  try {
+    void chrome.storage?.local?.set({ [FLOATING_TAB_POSITION_KEY]: pos });
+  } catch {
+    // Storage is a convenience; the tab still works where it is.
+  }
+}
+
+/** Docked (the default bottom right) or free at a saved spot. */
+function placeFloatingTab(tab: HTMLElement, pos: FloatingTabPosition | null): void {
+  if (!pos) {
+    tab.style.left = '';
+    tab.style.top = '';
+    tab.style.bottom = '0';
+    tab.style.right = '24px';
+    tab.style.borderRadius = '8px 8px 0 0';
+    tab.dataset.docked = 'true';
+    return;
+  }
+  const clamped = clampTabPosition(pos, tab);
+  tab.style.bottom = '';
+  tab.style.right = '';
+  tab.style.left = `${clamped.left}px`;
+  tab.style.top = `${clamped.top}px`;
+  tab.style.borderRadius = '8px';
+  tab.dataset.docked = 'false';
+}
+
+/** Where the overlay grows from and shrinks to: the tab's spot. */
+function floatingTabOrigin(): string {
+  const tab = overlayState.floatingTabElement;
+  if (!tab || tab.dataset.docked !== 'false') return 'bottom right';
+  const left = parseFloat(tab.style.left) || 0;
+  const top = parseFloat(tab.style.top) || 0;
+  return `${left + tab.offsetWidth / 2}px ${top + tab.offsetHeight / 2}px`;
+}
+
+function makeFloatingTabDraggable(tab: HTMLElement, onClick: () => void): void {
+  let start: { x: number; y: number; left: number; top: number } | null = null;
+  let dragging = false;
+
+  tab.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    const rect = tab.getBoundingClientRect();
+    start = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+    dragging = false;
+    try { tab.setPointerCapture(event.pointerId); } catch { /* jsdom */ }
+  });
+
+  tab.addEventListener('pointermove', (event) => {
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!dragging) {
+      if (Math.abs(dx) < FLOATING_TAB_DRAG_THRESHOLD && Math.abs(dy) < FLOATING_TAB_DRAG_THRESHOLD) return;
+      dragging = true;
+      tab.style.transition = 'none';
+      tab.style.transform = '';
+      tab.style.cursor = 'grabbing';
+    }
+    placeFloatingTab(tab, { left: start.left + dx, top: start.top + dy });
+  });
+
+  const finish = (event: PointerEvent) => {
+    if (!start) return;
+    try { tab.releasePointerCapture(event.pointerId); } catch { /* jsdom */ }
+    const wasDrag = dragging;
+    start = null;
+    dragging = false;
+    tab.style.transition = 'transform 0.2s ease';
+    tab.style.cursor = 'pointer';
+    if (wasDrag) {
+      tab.dataset.dropped = 'true';
+      saveFloatingTabPosition({ left: parseFloat(tab.style.left) || 0, top: parseFloat(tab.style.top) || 0 });
+    }
+  };
+  tab.addEventListener('pointerup', finish);
+  tab.addEventListener('pointercancel', finish);
+
+  // The click that follows a drag is the drop, not a restore.
+  tab.addEventListener('click', () => {
+    if (tab.dataset.dropped === 'true') {
+      delete tab.dataset.dropped;
+      return;
+    }
+    onClick();
+  });
+
+  window.addEventListener('resize', () => {
+    if (tab.isConnected && tab.dataset.docked === 'false') {
+      placeFloatingTab(tab, { left: parseFloat(tab.style.left) || 0, top: parseFloat(tab.style.top) || 0 });
+    }
+  });
+}
+
 /**
  * Create the floating tab element
  */
@@ -572,9 +717,8 @@ function createFloatingTab(): void {
   tab.id = 'discrub-floating-tab';
   tab.style.cssText = `
     position: fixed;
-    bottom: 0;
-    right: 24px;
     min-width: 180px;
+    touch-action: none;
     max-width: 280px;
     height: 40px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -635,21 +779,27 @@ function createFloatingTab(): void {
   `;
   tab.appendChild(dot);
 
-  // Click to restore
-  tab.addEventListener('click', () => {
-    restoreFullscreenOverlay();
-  });
+  // Click to restore, drag to move (floating-tab-drag)
+  makeFloatingTabDraggable(tab, restoreFullscreenOverlay);
 
   // Hover lift effect
   tab.addEventListener('mouseenter', () => {
-    tab.style.transform = 'translateY(-3px)';
+    if (tab.style.cursor !== 'grabbing') tab.style.transform = 'translateY(-3px)';
   });
   tab.addEventListener('mouseleave', () => {
-    tab.style.transform = 'translateY(0)';
+    if (tab.style.cursor !== 'grabbing') tab.style.transform = 'translateY(0)';
   });
 
+  placeFloatingTab(tab, null);
   document.body.appendChild(tab);
   overlayState.floatingTabElement = tab;
+
+  // Bring the tab back to where it was last dropped.
+  void readFloatingTabPosition().then((pos) => {
+    if (pos && overlayState.floatingTabElement === tab && tab.isConnected) {
+      placeFloatingTab(tab, pos);
+    }
+  });
 }
 
 /**

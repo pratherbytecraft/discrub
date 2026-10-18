@@ -816,6 +816,88 @@ describe('Content Script', () => {
     });
   });
 
+  describe('Floating Tab Drag (floating-tab-drag, 2.2.6)', () => {
+    function minimizeToTab(): HTMLElement {
+      const sendResponse = vi.fn();
+      messageListener({ action: 'injectOverlay' }, {} as chrome.runtime.MessageSender, sendResponse);
+      messageListener({ action: 'minimizeOverlay' }, {} as chrome.runtime.MessageSender, sendResponse);
+      fireAnimationEnd(document.getElementById('discrub-overlay')!);
+      const tab = document.getElementById('discrub-floating-tab')!;
+      // jsdom has no layout; give the tab a size and a spot.
+      Object.defineProperty(tab, 'offsetWidth', { value: 200, configurable: true });
+      Object.defineProperty(tab, 'offsetHeight', { value: 40, configurable: true });
+      tab.getBoundingClientRect = () => ({ left: 800, top: 700, width: 200, height: 40, right: 1000, bottom: 740, x: 800, y: 700, toJSON: () => ({}) });
+      return tab;
+    }
+
+    function pointer(type: string, x: number, y: number) {
+      const ev = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true });
+      Object.defineProperty(ev, 'pointerId', { value: 1 });
+      return ev;
+    }
+
+    it('starts docked at the bottom right', () => {
+      const tab = minimizeToTab();
+      expect(tab.dataset.docked).toBe('true');
+      expect(tab.style.bottom).toBe('0px');
+      expect(tab.style.right).toBe('24px');
+    });
+
+    it('moves with a drag, keeps the spot, and the drop is not a restore', () => {
+      const tab = minimizeToTab();
+      tab.dispatchEvent(pointer('pointerdown', 900, 720));
+      tab.dispatchEvent(pointer('pointermove', 700, 420));
+      tab.dispatchEvent(pointer('pointerup', 700, 420));
+      tab.dispatchEvent(pointer('click', 700, 420));
+
+      expect(tab.dataset.docked).toBe('false');
+      expect(tab.style.left).toBe('600px');
+      expect(tab.style.top).toBe('400px');
+      expect(tab.style.bottom).toBe('');
+      expect(mockChrome.storage.local.set).toHaveBeenCalledWith({ floatingTabPosition: { left: 600, top: 400 } });
+      // Still minimized: the drop did not restore.
+      expect(document.getElementById('discrub-floating-tab')).not.toBeNull();
+      expect(document.getElementById('discrub-overlay')!.style.display).toBe('none');
+    });
+
+    it('a small move is a click and restores', () => {
+      const tab = minimizeToTab();
+      tab.dispatchEvent(pointer('pointerdown', 900, 720));
+      tab.dispatchEvent(pointer('pointermove', 902, 721));
+      tab.dispatchEvent(pointer('pointerup', 902, 721));
+      tab.dispatchEvent(pointer('click', 902, 721));
+      expect(tab.dataset.docked).toBe('true');
+      expect(mockChrome.storage.local.set).not.toHaveBeenCalled();
+      expect(tab.style.animation).toContain('discrub-tab-slide-out');
+    });
+
+    it('keeps the tab inside the viewport', () => {
+      const tab = minimizeToTab();
+      tab.dispatchEvent(pointer('pointerdown', 900, 720));
+      tab.dispatchEvent(pointer('pointermove', -2000, -2000));
+      tab.dispatchEvent(pointer('pointerup', -2000, -2000));
+      expect(tab.style.left).toBe('4px');
+      expect(tab.style.top).toBe('4px');
+    });
+
+    it('comes back where it was dropped last time', async () => {
+      await mockChrome.storage.local.set({ floatingTabPosition: { left: 120, top: 80 } });
+      const tab = minimizeToTab();
+      await vi.waitFor(() => expect(tab.dataset.docked).toBe('false'));
+      expect(tab.style.left).toBe('120px');
+      expect(tab.style.top).toBe('80px');
+      expect(tab.style.borderRadius).toBe('8px');
+    });
+
+    it('ignores a damaged saved position', async () => {
+      await mockChrome.storage.local.set({ floatingTabPosition: { left: 'x' } });
+      const tab = minimizeToTab();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(tab.dataset.docked).toBe('true');
+    });
+  });
+
   describe('Status Updates via postMessage', () => {
     it('should update floating tab text when status message received', () => {
       const sendResponse = vi.fn();
