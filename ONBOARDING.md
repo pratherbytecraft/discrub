@@ -147,7 +147,7 @@ Your token is kept in memory only and cleared when you close the tab, unless you
 ### Navigation
 
 The layout is close to Discrub Classic:
-- Server list on the left (same), now with multi-select and a Copy button for server names or IDs
+- Server list on the left (same), now with multi-select, a Copy button for server names or IDs, and Purge and Edit across the selected servers
 - Channel list with category grouping (new; Discrub Classic showed a flat list)
 - Voice and Stage channels appear as clickable rows, and their text chat can be browsed like any text channel
 - DMs via a tab switch (same)
