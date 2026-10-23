@@ -220,8 +220,17 @@ describe('messageLightFormatting', () => {
         '<:emoji<script>:123456>',
         mockContext
       );
-      // This won't be matched as a valid emoji due to < > in the name
-      expect(result).toBe('<:emoji<script>:123456>');
+      // This won't be matched as a valid emoji due to < > in the name, and the raw text is escaped.
+      expect(result).toBe('&lt;:emoji&lt;script&gt;:123456&gt;');
+    });
+  });
+
+  describe('raw HTML in the message (2.2.7)', () => {
+    it('escapes tags in the content itself, since the reply preview and the Workbench table render the result as HTML', () => {
+      expect(formatMessageContentLight('<img src=x onerror=alert(1)> hi <@123456>', mockContext)).toBe(
+        '&lt;img src=x onerror=alert(1)&gt; hi <span class="user-mention" data-user-id="123456" style="cursor: pointer;">@Test User</span>',
+      );
+      expect(formatMessageContentLight('a & b <b>c</b>', mockContext)).toBe('a &amp; b &lt;b&gt;c&lt;/b&gt;');
     });
   });
 
@@ -310,12 +319,12 @@ describe('messageLightFormatting', () => {
 
     it('should handle malformed mention syntax', () => {
       const result = formatMessageContentLight('<@>', mockContext);
-      expect(result).toBe('<@>');
+      expect(result).toBe('&lt;@&gt;');
     });
 
     it('should handle incomplete mentions', () => {
       const result = formatMessageContentLight('<@123', mockContext);
-      expect(result).toBe('<@123');
+      expect(result).toBe('&lt;@123');
     });
 
     it('should handle special characters in content', () => {
@@ -425,7 +434,7 @@ describe('messageLightFormatting', () => {
         mockContext
       );
       // Won't be matched as a valid emoji
-      expect(result).toBe('<:name<b>bold</b>:123>');
+      expect(result).toBe('&lt;:name&lt;b&gt;bold&lt;/b&gt;:123&gt;');
     });
   });
 });

@@ -25,47 +25,10 @@ export const formatMessageContentLight = (
 ): string => {
   if (!content) return '(no content)';
 
-  let formatted = content;
-
-  // Replace user mentions: <@123456> or <@!123456> → <span class="user-mention">@Username</span>
-  formatted = formatted.replace(/<@!?(\d+)>/g, (_match, userId) => {
-    const user = context.userMap[userId];
-    const displayName = escapeHtml(user?.displayName || user?.userName || 'Unknown User');
-    return `<span class="user-mention" data-user-id="${userId}" style="cursor: pointer;">@${displayName}</span>`;
-  });
-
-  // Replace channel mentions: <#123456> → <span class="channel-mention">#channel-name</span>
-  formatted = formatted.replace(/<#(\d+)>/g, (_match, channelId) => {
-    const channel = context.channelMap?.[channelId];
-    const channelName = escapeHtml(channel?.name || 'unknown-channel');
-    return `<span class="channel-mention">#${channelName}</span>`;
-  });
-
-  // Replace role mentions: <@&123456> → <span class="role-mention">@RoleName</span>
-  formatted = formatted.replace(/<@&(\d+)>/g, (_match, roleId) => {
-    const role = Array.isArray(context.guildRoles)
-      ? context.guildRoles.find((r) => r.id === roleId)
-      : context.guildRoles?.[roleId];
-    const roleName = escapeHtml(role?.name || 'Unknown Role');
-    return `<span class="role-mention">@${roleName}</span>`;
-  });
-
-  // Replace @everyone and @here mentions → <span class="everyone-mention">@everyone</span>
-  formatted = formatted.replace(/@(everyone|here)/g, (_match, mentionType) => {
-    return `<span class="everyone-mention">@${mentionType}</span>`;
-  });
-
-  // Replace custom emojis: <:name:id> or <a:name:id> → actual emoji images from Discord CDN
-  formatted = formatted.replace(/<(a)?:(\w+):(\d+)>/g, (_match, animated, name, id) => {
-    const emojiName = escapeHtml(name);
-    const extension = animated ? 'gif' : 'png';
-    return `<img src="https://cdn.discordapp.com/emojis/${id}.${extension}?size=32" class="custom-emoji" alt=":${emojiName}:" title=":${emojiName}:" />`;
-  });
-
-  // Escape any remaining HTML in the content to prevent XSS
-  // We need to be careful not to escape the HTML we just added
-  // So we'll do this by escaping first, then doing replacements
-  // Actually, we already handled the user content via escapeHtml above
+  // Escape the user's text first, then resolve the mention and emoji tokens
+  // on the escaped form (2.2.7): the reply preview and the Workbench table
+  // render this as HTML, so raw tags in a message must never reach the page.
+  let formatted = resolveMentionsEscaped(escapeHtml(content), context, lightUserSpan);
 
   // Truncate if needed (plain text length, not HTML)
   // Strip HTML for length calculation
@@ -86,14 +49,18 @@ export const formatMessageContentLight = (
  * @everyone and @here, `<:name:id>`. Shared by the embed body formatter and
  * the title formatter (2.2.7).
  */
-const resolveMentionsEscaped = (escaped: string, context: HtmlFormattingContext): string => {
+const embedUserSpan = (_userId: string, displayName: string): string => `<span class="user-mention">@${displayName}</span>`;
+/** The feed's reply preview and the Workbench table keep the id on the span (the profile click reads it). */
+const lightUserSpan = (userId: string, displayName: string): string => `<span class="user-mention" data-user-id="${userId}" style="cursor: pointer;">@${displayName}</span>`;
+
+const resolveMentionsEscaped = (escaped: string, context: HtmlFormattingContext, userSpan: (userId: string, displayName: string) => string = embedUserSpan): string => {
   let formatted = escaped;
   // User mentions: <@123456> or <@!123456>
   // After HTML escape these become &lt;@123456&gt; or &lt;@!123456&gt;
   formatted = formatted.replace(/&lt;@!?(\d+)&gt;/g, (_match, userId) => {
     const user = context.userMap[userId];
     const displayName = escapeHtml(user?.displayName || user?.userName || 'Unknown User');
-    return `<span class="user-mention">@${displayName}</span>`;
+    return userSpan(userId, displayName);
   });
 
   // Channel mentions: <#123456>
