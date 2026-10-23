@@ -12,7 +12,7 @@ import {
 import type { Message, Guild, Channel } from 'discrub-core/types/discord-types';
 import type { ExportUserMap } from 'discrub-core/types/discrub-types';
 import { renderEmojiAsHtml } from 'discrub-core/export-utils';
-import { formatContentAsHtml, renderEmbedAsHtml, isBareMediaEmbed } from 'discrub-core/html-formatting-utils';
+import { formatContentAsHtml, formatMentionsAsHtml, renderEmbedAsHtml, isBareMediaEmbed } from 'discrub-core/html-formatting-utils';
 import {
   formatSystemMessage,
   SystemMessageKind,
@@ -1230,7 +1230,9 @@ class ExportService {
           const ref = msg.referenced_message;
           if (ref) {
             const refAuthor = ref.author?.username || 'Unknown';
-            const refContent = (ref.content || '').slice(0, 100) + ((ref.content || '').length > 100 ? '...' : '');
+            // One line of the original, mentions resolved like Discord's own preview (2.2.7; a
+            // `<@id>` used to show raw). The bar's CSS clips the rest, so the cut is only a bound.
+            const refContent = this.replyPreviewHtml(ref.content || '', formattingContext);
             const refId = ref.id;
             replyHtml = `
               <div class="reply-bar" data-action="jump-to-reply" data-target-id="${refId}">
@@ -1238,7 +1240,7 @@ class ExportService {
                   ? `<img src="https://cdn.discordapp.com/avatars/${ref.author.id}/${ref.author.avatar}.png?size=32" class="reply-avatar-img">`
                   : '<span class="reply-avatar-placeholder-small"></span>'}</span>
                 <span class="reply-author">${this.escapeHtml(refAuthor)}</span>
-                <span class="reply-content">${this.escapeHtml(refContent) || '<em>Click to see attachment</em>'}</span>
+                <span class="reply-content">${refContent || '<em>Click to see attachment</em>'}</span>
               </div>`;
           } else {
             replyHtml = `
@@ -3829,6 +3831,19 @@ ${buildExportFooterHtml(this.exportFooterConfig, {
   /**
    * Escape HTML special characters
    */
+  /** The reply bar's one line: newlines become spaces, the text is bounded at 300 characters without cutting a `<...>` token, and mentions resolve when a context is there. */
+  private replyPreviewHtml(content: string, formattingContext?: HtmlFormattingContext): string {
+    let text = content.replace(/\s*\n\s*/g, ' ').trim();
+    if (text.length > 300) {
+      let cut = 300;
+      const open = text.lastIndexOf('<', cut);
+      if (open >= 0 && text.indexOf('>', open) >= cut) cut = open;
+      text = text.slice(0, cut).trimEnd() + '...';
+    }
+    if (!text) return '';
+    return formattingContext ? formatMentionsAsHtml(text, formattingContext) : this.escapeHtml(text);
+  }
+
   private escapeHtml(text: string): string {
     const div = document.createElement('div');
     div.textContent = text;

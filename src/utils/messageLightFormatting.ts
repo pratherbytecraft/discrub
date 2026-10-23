@@ -82,6 +82,65 @@ export const formatMessageContentLight = (
 };
 
 /**
+ * Mentions and custom emoji on already escaped text: users, channels, roles,
+ * @everyone and @here, `<:name:id>`. Shared by the embed body formatter and
+ * the title formatter (2.2.7).
+ */
+const resolveMentionsEscaped = (escaped: string, context: HtmlFormattingContext): string => {
+  let formatted = escaped;
+  // User mentions: <@123456> or <@!123456>
+  // After HTML escape these become &lt;@123456&gt; or &lt;@!123456&gt;
+  formatted = formatted.replace(/&lt;@!?(\d+)&gt;/g, (_match, userId) => {
+    const user = context.userMap[userId];
+    const displayName = escapeHtml(user?.displayName || user?.userName || 'Unknown User');
+    return `<span class="user-mention">@${displayName}</span>`;
+  });
+
+  // Channel mentions: <#123456>
+  formatted = formatted.replace(/&lt;#(\d+)&gt;/g, (_match, channelId) => {
+    const channel = context.channelMap?.[channelId];
+    const channelName = escapeHtml(channel?.name || 'unknown-channel');
+    return `<span class="channel-mention">#${channelName}</span>`;
+  });
+
+  // Role mentions: <@&123456>
+  formatted = formatted.replace(/&lt;@&amp;(\d+)&gt;/g, (_match, roleId) => {
+    const role = Array.isArray(context.guildRoles)
+      ? context.guildRoles.find((r) => r.id === roleId)
+      : context.guildRoles?.[roleId];
+    const roleName = escapeHtml(role?.name || 'Unknown Role');
+    return `<span class="role-mention">@${roleName}</span>`;
+  });
+
+  // @everyone and @here
+  formatted = formatted.replace(/@(everyone|here)/g,
+    '<span class="everyone-mention">@$1</span>');
+
+  // Custom emojis: <:name:id> or <a:name:id>
+  // After escape: &lt;:name:id&gt; or &lt;a:name:id&gt;
+  formatted = formatted.replace(/&lt;(a)?:(\w+):(\d+)&gt;/g, (_match, animated, name, id) => {
+    const emojiName = escapeHtml(name);
+    const extension = animated ? 'gif' : 'png';
+    return `<img src="https://cdn.discordapp.com/emojis/${id}.${extension}?size=32" class="custom-emoji" alt=":${emojiName}:" title=":${emojiName}:" />`;
+  });
+
+  return formatted;
+};
+
+/**
+ * An embed's title, author name or footer text (2.2.7): mentions and custom
+ * emoji resolve, nothing else renders, the way Discord shows them. A bot's
+ * `<#id>` in a title used to show raw.
+ */
+export const formatEmbedTitle = (
+  content: string,
+  context: HtmlFormattingContext,
+): string => {
+  if (!content) return '';
+  return resolveMentionsEscaped(escapeHtml(content), context);
+};
+
+/**
  * Format embed text content (description, field values) with Discord markdown
  * and mention resolution. No truncation — embeds should display in full.
  */
@@ -122,41 +181,7 @@ export const formatEmbedContent = (
   formatted = formatted.replace(/(?<![">])(https?:\/\/[^\s<]+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #00aff4;">$1</a>');
 
-  // User mentions: <@123456> or <@!123456>
-  // After HTML escape these become &lt;@123456&gt; or &lt;@!123456&gt;
-  formatted = formatted.replace(/&lt;@!?(\d+)&gt;/g, (_match, userId) => {
-    const user = context.userMap[userId];
-    const displayName = escapeHtml(user?.displayName || user?.userName || 'Unknown User');
-    return `<span class="user-mention">@${displayName}</span>`;
-  });
-
-  // Channel mentions: <#123456>
-  formatted = formatted.replace(/&lt;#(\d+)&gt;/g, (_match, channelId) => {
-    const channel = context.channelMap?.[channelId];
-    const channelName = escapeHtml(channel?.name || 'unknown-channel');
-    return `<span class="channel-mention">#${channelName}</span>`;
-  });
-
-  // Role mentions: <@&123456>
-  formatted = formatted.replace(/&lt;@&amp;(\d+)&gt;/g, (_match, roleId) => {
-    const role = Array.isArray(context.guildRoles)
-      ? context.guildRoles.find((r) => r.id === roleId)
-      : context.guildRoles?.[roleId];
-    const roleName = escapeHtml(role?.name || 'Unknown Role');
-    return `<span class="role-mention">@${roleName}</span>`;
-  });
-
-  // @everyone and @here
-  formatted = formatted.replace(/@(everyone|here)/g,
-    '<span class="everyone-mention">@$1</span>');
-
-  // Custom emojis: <:name:id> or <a:name:id>
-  // After escape: &lt;:name:id&gt; or &lt;a:name:id&gt;
-  formatted = formatted.replace(/&lt;(a)?:(\w+):(\d+)&gt;/g, (_match, animated, name, id) => {
-    const emojiName = escapeHtml(name);
-    const extension = animated ? 'gif' : 'png';
-    return `<img src="https://cdn.discordapp.com/emojis/${id}.${extension}?size=32" class="custom-emoji" alt=":${emojiName}:" title=":${emojiName}:" />`;
-  });
+  formatted = resolveMentionsEscaped(formatted, context);
 
   // Discord timestamps <t:unix> and <t:unix:style>, same markup as the export
   // After escape: &lt;t:123:R&gt;

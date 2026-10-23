@@ -2324,6 +2324,27 @@ describe('Phase 6: Reply Chains & Thread Navigation', () => {
     });
   });
 
+  describe('Reply bar content (2.2.7)', () => {
+    const context = { userMap: { '1541': { displayName: 'Prather Bytecraft' } }, channelMap: { '345': { name: 'general' } } };
+    const replyTo = (content: string) => [
+      { ...REPLY_MESSAGES[0] },
+      { ...REPLY_MESSAGES[1], referenced_message: { ...(REPLY_MESSAGES[1] as any).referenced_message, content } },
+    ] as Message[];
+    const generate = (content: string, ctx?: typeof context) => getExportService().generateHTMLPage(replyTo(content), 'general', 1, 1, null, 'general', ctx, DEFAULT_EXPORT_CONFIG);
+
+    it('resolves mentions in the original message and keeps it on one line', () => {
+      const html = generate('Ask <@1541> in <#345>\nsecond line', context);
+      expect(html).toContain('<span class="reply-content">Ask <span class="user-mention" data-user-id="1541">@Prather Bytecraft</span> in <span class="channel-mention" data-channel-id="345"># general</span> second line</span>');
+      expect(html).not.toContain('&lt;@1541&gt;');
+    });
+
+    it('escapes the original without a context, and never cuts inside a mention', () => {
+      expect(generate('Ask <@1541> & <b>x</b>')).toContain('<span class="reply-content">Ask &lt;@1541&gt; &amp; &lt;b&gt;x&lt;/b&gt;</span>');
+      const html = generate('a'.repeat(296) + ' <@1541> tail', context);
+      expect(html).toContain('<span class="reply-content">' + 'a'.repeat(296) + '...</span>');
+    });
+  });
+
   describe('Reply & thread CSS', () => {
     it('includes reply bar styles', () => {
       const html = generateHTML(EXPORT_MESSAGES);

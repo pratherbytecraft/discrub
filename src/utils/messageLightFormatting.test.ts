@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatMessageContentLight, formatEmbedContent } from './messageLightFormatting';
+import { formatMessageContentLight, formatEmbedContent, formatEmbedTitle } from './messageLightFormatting';
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
 
 describe('messageLightFormatting', () => {
@@ -582,5 +582,28 @@ describe('formatEmbedContent underscore italics', () => {
     expect(formatEmbedContent('_Counted from the links._', ctx)).toBe('<em>Counted from the links.</em>');
     expect(formatEmbedContent('see my_var_name here', ctx)).toBe('see my_var_name here');
     expect(formatEmbedContent('a _b_ c', ctx)).toBe('a <em>b</em> c');
+  });
+});
+
+describe('formatEmbedTitle (2.2.7)', () => {
+  const ctx = {
+    userMap: { '123456': { userName: 'testuser', displayName: 'Test User' } },
+    channelMap: { '555555': { name: 'general' } },
+    guildRoles: [{ id: '777777', name: 'Admin' }],
+  } as HtmlFormattingContext;
+
+  it('resolves user, channel and role mentions and custom emoji', () => {
+    expect(formatEmbedTitle('Top posters in <#555555>', ctx)).toBe('Top posters in <span class="channel-mention">#general</span>');
+    expect(formatEmbedTitle('Stats for <@123456>', ctx)).toBe('Stats for <span class="user-mention">@Test User</span>');
+    expect(formatEmbedTitle('Hey <@&777777> <:wave:9>', ctx)).toBe('Hey <span class="role-mention">@Admin</span> <img src="https://cdn.discordapp.com/emojis/9.png?size=32" class="custom-emoji" alt=":wave:" title=":wave:" />');
+  });
+
+  it('renders no markdown and escapes HTML', () => {
+    expect(formatEmbedTitle('**bold** <b>x</b> & more', ctx)).toBe('**bold** &lt;b&gt;x&lt;/b&gt; &amp; more');
+    expect(formatEmbedTitle('', ctx)).toBe('');
+  });
+
+  it('the embed body still renders markdown around the same mentions', () => {
+    expect(formatEmbedContent('**1.** <@123456>', ctx)).toBe('<strong>1.</strong> <span class="user-mention">@Test User</span>');
   });
 });

@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import type { Message } from 'discrub-core/types/discord-types';
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
-import { formatEmbedContent } from '@/utils/messageLightFormatting';
+import { formatEmbedContent, formatEmbedTitle } from '@/utils/messageLightFormatting';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { useTranslation } from 'react-i18next';
 
@@ -131,18 +131,14 @@ const EmbedModal = ({ open, onClose, message, formattingContext }: EmbedModalPro
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                 {embed.author?.name && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    {embed.author.name}
-                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ ...mentionStyles, display: 'block', mb: 0.5 }} dangerouslySetInnerHTML={{ __html: formatEmbedTitle(embed.author.name, ctx) }} />
                 )}
                 {embed.title && (
-                  <Typography variant="h6" gutterBottom>
+                  <Typography variant="h6" gutterBottom sx={{ ...mentionStyles }}>
                     {embed.url ? (
-                      <Link href={embed.url} target="_blank" rel="noopener noreferrer">
-                        {embed.title}
-                      </Link>
+                      <Link href={embed.url} target="_blank" rel="noopener noreferrer" dangerouslySetInnerHTML={{ __html: formatEmbedTitle(embed.title, ctx) }} />
                     ) : (
-                      embed.title
+                      <span dangerouslySetInnerHTML={{ __html: formatEmbedTitle(embed.title, ctx) }} />
                     )}
                   </Typography>
                 )}
@@ -254,9 +250,7 @@ const EmbedModal = ({ open, onClose, message, formattingContext }: EmbedModalPro
                   </Typography>
                 )}
                 {embed.footer && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    {embed.footer.text}
-                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ ...mentionStyles, mt: 1, display: 'block' }} dangerouslySetInnerHTML={{ __html: formatEmbedTitle(embed.footer.text, ctx) }} />
                 )}
               </CardContent>
             </Card>

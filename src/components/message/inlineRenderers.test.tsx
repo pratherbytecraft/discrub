@@ -264,3 +264,22 @@ describe('InlineAttachments with a damaged row', () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe('InlineEmbeds title, author and mentions (2.2.7)', () => {
+  const formattingContext = { userMap: { '1541': { displayName: 'Prather Bytecraft' } }, channelMap: { '345': { name: 'general' } } } as any;
+
+  it('resolves a channel mention in the title and a user mention in the author name, without markdown', () => {
+    const embed = { type: 'rich', title: '**Top posters** in <#345>', url: 'https://example.com', author: { name: 'Stats for <@1541>' }, description: 'x' } as unknown as Embed;
+    const { container } = render(<InlineEmbeds embeds={[embed]} formattingContext={formattingContext} />);
+    const link = container.querySelector('a[href="https://example.com"]')!;
+    expect(link.innerHTML).toBe('**Top posters** in <span class="channel-mention">#general</span>');
+    expect(container.innerHTML).toContain('Stats for <span class="user-mention">@Prather Bytecraft</span>');
+    expect(container.innerHTML).not.toContain('&lt;#345&gt;');
+  });
+
+  it('escapes HTML in a title without a url', () => {
+    const embed = { type: 'rich', title: 'In <#345> <b>x</b>', description: 'x' } as unknown as Embed;
+    const { container } = render(<InlineEmbeds embeds={[embed]} formattingContext={formattingContext} />);
+    expect(container.innerHTML).toContain('In <span class="channel-mention">#general</span> &lt;b&gt;x&lt;/b&gt;');
+  });
+});

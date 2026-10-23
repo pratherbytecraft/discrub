@@ -23,7 +23,7 @@ import type { Message, Attachment, Embed, StickerItemObject, PollObject } from '
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
 import { EmbedType } from 'discrub-core/discord-enum';
 import { isBareMediaEmbed } from 'discrub-core/html-formatting-utils';
-import { formatEmbedContent } from '@/utils/messageLightFormatting';
+import { formatEmbedContent, formatEmbedTitle } from '@/utils/messageLightFormatting';
 import { reserveMediaBox } from '@/utils/reserveMediaBox';
 
 const isImageAttachment = (a: Attachment): boolean => {
@@ -333,19 +333,16 @@ export const InlineEmbeds = memo(function InlineEmbeds({
                   <Typography
                     variant="caption"
                     color="text.secondary"
-                    sx={{ display: 'block', mb: 0.5 }}
-                  >
-                    {embed.author.name}
-                  </Typography>
+                    sx={{ ...mentionStyles, display: 'block', mb: 0.5 }}
+                    dangerouslySetInnerHTML={{ __html: formatEmbedTitle(embed.author.name, ctx) }}
+                  />
                 )}
                 {embed.title && (
-                  <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 600 }}>
+                  <Typography variant="subtitle2" sx={{ ...mentionStyles, mb: 0.5, fontWeight: 600 }}>
                     {embed.url ? (
-                      <Link href={embed.url} target="_blank" rel="noopener noreferrer">
-                        {embed.title}
-                      </Link>
+                      <Link href={embed.url} target="_blank" rel="noopener noreferrer" dangerouslySetInnerHTML={{ __html: formatEmbedTitle(embed.title, ctx) }} />
                     ) : (
-                      embed.title
+                      <span dangerouslySetInnerHTML={{ __html: formatEmbedTitle(embed.title, ctx) }} />
                     )}
                   </Typography>
                 )}

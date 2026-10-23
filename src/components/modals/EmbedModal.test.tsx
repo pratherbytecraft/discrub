@@ -62,6 +62,19 @@ describe('EmbedModal', () => {
     expect(title.closest('a')).toBeNull();
   });
 
+  it('resolves mentions in the title, author name and footer text (2.2.7)', () => {
+    const msg = createMockMessage({
+      embeds: [createMockEmbed({ title: 'Top posters in <#345>', url: undefined, author: { name: 'Stats for <@1541>' }, footer: { text: 'Asked by <@1541>' } })],
+    });
+    const formattingContext = { userMap: { '1541': { displayName: 'Prather Bytecraft' } }, channelMap: { '345': { name: 'general' } } };
+    render(<EmbedModal open={true} onClose={vi.fn()} message={msg} formattingContext={formattingContext} />);
+    const html = document.body.innerHTML;
+    expect(html).toContain('Top posters in <span class="channel-mention">#general</span>');
+    expect(html).toContain('Stats for <span class="user-mention">@Prather Bytecraft</span>');
+    expect(html).toContain('Asked by <span class="user-mention">@Prather Bytecraft</span>');
+    expect(html).not.toContain('&lt;#345&gt;');
+  });
+
   it('should render embed description', () => {
     render(<EmbedModal {...defaultProps} />);
     expect(screen.getByText('Test description')).toBeInTheDocument();

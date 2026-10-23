@@ -556,10 +556,18 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
       expectStatusEntry('Export: Completed general');
     });
 
-    it('HTML export renders markdown and mentions inside a bot embed the way Discord does', () => {
+    it('HTML export renders markdown and mentions inside a bot embed the way Discord does, mentions in its title, and mentions in a reply preview', () => {
       cy.task('downloads:clean');
 
       openChannelWithMessages([
+        // 2.2.7: a reply whose original mentions someone; the reply bar resolves it.
+        makeMessage({
+          id: '900000000000000112',
+          content: 'replying',
+          type: 19,
+          message_reference: { message_id: '900000000000000110', channel_id: '801000000000000001' },
+          referenced_message: makeMessage({ id: '900000000000000110', content: 'Ask <@111222333444555666> about it\nsecond line' }),
+        }),
         makeMessage({
           id: '900000000000000111',
           content: '',
@@ -567,7 +575,7 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
             {
               type: 'rich',
               color: 7139930,
-              title: 'Most reactions given',
+              title: '**Most reactions** given in <#801000000000000001>',
               description: '<#801000000000000001> · Sep 1 to Sep 30\n\n**1.** <@111222333444555666> · **5**\n-# 🎉 2 · <t:1788287560:R>',
               fields: [{ name: '__Scanned__', value: '*5 reactions* on 3 messages' }],
             },
@@ -594,6 +602,10 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
           expect(description).to.not.contain('-#');
           expect(page).to.contain('<div class="embed-field-name"><u>Scanned</u></div>');
           expect(page).to.contain('<div class="embed-field-value"><em>5 reactions</em> on 3 messages</div>');
+          // 2.2.7: the title resolves the channel mention and renders no markdown.
+          expect(page).to.contain('<div class="embed-title">**Most reactions** given in <span class="channel-mention" data-channel-id="801000000000000001"># general</span></div>');
+          // 2.2.7: the reply bar resolves the user mention and stays on one line.
+          expect(page).to.contain('<span class="reply-content">Ask <span class="user-mention" data-user-id="111222333444555666">@Discrub Tester</span> about it second line</span>');
         });
       });
       expectStatusEntry('Export: Completed general');
