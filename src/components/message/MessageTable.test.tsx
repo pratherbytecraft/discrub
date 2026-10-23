@@ -33,6 +33,23 @@ describe('<MessageTable />', () => {
     expect(store.getState().message.selectedIds).toHaveLength(0);
   });
 
+  it('resolves mentions and custom emoji in the Message cell and keeps it to one line (wb-mention-cell)', () => {
+    const messages = [
+      createMockMessage({ id: 'm1', content: '<@1541>' }),
+      createMockMessage({ id: 'm2', content: 'see <#345> and <@&777>\nsecond line <:wave:9>' }),
+      createMockMessage({ id: 'm3', content: '<b>x</b> & y' }),
+    ];
+    const state = createAuthenticatedState();
+    state.message = messageStateWith(state.message, messages);
+    const formattingContext = { userMap: { '1541': { displayName: 'Prather Bytecraft' } }, channelMap: { '345': { name: 'general' } }, guildRoles: [{ id: '777', name: 'Admin' }] } as never;
+    renderWithProviders(<MessageTable formattingContext={formattingContext} />, { preloadedState: state });
+    const cells = screen.getAllByTestId('table-content').map((el) => el.innerHTML);
+    expect(cells[0]).toBe('<span class="user-mention" data-user-id="1541" style="cursor: pointer;">@Prather Bytecraft</span>');
+    expect(cells[1]).toBe('see <span class="channel-mention">#general</span> and <span class="role-mention">@Admin</span> second line <img src="https://cdn.discordapp.com/emojis/9.png?size=32" class="custom-emoji" alt=":wave:" title=":wave:">');
+    expect(cells[2]).toBe('&lt;b&gt;x&lt;/b&gt; &amp; y');
+    expect(screen.queryByTestId('table-standin')).toBeNull();
+  });
+
   it('a message with no text says what it holds: the embed title, a plain embed, or a sticker', () => {
     const messages = [
       createMockMessage({ id: 'e1', content: '', embeds: [{ title: 'Most attachments shared' }] as never }),

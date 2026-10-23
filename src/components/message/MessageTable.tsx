@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { SortDirection } from 'discrub-core/common-enum';
 import type { Message } from 'discrub-core/types/discord-types';
+import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
+import { formatMessageContentLight } from '@/utils/messageLightFormatting';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { formatSystemMessage } from 'discrub-core/system-messages';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -32,7 +34,10 @@ const cellSx = { px: 1, display: 'flex', alignItems: 'center', minWidth: 0, heig
  * and writes the same store the chunked feed does, so selection, sort and
  * every dialog behave the same in both presenters.
  */
-const MessageTable = () => {
+/** No context resolves nothing; the Workbench shell passes the feed's. */
+const EMPTY_CONTEXT: HtmlFormattingContext = { userMap: {} };
+
+const MessageTable = ({ formattingContext = EMPTY_CONTEXT }: { formattingContext?: HtmlFormattingContext } = {}) => {
   perfCount('MessageTable');
   const { t } = useTranslation();
   const guildName = useAppSelector(selectSelectedGuild)?.name;
@@ -129,6 +134,7 @@ const MessageTable = () => {
                 onToggle={toggle}
                 grid={grid}
                 t={t}
+                formattingContext={formattingContext}
               />
             );
           })}
@@ -145,14 +151,25 @@ const MessageTable = () => {
  * message, selection or position changes.
  */
 const MessageTableRow = memo(function MessageTableRow({
-  message: m, isSelected, top, height, stamp, standIn, onToggle, grid, t,
+  message: m, isSelected, top, height, stamp, standIn, onToggle, grid, t, formattingContext,
 }: {
   message: Message; isSelected: boolean; top: number; height: number;
   stamp: (ts: string) => string; standIn: (m: Message, files: number) => string; onToggle: (id: string) => void; grid: string; t: TFunction;
+  formattingContext: HtmlFormattingContext;
 }) {
   const theme = useTheme();
   const author = m.author?.global_name || m.author?.username || '';
   const files = m.attachments?.length ?? 0;
+  // The Message cell is one line of plain text with mentions and custom emoji resolved (wb-mention-cell,
+  // 2026-10-27: a message that was only a <@id> showed the raw tag). Newlines fold into spaces first.
+  const contentHtml = useMemo(
+    () => (m.content ? formatMessageContentLight(m.content.replace(/\s*\n\s*/g, ' '), formattingContext, 200) : ''),
+    [m.content, formattingContext],
+  );
+  const mentionSx = {
+    '& .user-mention, & .channel-mention, & .role-mention, & .everyone-mention': { color: theme.palette.primary.main, backgroundColor: alpha(theme.palette.primary.main, 0.15), borderRadius: '3px', padding: '0 2px' },
+    '& .custom-emoji': { height: 14, verticalAlign: 'middle' },
+  };
   return (
     <Box
       role="row"
@@ -174,7 +191,11 @@ const MessageTableRow = memo(function MessageTableRow({
         <Box component="img" src={m.author?.avatar ? `https://cdn.discordapp.com/avatars/${m.author.id}/${m.author.avatar}.png?size=32` : undefined} alt="" sx={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0, backgroundColor: 'action.hover' }} />
         <Typography variant="body2" noWrap sx={{ fontSize: 'inherit', fontWeight: 600 }}>{author}</Typography>
       </Box>
-      <Box sx={cellSx}><Typography variant="body2" noWrap data-testid={m.content ? undefined : 'table-standin'} sx={{ fontSize: 'inherit', ...(m.content ? {} : { color: 'text.secondary', fontStyle: 'italic' }) }}>{m.content || standIn(m, files)}</Typography></Box>
+      <Box sx={cellSx}>
+        {m.content
+          ? <Typography variant="body2" noWrap data-testid="table-content" sx={{ fontSize: 'inherit', ...mentionSx }} dangerouslySetInnerHTML={{ __html: contentHtml }} />
+          : <Typography variant="body2" noWrap data-testid="table-standin" sx={{ fontSize: 'inherit', color: 'text.secondary', fontStyle: 'italic' }}>{standIn(m, files)}</Typography>}
+      </Box>
       <Box sx={{ ...cellSx, color: 'text.secondary', gap: 0.5 }}>{files > 0 && <><AttachmentIcon sx={{ fontSize: 14 }} />{files}</>}</Box>
       <Box sx={{ ...cellSx, gap: 0.5, overflow: 'hidden' }}>{(m.reactions ?? []).slice(0, 3).map((r, i) => <Box key={i} component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>{r.emoji?.name} {r.count}</Box>)}</Box>
       <Box sx={{ ...cellSx, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}><Typography variant="body2" noWrap sx={{ fontSize: 'inherit' }}>{stamp(m.timestamp)}</Typography></Box>

@@ -1329,7 +1329,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
 
       {!isForumChannel && !isLoading && !error && messages.length > 0 && (
         <Box data-tour="message-table" data-testid="message-feed" sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
-          {variant === 'workbench' ? <MessageTable /> : (
+          {variant === 'workbench' ? <MessageTable formattingContext={formattingContext} /> : (
           <MessageFeed
             formattingContext={formattingContext}
             fullUserMap={fullUserMap}
