@@ -38,6 +38,7 @@ import TourButton from '@components/welcome/TourButton';
 import MultiSelectControls from './MultiSelectControls';
 import { useLoadGuilds } from '@/hooks/useLoadGuilds';
 import BulkPurgeDialog from '@containers/PurgeView/BulkPurgeDialog';
+import BulkEditDialog from '@containers/PurgeView/BulkEditDialog';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
 import { nameIncludes } from '@utils/nameMatch';
@@ -55,6 +56,7 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
   perfCount('ServerList');
   const dispatch = useAppDispatch();
   const serverPurgeResume = useBulkResume('bulkPurge', 'servers', null);
+  const serverEditResume = useBulkResume('bulkEdit', 'servers', null);
   const { t } = useTranslation();
   const guilds = useAppSelector(selectGuilds);
   const selectedGuild = useAppSelector(selectSelectedGuild);
@@ -65,6 +67,8 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   // #255 — multi-server purge dialog
   const [serverPurgeOpen, setServerPurgeOpen] = useState(false);
+  // 2.2.7 (GitHub 16): multi-Server edit dialog
+  const [serverEditOpen, setServerEditOpen] = useState(false);
 
   // Filter guilds by name
   const filteredGuilds = useMemo(() => {
@@ -185,10 +189,19 @@ const ServerList = ({ filterText = '' }: ServerListProps) => {
               : selectAllGuilds(filteredGuilds),
           )
         }
+        onEdit={() => setServerEditOpen(true)}
         onPurge={() => setServerPurgeOpen(true)}
         onCopyNames={handleCopySelectedNames}
         noun={t('nav.nounServers')}
-        resume={{ purge: serverPurgeResume !== null }}
+        resume={{ purge: serverPurgeResume !== null, edit: serverEditResume !== null }}
+      />
+
+      <BulkEditDialog
+        open={serverEditOpen}
+        onClose={() => setServerEditOpen(false)}
+        channels={[]}
+        guilds={selectedGuilds}
+        mode="servers"
       />
 
       <BulkPurgeDialog

@@ -9,7 +9,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import type { AppDispatch } from '@/app/store';
 import type { Channel, Guild } from 'discrub-core/types/discord-types';
 import { createMockChannel, createMockGuild } from '@/test/fixtures';
-import messageReducer, { bulkEditChannels, bulkEditChannelStarted } from '@features/message/messageSlice';
+import messageReducer, { bulkEditChannels, bulkEditChannelStarted, bulkEditGuilds, bulkEditServerStarted } from '@features/message/messageSlice';
 import workspaceReducer, { actionRecorded, selectHasUnfinishedWork, selectUnfinishedBulk, setCurrentWorkspace, initializeWorkspaces } from './workspaceSlice';
 import { workspacePersistenceMiddleware, flushPendingRecords, setSuspendingForSwitch } from './workspacePersistenceMiddleware';
 import channelReducer, { setSelectedChannel } from '@features/channel/channelSlice';
@@ -239,6 +239,22 @@ describe('Bulk Export and Bulk Edit records', () => {
     const record = await readBulkRecord(store.getState() as never);
     expect(record).toMatchObject({ kind: 'bulkEdit', done: ['c1', 'c2'], inHand: 'c3' });
     expect((record?.settings as { content: string }).content).toBe('redacted');
+  });
+
+  it('a multi-Server edit follows the server in hand and ignores the channel steps inside it (2.2.7)', async () => {
+    const store = await openDefault();
+    const guilds: Guild[] = [createMockGuild({ id: 'g1' }), createMockGuild({ id: 'g2' })];
+    const arg = { guilds, content: 'redacted', searchCriteria: null };
+    store.dispatch(bulkEditGuilds.pending('e1', arg));
+    store.dispatch(bulkEditServerStarted({ index: 1, total: 2, name: 'two' }));
+    store.dispatch(bulkEditChannelStarted({ index: 0, total: 3 }));
+    await flush(store);
+    const record = await readBulkRecord(store.getState() as never);
+    expect(record).toMatchObject({ kind: 'bulkEdit', mode: 'servers', guildId: null, queue: ['g1', 'g2'], done: ['g1'], inHand: 'g2' });
+    expect((record?.settings as { content: string }).content).toBe('redacted');
+    store.dispatch(bulkEditGuilds.fulfilled({ edited: 0, skipped: 0, failed: 0 }, 'e1', arg));
+    await flush(store);
+    expect(await readBulkRecord(store.getState() as never)).toBeNull();
   });
 });
 

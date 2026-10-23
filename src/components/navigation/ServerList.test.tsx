@@ -273,6 +273,24 @@ describe('ServerList', () => {
       expect(screen.getByText(/Alpha Server, Gamma Server/)).toBeInTheDocument();
     });
 
+    it('renders Edit in server multi-select and opens the servers edit dialog (2.2.7, GitHub 16)', () => {
+      renderWithProviders(<ServerList />, {
+        preloadedState: createBaseState({
+          auth: { token: 'test-token', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+          guild: { ...baseGuildState, selectedGuilds: [guilds[0], guilds[2]] },
+        }),
+      });
+      fireEvent.click(screen.getByLabelText('Toggle multi-select'));
+      expect(screen.getByLabelText('Edit selected servers')).toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('multi-select-edit'));
+      expect(screen.getByText('Edit Servers')).toBeInTheDocument();
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      expect(screen.getByText(/Alpha Server, Gamma Server/)).toBeInTheDocument();
+      expect(screen.getByText(/Server edits target your own messages/)).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-edit-confirm')).toHaveTextContent('Edit 2 servers');
+      expect(screen.getByTestId('bulk-edit-confirm')).toBeDisabled();
+    });
+
     it('copies only currently-selected names and dispatches a toast', () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, { clipboard: { writeText } });

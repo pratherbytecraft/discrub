@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import type { Theme } from '@mui/material/styles';
 import { Edit as EditIcon } from '@mui/icons-material';
-import type { Channel } from 'discrub-core/types/discord-types';
+import type { Channel, Guild } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { useAppDispatch, useAppSelector, useAppStore } from '@/app/hooks';
 import { useBulkResume } from '@/hooks/useResume';
@@ -26,7 +26,7 @@ import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
-import { bulkEditChannels } from '@features/message/messageSlice';
+import { bulkEditChannels, bulkEditGuilds } from '@features/message/messageSlice';
 import { countActiveFilters } from 'discrub-core/filtering';
 import FilterModal from '@components/search/FilterModal';
 import BulkFilterButton from '@components/search/BulkFilterButton';
@@ -37,7 +37,13 @@ interface BulkEditDialogProps {
   open: boolean;
   onClose: () => void;
   channels: Channel[];
-  mode: 'channels' | 'dms';
+  /**
+   * 'channels' = text channels of one server, 'dms' = conversations,
+   * 'servers' = whole servers (2.2.7, GitHub 16): every readable channel in
+   * each selected server, the servers come from `guilds`.
+   */
+  mode: 'channels' | 'dms' | 'servers';
+  guilds?: Guild[];
   guildId?: string | null;
 }
 
@@ -51,7 +57,7 @@ interface BulkEditDialogProps {
  * author target is locked to self — the optional FilterModal only narrows by
  * date / content, never author. Mirrors BulkPurgeDialog's shell.
  */
-const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guildId }: BulkEditDialogProps) => {
+const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guilds: selectedGuilds = [], guildId }: BulkEditDialogProps) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -73,10 +79,10 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
   const store = useAppStore();
   const bulkResume = useBulkResume('bulkEdit', mode, guildId);
   const resumable = bulkResume !== null;
-  const [resumeChannels, setResumeChannels] = useState<Channel[] | null>(null);
+  const [resumeTargets, setResumeTargets] = useState<{ channels: Channel[]; guilds: Guild[] } | null>(null);
   useEffect(() => {
     if (!open || !resumable) {
-      setResumeChannels(null);
+      setResumeTargets(null);
       return;
     }
     let live = true;
@@ -87,24 +93,31 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
       setFilterCriteria(saved?.searchCriteria ?? null);
       const state = store.getState();
       const remaining = record.queue.filter((id) => !record.done.includes(id));
-      setResumeChannels(resolveQueue(remaining, [state.channel.channels, state.channel.forumThreads, state.dm.dms]));
+      setResumeTargets(
+        record.mode === 'servers'
+          ? { channels: [], guilds: resolveQueue(remaining, [state.guild.guilds]) }
+          : { channels: resolveQueue(remaining, [state.channel.channels, state.channel.forumThreads, state.dm.dms]), guilds: [] },
+      );
     });
     return () => {
       live = false;
     };
   }, [open, resumable, store]);
-  const resuming = resumeChannels !== null;
-  const channels = resumeChannels ?? selectedChannels;
+  const resuming = resumeTargets !== null;
+  const channels = resumeTargets ? resumeTargets.channels : selectedChannels;
+  const guilds = resumeTargets ? resumeTargets.guilds : selectedGuilds;
   const handleStartOver = () => {
     void dispatch(discardBulkRecord());
-    setResumeChannels(null);
+    setResumeTargets(null);
     setContent('');
     setFilterCriteria(null);
   };
 
   const isDmMode = mode === 'dms';
-  const scopeContext = isDmMode ? 'dm' : 'channel';
-  const count = channels.length;
+  const isServerMode = mode === 'servers';
+  const scopeContext = isServerMode ? 'server' : isDmMode ? 'dm' : 'channel';
+  // Server mode counts servers; the other modes count channels.
+  const count = isServerMode ? guilds.length : channels.length;
   const filterCount = filterCriteria ? countActiveFilters(filterCriteria) : 0;
 
   const openFilterModal = () => {
@@ -113,12 +126,16 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
   };
 
   const handleConfirm = () => {
-    dispatch(bulkEditChannels({
-      channels,
-      content,
-      guildId,
-      searchCriteria: filterCriteria,
-    }));
+    if (isServerMode) {
+      dispatch(bulkEditGuilds({ guilds, content, searchCriteria: filterCriteria }));
+    } else {
+      dispatch(bulkEditChannels({
+        channels,
+        content,
+        guildId,
+        searchCriteria: filterCriteria,
+      }));
+    }
     onClose();
   };
 
@@ -127,7 +144,7 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pr: 5 }}>
-        {isDmMode ? t('bulkEdit.titleDms') : t('bulkEdit.titleChannels')}
+        {isServerMode ? t('bulkEdit.titleServers') : isDmMode ? t('bulkEdit.titleDms') : t('bulkEdit.titleChannels')}
         <Chip
           label={t('bulkEdit.selectedCount', { count })}
           size="small"
@@ -149,10 +166,10 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
             </Typography>
           )}
           {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="bulk-edit-sign-in-again" />}
-          <SelectedChannelsPill channels={channels} mode={isDmMode ? 'dms' : 'channels'} />
+          <SelectedChannelsPill channels={channels} guilds={guilds} mode={isServerMode ? 'servers' : isDmMode ? 'dms' : 'channels'} />
 
           <Alert severity="info" variant="outlined" sx={{ py: 0.5 }}>
-            {t('bulkEdit.ownOnly')}
+            {isServerMode ? t('bulkEdit.ownOnlyServers') : t('bulkEdit.ownOnly')}
           </Alert>
 
           <TextField
@@ -185,7 +202,7 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
 
           {/* #206 wake lock + #247 worker pacing: same caveat wording as the purge dialog. */}
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            {t('bulkEdit.longRun')}
+            {isServerMode ? t('bulkEdit.longRunServer') : t('bulkEdit.longRun')}
           </Typography>
         </Box>
       </DialogContent>

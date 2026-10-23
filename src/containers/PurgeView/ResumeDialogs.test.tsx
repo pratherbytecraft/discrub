@@ -17,7 +17,8 @@ import BulkEditDialog from './BulkEditDialog';
 import BulkExportDialog from '@containers/ExportView/BulkExportDialog';
 import ExportDialog from '@containers/ExportView/ExportDialog';
 import { bulkPurgeChannels } from '@features/purge/purgeSlice';
-import { bulkEditChannels } from '@features/message/messageSlice';
+import { bulkEditChannels, bulkEditGuilds } from '@features/message/messageSlice';
+import { createMockGuild } from '@/test/fixtures';
 import { buildConfigSnapshot, bulkExportChannels, exportMessages } from '@features/export/exportSlice';
 import { initialExportState } from '@features/export/exportTypes';
 import { initialWorkspaceState, type UnfinishedBulk } from '@features/workspace/workspaceSlice';
@@ -39,7 +40,7 @@ vi.mock('@features/purge/purgeSlice', async () => {
 });
 vi.mock('@features/message/messageSlice', async () => {
   const actual = await vi.importActual('@features/message/messageSlice');
-  return { ...actual, bulkEditChannels: vi.fn(() => ({ type: 'message/bulkEditChannels/mock' })) };
+  return { ...actual, bulkEditChannels: vi.fn(() => ({ type: 'message/bulkEditChannels/mock' })), bulkEditGuilds: vi.fn(() => ({ type: 'message/bulkEditGuilds/mock' })) };
 });
 vi.mock('@features/export/exportSlice', async () => {
   const actual = await vi.importActual('@features/export/exportSlice');
@@ -151,6 +152,22 @@ describe('Bulk Edit resume', () => {
     const arg = vi.mocked(bulkEditChannels).mock.calls[0][0];
     expect(arg.content).toBe('redacted');
     expect(arg.channels.map((c) => c.id)).toEqual(['c2', 'c3']);
+  });
+
+  it('a multi-Server edit brings back the text and the servers not yet finished (2.2.7)', async () => {
+    await saveBulk({ kind: 'bulkEdit', mode: 'servers', guildId: null, queue: ['g1', 'g2', 'g3'], done: ['g1'], inHand: 'g2', settings: { content: 'redacted', searchCriteria: null } });
+    const guilds = [createMockGuild({ id: 'g1', name: 'Alpha' }), createMockGuild({ id: 'g2', name: 'Beta' }), createMockGuild({ id: 'g3', name: 'Gamma' })];
+    renderWithProviders(<BulkEditDialog open onClose={vi.fn()} channels={[]} guilds={[]} mode="servers" />, {
+      preloadedState: stateWith({ kind: 'bulkEdit', mode: 'servers', guildId: null, total: 3, doneCount: 1, remaining: 2 }, { guild: { ...base.guild, guilds } }),
+    });
+    expect(await screen.findByTestId('bulk-edit-resume-note')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByDisplayValue('redacted')).toBeInTheDocument());
+    expect(screen.getByText(/Beta, Gamma/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('bulk-edit-confirm'));
+    const arg = vi.mocked(bulkEditGuilds).mock.calls[0][0];
+    expect(arg.content).toBe('redacted');
+    expect(arg.guilds.map((g) => g.id)).toEqual(['g2', 'g3']);
+    expect(vi.mocked(bulkEditChannels)).not.toHaveBeenCalled();
   });
 });
 

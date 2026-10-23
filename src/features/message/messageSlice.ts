@@ -1,5 +1,5 @@
-import { createAction, createSlice, createAsyncThunk, createSelector, isDraft, original, PayloadAction } from '@reduxjs/toolkit';
-import type { Message, Attachment, User, Channel } from 'discrub-core/types/discord-types';
+import { createAction, createSlice, createAsyncThunk, createSelector, isDraft, original, PayloadAction, type ThunkDispatch, type UnknownAction } from '@reduxjs/toolkit';
+import type { Message, Attachment, User, Channel, Guild } from 'discrub-core/types/discord-types';
 import type { RestoredConversation } from './messagePersistence';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { ReactionType, IsPinnedType } from 'discrub-core/discord-enum';
@@ -52,6 +52,8 @@ import { replyEnrichmentService } from '@services/replyEnrichmentService';
 import { mergeCachedUserMap, addFailedUserId, saveCacheToLocalStorage } from '@features/cache/cacheSlice';
 import { waitWhilePaused, checkCancelled, cancellableDelay, withTransientRetry, isTransientApiFailure, transientRetryDelayMs, retryBaseDelayMs, describeAnswer, describeFailure, isSignInExpired, throwIfSignInExpired, isSignInExpiredError, retryMaxFor } from '@/utils/operationLoopUtils';
 import { addStatusEntry, showOperationTip, showToast } from '@features/status/statusSlice';
+import { isMessageChannel } from '@utils/channelTypeUtils';
+import { canAccessChannel } from '@/utils/permissionUtils';
 import { getEmojiKey } from '@/utils/emojiUtils';
 import { applyRefineCriteria, criteriaIsActive, type RefineCriteria } from './messageFiltering';
 import { applyRefineToRows } from './messageRows';
@@ -466,6 +468,149 @@ export const editMessages = createAsyncThunk(
  */
 /** 2.2.5 WP4b: Bulk Edit has no progress state; this tells the workspace record which channel is in hand. */
 export const bulkEditChannelStarted = createAction<{ index: number; total: number }>('message/bulkEditChannelStarted');
+/** 2.2.7: a multi-Server edit tells the workspace record which server is in hand. */
+export const bulkEditServerStarted = createAction<{ index: number; total: number; name: string }>('message/bulkEditServerStarted');
+
+interface BulkEditStats { edited: number; skipped: number; failed: number }
+interface BulkEditRun {
+  stats: BulkEditStats;
+  cancelled: boolean;
+  /** The channel index the sign in expired on, or null. */
+  signInExpiredAt: number | null;
+}
+
+/**
+ * The per-channel edit walk (2.2.7: the former body of `bulkEditChannels`,
+ * shared with `bulkEditGuilds`). For each channel it streams the current
+ * user's own messages through the search iterator and PATCHes each to
+ * `content`, pause and cancel aware, paced by the delete delay. Status
+ * lines per channel; the caller writes the summary.
+ */
+const executeBulkEdit = async (
+  { channels, content, guildId, searchCriteria }: { channels: Channel[]; content: string; guildId?: string | null; searchCriteria?: SearchCriteria | null },
+  { dispatch, getState }: { dispatch: ThunkDispatch<RootState, unknown, UnknownAction>; getState: () => RootState },
+): Promise<BulkEditRun> => {
+  const initialState = getState();
+  const token = selectAuthToken(initialState) as string;
+  const currentUserId = selectCurrentUser(initialState)?.id as string;
+  const deleteDelay = selectDeleteDelay(initialState);
+  const delayModifier = selectDelayModifier(initialState);
+  const isDm = !guildId;
+  const stats: BulkEditStats = { edited: 0, skipped: 0, failed: 0 };
+  let signInExpiredAt: number | null = null;
+  let cancelled = false;
+
+  for (let i = 0; i < channels.length; i++) {
+    await waitWhilePaused(getState);
+    if (checkCancelled(getState)) { cancelled = true; break; }
+
+    const channel = channels[i];
+    const channelName = channel.name || channel.id;
+    dispatch(bulkEditChannelStarted({ index: i, total: channels.length }));
+
+    dispatch(addStatusEntry({
+      level: 'info',
+      message: t('status.msg.bulkEditStartChannel', { name: `${isDm ? '' : '#'}${channelName}`, index: i + 1, total: channels.length }),
+    }));
+
+    // Only the current user's own messages can be edited (Discord 403s
+    // on others'). Force the author filter to the current user; allow an
+    // optional date-range/content scope to flow through from the dialog.
+    const criteria: SearchCriteria = {
+      searchBeforeDate: searchCriteria?.searchBeforeDate ?? null,
+      searchAfterDate: searchCriteria?.searchAfterDate ?? null,
+      searchMessageContents: searchCriteria?.searchMessageContents ?? [],
+      selectedHasTypes: searchCriteria?.selectedHasTypes ?? [],
+      userIds: [currentUserId],
+      mentionIds: searchCriteria?.mentionIds ?? [],
+      channelIds: [],
+      isPinned: searchCriteria?.isPinned ?? IsPinnedType.UNSET,
+    };
+
+    let channelEdited = 0;
+
+    try {
+      for await (const page of iterateSearchMessagesRedux({
+        token,
+        channelId: channel.id,
+        guildId: guildId ?? null,
+        criteria,
+        getState,
+        dispatch,
+      })) {
+        await waitWhilePaused(getState);
+        if (checkCancelled(getState)) { cancelled = true; break; }
+
+        for (const message of page.messages) {
+          await waitWhilePaused(getState);
+          if (checkCancelled(getState)) { cancelled = true; break; }
+
+          // Defensive: the search is author-scoped, but never attempt to
+          // edit a message that isn't the current user's.
+          if (message.author?.id && message.author.id !== currentUserId) {
+            stats.skipped++;
+            continue;
+          }
+          // A message that already carries the text was edited by the
+          // run this one resumes (the record is per channel, so the
+          // channel in hand starts over); editing it again would only
+          // spend a request. The search answers the current content.
+          if (message.content === content) {
+            stats.skipped++;
+            continue;
+          }
+
+          try {
+            // Call the service directly rather than dispatching the
+            // editMessage thunk: that thunk toggles state.isEditing off on
+            // every fulfilled, which would flicker the operation indicator
+            // and pause/cancel controls off between messages. bulkEdit holds
+            // isEditing stable across the whole run via its own reducer cases.
+            const response = await getDiscordService().editMessage(
+              token,
+              message.id,
+              { content },
+              message.channel_id ?? channel.id,
+            );
+            if (response.success) {
+              stats.edited++;
+              channelEdited++;
+            } else {
+              throwIfSignInExpired(response);
+              stats.failed++;
+              console.error(`Bulk edit: failed to edit ${message.id} (HTTP ${response.status ?? 'unknown'})`);
+            }
+          } catch (error) {
+            if (isSignInExpiredError(error)) throw error;
+            stats.failed++;
+            console.error(`Bulk edit: failed to edit ${message.id}:`, error);
+          }
+
+          const delayCalc = calculateRandomDelay(deleteDelay, delayModifier);
+          const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState);
+          if (wasCancelled) { cancelled = true; break; }
+        }
+
+        if (cancelled) break;
+      }
+    } catch (error) {
+      if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
+      dispatch(addStatusEntry({
+        level: 'error',
+        message: t('status.msg.bulkEditFailedChannel', { name: `${isDm ? '' : '#'}${channelName}`, error: error instanceof Error ? error.message : t('status.msg.failed') }),
+      }));
+    }
+
+    dispatch(addStatusEntry({
+      level: 'success',
+      message: t('status.msg.bulkEditCompletedChannel', { name: `${isDm ? '' : '#'}${channelName}`, count: channelEdited }),
+    }));
+
+    if (cancelled) break;
+  }
+
+  return { stats, cancelled, signInExpiredAt };
+};
 
 export const bulkEditChannels = createAsyncThunk<
   { edited: number; skipped: number; failed: number; signInExpired?: true },
@@ -490,15 +635,8 @@ export const bulkEditChannels = createAsyncThunk<
 
     const currentUser = selectCurrentUser(initialState);
     if (!currentUser?.id) return rejectWithValue('No current user');
-    const currentUserId = currentUser.id;
-
-    const deleteDelay = selectDeleteDelay(initialState);
-    const delayModifier = selectDelayModifier(initialState);
 
     const isDm = !guildId;
-    const stats = { edited: 0, skipped: 0, failed: 0 };
-    // Row 134: the channel the sign in expired on; the run stops there and keeps its record.
-    let signInExpiredAt: number | null = null;
 
     dispatch(addStatusEntry({
       level: 'info',
@@ -506,120 +644,16 @@ export const bulkEditChannels = createAsyncThunk<
     }));
 
     try {
-      for (let i = 0; i < channels.length; i++) {
-        await waitWhilePaused(getState as () => RootState);
-        if (checkCancelled(getState as () => RootState)) break;
+      const run = await executeBulkEdit(
+        { channels, content, guildId, searchCriteria },
+        { dispatch, getState: getState as () => RootState },
+      );
+      const { stats } = run;
 
-        const channel = channels[i];
-        const channelName = channel.name || channel.id;
-        dispatch(bulkEditChannelStarted({ index: i, total: channels.length }));
-
-        dispatch(addStatusEntry({
-          level: 'info',
-          message: t('status.msg.bulkEditStartChannel', { name: `${isDm ? '' : '#'}${channelName}`, index: i + 1, total: channels.length }),
-        }));
-
-        // Only the current user's own messages can be edited (Discord 403s
-        // on others'). Force the author filter to the current user; allow an
-        // optional date-range/content scope to flow through from the dialog.
-        const criteria: SearchCriteria = {
-          searchBeforeDate: searchCriteria?.searchBeforeDate ?? null,
-          searchAfterDate: searchCriteria?.searchAfterDate ?? null,
-          searchMessageContents: searchCriteria?.searchMessageContents ?? [],
-          selectedHasTypes: searchCriteria?.selectedHasTypes ?? [],
-          userIds: [currentUserId],
-          mentionIds: searchCriteria?.mentionIds ?? [],
-          channelIds: [],
-          isPinned: searchCriteria?.isPinned ?? IsPinnedType.UNSET,
-        };
-
-        let channelEdited = 0;
-        let cancelled = false;
-
-        try {
-          for await (const page of iterateSearchMessagesRedux({
-            token,
-            channelId: channel.id,
-            guildId: guildId ?? null,
-            criteria,
-            getState: getState as () => RootState,
-            dispatch,
-          })) {
-            await waitWhilePaused(getState as () => RootState);
-            if (checkCancelled(getState as () => RootState)) { cancelled = true; break; }
-
-            for (const message of page.messages) {
-              await waitWhilePaused(getState as () => RootState);
-              if (checkCancelled(getState as () => RootState)) { cancelled = true; break; }
-
-              // Defensive: the search is author-scoped, but never attempt to
-              // edit a message that isn't the current user's.
-              if (message.author?.id && message.author.id !== currentUserId) {
-                stats.skipped++;
-                continue;
-              }
-              // A message that already carries the text was edited by the
-              // run this one resumes (the record is per channel, so the
-              // channel in hand starts over); editing it again would only
-              // spend a request. The search answers the current content.
-              if (message.content === content) {
-                stats.skipped++;
-                continue;
-              }
-
-              try {
-                // Call the service directly rather than dispatching the
-                // editMessage thunk: that thunk toggles state.isEditing off on
-                // every fulfilled, which would flicker the operation indicator
-                // and pause/cancel controls off between messages. bulkEdit holds
-                // isEditing stable across the whole run via its own reducer cases.
-                const response = await getDiscordService().editMessage(
-                  token,
-                  message.id,
-                  { content },
-                  message.channel_id ?? channel.id,
-                );
-                if (response.success) {
-                  stats.edited++;
-                  channelEdited++;
-                } else {
-                  throwIfSignInExpired(response);
-                  stats.failed++;
-                  console.error(`Bulk edit: failed to edit ${message.id} (HTTP ${response.status ?? 'unknown'})`);
-                }
-              } catch (error) {
-                if (isSignInExpiredError(error)) throw error;
-                stats.failed++;
-                console.error(`Bulk edit: failed to edit ${message.id}:`, error);
-              }
-
-              const delayCalc = calculateRandomDelay(deleteDelay, delayModifier);
-              const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState as () => RootState);
-              if (wasCancelled) { cancelled = true; break; }
-            }
-
-            if (cancelled) break;
-          }
-        } catch (error) {
-          if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
-          dispatch(addStatusEntry({
-            level: 'error',
-            message: t('status.msg.bulkEditFailedChannel', { name: `${isDm ? '' : '#'}${channelName}`, error: error instanceof Error ? error.message : t('status.msg.failed') }),
-          }));
-        }
-
-        dispatch(addStatusEntry({
-          level: 'success',
-          message: t('status.msg.bulkEditCompletedChannel', { name: `${isDm ? '' : '#'}${channelName}`, count: channelEdited }),
-        }));
-
-        if (cancelled) break;
-      }
-
-      if (signInExpiredAt !== null) {
+      if (run.signInExpiredAt !== null) {
         dispatch(addStatusEntry({
           level: 'warning',
-          message: t('status.msg.bulkEditSignInExpired', { done: signInExpiredAt, total: channels.length }),
+          message: t('status.msg.bulkEditSignInExpired', { done: run.signInExpiredAt, total: channels.length }),
         }));
         dispatch(showToast({ level: 'warning', message: t('workspace.signInExpiredToast') }));
         return { ...stats, signInExpired: true };
@@ -635,6 +669,148 @@ export const bulkEditChannels = createAsyncThunk<
       );
     }
   }
+);
+
+/**
+ * Multi-Server edit (2.2.7, GitHub 16). For each selected server, in
+ * order: load its channel list, keep the message-bearing channels the
+ * user can read, then run the same per-channel edit walk single-server
+ * bulk edits use. One operation (one pending/fulfilled), one pause/cancel,
+ * the same pacing per request. A server whose channels cannot be loaded
+ * is reported and skipped; the run continues with the next one. Cancel
+ * finishes the current channel and stops. Mirrors `purgeGuilds`.
+ */
+export const bulkEditGuilds = createAsyncThunk<
+  { edited: number; skipped: number; failed: number; errors?: string[]; signInExpired?: true },
+  { guilds: Guild[]; content: string; searchCriteria?: SearchCriteria | null },
+  { state: RootState; rejectValue: string }
+>(
+  'message/bulkEditGuilds',
+  async ({ guilds, content, searchCriteria }, { dispatch, getState, rejectWithValue, signal }) => {
+    const initialState = getState() as RootState;
+    const token = selectAuthToken(initialState);
+    if (!token) return rejectWithValue('Not authenticated');
+    const currentUserId = selectCurrentUser(initialState)?.id;
+    if (!currentUserId) return rejectWithValue('No current user');
+    if (guilds.length === 0) return rejectWithValue('No servers selected');
+
+    dispatch(showOperationTip(t('operation.queued.edit')));
+    dispatch(addStatusEntry({ level: 'info', message: t('status.msg.bulkEditStartServers', { count: guilds.length }) }));
+
+    const searchDelay = selectSearchDelay(initialState);
+    const delayModifier = selectDelayModifier(initialState);
+    const discordService = getDiscordService();
+    const errors: string[] = [];
+    const totals: BulkEditStats = { edited: 0, skipped: 0, failed: 0 };
+    let serversProcessed = 0;
+    let cancelled = false;
+    let signInExpired = false;
+
+    try {
+      for (let i = 0; i < guilds.length; i++) {
+        await waitWhilePaused(getState as () => RootState);
+        if (checkCancelled(getState as () => RootState)) { cancelled = true; break; }
+
+        const guild = guilds[i];
+        dispatch(bulkEditServerStarted({ index: i, total: guilds.length, name: guild.name }));
+        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.bulkEditServerHeader', { index: i + 1, total: guilds.length, name: guild.name }) }));
+
+        // Channel discovery. Transient failures retry with backoff; a hard
+        // failure (403 on a server the token cannot see any more, etc.)
+        // is recorded and the run moves on.
+        const channelsResponse = await withTransientRetry(
+          () => discordService.fetchChannels(token, guild.id),
+          {
+            getState: getState as () => RootState,
+            dispatch,
+            signal,
+            onRetry: (attempt, delayMs, _last, max) => {
+              dispatch(addStatusEntry({
+                level: 'warning',
+                message: t('status.msg.bulkEditChannelsRetry', { name: guild.name, seconds: Math.round(delayMs / 1000), attempt, max }),
+              }));
+            },
+          },
+        );
+        if (!channelsResponse.success || !channelsResponse.data) {
+          const detail = t('status.msg.bulkEditCouldNotLoadChannels', { status: channelsResponse.status ?? 'unknown' });
+          errors.push(`${guild.name}: ${detail}`);
+          dispatch(addStatusEntry({ level: 'error', message: t('status.msg.bulkEditServerSkipped', { name: guild.name, detail }) }));
+          continue;
+        }
+
+        // Member roles feed the per-channel permission check (overwrites).
+        // A miss is not fatal: canAccessChannel falls back to the guild
+        // level permissions the guild list already carries.
+        let memberRoles: string[] = [];
+        const memberResponse = await withTransientRetry(
+          () => discordService.fetchGuildUser(guild.id, currentUserId, token),
+          { getState: getState as () => RootState, signal, maxRetries: 2, dispatch },
+        );
+        if (memberResponse.success && memberResponse.data) {
+          memberRoles = memberResponse.data.roles ?? [];
+        }
+
+        const channels = (channelsResponse.data as Channel[]).filter(
+          (channel) =>
+            isMessageChannel(channel)
+            && canAccessChannel(guild.permissions, memberRoles, channel, guild.id, currentUserId),
+        );
+        if (channels.length === 0) {
+          dispatch(addStatusEntry({ level: 'info', message: t('status.msg.bulkEditNoReadableChannels', { name: guild.name }) }));
+          serversProcessed += 1;
+          continue;
+        }
+        dispatch(addStatusEntry({ level: 'info', message: t('status.msg.bulkEditServerChannels', { name: guild.name, count: channels.length }) }));
+
+        // A failure that escapes the channel walk (its own per-channel
+        // handling covers the usual cases) must not end the whole run:
+        // record it against the server and continue with the next one.
+        let run: BulkEditRun;
+        try {
+          run = await executeBulkEdit(
+            { channels, content, guildId: guild.id, searchCriteria },
+            { dispatch, getState: getState as () => RootState },
+          );
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : t('status.msg.failed');
+          errors.push(`${guild.name}: ${detail}`);
+          dispatch(addStatusEntry({ level: 'error', message: t('status.msg.bulkEditServerStoppedEarly', { name: guild.name, detail }) }));
+          continue;
+        }
+        serversProcessed += 1;
+        totals.edited += run.stats.edited;
+        totals.skipped += run.stats.skipped;
+        totals.failed += run.stats.failed;
+        dispatch(addStatusEntry({ level: 'success', message: t('status.msg.bulkEditServerComplete', { name: guild.name, count: run.stats.edited }) }));
+        if (run.signInExpiredAt !== null) { signInExpired = true; break; }
+        if (run.cancelled) { cancelled = true; break; }
+
+        // Delay between servers, the same cadence as between channels.
+        if (i < guilds.length - 1) {
+          const delayCalc = calculateRandomDelay(searchDelay, delayModifier);
+          const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState as () => RootState);
+          if (wasCancelled) { cancelled = true; break; }
+        }
+      }
+
+      const detail = t('status.msg.bulkEditDetail', { edited: totals.edited, skipped: totals.skipped > 0 ? t('status.msg.skippedSuffix', { count: totals.skipped }) : '', failed: totals.failed > 0 ? t('status.msg.failedSuffix', { count: totals.failed }) : '' });
+      const serverCount = t('status.msg.bulkEditServerCount', { processed: serversProcessed, count: guilds.length });
+      if (signInExpired) {
+        dispatch(addStatusEntry({ level: 'warning', message: t('status.msg.bulkEditServersSignInExpired', { servers: serverCount, detail }) }));
+        dispatch(showToast({ level: 'warning', message: t('workspace.signInExpiredToast') }));
+        return { ...totals, errors: errors.length > 0 ? errors : undefined, signInExpired: true };
+      }
+      if (cancelled || checkCancelled(getState as () => RootState)) {
+        dispatch(addStatusEntry({ level: 'warning', message: t('status.msg.bulkEditServersCancelled', { servers: serverCount, detail }) }));
+      } else {
+        dispatch(addStatusEntry({ level: 'success', message: t('status.msg.bulkEditServersComplete', { servers: serverCount, detail }) }));
+      }
+      return errors.length > 0 ? { ...totals, errors } : totals;
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Bulk edit failed');
+    }
+  },
 );
 
 /**
@@ -4124,6 +4300,17 @@ const messageSlice = createSlice({
         state.isEditing = false;
       })
       .addCase(bulkEditChannels.rejected, (state, action) => {
+        state.isEditing = false;
+        state.error = action.payload as string;
+      })
+      // 2.2.7 multi-Server edit: one operation, isEditing held for the whole run.
+      .addCase(bulkEditGuilds.pending, (state) => {
+        state.isEditing = true;
+      })
+      .addCase(bulkEditGuilds.fulfilled, (state) => {
+        state.isEditing = false;
+      })
+      .addCase(bulkEditGuilds.rejected, (state, action) => {
         state.isEditing = false;
         state.error = action.payload as string;
       })

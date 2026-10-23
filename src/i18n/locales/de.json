@@ -1275,7 +1275,14 @@
     "matchingFilter": ", die zum Filter passt,",
     "longRun": "Große Bearbeitungen können eine Weile dauern. Discrub hält deinen Bildschirm wach und bearbeitet auch im Hintergrund mit vollem Tempo weiter. Lass den Tab offen; Tab-Schlaf oder Speichersparmodus des Browsers können einen Lauf trotzdem vorzeitig beenden.",
     "cancel": "Abbrechen",
-    "applyFilters": "Filter anwenden"
+    "applyFilters": "Filter anwenden",
+    "confirm_server_one": "{{count}} Server bearbeiten",
+    "confirm_server_other": "{{count}} Server bearbeiten",
+    "titleServers": "Server bearbeiten",
+    "ownOnlyServers": "Server-Bearbeitungen betreffen deine eigenen Nachrichten. Jeder Kanal, den du in jedem ausgewählten Server lesen kannst, ist dabei.",
+    "summary_server_one": "Jede deiner Nachrichten in jedem lesbaren Kanal von {{count}} Server{{filter}} wird mit dem neuen Inhalt überschrieben. Der ursprüngliche Text lässt sich nicht wiederherstellen.",
+    "summary_server_other": "Jede deiner Nachrichten in jedem lesbaren Kanal von {{count}} Servern{{filter}} wird mit dem neuen Inhalt überschrieben. Der ursprüngliche Text lässt sich nicht wiederherstellen.",
+    "longRunServer": "Eine Server-Bearbeitung kann Stunden dauern. Die Server werden nacheinander mit demselben Tempo wie bei einem einzelnen Server bearbeitet. Discrub hält deinen Bildschirm wach und bearbeitet auch im Hintergrund mit vollem Tempo weiter. Lass den Tab offen; Tab-Schlaf oder Speichersparmodus des Browsers können einen Lauf trotzdem vorzeitig beenden."
   },
   "bulkFilter": {
     "add": "Filter hinzufügen",
@@ -1825,7 +1832,24 @@
       "workspaceWriteFailed": "Nachrichten konnten nicht in diesem Arbeitsbereich gespeichert werden, es geht im Speicher weiter",
       "storageFullNotSaved": "Der Browserspeicher ist voll, jetzt geladene Nachrichten werden nicht gespeichert",
       "storageNearlyFull": "Der Browserspeicher ist zu über 80 Prozent voll",
-      "workspaceStartOver": "Gespeicherte Nachrichten dieser Unterhaltung gelöscht"
+      "workspaceStartOver": "Gespeicherte Nachrichten dieser Unterhaltung gelöscht",
+      "bulkEditStartServers_one": "Sammelbearbeitung: Start in {{count}} Server",
+      "bulkEditStartServers_other": "Sammelbearbeitung: Start in {{count}} Servern",
+      "bulkEditServerHeader": "Sammelbearbeitung: Server {{index}} von {{total}} · {{name}}",
+      "bulkEditChannelsRetry": "Sammelbearbeitung: {{name}} · Kanäle laden fehlgeschlagen, neuer Versuch in {{seconds}}s (Versuch {{attempt}}/{{max}})",
+      "bulkEditCouldNotLoadChannels": "Kanäle konnten nicht geladen werden (HTTP {{status}})",
+      "bulkEditServerSkipped": "Sammelbearbeitung: {{name}} · {{detail}}, übersprungen",
+      "bulkEditNoReadableChannels": "Sammelbearbeitung: {{name}} · keine lesbaren Kanäle, übersprungen",
+      "bulkEditServerChannels_one": "Sammelbearbeitung: {{name}} · {{count}} Kanal zu bearbeiten",
+      "bulkEditServerChannels_other": "Sammelbearbeitung: {{name}} · {{count}} Kanäle zu bearbeiten",
+      "bulkEditServerStoppedEarly": "Sammelbearbeitung: {{name}} · vorzeitig gestoppt, {{detail}}",
+      "bulkEditServerComplete": "Sammelbearbeitung: {{name}} abgeschlossen · {{count}} bearbeitet",
+      "bulkEditDetail": "{{edited}} bearbeitet{{skipped}}{{failed}}",
+      "bulkEditServerCount_one": "{{processed}} von {{count}} Server",
+      "bulkEditServerCount_other": "{{processed}} von {{count}} Servern",
+      "bulkEditServersSignInExpired": "Sammelbearbeitung: Anmeldung abgelaufen · {{servers}}, {{detail}}. Nach einer neuen Anmeldung fortsetzen.",
+      "bulkEditServersCancelled": "Sammelbearbeitung: Abgebrochen · {{servers}}, {{detail}}",
+      "bulkEditServersComplete": "Sammelbearbeitung: Abgeschlossen · {{servers}}, {{detail}}"
     },
     "channel": {
       "loadingForumPosts": "Forenbeiträge werden geladen...",

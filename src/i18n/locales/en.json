@@ -1275,7 +1275,14 @@
     "matchingFilter": " matching the filter",
     "longRun": "Large edits can run for a while. Discrub keeps your screen awake and keeps editing at full pace even when this tab is in the background. Leave the tab open; a browser’s tab-sleep or memory saver can still end a run early.",
     "cancel": "Cancel",
-    "applyFilters": "Apply filters"
+    "applyFilters": "Apply filters",
+    "confirm_server_one": "Edit {{count}} server",
+    "confirm_server_other": "Edit {{count}} servers",
+    "titleServers": "Edit Servers",
+    "ownOnlyServers": "Server edits target your own messages. Every channel you can read in each selected server is included.",
+    "summary_server_one": "Every message you authored in every channel you can read across {{count}} server{{filter}} will be overwritten with the new content. The original text cannot be recovered.",
+    "summary_server_other": "Every message you authored in every channel you can read across {{count}} servers{{filter}} will be overwritten with the new content. The original text cannot be recovered.",
+    "longRunServer": "A server edit can run for hours. Servers are processed one at a time with the same pacing as a single-server edit. Discrub keeps your screen awake and keeps editing at full pace even when this tab is in the background. Leave the tab open; a browser’s tab-sleep or memory saver can still end a run early."
   },
   "bulkFilter": {
     "add": "Add filters",
@@ -1825,7 +1832,24 @@
       "workspaceWriteFailed": "Could not save messages to this workspace, continuing in memory",
       "storageFullNotSaved": "Browser storage is full, messages loaded now are not saved",
       "storageNearlyFull": "Browser storage is over 80 percent full",
-      "workspaceStartOver": "Cleared the saved messages for this conversation"
+      "workspaceStartOver": "Cleared the saved messages for this conversation",
+      "bulkEditStartServers_one": "Bulk edit: Starting across {{count}} server",
+      "bulkEditStartServers_other": "Bulk edit: Starting across {{count}} servers",
+      "bulkEditServerHeader": "Bulk edit: Server {{index}} of {{total}} · {{name}}",
+      "bulkEditChannelsRetry": "Bulk edit: {{name}} · loading channels failed, retrying in {{seconds}}s (attempt {{attempt}}/{{max}})",
+      "bulkEditCouldNotLoadChannels": "could not load channels (HTTP {{status}})",
+      "bulkEditServerSkipped": "Bulk edit: {{name}} · {{detail}}, skipped",
+      "bulkEditNoReadableChannels": "Bulk edit: {{name}} · no readable channels, skipped",
+      "bulkEditServerChannels_one": "Bulk edit: {{name}} · {{count}} channel to process",
+      "bulkEditServerChannels_other": "Bulk edit: {{name}} · {{count}} channels to process",
+      "bulkEditServerStoppedEarly": "Bulk edit: {{name}} · stopped early, {{detail}}",
+      "bulkEditServerComplete": "Bulk edit: {{name}} complete · {{count}} edited",
+      "bulkEditDetail": "{{edited}} edited{{skipped}}{{failed}}",
+      "bulkEditServerCount_one": "{{processed}} of {{count}} server",
+      "bulkEditServerCount_other": "{{processed}} of {{count}} servers",
+      "bulkEditServersSignInExpired": "Bulk edit: Sign in expired · {{servers}}, {{detail}}. Resume after a new sign in.",
+      "bulkEditServersCancelled": "Bulk edit: Cancelled · {{servers}}, {{detail}}",
+      "bulkEditServersComplete": "Bulk edit: Complete · {{servers}}, {{detail}}"
     },
     "channel": {
       "loadingForumPosts": "Loading forum posts...",

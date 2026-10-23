@@ -28,6 +28,8 @@ import {
   setActiveTab,
   bulkEditChannels,
   bulkEditChannelStarted,
+  bulkEditGuilds,
+  bulkEditServerStarted,
   selectActiveCid,
   selectAllMessages,
   selectAllThreadMessages,
@@ -822,16 +824,43 @@ listen({
   },
 });
 
+// 2.2.7: a multi-Server edit records the servers as its queue; the server in hand marks progress.
 listen({
-  actionCreator: bulkEditChannelStarted,
+  actionCreator: bulkEditGuilds.pending,
   effect: (action, listenerApi) => {
-    if (listenerApi.getState().workspace?.bulk?.kind !== 'bulkEdit') return;
+    const arg = action.meta.arg;
+    recordBulkStart(api(listenerApi), {
+      kind: 'bulkEdit',
+      mode: 'servers',
+      guildId: null,
+      settings: { content: arg.content, searchCriteria: arg.searchCriteria ?? null },
+      queue: idsOf(arg.guilds),
+    });
+  },
+});
+
+listen({
+  actionCreator: bulkEditServerStarted,
+  effect: (action, listenerApi) => {
+    const record = listenerApi.getState().workspace?.bulk;
+    if (record?.kind !== 'bulkEdit' || record.mode !== 'servers') return;
     recordBulkAt(api(listenerApi), action.payload.index, null);
   },
 });
 
 listen({
-  matcher: isAnyOf(bulkEditChannels.fulfilled, bulkEditChannels.rejected),
+  actionCreator: bulkEditChannelStarted,
+  effect: (action, listenerApi) => {
+    const record = listenerApi.getState().workspace?.bulk;
+    if (record?.kind !== 'bulkEdit') return;
+    // A server run walks each server's channels inside one bulkEditGuilds; the server index is the record's.
+    if (record.mode === 'servers') return;
+    recordBulkAt(api(listenerApi), action.payload.index, null);
+  },
+});
+
+listen({
+  matcher: isAnyOf(bulkEditChannels.fulfilled, bulkEditChannels.rejected, bulkEditGuilds.fulfilled, bulkEditGuilds.rejected),
   effect: (action, listenerApi) => {
     if (signInExpiredRun(action)) recordBulkSignInExpired(api(listenerApi));
     else recordBulkEnd(api(listenerApi));
