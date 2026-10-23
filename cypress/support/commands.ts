@@ -1,4 +1,5 @@
 /// <reference types="cypress" />
+import { holidayThemeToday } from './holidays';
 
 const API = '**/api/v10';
 
@@ -132,7 +133,8 @@ Cypress.Commands.add('interceptDiscordApi', () => {
  */
 Cypress.Commands.add('seenSeasonalNotice', () => {
   cy.window().its('__store__').invoke('getState').its('notice.loaded').should('be.true');
-  cy.window().its('__store__').invoke('dispatch', { type: 'notice/seen/pending', meta: { arg: 'halloween-26', requestId: 'cy', requestStatus: 'pending' } });
+  const id = holidayThemeToday() ?? 'halloween-26';
+  cy.window().its('__store__').invoke('dispatch', { type: 'notice/seen/pending', meta: { arg: id, requestId: 'cy', requestStatus: 'pending' } });
 });
 
 /**

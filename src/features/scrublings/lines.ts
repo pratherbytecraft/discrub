@@ -32,6 +32,10 @@ export const LINES: Record<ScrublingId, Record<ScrublingEvent, string>> = {
   alien: { purge: '{n} beamed up from #{ch}', load: 'Scanning #{ch}, {n} so far', wait: 'Landed. {s}s.', done: 'Beep. {n} gone.', failed: 'Sputter. {f} missed.', paused: 'Hatch closed.' },
   ghost: { purge: '{n} eaten in #{ch}', load: 'Trailing #{ch}, {n} so far', wait: 'Fading. {s}s.', done: 'Boo. {n} gone.', failed: 'Small now. {f} left.', paused: 'Still.' },
   spider: { purge: '{n} wrapped in #{ch}', load: 'Spinning #{ch}, {n} so far', wait: 'Hanging. {s}s.', done: 'Caught {n}. Wrapped up.', failed: 'Tangled. {f} got away.', paused: 'Resting in the web.' },
+  elf: { purge: '{n} stamped in #{ch}', load: 'Wrapping #{ch}, {n} so far', wait: 'Checking the list. {s}s.', done: 'Delivered. {n} done.', failed: 'Dropped. {f} left.', paused: 'Nap. Hat over the eyes.' },
+  snowman: { purge: '{n} shovelled from #{ch}', load: 'Rolling #{ch}, {n} so far', wait: 'Melting a bit. {s}s.', done: 'Star on top. {n} gone.', failed: 'Puddle. {f} left.', paused: 'Frozen. Zzz.' },
+  reindeer: { purge: '{n} stomped in #{ch}', load: 'Hauling #{ch}, {n} so far', wait: 'Grazing. {s}s.', done: 'Airborne. {n} gone.', failed: 'Tangled. {f} left.', paused: 'Sleigh parked. Zzz.' },
+  gingerbread: { purge: '{n} bitten in #{ch}', load: 'Frosting #{ch}, {n} so far', wait: 'Cooling. {s}s.', done: 'Frosted. {n} gone.', failed: 'Crumbs. {f} left.', paused: 'Resting on the tray.' },
 };
 
 /** Shared by everyone during a rest break. */
@@ -52,6 +56,10 @@ export const SHORT_LINES: Record<ScrublingId, Record<ScrublingEvent, string>> = 
   alien: { purge: '{n} beamed', load: 'Scanning {n}', wait: 'Landed. {s}s', done: 'Beep. {n}', failed: '{f} missed.', paused: 'Hatch shut.' },
   ghost: { purge: '{n} eaten', load: 'Trailing {n}', wait: 'Fading. {s}s', done: 'Boo. {n}', failed: '{f} left.', paused: 'Still.' },
   spider: { purge: '{n} wrapped', load: 'Spinning {n}', wait: 'Hanging. {s}s', done: 'Caught {n}.', failed: '{f} escaped.', paused: 'Resting.' },
+  elf: { purge: '{n} stamped', load: 'Wrapping {n}', wait: 'The list. {s}s', done: 'Delivered.', failed: '{f} dropped.', paused: 'Nap.' },
+  snowman: { purge: '{n} dug out', load: 'Rolling {n}', wait: 'Melting. {s}s', done: 'Star on. {n}', failed: 'Puddle. {f}', paused: 'Frozen.' },
+  reindeer: { purge: '{n} stomped', load: 'Hauling {n}', wait: 'Grazing. {s}s', done: 'Flying. {n}', failed: 'Tangled. {f}', paused: 'Parked.' },
+  gingerbread: { purge: '{n} bitten', load: 'Frosting {n}', wait: 'Cooling. {s}s', done: 'Frosted. {n}', failed: 'Crumbs. {f}', paused: 'On the tray.' },
 };
 
 /** The short rest break line (2.2.2). */

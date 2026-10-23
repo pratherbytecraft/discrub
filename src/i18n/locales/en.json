@@ -114,7 +114,11 @@
       "pker": "Pker",
       "alien": "Alien",
       "ghost": "Ghost",
-      "spider": "Spider '26"
+      "spider": "Spider '26",
+      "elf": "Elf '26",
+      "snowman": "Snowman '26",
+      "reindeer": "Reindeer '26",
+      "gingerbread": "Gingerbread '26"
     },
     "blurbs": {
       "suds": "The scrubber. Bubbles, a sponge, and a bucket.",
@@ -125,7 +129,11 @@
       "pker": "Wizard hat, leather body, black d'hide chaps, a dragon scimitar. Skulls up when a Purge starts.",
       "alien": "Rides a saucer. Beams up the 1s and 0s while a Purge runs.",
       "ghost": "The spirit of deleted messages. Eats them during a Purge.",
-      "spider": "Hangs around for Halloween. Wraps what it catches."
+      "spider": "Hangs around for Halloween. Wraps what it catches.",
+      "elf": "Straight from the workshop. Stamps what it finds.",
+      "snowman": "Built for Christmas. Shovels what it finds and melts a little while it waits.",
+      "reindeer": "Pulls the sleigh for Christmas. Stomps what it finds.",
+      "gingerbread": "Fresh out of the oven for Christmas. Bites what it finds."
     },
     "designedBy": "Designed by {{name}}",
     "commission": "New Scrubling"

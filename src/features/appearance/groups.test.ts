@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupItems, groupOrder, halloween, inSeason, isUnlocked } from './groups';
+import { christmas, groupItems, groupOrder, halloween, inSeason, isUnlocked } from './groups';
 
 const d = (y: number, m: number, day: number) => new Date(y, m - 1, day, 12);
 
@@ -13,6 +13,20 @@ describe('holiday seasons (2.2.3)', () => {
     expect(inSeason(s, d(2026, 11, 3))).toBe(false);
     expect(inSeason(s, d(2027, 10, 15))).toBe(false);
     expect(inSeason(undefined, d(2026, 10, 15))).toBe(false);
+  });
+
+  it('Christmas runs December 1 to January 4 of the next year, and no other year (2.2.7)', () => {
+    const s = christmas(2026);
+    expect(inSeason(s, d(2026, 11, 30))).toBe(false);
+    expect(inSeason(s, d(2026, 12, 1))).toBe(true);
+    expect(inSeason(s, d(2026, 12, 25))).toBe(true);
+    expect(inSeason(s, d(2026, 12, 31))).toBe(true);
+    expect(inSeason(s, d(2027, 1, 1))).toBe(true);
+    expect(inSeason(s, d(2027, 1, 4))).toBe(true);
+    expect(inSeason(s, d(2027, 1, 5))).toBe(false);
+    expect(inSeason(s, d(2027, 12, 25))).toBe(false);
+    expect(inSeason(s, d(2025, 12, 25))).toBe(false);
+    expect(inSeason(s, d(2028, 1, 2))).toBe(false);
   });
 
   it('unlocks free items always, supporter items with a key, holiday items in season too', () => {

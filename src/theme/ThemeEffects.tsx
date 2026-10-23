@@ -106,6 +106,40 @@ const HalloweenEffects = ({ moving }: { moving: boolean }) => {
   );
 };
 
+/**
+ * Christmas '26 (2.2.7): three layers of pixel snow fall over
+ * the app at different speeds (each layer is one tiled element sliding on
+ * `transform`), and a string of lights along the very top edge twinkles
+ * slowly on `opacity`. Snow stops and the lights stay lit with animations
+ * off, reduced motion, or a heavy operation running.
+ */
+const snowTile = (dots: [number, number][], size: number) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${size} ${size}' shape-rendering='crispEdges'>${dots.map(([x, y]) => `<rect x='${x}' y='${y}' width='1' height='1' fill='#f3f7f4'/>`).join('')}</svg>`)}`;
+const SNOW_A = snowTile([[3, 5], [21, 14], [38, 2], [11, 33], [29, 41], [46, 27], [8, 50], [52, 56], [34, 58]], 64);
+const SNOW_B = snowTile([[9, 9], [27, 30], [44, 6], [17, 47], [55, 19], [36, 52], [2, 40], [60, 44]], 64);
+const SNOW_C = snowTile([[14, 20], [40, 36], [26, 4], [58, 60], [6, 56], [48, 12]], 64);
+const BULB_COLORS = ['#e63946', '#5ad17a', '#f2c14e', '#8fd3ff'];
+const BULBS = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 8' shape-rendering='crispEdges'><path d='M0 1h64' stroke='#1b1b22' stroke-width='1'/>${BULB_COLORS.map((c, i) => `<rect x='${i * 16 + 6}' y='1' width='2' height='2' fill='#1b1b22'/><rect x='${i * 16 + 5}' y='3' width='4' height='4' fill='${c}'/><rect x='${i * 16 + 6}' y='4' width='1' height='1' fill='#ffffff' opacity='.7'/>`).join('')}</svg>`)}`;
+const christmasLook = {
+  '@keyframes christmas-snow': { from: { transform: 'translateY(-50%)' }, to: { transform: 'translateY(0)' } },
+  '@keyframes christmas-twinkle': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.45 } },
+};
+const ChristmasEffects = ({ moving }: { moving: boolean }) => {
+  const snow = (img: string, seconds: number, size: number, opacity: number) => (
+    <Box sx={{ position: 'absolute', left: 0, right: 0, top: 0, height: '200%', backgroundImage: `url("${img}")`, backgroundSize: `${size}px ${size}px`, imageRendering: 'pixelated', opacity, willChange: moving ? 'transform' : undefined, animation: moving ? `christmas-snow ${seconds}s linear infinite` : 'none', transform: moving ? undefined : 'translateY(-25%)' }} />
+  );
+  return (
+    <>
+      <GlobalStyles styles={christmasLook} />
+      <Box aria-hidden data-testid="theme-effects-christmas" data-moving={moving ? 'true' : 'false'} sx={{ position: 'fixed', inset: 0, zIndex: 1190, pointerEvents: 'none', overflow: 'hidden' }}>
+        {snow(SNOW_A, 26, 192, 0.42)}
+        {snow(SNOW_B, 38, 256, 0.3)}
+        {snow(SNOW_C, 52, 320, 0.2)}
+        <Box sx={{ position: 'absolute', left: 0, right: 0, top: 0, height: 16, backgroundImage: `url("${BULBS}")`, backgroundSize: '128px 16px', backgroundRepeat: 'repeat-x', imageRendering: 'pixelated', opacity: 0.9, animation: moving ? 'christmas-twinkle 3.6s ease-in-out infinite' : 'none' }} />
+      </Box>
+    </>
+  );
+};
+
 const ThemeEffects = () => {
   const theme = useTheme();
   const animations = useAppSelector(selectSetting(DiscrubSetting.APP_THEME_ANIMATIONS));
@@ -113,6 +147,7 @@ const ThemeEffects = () => {
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const moving = animations !== 'false' && !busy && !reducedMotion;
   if (theme.themeEffects === 'halloween') return <HalloweenEffects moving={moving} />;
+  if (theme.themeEffects === 'christmas') return <ChristmasEffects moving={moving} />;
   if (theme.themeEffects !== 'abstract') return null;
   const cloud = (color: string, place: object, name: string, seconds: number) => (
     <Box sx={{ position: 'absolute', width: '55%', height: '55%', borderRadius: '50%', filter: 'blur(80px)', backgroundColor: color, willChange: moving ? 'transform' : undefined, animation: moving ? `${name} ${seconds}s ease-in-out infinite alternate` : 'none', ...place }} />

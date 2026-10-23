@@ -198,6 +198,28 @@ describe('Export theming (slot E)', () => {
     });
   });
 
+  it("Christmas '26 embeds for everyone on January 2, over the year end, and bakes as the export default (2.2.7)", () => {
+    cy.task('downloads:clean');
+    cy.clock(new Date(2027, 0, 2, 12).getTime(), ['Date']);
+    visitApp();
+    saveTheme('christmas-26');
+
+    openGeneralAndExport();
+    cy.waitForDownload(/^general\.zip$/i, 60000).then((zipName) => {
+      cy.task<string>('zip:read', {
+        fileName: zipName,
+        entry: 'general/general-page-1.html',
+      }).then((page) => {
+        expect(page).to.contain('class="export-theme-christmas-26"');
+        expect(page).to.contain('<option value="christmas-26" selected>');
+        expect(page).to.not.contain('halloween-26');
+        // The snow and lights live in the app only.
+        expect(page).to.not.contain('christmas-snow');
+        expect(page.match(/<option value="/g)).to.have.length(7);
+      });
+    });
+  });
+
   it('a supporter export embeds the full roster with the supporter theme baked', () => {
     cy.task('downloads:clean');
     visitApp();
@@ -213,8 +235,8 @@ describe('Export theming (slot E)', () => {
         expect(page).to.contain('class="export-theme-synthwave"');
         expect(page).to.contain('<option value="synthwave" selected>');
         expect(page).to.contain('.export-theme-abyss {');
-        // Full roster: 16 dropdown options (Halloween '26 joined in 2.2.3).
-        expect(page.match(/<option value="/g)).to.have.length(16);
+        // Full roster: 17 dropdown options (Halloween '26 joined in 2.2.3, Christmas '26 in 2.2.7).
+        expect(page.match(/<option value="/g)).to.have.length(17);
         expect(page).to.contain('.export-theme-abstract {');
       });
       cy.task<string>('zip:read', {

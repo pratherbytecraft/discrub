@@ -1,3 +1,4 @@
+import { holidaysInSeason } from '../support/holidays';
 /**
  * Themes hub details: the roster, the Settings pointer,
  * accents, and the animations toggle. Theme selection left Settings
@@ -29,19 +30,13 @@ describe('Themes hub', () => {
 
   it('shows the full roster with supporter themes locked', () => {
     openHub();
-    // Auto card + 16 registry themes (2.2.3 added Halloween '26)
-    cy.get('[data-testid^="theme-card-"]:not([data-testid="theme-card-commission"])').should('have.length', 17);
+    // Auto card + 17 registry themes (2.2.3 added Halloween '26, 2.2.7 Christmas '26)
+    cy.get('[data-testid^="theme-card-"]:not([data-testid="theme-card-commission"])').should('have.length', 18);
     cy.get('[data-testid="theme-card-commission"]').should('exist');
-    // All 10 supporter themes are locked for a free user, marked on the
-    // swatch corner (the label row keeps its full width). Halloween '26
-    // counts as locked here because this spec runs on the real clock only
-    // outside its season; holiday.cy.ts covers the season itself.
-    cy.window().then((win) => {
-      const now = new Date();
-      const inSeason = now.getFullYear() === 2026 && ((now.getMonth() === 9) || (now.getMonth() === 10 && now.getDate() <= 2));
-      cy.get('[data-testid^="theme-locked-"]').should('have.length', inSeason ? 9 : 10);
-      void win;
-    });
+    // All 11 supporter themes are locked for a free user, marked on the
+    // swatch corner (the label row keeps its full width), less any holiday
+    // theme in season on the real clock; holiday.cy.ts pins the seasons.
+    cy.get('[data-testid^="theme-locked-"]').should('have.length', 11 - holidaysInSeason());
   });
 
   it('a hub pick persists across a reload', () => {

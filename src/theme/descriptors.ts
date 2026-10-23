@@ -13,7 +13,7 @@
  * verbatim (every hex below matches the pre-factory `theme.ts`).
  */
 
-import { halloween, type ItemGroup, type Season } from '@features/appearance/groups';
+import { christmas, halloween, type ItemGroup, type Season } from '@features/appearance/groups';
 
 export type ThemeBase = 'dark' | 'light';
 export type ThemeTier = 'free' | 'supporter';
@@ -57,7 +57,7 @@ export interface ThemeAccent {
   durationS: number;
 }
 
-export type ThemeEffectsId = 'abstract' | 'halloween';
+export type ThemeEffectsId = 'abstract' | 'halloween' | 'christmas';
 
 export interface ThemeDescriptor {
   /** Stable id persisted in APP_THEME_MODE. Never 'auto'. */
@@ -603,6 +603,48 @@ const halloween26: ThemeDescriptor = {
   effects: 'halloween',
 };
 
+/**
+ * Christmas '26 (2.2.7): holly red on an evergreen night, snow white text,
+ * gold as the second colour and ice blue links. Snow falls over the app and
+ * a string of lights twinkles along the top edge behind `effects: 'christmas'`.
+ * Free for everyone December 1 to January 4, supporter only after.
+ */
+const christmas26: ThemeDescriptor = {
+  id: 'christmas-26',
+  name: "Christmas '26",
+  base: 'dark',
+  tier: 'supporter',
+  group: 'holiday',
+  season: christmas(2026),
+  palette: {
+    primary: { main: '#e63946', light: '#ff6b75', dark: '#b52430', contrastText: '#ffffff' },
+    secondary: { main: '#f2c14e', light: '#f8d784', dark: '#c99a2e' },
+    background: { default: '#0a1a12', paper: '#10241a', elevated: '#173023' },
+    text: { primary: '#f3f7f4', secondary: '#a9c4b5' },
+    error: '#ff5c5c',
+    warning: '#f2c14e',
+    success: '#5ad17a',
+    divider: 'rgba(242, 193, 78, 0.18)',
+    glassBase: '#10241a',
+    dialog: 'rgba(16, 36, 26, 0.96)',
+    tooltip: 'rgba(10, 26, 18, 0.98)',
+    link: { main: '#8fd3ff', hover: '#b8e4ff' },
+    cta: { main: '#b52430', hover: '#931c27', active: '#731520' },
+    ctaDanger: { main: '#8f2835', hover: '#73202b', active: '#5a1821' },
+    gradient: {
+      primary: 'linear-gradient(120deg, #e63946 0%, #2e8b57 55%, #f2c14e 100%)',
+      primarySubtle: 'linear-gradient(120deg, rgba(230, 57, 70, 0.08) 0%, rgba(46, 139, 87, 0.08) 100%)',
+      overlay: 'linear-gradient(180deg, rgba(46, 139, 87, 0.06) 0%, transparent 100%)',
+    },
+  },
+  accent: {
+    background: 'linear-gradient(90deg, #e63946 0%, #2e8b57 33%, #f2c14e 66%, #e63946 100%)',
+    motion: 'flow',
+    durationS: 13,
+  },
+  effects: 'christmas',
+};
+
 /** Registry, in display order. The first entry is the app default. */
 export const THEME_DESCRIPTORS: ThemeDescriptor[] = [
   discordDark,
@@ -621,6 +663,7 @@ export const THEME_DESCRIPTORS: ThemeDescriptor[] = [
   abyss,
   abstract,
   halloween26,
+  christmas26,
 ];
 
 export const DEFAULT_THEME_ID = DISCORD_DARK_ID;

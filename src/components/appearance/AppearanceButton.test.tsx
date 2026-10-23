@@ -30,6 +30,22 @@ describe('<AppearanceButton />', () => {
     fireEvent.keyDown(document.body, { key: 'Escape' });
   });
 
+  it("stands the Elf under the button over Christmas '26 with the workshop line, no sway, and the first click puts it away (2.2.7)", async () => {
+    vi.setSystemTime(new Date(2026, 11, 20));
+    const unseen = withSettings();
+    unseen.notice = { loaded: true, seenId: 'halloween-26' };
+    renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: unseen });
+    const notice = screen.getByTestId('seasonal-notice');
+    expect(notice).toHaveAttribute('data-theme-id', 'christmas-26');
+    expect(notice).toHaveAttribute('data-pose', 'stand');
+    expect(notice).toHaveStyle({ animation: 'none' });
+    expect(screen.getByTestId('seasonal-notice-line')).toHaveTextContent("Straight from the workshop. Christmas '26.");
+    fireEvent.click(screen.getByLabelText('Appearance'));
+    expect(await screen.findByTestId('appearance-theme-grid')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('seasonal-notice')).toBeNull());
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+  });
+
   it('shows no seasonal notice outside the season or once it was seen', () => {
     vi.setSystemTime(new Date(2026, 8, 15));
     const { unmount } = renderWithProviders(<AppearanceButton onOpenSettings={vi.fn()} />, { preloadedState: withSettings() });

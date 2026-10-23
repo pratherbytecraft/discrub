@@ -54,6 +54,18 @@ describe('ThemeGrid', () => {
     expect(onChange).toHaveBeenCalledWith('halloween-26');
   });
 
+  it('unlocks Christmas \'26 for everyone over the year end and keeps Halloween locked (2.2.7)', () => {
+    vi.setSystemTime(new Date(2027, 0, 2));
+    renderGrid();
+    const sections = screen.getAllByTestId(/^theme-group-section-/).map((el) => el.getAttribute('data-testid'));
+    expect(sections.slice(0, 2)).toEqual(['theme-group-section-commissioned', 'theme-group-section-holiday']);
+    expect(screen.getByTestId('theme-group-section-holiday')).toContainElement(screen.getByTestId('theme-card-christmas-26'));
+    expect(screen.queryByTestId('theme-locked-christmas-26')).toBeNull();
+    expect(screen.getByTestId('theme-locked-halloween-26')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('theme-card-christmas-26'));
+    expect(onChange).toHaveBeenCalledWith('christmas-26');
+  });
+
   it('renders the Auto card plus one card per registry theme', () => {
     renderGrid();
     expect(screen.getByTestId('theme-card-auto')).toBeInTheDocument();

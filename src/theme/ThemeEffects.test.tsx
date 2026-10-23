@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
 import { createBaseState } from '@/test/state-factories';
@@ -18,6 +18,8 @@ const stateWith = (settings: Record<string, string>, opts: { supporter?: boolean
 };
 const renderTheme = (settings: Record<string, string>, opts?: { supporter?: boolean; exporting?: boolean }) =>
   renderWithProviders(<ThemeWrapper><div>app</div></ThemeWrapper>, { preloadedState: stateWith(settings, opts) });
+
+afterEach(() => { vi.useRealTimers(); });
 
 describe('Abstract theme effects', () => {
   it('is a dark supporter theme that carries the abstract effects', () => {
@@ -51,5 +53,42 @@ describe('Abstract theme effects', () => {
   it('stops moving while an export runs', () => {
     renderTheme({ [DiscrubSetting.APP_THEME_MODE]: 'abstract' }, { supporter: true, exporting: true });
     expect(screen.getByTestId('theme-effects-abstract')).toHaveAttribute('data-moving', 'false');
+  });
+});
+
+describe("Christmas '26 theme effects (2.2.7)", () => {
+  it('is a dark holiday theme over the year end that carries the christmas effects', () => {
+    const d = findThemeDescriptor('christmas-26');
+    expect(d).toMatchObject({ name: "Christmas '26", base: 'dark', tier: 'supporter', group: 'holiday', effects: 'christmas' });
+    expect(d!.season).toEqual({ year: 2026, from: [12, 1], until: [1, 4] });
+  });
+
+  it('draws snow and lights for everyone in season, moving, out of the way of clicks, and never the Halloween layer', () => {
+    vi.setSystemTime(new Date(2026, 11, 24));
+    renderTheme({ [DiscrubSetting.APP_THEME_MODE]: 'christmas-26' });
+    const layer = screen.getByTestId('theme-effects-christmas');
+    expect(layer).toHaveAttribute('data-moving', 'true');
+    expect(layer).toHaveAttribute('aria-hidden');
+    expect(layer).toHaveStyle({ pointerEvents: 'none' });
+    expect(screen.queryByTestId('theme-effects-halloween')).toBeNull();
+  });
+
+  it('still draws on January 2, and falls back without a key on January 5', () => {
+    vi.setSystemTime(new Date(2027, 0, 2));
+    const { unmount } = renderTheme({ [DiscrubSetting.APP_THEME_MODE]: 'christmas-26' });
+    expect(screen.getByTestId('theme-effects-christmas')).toBeInTheDocument();
+    unmount();
+    vi.setSystemTime(new Date(2027, 0, 5));
+    renderTheme({ [DiscrubSetting.APP_THEME_MODE]: 'christmas-26' });
+    expect(screen.queryByTestId('theme-effects-christmas')).toBeNull();
+  });
+
+  it('keeps the snow still with animations off and while an export runs', () => {
+    vi.setSystemTime(new Date(2026, 11, 24));
+    const { unmount } = renderTheme({ [DiscrubSetting.APP_THEME_MODE]: 'christmas-26', [DiscrubSetting.APP_THEME_ANIMATIONS]: 'false' });
+    expect(screen.getByTestId('theme-effects-christmas')).toHaveAttribute('data-moving', 'false');
+    unmount();
+    renderTheme({ [DiscrubSetting.APP_THEME_MODE]: 'christmas-26' }, { exporting: true });
+    expect(screen.getByTestId('theme-effects-christmas')).toHaveAttribute('data-moving', 'false');
   });
 });

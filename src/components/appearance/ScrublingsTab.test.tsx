@@ -49,14 +49,29 @@ describe('Appearance menu, Scrublings tab', () => {
     expect(screen.getByTestId('scrubling-card-spider')).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('lists nine cards, three free, two picked, six locked without a key out of season, and no hint line', async () => {
+  it('unlocks the four Christmas Scrublings for everyone from December 1 to January 4 and keeps the Spider locked (2.2.7)', async () => {
+    vi.setSystemTime(new Date(2027, 0, 4));
+    await openTab();
+    const sections = screen.getAllByTestId(/^scrublings-group-section-/).map((el) => el.getAttribute('data-testid'));
+    expect(sections.slice(0, 2)).toEqual(['scrublings-group-section-commissioned', 'scrublings-group-section-holiday']);
+    for (const id of ['elf', 'snowman', 'reindeer', 'gingerbread']) {
+      expect(screen.getByTestId('scrublings-group-section-holiday')).toContainElement(screen.getByTestId(`scrubling-card-${id}`));
+      expect(screen.queryByTestId(`scrubling-locked-${id}`)).toBeNull();
+    }
+    expect(screen.getByTestId('scrubling-locked-spider')).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^scrubling-locked-/)).toHaveLength(6);
+    fireEvent.click(screen.getByTestId('scrubling-card-elf'));
+    expect(screen.getByTestId('scrubling-card-elf')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('lists thirteen cards, three free, two picked, ten locked without a key out of season, and no hint line', async () => {
     vi.setSystemTime(new Date(2026, 8, 15));
     await openTab();
-    expect(screen.getAllByTestId(/^scrubling-card-/).filter((el) => el.getAttribute('role') === 'checkbox')).toHaveLength(9);
+    expect(screen.getAllByTestId(/^scrubling-card-/).filter((el) => el.getAttribute('role') === 'checkbox')).toHaveLength(13);
     expect(screen.getByTestId('scrubling-card-suds')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-mage')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('scrubling-card-cat')).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getAllByTestId(/^scrubling-locked-/)).toHaveLength(6);
+    expect(screen.getAllByTestId(/^scrubling-locked-/)).toHaveLength(10);
     expect(screen.getByLabelText('Dog (supporter Scrubling, locked)')).toBeInTheDocument();
     expect(screen.getAllByText('Free')).toHaveLength(3);
     expect(screen.getByTestId('scrublings-count')).toHaveTextContent('2 of 3 picked');

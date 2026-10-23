@@ -8,10 +8,14 @@ import pker from './sprites/pker';
 import alien from './sprites/alien';
 import ghost from './sprites/ghost';
 import spider from './sprites/spider';
+import elf from './sprites/elf';
+import snowman from './sprites/snowman';
+import reindeer from './sprites/reindeer';
+import gingerbread from './sprites/gingerbread';
 import { EXTRA_LINES, type Exchange } from './pairLines';
-import { halloween, type ItemGroup, type Season } from '@features/appearance/groups';
+import { christmas, halloween, type ItemGroup, type Season } from '@features/appearance/groups';
 
-export type ScrublingId = 'suds' | 'mage' | 'cat' | 'dog' | 'adventurer' | 'pker' | 'alien' | 'ghost' | 'spider';
+export type ScrublingId = 'suds' | 'mage' | 'cat' | 'dog' | 'adventurer' | 'pker' | 'alien' | 'ghost' | 'spider' | 'elf' | 'snowman' | 'reindeer' | 'gingerbread';
 export type ScrublingTier = 'free' | 'supporter';
 /** The six app events a Scrubling answers. */
 export type ScrublingEvent = 'purge' | 'load' | 'wait' | 'done' | 'failed' | 'paused';
@@ -47,7 +51,7 @@ export interface ScrublingDescriptor {
   };
 }
 
-export const SCRUBLING_IDS: ScrublingId[] = ['suds', 'mage', 'cat', 'dog', 'adventurer', 'pker', 'alien', 'ghost', 'spider'];
+export const SCRUBLING_IDS: ScrublingId[] = ['suds', 'mage', 'cat', 'dog', 'adventurer', 'pker', 'alien', 'ghost', 'spider', 'elf', 'snowman', 'reindeer', 'gingerbread'];
 export const MAX_PICKED = 3;
 export const DEFAULT_PICKED: ScrublingId[] = ['suds', 'mage'];
 
@@ -92,6 +96,23 @@ export const SCRUBLINGS: Record<ScrublingId, ScrublingDescriptor> = {
   spider: {
     id: 'spider', tier: 'supporter', group: 'holiday', season: halloween(2026), sheet: spider, idle: 'idle', walk: 'walk', look: 'look', trick: 'boo',
     events: { purge: 'wrap', load: 'spin', wait: 'hang', done: 'dangle', failed: 'tangled', paused: 'sleep' },
+  },
+  // Christmas '26 (2.2.7): four holiday Scrublings, free for everyone December 1 to January 4, supporter only after.
+  elf: {
+    id: 'elf', tier: 'supporter', group: 'holiday', season: christmas(2026), sheet: elf, idle: 'idle', walk: 'walk', look: 'look', trick: 'jingle',
+    events: { purge: 'stamp', load: 'wrap', wait: 'list', done: 'cheer', failed: 'drop', paused: 'nap' },
+  },
+  snowman: {
+    id: 'snowman', tier: 'supporter', group: 'holiday', season: christmas(2026), sheet: snowman, idle: 'idle', walk: 'walk', look: 'look', trick: 'tip',
+    events: { purge: 'shovel', load: 'roll', wait: 'melt', done: 'star', failed: 'puddle', paused: 'sleep' },
+  },
+  reindeer: {
+    id: 'reindeer', tier: 'supporter', group: 'holiday', season: christmas(2026), sheet: reindeer, idle: 'idle', walk: 'walk', look: 'look', trick: 'glow',
+    events: { purge: 'stomp', load: 'haul', wait: 'graze', done: 'fly', failed: 'tangled', paused: 'sleep' },
+  },
+  gingerbread: {
+    id: 'gingerbread', tier: 'supporter', group: 'holiday', season: christmas(2026), sheet: gingerbread, idle: 'idle', walk: 'walk', look: 'look', trick: 'dance',
+    events: { purge: 'bite', load: 'frost', wait: 'cool', done: 'frosted', failed: 'crumbs', paused: 'rest' },
   },
 };
 
@@ -179,6 +200,49 @@ export const PAIR_ACTIONS: PairAction[] = [
   P('pker', 'spider', { activity: 'eat' }, { activity: 'tangled' }, ['Spider on a stick?', 'No.']),
   P('alien', 'spider', { activity: 'lift' }, { activity: 'hang' }, ['Specimen.', 'Put me down.']),
   P('ghost', 'spider', { activity: 'wave', motion: rise(10, 1.5) }, { activity: 'boo' }, ['Boo.', 'Boo yourself.']),
+  // Christmas '26 (2.2.7): one scene for each of the four with everyone, including each other.
+  P('elf', 'suds', { activity: 'stamp' }, { activity: 'scrub' }, ['Stamped.', 'Scrubbed.']),
+  P('mage', 'elf', { activity: 'cast' }, { activity: 'wrap' }, ['Snap. Wrapped.', 'I had a system.']),
+  P('cat', 'elf', { activity: 'bat' }, { activity: 'wrap' }, ['Ribbon!', 'Not for you.']),
+  P('dog', 'elf', { activity: 'fetch', motion: slide(50, 1.8) }, { activity: 'drop' }, ['Got it!', 'Oops.']),
+  P('adventurer', 'elf', { activity: 'check' }, { activity: 'stamp' }, ['Finders keepers.', 'That hat is ours.']),
+  P('pker', 'elf', { activity: 'skulled' }, { activity: 'list' }, ['Worth it.', 'Naughty list.']),
+  P('alien', 'elf', { activity: 'lift' }, { activity: 'jingle' }, ['Small one. Bells.', 'Put me down.']),
+  P('ghost', 'elf', { activity: 'wave', motion: rise(10, 1.5) }, { activity: 'cheer' }, ['Christmas past.', 'Christmas present.']),
+  P('spider', 'elf', { activity: 'dangle' }, { activity: 'look' }, ['Web is warm.', 'Still here?']),
+  P('suds', 'snowman', { activity: 'scrub' }, { activity: 'melt' }, ['Hold still.', 'Warm water. No.']),
+  P('mage', 'snowman', { activity: 'cast' }, { activity: 'star' }, ['Ice Barrage!', 'Finally. Cold.']),
+  P('cat', 'snowman', { activity: 'bat' }, { activity: 'tip' }, ['Carrot!', 'My nose.']),
+  P('dog', 'snowman', { activity: 'skyward' }, { activity: 'shovel' }, ['Stick arm!', 'Not a stick.']),
+  P('adventurer', 'snowman', { activity: 'mine' }, { activity: 'roll' }, ['Snow rocks?', 'Snowballs.']),
+  P('pker', 'snowman', { activity: 'slash' }, { activity: 'puddle' }, ['ez', 'That was my head.']),
+  P('alien', 'snowman', { activity: 'scan' }, { activity: 'melt' }, ['Water based.', 'Mostly.']),
+  P('ghost', 'snowman', { activity: 'wave', motion: rise(10, 1.5) }, { activity: 'look' }, ['Cold in here.', 'Thanks.']),
+  P('spider', 'snowman', { activity: 'hang' }, { activity: 'melt' }, ['Web is cold.', 'Web is wet.']),
+  P('suds', 'reindeer', { activity: 'carry', motion: slide(60, 2) }, { activity: 'haul', motion: slide(60, 2) }, ['Heavy.', 'Get a sleigh.']),
+  P('mage', 'reindeer', { activity: 'cast' }, { activity: 'fly', motion: rise(16, 1.4) }, ['Levitate.', 'Already can.']),
+  P('cat', 'reindeer', { activity: 'loaf' }, { activity: 'graze' }, ['Hay?', 'Nap spot.']),
+  P('dog', 'reindeer', { activity: 'run', motion: slide(70, 1.8) }, { activity: 'stomp' }, ['Race!', 'Fine.']),
+  P('adventurer', 'reindeer', { activity: 'check' }, { activity: 'glow' }, ['Nose is on.', 'Fog tonight.']),
+  P('pker', 'reindeer', { activity: 'noscim' }, { activity: 'tangled' }, ['My scim.', 'Your lines.']),
+  P('alien', 'reindeer', { activity: 'lift' }, { activity: 'fly' }, ['Flying deer.', 'Flying saucer.']),
+  P('ghost', 'reindeer', { activity: 'hat', motion: rise(6, 1.2) }, { activity: 'stomp' }, ['Boo.', 'Snort.']),
+  P('spider', 'reindeer', { activity: 'spin' }, { activity: 'tangled' }, ['Web.', 'Great. Lines.']),
+  P('suds', 'gingerbread', { activity: 'scrub' }, { activity: 'crumbs' }, ['Crumbs. Everywhere.', 'Sorry.']),
+  P('mage', 'gingerbread', { activity: 'cast' }, { activity: 'frosted' }, ['Enchant.', 'Already sweet.']),
+  P('cat', 'gingerbread', { activity: 'bat' }, { activity: 'dance' }, ['Snack!', 'Run run run.']),
+  P('dog', 'gingerbread', { activity: 'fetch', motion: slide(50, 1.8) }, { activity: 'dance' }, ['Cookie!', 'Catch me first.']),
+  P('adventurer', 'gingerbread', { activity: 'check' }, { activity: 'cool' }, ['Food?', 'Decoration.']),
+  P('pker', 'gingerbread', { activity: 'eat' }, { activity: 'crumbs' }, ['Shark.', 'Cookie. Rude.']),
+  P('alien', 'gingerbread', { activity: 'scan' }, { activity: 'frost' }, ['Edible.', 'Decorative.']),
+  P('ghost', 'gingerbread', { activity: 'inhale' }, { activity: 'dance' }, ['Smells good.', 'Stop that.']),
+  P('spider', 'gingerbread', { activity: 'wrap' }, { activity: 'crumbs' }, ['Snack for later.', 'Crumbs for later.']),
+  P('elf', 'snowman', { activity: 'list' }, { activity: 'star' }, ['Nice list.', 'Top of it.']),
+  P('elf', 'reindeer', { activity: 'wrap' }, { activity: 'haul' }, ['Load it up.', 'More?']),
+  P('elf', 'gingerbread', { activity: 'stamp' }, { activity: 'frosted' }, ['Fresh batch.', 'Fresh icing.']),
+  P('reindeer', 'snowman', { activity: 'graze' }, { activity: 'look' }, ['Carrot?', 'Mine.']),
+  P('gingerbread', 'snowman', { activity: 'cool' }, { activity: 'melt' }, ['Cooling.', 'Melting.']),
+  P('reindeer', 'gingerbread', { activity: 'graze' }, { activity: 'dance' }, ['Snack?', 'Run run run.']),
 ];
 
 export const pairKey = (x: ScrublingId, y: ScrublingId): string => [x, y].sort().join('+');

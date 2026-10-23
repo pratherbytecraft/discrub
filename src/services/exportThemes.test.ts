@@ -105,6 +105,16 @@ describe('exportThemes', () => {
       expect(set.defaultId).toBe('halloween-26');
     });
 
+    it("embeds Christmas '26 for everyone on January 3, over the year end, and not on January 5 (2.2.7)", () => {
+      const inside = resolveExportThemeSet({ themeSetting: 'christmas-26', isSupporter: false, now: new Date(2027, 0, 3) });
+      expect(inside.themes.map((t) => t.id)).toContain('christmas-26');
+      expect(inside.themes.map((t) => t.id)).not.toContain('halloween-26');
+      expect(inside.defaultId).toBe('christmas-26');
+      const after = resolveExportThemeSet({ themeSetting: 'christmas-26', isSupporter: false, now: new Date(2027, 0, 5) });
+      expect(after.themes.map((t) => t.id)).not.toContain('christmas-26');
+      expect(after.defaultId).toBe(DISCORD_DARK_ID);
+    });
+
     it('a holiday theme after its season falls back like any supporter theme', () => {
       const set = resolveExportThemeSet({ themeSetting: 'halloween-26', isSupporter: false, now: OFF_SEASON });
       expect(set.themes.map((t) => t.id)).not.toContain('halloween-26');

@@ -14,7 +14,11 @@
 export type ItemGroup = 'standard' | 'holiday' | 'commissioned';
 export type ItemTier = 'free' | 'supporter';
 
-/** Month and day, inclusive at both ends, plus the one year the window is open. */
+/**
+ * Month and day, inclusive at both ends, plus the year the window opens. A
+ * window whose `until` falls before its `from` runs over the year end and
+ * closes in the next year (Christmas '26 is December 1 2026 to January 4 2027).
+ */
 export interface Season {
   year: number;
   from: [number, number];
@@ -25,14 +29,21 @@ export const GROUPS: ItemGroup[] = ['commissioned', 'standard', 'holiday'];
 
 /** Halloween runs October 1 to November 2 (owner, 2026-09-29). */
 export const halloween = (year: number): Season => ({ year, from: [10, 1], until: [11, 2] });
+/** Christmas runs December 1 to January 4 of the next year (owner, 2026-10-26). */
+export const christmas = (year: number): Season => ({ year, from: [12, 1], until: [1, 4] });
 
 const dayNumber = (month: number, day: number) => month * 100 + day;
 
 export const inSeason = (season: Season | undefined, now: Date = new Date()): boolean => {
   if (!season) return false;
-  if (now.getFullYear() !== season.year) return false;
   const today = dayNumber(now.getMonth() + 1, now.getDate());
-  return today >= dayNumber(...season.from) && today <= dayNumber(...season.until);
+  const from = dayNumber(...season.from), until = dayNumber(...season.until);
+  const year = now.getFullYear();
+  if (until < from) {
+    // Runs over the year end: the tail of its own year, or the head of the next.
+    return (year === season.year && today >= from) || (year === season.year + 1 && today <= until);
+  }
+  return year === season.year && today >= from && today <= until;
 };
 
 /** Free items always, supporter items with a key, holiday items also inside their season. */

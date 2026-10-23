@@ -49,7 +49,7 @@ describe('theme registry', () => {
 });
 
 describe('v2.1.0 roster', () => {
-  it('ships 6 free and 10 supporter themes in ratified display order', () => {
+  it('ships 6 free and 11 supporter themes in ratified display order', () => {
     expect(THEME_DESCRIPTORS.map((d) => d.name)).toEqual([
       'Dark Original',
       'Light Original',
@@ -67,9 +67,10 @@ describe('v2.1.0 roster', () => {
       'Abyss',
       'Abstract',
       "Halloween '26",
+      "Christmas '26",
     ]);
     expect(THEME_DESCRIPTORS.filter((d) => d.tier === 'free')).toHaveLength(6);
-    expect(THEME_DESCRIPTORS.filter((d) => d.tier === 'supporter')).toHaveLength(10);
+    expect(THEME_DESCRIPTORS.filter((d) => d.tier === 'supporter')).toHaveLength(11);
   });
 
   it('the default theme stays Dark Original', () => {

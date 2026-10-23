@@ -1,3 +1,4 @@
+import { holidayScrublingsInSeason } from '../support/holidays';
 // 2.2.0 item 9: the Scrublings, pixel characters on the top bar, and their Appearance tab.
 const KEY = { keyStatus: 'valid', payload: { v: 2, kid: 'k', jti: 'j', name: 'Jordan', eh: 'x', ent: { themes: null }, iat: 1, exp: null }, lastRefreshAt: 1 };
 const giveKey = () =>
@@ -67,16 +68,14 @@ describe('Scrublings (2.2.0)', () => {
     cy.window().its('__store__').invoke('getState').its('app.settings.appScrublingsPositions').should('contain', '"suds"');
   });
 
-  it('lists the nine in the Appearance tab, three free, the rest locked, and a locked pick goes to the Supporter segment', () => {
+  it('lists the thirteen in the Appearance tab, three free, the rest locked, and a locked pick goes to the Supporter segment', () => {
     openTab();
-    cy.get('[data-testid="scrublings-cards"] [data-testid^="scrubling-card-"]:not([data-testid="scrubling-card-commission"])').should('have.length', 9);
+    cy.get('[data-testid="scrublings-cards"] [data-testid^="scrubling-card-"]:not([data-testid="scrubling-card-commission"])').should('have.length', 13);
     cy.get('[data-testid="scrubling-card-commission"]').should('exist');
     cy.get('[data-testid="scrubling-card-suds"]').should('have.attr', 'aria-checked', 'true');
     cy.get('[data-testid="scrubling-card-mage"]').should('have.attr', 'aria-checked', 'true');
-    // The Spider '26 is unlocked for everyone through Halloween on the real clock (holiday.cy.ts pins the dates).
-    const now = new Date();
-    const inSeason = now.getFullYear() === 2026 && ((now.getMonth() === 9) || (now.getMonth() === 10 && now.getDate() <= 2));
-    cy.get('[data-testid^="scrubling-locked-"]').should('have.length', inSeason ? 5 : 6);
+    // The Spider '26 is unlocked through Halloween and the four Christmas ones over Christmas on the real clock (holiday.cy.ts pins the dates).
+    cy.get('[data-testid^="scrubling-locked-"]').should('have.length', 10 - holidayScrublingsInSeason());
     cy.get('[data-testid="scrubling-locked-cat"]').should('not.exist');
     cy.get('[data-testid="scrublings-count"]').should('have.text', '2 of 3 picked');
     cy.get('[data-testid="appearance-hint"]').should('not.exist');

@@ -1,3 +1,4 @@
+import { holidaysInSeason } from '../support/holidays';
 /**
  * Theme switching from the Themes hub (the gift-button dialog). The
  * old TopBar cycle button was retired when the hub took over as the
@@ -23,12 +24,10 @@ describe('Theme switching from the hub', () => {
     openHub();
     cy.get('[data-testid="theme-card-auto"]').should('be.visible');
     cy.get('[data-testid="theme-card-discord-light"]').should('be.visible');
-    // All 10 supporter themes locked for a free user, one fewer while Halloween '26 is in season on the real clock.
-    const now = new Date();
-    const inSeason = now.getFullYear() === 2026 && ((now.getMonth() === 9) || (now.getMonth() === 10 && now.getDate() <= 2));
+    // All 11 supporter themes locked for a free user, less any holiday theme in season on the real clock.
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
       'have.length',
-      inSeason ? 9 : 10,
+      11 - holidaysInSeason(),
     );
   });
 
