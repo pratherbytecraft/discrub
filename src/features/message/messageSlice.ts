@@ -782,9 +782,10 @@ export const bulkEditGuilds = createAsyncThunk<
         totals.edited += run.stats.edited;
         totals.skipped += run.stats.skipped;
         totals.failed += run.stats.failed;
-        dispatch(addStatusEntry({ level: 'success', message: t('status.msg.bulkEditServerComplete', { name: guild.name, count: run.stats.edited }) }));
+        // A server cut short (Stop, or the sign in expired) is not complete; the run's own summary line follows.
         if (run.signInExpiredAt !== null) { signInExpired = true; break; }
         if (run.cancelled) { cancelled = true; break; }
+        dispatch(addStatusEntry({ level: 'success', message: t('status.msg.bulkEditServerComplete', { name: guild.name, count: run.stats.edited }) }));
 
         // Delay between servers, the same cadence as between channels.
         if (i < guilds.length - 1) {

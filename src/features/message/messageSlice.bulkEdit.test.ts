@@ -213,7 +213,7 @@ describe('bulkEditGuilds, multi-Server edit (2.2.7, GitHub 16)', () => {
   /** One page per channel keyed by channel id, then empties. */
   const pagesByChannel = (pages: Record<string, Message[]>) => {
     vi.mocked(searchPagination.iterateSearchMessagesRedux).mockImplementation(
-      ({ channelId }) => (async function* () { yield { messages: pages[channelId] ?? [], totalResults: 0 } as any; })(),
+      ({ channelId }) => (async function* () { yield { messages: pages[channelId ?? ''] ?? [], totalResults: 0 } as any; })(),
     );
   };
   const logged = () => vi.mocked(addStatusEntry).mock.calls.map((c) => (c[0] as { message: string }).message);
@@ -292,8 +292,8 @@ describe('bulkEditGuilds, multi-Server edit (2.2.7, GitHub 16)', () => {
 
   it('stops after the current server when cancelled and reports a cancelled summary', async () => {
     channelsByGuild({ g1: [textChannel('c1', 'general')], g2: [textChannel('c2', 'chat')] });
-    pagesByChannel({ c1: [ownMsg('m1')], c2: [ownMsg('m2')] });
-    // Cancel lands after the first edit.
+    pagesByChannel({ c1: [ownMsg('m1'), ownMsg('m2')], c2: [ownMsg('m3')] });
+    // Cancel lands after the first edit, with Alpha's #general still half done.
     service.editMessage.mockImplementation(async () => {
       vi.mocked(operationLoopUtils.checkCancelled).mockReturnValue(true);
       return { success: true, data: { id: 'm1' } };
@@ -304,6 +304,8 @@ describe('bulkEditGuilds, multi-Server edit (2.2.7, GitHub 16)', () => {
     expect(result).toEqual({ edited: 1, skipped: 0, failed: 0 });
     expect(service.fetchChannels.mock.calls.map((c) => c[1])).toEqual(['g1']);
     expect(logged().some((m) => m.startsWith('Bulk edit: Cancelled · 1 of 2 servers, 1 edited'))).toBe(true);
+    // The cut server is not reported complete (mock pass 2026-10-27).
+    expect(logged().some((m) => m.startsWith('Bulk edit: Alpha complete'))).toBe(false);
   });
 
   it('stops at the server where the sign in expired and answers signInExpired', async () => {
@@ -319,6 +321,7 @@ describe('bulkEditGuilds, multi-Server edit (2.2.7, GitHub 16)', () => {
     expect(result).toMatchObject({ edited: 1, signInExpired: true });
     expect(service.fetchChannels.mock.calls.map((c) => c[1])).toEqual(['g1']);
     expect(logged().some((m) => m.startsWith('Bulk edit: Sign in expired · 1 of 2 servers'))).toBe(true);
+    expect(logged().some((m) => m.startsWith('Bulk edit: Alpha complete'))).toBe(false);
     expect(vi.mocked(showToast)).toHaveBeenCalledWith(expect.objectContaining({ level: 'warning' }));
     expect(store.getState().message.isEditing).toBe(false);
   });
