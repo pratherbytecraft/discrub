@@ -1,3 +1,4 @@
+import { holidaysInSeason } from '../support/holidays';
 /**
  * Supporter platform E2E — the Themes hub, paste-a-key unlock,
  * unlock/relock, and the key-based daily check-in (payload v2: one key
@@ -145,9 +146,10 @@ describe('Supporter platform', () => {
     // The theme grid is its own segment now.
     cy.get('[data-testid="supporter-theme-showcase"]').should('not.exist');
     cy.get('[data-testid="appearance-tab-theme"]').click();
+    // 11 supporter themes, less any holiday theme in season on the real clock.
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
       'have.length',
-      9,
+      11 - holidaysInSeason(),
     );
     cy.get('[data-testid="appearance-tab-supporter"]').click();
     // Export footer controls are shown, locked, with the real default line.
@@ -430,9 +432,10 @@ describe('Supporter platform', () => {
     cy.get('body').should('have.css', 'background-color', DARK_BG);
     cy.openThemesHub();
     cy.get('[data-testid="appearance-tab-theme"]').click();
+    // 11 supporter themes, less any holiday theme in season on the real clock.
     cy.get('[data-testid="supporter-theme-showcase"] [data-testid^="theme-locked-"]').should(
       'have.length',
-      9,
+      11 - holidaysInSeason(),
     );
     // The relocked-but-still-saved theme shows its lock (the corner
     // badge shows lock over check; the selection border remains).
