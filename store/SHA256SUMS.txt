@@ -1,5 +1,5 @@
-# Discrub v2.2.7 SHA-256 checksums of the store upload artifacts
+# Discrub v2.2.8 SHA-256 checksums of the store upload artifacts
 # Verify: shasum -a 256 <file>  (Windows: certutil -hashfile <file> SHA256)
-7ca2fa7d25a020813310cf42cca976c8bd2bc8a563831b5974d98ede5a225d15  chrome/discrub-chrome.zip
-27767e36ef22b59662ef679e7da35f67c6955e3506aff80a4eb191a9b6e92e57  firefox/discrub-firefox.zip
-bd5bc05351de5dc82da1a7a401be38cc07e56d144857feb6757d15871bcf6d09  firefox/discrub-firefox-source.zip
+d2bc24810a4c108b122a3d910db3a0f04a747bedf3aabdcfa3d2466a4b19e9ba  chrome/discrub-chrome.zip
+477058031de94c23fd786e84e4bbe634a69007b7049e268d70bd361e4c413ede  firefox/discrub-firefox.zip
+dc878deac0ab8aacdced80a17b6625296d577d535dbc91527179278c0147c023  firefox/discrub-firefox-source.zip
