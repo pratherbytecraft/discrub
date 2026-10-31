@@ -142,3 +142,109 @@ describe('<PackageChannelList /> — sections per category (#270)', () => {
     expect(screen.queryByText('Other')).not.toBeInTheDocument();
   });
 });
+
+describe('<PackageChannelList /> — Multi-select bulk delete (2.2.8)', () => {
+  const signedIn = {
+    auth: { token: 'tok', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+  };
+  const withLeft: ParsedPackage = {
+    ...parsed,
+    channels: [purgedChannel, untouchedChannel, { id: '5', type: PACKAGE_CHANNEL_TYPE.GUILD_TEXT, name: 'orphan-five', messageCount: 3, isOrphan: true }],
+    totalMessages: 80008,
+  };
+
+  function loaded() {
+    const state = statePackageLoaded() as any;
+    state.package.parsed = withLeft;
+    return { ...state, ...signedIn };
+  }
+
+  it('shows the toggle only as enabled when signed in and the package is writable', () => {
+    const { unmount } = renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
+    expect(screen.getByTestId('package-multi-select-toggle')).toBeEnabled();
+    unmount();
+
+    const signedOut = statePackageLoaded() as any;
+    renderWithProviders(<PackageChannelList />, { preloadedState: signedOut });
+    expect(screen.getByTestId('package-multi-select-toggle')).toBeDisabled();
+  });
+
+  it('ticks rows into the store, leaves Left Servers rows without a checkbox, and Select all picks the rest', () => {
+    const { store } = renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
+    expect(screen.queryAllByTestId('package-bulk-tick')).toHaveLength(0);
+    fireEvent.click(screen.getByTestId('package-multi-select-toggle'));
+    // Two deletable rows get a checkbox; the Left Servers row (collapsed group) gets none.
+    expect(screen.getAllByTestId('package-bulk-tick')).toHaveLength(2);
+    expect(screen.getByTestId('multi-select-purge')).toHaveTextContent('Delete');
+    expect(screen.getByTestId('multi-select-purge')).toBeDisabled();
+
+    fireEvent.click(screen.getByText('general'));
+    expect(store.getState().package.bulkSelectedChannelIds).toEqual(['200']);
+    expect(store.getState().package.selectedChannelId).toBeNull();
+    expect(screen.getByTestId('multi-select-count')).toHaveTextContent('1 of 2');
+    expect(screen.getByTestId('multi-select-purge')).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId('multi-select-toggle-all'));
+    expect([...store.getState().package.bulkSelectedChannelIds].sort()).toEqual(['200', '201']);
+    fireEvent.click(screen.getByTestId('multi-select-toggle-all'));
+    expect(store.getState().package.bulkSelectedChannelIds).toEqual([]);
+
+    // Switching Multi-select off clears the selection.
+    fireEvent.click(screen.getByText('general'));
+    fireEvent.click(screen.getByTestId('package-multi-select-toggle'));
+    expect(store.getState().package.bulkSelectedChannelIds).toEqual([]);
+    expect(screen.queryAllByTestId('package-bulk-tick')).toHaveLength(0);
+  });
+
+  it('starts with Multi-select on when the store already holds ticks, so a layout switch keeps them visible', () => {
+    const state = loaded();
+    state.package.bulkSelectedChannelIds = ['200'];
+    renderWithProviders(<PackageChannelList />, { preloadedState: state });
+    expect(screen.getAllByTestId('package-bulk-tick')).toHaveLength(2);
+    expect(screen.getByTestId('multi-select-count')).toHaveTextContent('1 of 2');
+  });
+
+  it('opens the confirm dialog from the Delete button', () => {
+    renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
+    fireEvent.click(screen.getByTestId('package-multi-select-toggle'));
+    fireEvent.click(screen.getByText('random'));
+    fireEvent.click(screen.getByTestId('multi-select-purge'));
+    expect(screen.getByTestId('package-bulk-delete-dialog')).toBeInTheDocument();
+    expect(screen.getByText('Delete your messages in 1 Channel')).toBeInTheDocument();
+  });
+
+  it('shows the running bar with Skip and marks the queue while a run is on', () => {
+    const state = loaded();
+    state.package.bulkDelete = {
+      ...initialPackageState.bulkDelete,
+      status: 'running',
+      queue: ['200', '201'],
+      currentChannelId: '201',
+      outcomes: { '200': { channelId: '200', state: 'done' }, '201': { channelId: '201', state: 'running' } },
+      progress: { messagesDone: 80000, messagesTotal: 80005 },
+    };
+    const { store } = renderWithProviders(<PackageChannelList />, { preloadedState: state });
+    expect(screen.getByTestId('package-bulk-running')).toHaveTextContent('Deleting Channel 2 of 2 · random');
+    expect(screen.getByTestId('package-bulk-running')).toHaveTextContent('80,000 of 80,005 messages');
+    expect(screen.queryByTestId('package-multi-select-toggle')).toBeNull();
+    expect(screen.getByTestId('package-bulk-mark-done')).toBeInTheDocument();
+    expect(screen.getByTestId('package-bulk-mark-running')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('package-bulk-skip'));
+    expect(store.getState().package.bulkDelete.skipRequested).toBe(true);
+  });
+
+  it('shows the totals after a run and dismisses back to the toggle', () => {
+    const state = loaded();
+    state.package.bulkDelete = {
+      ...initialPackageState.bulkDelete,
+      status: 'done',
+      queue: ['200'],
+      outcomes: { '200': { channelId: '200', state: 'done', result: { deleted: 5, alreadyGone: 2, forbidden: 0, failed: 1, cancelled: false, deletedIds: [], alreadyGoneIds: [] } } },
+    };
+    const { store } = renderWithProviders(<PackageChannelList />, { preloadedState: state });
+    expect(screen.getByTestId('package-bulk-finished')).toHaveTextContent('Done. 5 deleted, 2 already gone, 1 failed.');
+    fireEvent.click(screen.getByRole('button', { name: /close/i }));
+    expect(store.getState().package.bulkDelete.status).toBe('idle');
+    expect(screen.getByTestId('package-multi-select-toggle')).toBeInTheDocument();
+  });
+});

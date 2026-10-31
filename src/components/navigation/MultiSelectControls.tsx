@@ -34,6 +34,8 @@ export interface MultiSelectControlsProps {
    * dialog brings back the run's own channels.
    */
   resume?: { export?: boolean; purge?: boolean; edit?: boolean };
+  /** 2.2.8: the package sidebar's run is a plain delete, so its red button reads Delete. */
+  purgeLabel?: string;
 }
 
 /**
@@ -61,6 +63,7 @@ const MultiSelectControls = ({
   onCopyNames,
   noun,
   resume,
+  purgeLabel,
 }: MultiSelectControlsProps) => {
   const { t } = useTranslation();
   if (!active) return null;
@@ -142,7 +145,7 @@ const MultiSelectControls = ({
               data-testid="multi-select-purge"
               sx={{ textTransform: 'none' }}
             >
-              {resume?.purge ? resumeLabel : t('nav.purge')}
+              {resume?.purge ? resumeLabel : purgeLabel ?? t('nav.purge')}
             </Button>
           )}
           <Button

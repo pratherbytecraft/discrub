@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Avatar,
   Box,
   Button,
+  Checkbox,
   Chip,
   Collapse,
   IconButton,
+  LinearProgress,
+  Link,
   List,
   ListItemButton,
   ListSubheader,
@@ -16,6 +20,8 @@ import {
 import {
   Archive as ArchiveIcon,
   AlternateEmail as DmIcon,
+  CheckBox as SelectModeIcon,
+  CheckBoxOutlineBlank as SelectModeOffIcon,
   ExpandLess,
   ExpandMore,
   Forum as ThreadIcon,
@@ -28,14 +34,25 @@ import {
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
+  clearBulkChannelSelection,
+  dismissBulkDelete,
   recheckLeftServers,
+  requestBulkSkip,
+  selectBulkDelete,
+  selectBulkSelectedChannelIds,
   selectChannelDeletedMessageCount,
   selectChannelGoneMessageCount,
+  selectIsPackageReadOnly,
   selectLeftServersRecheckStatus,
   selectPackageChannel,
   selectParsedPackage,
   selectSelectedPackageChannelId,
+  setBulkChannelSelection,
+  toggleBulkChannelSelection,
+  type BulkDeleteChannelState,
 } from '@features/package/packageSlice';
+import MultiSelectControls from '@components/navigation/MultiSelectControls';
+import BulkPackageDeleteDialog from './BulkPackageDeleteDialog';
 import { formatProvenanceTooltip } from '@features/package/packageStatusCopy';
 import type { PackageChannel } from '@features/package/packageTypes';
 import {
@@ -72,6 +89,12 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
   const selectedId = useAppSelector(selectSelectedPackageChannelId);
   const token = useAppSelector((s) => s.auth.token);
   const recheckStatus = useAppSelector(selectLeftServersRecheckStatus);
+  const readOnly = useAppSelector(selectIsPackageReadOnly);
+  const bulkSelected = useAppSelector(selectBulkSelectedChannelIds);
+  const bulk = useAppSelector(selectBulkDelete);
+  // A layout switch remounts the sidebar; ticks kept in the store mean Multi-select was on.
+  const [multiSelectMode, setMultiSelectMode] = useState(() => bulkSelected.length > 0);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [showEmpty, setShowEmpty] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<PackageChannelCategory, boolean>>({
     guildText: false,
@@ -117,6 +140,58 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
     return map;
   }, [filtered]);
 
+  // 2.2.8: the sidebar Multi-select. Left Servers rows cannot be ticked
+  // (Discord refuses deletes in a Server you are not in) and the run's
+  // queue keeps showing its marks after Multi-select is switched off.
+  const bulkRunning = bulk.status === 'running';
+  const bulkFinished = bulk.status === 'done' || bulk.status === 'error';
+  const canBulkDelete = !!token && !readOnly;
+  const bulkDisabledReason = !token
+    ? t('package.bulk.cannotDeleteSignIn')
+    : readOnly
+      ? t('package.bulk.cannotDeleteReadOnly')
+      : null;
+  const selectableIds = useMemo(
+    () => filtered.filter((c) => !c.isOrphan).map((c) => c.id),
+    [filtered],
+  );
+  const bulkSelectedSet = useMemo(() => new Set(bulkSelected), [bulkSelected]);
+  const selectedVisibleCount = selectableIds.filter((id) => bulkSelectedSet.has(id)).length;
+  const allSelected = selectableIds.length > 0 && selectedVisibleCount === selectableIds.length;
+  const showChecks = multiSelectMode && !bulkRunning;
+  const marks = useMemo(() => {
+    const m: Record<string, BulkDeleteChannelState> = {};
+    if (bulk.status === 'idle' || bulk.status === 'counting') return m;
+    for (const id of bulk.queue) m[id] = bulk.outcomes[id]?.state ?? 'pending';
+    return m;
+  }, [bulk]);
+
+  const handleToggleMultiSelect = () => {
+    if (multiSelectMode) dispatch(clearBulkChannelSelection());
+    setMultiSelectMode((v) => !v);
+  };
+  const handleToggleAll = () => {
+    if (allSelected) {
+      dispatch(setBulkChannelSelection(bulkSelected.filter((id) => !selectableIds.includes(id))));
+    } else {
+      dispatch(setBulkChannelSelection([...bulkSelected, ...selectableIds]));
+    }
+  };
+  const handleCopyNames = useCallback(() => {
+    if (!parsed) return;
+    const names = parsed.channels.filter((c) => bulkSelectedSet.has(c.id)).map((c) => getPackageChannelLabel(c));
+    void navigator.clipboard?.writeText(names.join('\n'));
+  }, [parsed, bulkSelectedSet]);
+  // The dialog lists channels in sidebar order, not tick order.
+  const orderedSelection = useMemo(() => {
+    if (!parsed) return [];
+    return parsed.channels.filter((c) => bulkSelectedSet.has(c.id)).map((c) => c.id);
+  }, [parsed, bulkSelectedSet]);
+  // A finished run leaves Multi-select off so the marks read as a result, not a selection.
+  useEffect(() => {
+    if (bulkRunning) setMultiSelectMode(false);
+  }, [bulkRunning]);
+
   if (!parsed) {
     // Main pane already shows the import CTA — keep the sidebar quiet.
     return (
@@ -145,6 +220,60 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
 
   return (
     <>
+      {bulkRunning ? (
+        <BulkRunningBar
+          current={bulk.queue.indexOf(bulk.currentChannelId ?? '') + 1}
+          total={bulk.queue.length}
+          channel={parsed.channels.find((c) => c.id === bulk.currentChannelId) ?? null}
+          messagesDone={bulk.progress?.messagesDone ?? 0}
+          messagesTotal={bulk.progress?.messagesTotal ?? 0}
+          skipRequested={bulk.skipRequested}
+          onSkip={() => dispatch(requestBulkSkip())}
+        />
+      ) : bulkFinished ? (
+        <BulkFinishedNote
+          cancelled={bulk.cancelled}
+          error={bulk.error}
+          outcomes={Object.values(bulk.outcomes)}
+          onDismiss={() => dispatch(dismissBulkDelete())}
+        />
+      ) : (
+        <Box sx={{ px: 1.5, pt: 1, pb: multiSelectMode ? 0.5 : 1 }}>
+          <Tooltip title={bulkDisabledReason ?? ''} disableHoverListener={canBulkDelete}>
+            <span>
+              <Button
+                size="small"
+                onClick={handleToggleMultiSelect}
+                variant={multiSelectMode ? 'contained' : 'outlined'}
+                color={multiSelectMode ? 'primary' : 'inherit'}
+                disabled={!canBulkDelete}
+                aria-label={t('nav.toggleMultiSelect')}
+                startIcon={multiSelectMode ? <SelectModeIcon fontSize="small" /> : <SelectModeOffIcon fontSize="small" />}
+                data-testid="package-multi-select-toggle"
+                sx={{ textTransform: 'none' }}
+              >
+                {t('nav.multiSelect')}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
+      )}
+      <MultiSelectControls
+        active={showChecks}
+        selectedCount={selectedVisibleCount}
+        totalCount={selectableIds.length}
+        allSelected={allSelected}
+        onToggleAll={handleToggleAll}
+        onPurge={() => setBulkDialogOpen(true)}
+        purgeLabel={t('package.bulk.delete')}
+        onCopyNames={handleCopyNames}
+        noun={t('package.bulk.nounChannels')}
+      />
+      <BulkPackageDeleteDialog
+        open={bulkDialogOpen}
+        onClose={() => setBulkDialogOpen(false)}
+        channelIds={orderedSelection}
+      />
       {emptyCount > 0 && (
         <Box sx={{ px: 1.5, py: 1 }}>
           <Button
@@ -201,8 +330,16 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
                     <ChannelRow
                       key={channel.id}
                       channel={channel}
-                      selected={channel.id === selectedId}
-                      onSelect={() => dispatch(selectPackageChannel(channel.id))}
+                      selected={showChecks ? bulkSelectedSet.has(channel.id) : channel.id === selectedId}
+                      check={showChecks ? (channel.isOrphan ? 'blocked' : bulkSelectedSet.has(channel.id) ? 'on' : 'off') : null}
+                      mark={marks[channel.id] ?? null}
+                      onSelect={() => {
+                        if (showChecks) {
+                          if (!channel.isOrphan) dispatch(toggleBulkChannelSelection(channel.id));
+                        } else {
+                          dispatch(selectPackageChannel(channel.id));
+                        }
+                      }}
                     />
                   ))}
                 </SidebarSection>
@@ -270,10 +407,21 @@ const SidebarSection = ({
 interface ChannelRowProps {
   channel: PackageChannel;
   selected: boolean;
+  /** 2.2.8: Multi-select state of the row; null when Multi-select is off. Blocked rows are Left Servers. */
+  check: 'on' | 'off' | 'blocked' | null;
+  /** 2.2.8: the row's place in a bulk run, shown as a dot like the Operator queue. */
+  mark: BulkDeleteChannelState | null;
   onSelect: () => void;
 }
 
-const ChannelRow = ({ channel, selected, onSelect }: ChannelRowProps) => {
+const MARK_COLOR: Record<BulkDeleteChannelState, string> = {
+  pending: 'text.disabled',
+  running: 'primary.main',
+  done: 'success.main',
+  skipped: 'warning.main',
+};
+
+const ChannelRow = ({ channel, selected, check, mark, onSelect }: ChannelRowProps) => {
   const { t } = useTranslation();
   const primary = getPackageChannelLabel(channel);
   const subtitle = getPackageChannelSubtitle(channel);
@@ -295,10 +443,13 @@ const ChannelRow = ({ channel, selected, onSelect }: ChannelRowProps) => {
     <ListItemButton
       selected={selected}
       onClick={onSelect}
+      disabled={check === 'blocked'}
+      data-testid="package-channel-row"
+      data-bulk-mark={mark ?? undefined}
       sx={{
         px: 1.5,
         py: 0.75,
-        opacity: channel.isOrphan ? 0.82 : 1,
+        opacity: check === 'blocked' ? 0.4 : channel.isOrphan ? 0.82 : 1,
         borderLeft: '3px solid transparent',
         borderLeftColor: channel.isOrphan
           ? 'warning.main'
@@ -307,6 +458,20 @@ const ChannelRow = ({ channel, selected, onSelect }: ChannelRowProps) => {
             : 'transparent',
       }}
     >
+      {check !== null && check !== 'blocked' && (
+        <Checkbox
+          size="small"
+          checked={check === 'on'}
+          tabIndex={-1}
+          disableRipple
+          inputProps={{ 'aria-label': t('package.bulk.selectAria', { name: primary }) }}
+          data-testid="package-bulk-tick"
+          sx={{ p: 0, mr: 1 }}
+        />
+      )}
+      {mark && (
+        <Box data-testid={`package-bulk-mark-${mark}`} sx={{ width: 8, height: 8, borderRadius: '50%', mr: 1, flexShrink: 0, backgroundColor: MARK_COLOR[mark] }} />
+      )}
       <ChannelIcon category={category} />
       <Box sx={{ flexGrow: 1, minWidth: 0, ml: 1 }}>
         <Stack direction="row" spacing={1} alignItems="baseline">
@@ -356,6 +521,82 @@ const ChannelRow = ({ channel, selected, onSelect }: ChannelRowProps) => {
         </Typography>
       </Box>
     </ListItemButton>
+  );
+};
+
+interface BulkRunningBarProps {
+  current: number;
+  total: number;
+  channel: PackageChannel | null;
+  messagesDone: number;
+  messagesTotal: number;
+  skipRequested: boolean;
+  onSkip: () => void;
+}
+
+/** 2.2.8: which channel the run is on and how far along, with the Skip control. Pause and stop live in the status log. */
+const BulkRunningBar = ({ current, total, channel, messagesDone, messagesTotal, skipRequested, onSkip }: BulkRunningBarProps) => {
+  const { t } = useTranslation();
+  const pct = messagesTotal > 0 ? Math.min(100, (messagesDone / messagesTotal) * 100) : 0;
+  return (
+    <Stack spacing={0.75} sx={{ px: 2, pt: 1.25, pb: 1 }} data-testid="package-bulk-running">
+      <Typography variant="caption" color="text.secondary" noWrap>
+        {t('package.bulk.running', { current: Math.max(1, current), total, channel: channel ? getPackageChannelLabel(channel) : '' })}
+      </Typography>
+      <LinearProgress variant="determinate" value={pct} sx={{ height: 4, borderRadius: 2 }} />
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: 'wrap' }}>
+        <Typography variant="caption" color="text.secondary">
+          {t('package.bulk.runningCount', { done: messagesDone, total: messagesTotal })}
+        </Typography>
+        <Typography variant="caption" color="text.disabled">·</Typography>
+        <Link
+          component="button"
+          type="button"
+          variant="caption"
+          underline="hover"
+          disabled={skipRequested}
+          onClick={onSkip}
+          data-testid="package-bulk-skip"
+          sx={{ color: 'primary.main', cursor: 'pointer' }}
+        >
+          {t('package.bulk.skip')}
+        </Link>
+      </Stack>
+      <Typography variant="caption" color="text.disabled">{t('package.bulk.controlsHint')}</Typography>
+    </Stack>
+  );
+};
+
+interface BulkFinishedNoteProps {
+  cancelled: boolean;
+  error: string | null;
+  outcomes: Array<{ result?: { deleted: number; alreadyGone: number; forbidden: number; failed: number } }>;
+  onDismiss: () => void;
+}
+
+/** 2.2.8: the run's totals, kept until dismissed so the marks in the list mean something. */
+const BulkFinishedNote = ({ cancelled, error, outcomes, onDismiss }: BulkFinishedNoteProps) => {
+  const { t } = useTranslation();
+  const sum = outcomes.reduce(
+    (acc, o) => ({
+      deleted: acc.deleted + (o.result?.deleted ?? 0),
+      gone: acc.gone + (o.result?.alreadyGone ?? 0),
+      failed: acc.failed + (o.result?.failed ?? 0) + (o.result?.forbidden ?? 0),
+    }),
+    { deleted: 0, gone: 0, failed: 0 },
+  );
+  return (
+    <Box sx={{ px: 1.5, pt: 1, pb: 0.5 }}>
+      <Alert
+        severity={error ? 'error' : cancelled || sum.failed > 0 ? 'warning' : 'success'}
+        variant="outlined"
+        sx={{ py: 0.25, '& .MuiAlert-message': { fontSize: '0.78rem' } }}
+        onClose={onDismiss}
+        data-testid="package-bulk-finished"
+      >
+        {error ?? t(cancelled ? 'package.bulk.stopped' : 'package.bulk.finished', sum)}
+      </Alert>
+    </Box>
   );
 };
 

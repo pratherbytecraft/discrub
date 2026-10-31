@@ -271,7 +271,9 @@ describe('deleteSummaryLevel (#271)', () => {
     expect(deleteSummaryLevel({ ...baseDeleteResult, deleted: 3, alreadyGone: 2 })).toBe('success');
     expect(deleteSummaryLevel({ ...baseDeleteResult, deleted: 0, alreadyGone: 2 })).toBe('warning');
     expect(deleteSummaryLevel({ ...baseDeleteResult, deleted: 3, failed: 1 })).toBe('warning');
-    expect(deleteSummaryLevel({ ...baseDeleteResult, deleted: 0, forbidden: 2 })).toBe('success');
+    // 2.2.8: a run Discord refused outright is a warning, so a bulk run's log does not read green over a 403 channel.
+    expect(deleteSummaryLevel({ ...baseDeleteResult, deleted: 0, forbidden: 2 })).toBe('warning');
+    expect(deleteSummaryLevel({ ...baseDeleteResult, deleted: 3, forbidden: 1 })).toBe('warning');
   });
 });
 

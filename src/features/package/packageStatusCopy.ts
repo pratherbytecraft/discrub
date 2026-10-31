@@ -101,7 +101,7 @@ export function formatProvenanceTooltip(total: number, deleted: number, gone: nu
  * were already gone.
  */
 export function deleteSummaryLevel(result: DeleteResult): 'success' | 'warning' {
-  if (result.failed > 0) return 'warning';
+  if (result.failed > 0 || result.forbidden > 0) return 'warning';
   if (result.deleted === 0 && result.alreadyGone > 0) return 'warning';
   return 'success';
 }

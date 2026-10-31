@@ -60,6 +60,7 @@ import type {
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import { toDiscordMessage } from './packageMessageAdapter';
 import { applyPackageFilter, hasAnyPackageCriterion } from './packageFilter';
+import { getPackageChannelLabel } from './packageDisplayUtils';
 import {
   enrichmentCache,
   type EnrichedChannelCache,
@@ -137,6 +138,50 @@ export interface DeleteResult {
   /** IDs Discord answered 404 for: already gone before this run (#271). */
   alreadyGoneIds: string[];
 }
+
+/** 2.2.8: a package bulk delete walks several channels one after another. */
+export type BulkDeleteStatus = 'idle' | 'counting' | 'running' | 'done' | 'error';
+
+export type BulkDeleteChannelState = 'pending' | 'running' | 'done' | 'skipped';
+
+export interface BulkDeleteChannelOutcome {
+  channelId: string;
+  state: BulkDeleteChannelState;
+  /** Why a channel was skipped: left Server, nothing left to delete, or the user pressed Skip. */
+  reason?: 'orphan' | 'empty' | 'user';
+  result?: DeleteResult;
+}
+
+export interface BulkDeleteState {
+  status: BulkDeleteStatus;
+  /** Channel ids in run order. */
+  queue: string[];
+  currentChannelId: string | null;
+  outcomes: Record<string, BulkDeleteChannelOutcome>;
+  /** Messages done so far across the run and the total planned. */
+  progress: { messagesDone: number; messagesTotal: number } | null;
+  /** The filter the run was started with, if any. */
+  criteria: SearchCriteria | null;
+  /** Set by the Skip control; the loop moves to the next channel and clears it. */
+  skipRequested: boolean;
+  /** Per channel counts from the last countBulkDeleteTargets pass. */
+  counts: Record<string, number>;
+  error: string | null;
+  cancelled: boolean;
+}
+
+export const initialBulkDeleteState: BulkDeleteState = {
+  status: 'idle',
+  queue: [],
+  currentChannelId: null,
+  outcomes: {},
+  progress: null,
+  criteria: null,
+  skipRequested: false,
+  counts: {},
+  error: null,
+  cancelled: false,
+};
 
 export interface PackageState {
   status: PackageStatus;
@@ -218,11 +263,19 @@ export interface PackageState {
    * PackageView re-validates when the signed in user differs.
    */
   validatedUserId: string | null;
+  /**
+   * 2.2.8: channel ids ticked in the sidebar's Multi-select, and the bulk
+   * delete run that works through them.
+   */
+  bulkSelectedChannelIds: string[];
+  bulkDelete: BulkDeleteState;
 }
 
 export const initialPackageState: PackageState = {
   leftServersRecheckStatus: 'idle',
   validatedUserId: null,
+  bulkSelectedChannelIds: [],
+  bulkDelete: initialBulkDeleteState,
   status: 'idle',
   parsed: null,
   validation: null,
@@ -740,6 +793,156 @@ export const loadAllPackageTimestamps = createAsyncThunk<
   return timestamps;
 });
 
+type PackageDispatch = (action: any) => any;
+
+interface RunChannelDeleteArgs {
+  ids: string[];
+  channelId: string;
+  token: string;
+  getState: () => RootState;
+  dispatch: PackageDispatch;
+  onProgress: (current: number, total: number) => void;
+  /** 2.2.8: returns true when the user asked to skip the rest of this channel. */
+  shouldSkip?: () => boolean;
+  /**
+   * 2.2.8: called every DELETE_FLUSH_EVERY results with the ids accepted and
+   * the ids answered 404 since the last call, so a reload mid channel does
+   * not lose them (a lost id comes back as a 404 on the next run).
+   */
+  onFlush?: (deletedIds: string[], alreadyGoneIds: string[]) => void;
+}
+
+/** 2.2.8: how many results between cache flushes during a package delete. */
+export const DELETE_FLUSH_EVERY = 25;
+
+/**
+ * The per message delete loop shared by the single channel delete and the
+ * 2.2.8 bulk run. Sends one DELETE per id with the Delete Delay between
+ * them, honours pause and stop, pays only a short floor after a 404
+ * (#271), and logs HTTP failures as it goes. Does not log the opening or
+ * closing summary lines; the callers do, since the bulk run words them per
+ * channel.
+ */
+async function runChannelDelete({ ids, channelId, token, getState, dispatch, onProgress, shouldSkip, onFlush }: RunChannelDeleteArgs): Promise<DeleteResult> {
+  const state = getState();
+  const deleteDelay = selectDeleteDelay(state);
+  const delayModifier = selectDelayModifier(state);
+  const discordService = getDiscordService();
+
+  const result: DeleteResult = {
+    deleted: 0,
+    alreadyGone: 0,
+    forbidden: 0,
+    failed: 0,
+    cancelled: false,
+    deletedIds: [],
+    alreadyGoneIds: [],
+  };
+
+  // #271: a run that started with a stale selection (messages removed
+  // by the live purge after the package was exported) answers 404 for
+  // every one. Say so as it goes, not only at the end.
+  const noteAlreadyGone = (tried: number) => {
+    result.alreadyGone += 1;
+    if (result.alreadyGone % ALREADY_GONE_LOG_EVERY === 0) {
+      dispatch(addStatusEntry({
+        level: 'info',
+        message: t('status.package.alreadyGoneProgress', { gone: result.alreadyGone, tried }),
+      }));
+    }
+  };
+
+  // How many of result.deletedIds and result.alreadyGoneIds the last flush covered.
+  let flushed = { deleted: 0, gone: 0 };
+  try {
+    for (let i = 0; i < ids.length; i++) {
+      await waitWhilePaused(getState);
+      if (checkCancelled(getState)) throw new CancelledError();
+      if (shouldSkip?.()) break;
+
+      onProgress(i, ids.length);
+
+      const messageId = ids[i];
+      let wasAlreadyGone = false;
+      try {
+        // discrub-core's `discordService.deleteMessage` does NOT throw
+        // on HTTP errors; its `withRetry` wrapper catches and returns a
+        // `{ success, status }` object. We inspect that. The catch is
+        // kept for genuinely-thrown exceptions (CancelledError surfacing
+        // through the await chain, programming errors, etc.).
+        const apiResult = await discordService.deleteMessage(token, messageId, channelId);
+        if (apiResult.success) {
+          result.deleted += 1;
+          result.deletedIds.push(messageId);
+        } else if (apiResult.status === 404) {
+          noteAlreadyGone(i + 1);
+          result.alreadyGoneIds.push(messageId);
+          wasAlreadyGone = true;
+        } else if (apiResult.status === 403) {
+          result.forbidden += 1;
+        } else {
+          result.failed += 1;
+          dispatch(addStatusEntry({
+            level: 'error',
+            message: t('status.package.deleteFailedHttp', { id: messageId, status: apiResult.status ?? t('status.package.unknown') }),
+          }));
+        }
+      } catch (err) {
+        if (err instanceof CancelledError) throw err;
+        const status = extractHttpStatus(err);
+        if (status === 404) {
+          noteAlreadyGone(i + 1);
+          result.alreadyGoneIds.push(messageId);
+          wasAlreadyGone = true;
+        } else if (status === 403) {
+          result.forbidden += 1;
+        } else {
+          result.failed += 1;
+          dispatch(addStatusEntry({
+            level: 'error',
+            message: t('status.package.deleteFailed', { id: messageId, error: err instanceof Error ? err.message : t('status.package.unknownError') }),
+          }));
+        }
+      }
+
+      flushed = flushPending(result, flushed, onFlush, false);
+
+      // Delay between deletes, unless this is the last one. A 404 did
+      // not delete anything, so it only pays a short floor (#271) instead
+      // of the full Delete Delay; a stale selection of thousands would
+      // otherwise wait hours for nothing.
+      if (i < ids.length - 1) {
+        const calc = calculateRandomDelay(deleteDelay, delayModifier);
+        const delayMs = wasAlreadyGone ? Math.min(calc.delayMs, ALREADY_GONE_DELAY_MS) : calc.delayMs;
+        const wasCancelled = await cancellableDelay(delayMs, getState, undefined, shouldSkip);
+        if (wasCancelled) throw new CancelledError();
+      }
+    }
+  } catch (err) {
+    if (err instanceof CancelledError) {
+      result.cancelled = true;
+    } else {
+      dispatch(addStatusEntry({
+        level: 'error',
+        message: t('status.package.deleteStopped', { error: err instanceof Error ? err.message : t('status.package.unknownError') }),
+      }));
+    }
+  }
+
+  flushPending(result, flushed, onFlush, true);
+  onProgress(ids.length, ids.length);
+  return result;
+}
+
+/** Hands the ids since the last flush to `onFlush` every DELETE_FLUSH_EVERY results, or whatever is left when `final`. */
+function flushPending(result: DeleteResult, flushed: { deleted: number; gone: number }, onFlush: RunChannelDeleteArgs['onFlush'], final: boolean): { deleted: number; gone: number } {
+  if (!onFlush) return flushed;
+  const pending = (result.deletedIds.length - flushed.deleted) + (result.alreadyGoneIds.length - flushed.gone);
+  if (pending === 0 || (!final && pending < DELETE_FLUSH_EVERY)) return flushed;
+  onFlush(result.deletedIds.slice(flushed.deleted), result.alreadyGoneIds.slice(flushed.gone));
+  return { deleted: result.deletedIds.length, gone: result.alreadyGoneIds.length };
+}
+
 /**
  * Deletes the messages currently selected in one package channel using
  * the Discord API. Honors the user's delete delay + pause/cancel flags
@@ -785,109 +988,25 @@ export const deletePackageMessages = createAsyncThunk<
     return rejectWithValue('No messages selected.');
   }
 
-  const deleteDelay = selectDeleteDelay(state);
-  const delayModifier = selectDelayModifier(state);
-  const discordService = getDiscordService();
-
-  const result: DeleteResult = {
-    deleted: 0,
-    alreadyGone: 0,
-    forbidden: 0,
-    failed: 0,
-    cancelled: false,
-    deletedIds: [],
-    alreadyGoneIds: [],
-  };
-
-  // #271: a run that started with a stale selection (messages removed
-  // by the live purge after the package was exported) answers 404 for
-  // every one. Say so as it goes, not only at the end.
-  const noteAlreadyGone = (tried: number) => {
-    result.alreadyGone += 1;
-    if (result.alreadyGone % ALREADY_GONE_LOG_EVERY === 0) {
-      dispatch(addStatusEntry({
-        level: 'info',
-        message: t('status.package.alreadyGoneProgress', { gone: result.alreadyGone, tried }),
-      }));
-    }
-  };
-
   dispatch(addStatusEntry({
     level: 'info',
     message: t('status.package.deleting', { count: ids.length }),
   }));
 
-  try {
-    for (let i = 0; i < ids.length; i++) {
-      await waitWhilePaused(getState);
-      if (checkCancelled(getState)) throw new CancelledError();
-
-      dispatch(setDeleteProgress({ current: i, total: ids.length }));
-
-      const messageId = ids[i];
-      let wasAlreadyGone = false;
-      try {
-        // discrub-core's `discordService.deleteMessage` does NOT throw
-        // on HTTP errors; its `withRetry` wrapper catches and returns a
-        // `{ success, status }` object. We inspect that. The catch is
-        // kept for genuinely-thrown exceptions (CancelledError surfacing
-        // through the await chain, programming errors, etc.).
-        const apiResult = await discordService.deleteMessage(token, messageId, channelId);
-        if (apiResult.success) {
-          result.deleted += 1;
-          result.deletedIds.push(messageId);
-        } else if (apiResult.status === 404) {
-          noteAlreadyGone(i + 1);
-          result.alreadyGoneIds.push(messageId);
-          wasAlreadyGone = true;
-        } else if (apiResult.status === 403) {
-          result.forbidden += 1;
-        } else {
-          result.failed += 1;
-          dispatch(addStatusEntry({
-            level: 'error',
-            message: t('status.package.deleteFailedHttp', { id: messageId, status: apiResult.status ?? t('status.package.unknown') }),
-          }));
-        }
-      } catch (err) {
-        if (err instanceof CancelledError) throw err;
-        const status = extractHttpStatus(err);
-        if (status === 404) {
-          noteAlreadyGone(i + 1);
-          result.alreadyGoneIds.push(messageId);
-          wasAlreadyGone = true;
-        } else if (status === 403) {
-          result.forbidden += 1;
-        } else {
-          result.failed += 1;
-          dispatch(addStatusEntry({
-            level: 'error',
-            message: t('status.package.deleteFailed', { id: messageId, error: err instanceof Error ? err.message : t('status.package.unknownError') }),
-          }));
-        }
-      }
-
-      // Delay between deletes — unless we're on the last one. A 404 did
-      // not delete anything, so it only pays a short floor (#271) instead
-      // of the full Delete Delay; a stale selection of thousands would
-      // otherwise wait hours for nothing.
-      if (i < ids.length - 1) {
-        const calc = calculateRandomDelay(deleteDelay, delayModifier);
-        const delayMs = wasAlreadyGone ? Math.min(calc.delayMs, ALREADY_GONE_DELAY_MS) : calc.delayMs;
-        const wasCancelled = await cancellableDelay(delayMs, getState);
-        if (wasCancelled) throw new CancelledError();
-      }
-    }
-  } catch (err) {
-    if (err instanceof CancelledError) {
-      result.cancelled = true;
-    } else {
-      dispatch(addStatusEntry({
-        level: 'error',
-        message: t('status.package.deleteStopped', { error: err instanceof Error ? err.message : t('status.package.unknownError') }),
-      }));
-    }
-  }
+  const result = await runChannelDelete({
+    ids,
+    channelId,
+    token,
+    getState,
+    dispatch,
+    onProgress: (current, total) => dispatch(setDeleteProgress({ current, total })),
+    onFlush: (deletedIds, alreadyGoneIds) => {
+      const userId = getState().package.parsed?.user.id;
+      if (!userId) return;
+      void recordDeletions(userId, channelId, deletedIds, 'deleted');
+      void recordDeletions(userId, channelId, alreadyGoneIds, 'gone');
+    },
+  });
 
   dispatch(setDeleteProgress({ current: ids.length, total: ids.length }));
   dispatch(addStatusEntry({
@@ -918,6 +1037,181 @@ export const deletePackageMessages = createAsyncThunk<
 export const ALREADY_GONE_LOG_EVERY = 50;
 /** #271: the wait after a 404 instead of the full Delete Delay. */
 export const ALREADY_GONE_DELAY_MS = 250;
+
+/** 2.2.8: the ids a bulk run would delete in one channel: the package's rows, filtered, minus the ones already gone. */
+async function bulkTargetIds(state: RootState, channel: PackageChannel, criteria: SearchCriteria | null): Promise<string[]> {
+  const userId = state.package.parsed?.user.id;
+  if (!userId) return [];
+  const cached = state.package.loadedChannels[channel.id];
+  const messages = cached ?? (await loadChannelMessagesFromStorage(userId, channel.id));
+  const filtered = criteria && hasAnyPackageCriterion(criteria) ? applyPackageFilter(messages, criteria) : messages;
+  const goneSet = new Set<string>([
+    ...(state.package.deletedMessageIds[channel.id] ?? []),
+    ...(state.package.enrichmentMisses[channel.id]?.deleted ?? []),
+  ]);
+  return filtered.filter((m) => !goneSet.has(m.id)).map((m) => m.id);
+}
+
+function bulkChannelLabel(channel: PackageChannel): string {
+  const name = getPackageChannelLabel(channel);
+  return channel.guildName ? `${name} (${channel.guildName})` : name;
+}
+
+/**
+ * 2.2.8: count what a bulk delete would remove per channel, so the confirm
+ * dialog shows real numbers (filtered, minus already gone) before the run.
+ * Left Servers channels count as 0.
+ */
+export const countBulkDeleteTargets = createAsyncThunk<
+  Record<string, number>,
+  { channelIds: string[]; criteria: SearchCriteria | null },
+  { state: RootState; rejectValue: string }
+>('package/countBulkDeleteTargets', async ({ channelIds, criteria }, { getState, rejectWithValue }) => {
+  const state = getState();
+  const parsed = state.package.parsed;
+  if (!parsed) return rejectWithValue('No package loaded');
+  const counts: Record<string, number> = {};
+  for (const id of channelIds) {
+    const channel = parsed.channels.find((c) => c.id === id);
+    if (!channel || channel.isOrphan) { counts[id] = 0; continue; }
+    try {
+      counts[id] = (await bulkTargetIds(state, channel, criteria)).length;
+    } catch {
+      counts[id] = 0;
+    }
+  }
+  return counts;
+});
+
+/**
+ * 2.2.8: delete the user's messages in several package channels, one
+ * channel after another, over the same per message loop as the single
+ * channel delete. Left Servers channels are skipped with a line in the
+ * status log, channels with nothing left are skipped too, Stop ends the
+ * run after the current message, Skip moves to the next channel, and every
+ * id Discord accepted or answered 404 for lands in the deleted cache so a
+ * rerun or a reload picks up where this one stopped.
+ */
+export const bulkDeletePackageChannels = createAsyncThunk<
+  { cancelled: boolean; deleted: number; alreadyGone: number; forbidden: number; failed: number; channelsDone: number; channelsSkipped: number },
+  { channelIds: string[]; criteria: SearchCriteria | null },
+  { state: RootState; rejectValue: string }
+>('package/bulkDelete', async ({ channelIds, criteria }, { getState, dispatch, rejectWithValue }) => {
+  const state = getState();
+  const token = state.auth.token;
+  if (!token) return rejectWithValue('Not authenticated');
+  const validation = state.package.validation;
+  if (!validation || validation.readOnly) return rejectWithValue('Package is in read-only mode');
+  const parsed = state.package.parsed;
+  if (!parsed) return rejectWithValue('No package loaded');
+  if (channelIds.length === 0) return rejectWithValue('No channels selected.');
+
+  const totals = { cancelled: false, deleted: 0, alreadyGone: 0, forbidden: 0, failed: 0, channelsDone: 0, channelsSkipped: 0 };
+  const plannedTotal = channelIds.reduce((n, id) => n + (state.package.bulkDelete.counts[id] ?? 0), 0);
+  let messagesDone = 0;
+  dispatch(setBulkDeleteProgress({ messagesDone: 0, messagesTotal: plannedTotal }));
+  const firstLabel = channelIds.length === 1 ? parsed.channels.find((c) => c.id === channelIds[0]) : null;
+  dispatch(addStatusEntry({
+    level: 'info',
+    message: firstLabel
+      ? t('status.package.bulkStartOneChannel', { count: plannedTotal, channel: bulkChannelLabel(firstLabel) })
+      : t('status.package.bulkStart', { count: plannedTotal, channels: channelIds.length }),
+  }));
+
+  for (const channelId of channelIds) {
+    const live = getState();
+    if (checkCancelled(() => live)) { totals.cancelled = true; break; }
+    const channel = parsed.channels.find((c) => c.id === channelId);
+    if (!channel) continue;
+    const label = bulkChannelLabel(channel);
+    dispatch(setBulkDeleteCurrent(channelId));
+
+    if (channel.isOrphan) {
+      dispatch(setBulkChannelOutcome({ channelId, state: 'skipped', reason: 'orphan' }));
+      dispatch(addStatusEntry({ level: 'warning', message: t('status.package.bulkSkipOrphan', { channel: label }) }));
+      totals.channelsSkipped += 1;
+      continue;
+    }
+
+    let ids: string[] = [];
+    try {
+      ids = await bulkTargetIds(live, channel, criteria);
+    } catch (err) {
+      dispatch(setBulkChannelOutcome({ channelId, state: 'skipped', reason: 'empty' }));
+      dispatch(addStatusEntry({ level: 'error', message: t('status.package.bulkLoadFailed', { channel: label, error: err instanceof Error ? err.message : t('status.package.unknownError') }) }));
+      totals.channelsSkipped += 1;
+      continue;
+    }
+    if (ids.length === 0) {
+      dispatch(setBulkChannelOutcome({ channelId, state: 'skipped', reason: 'empty' }));
+      dispatch(addStatusEntry({ level: 'info', message: t('status.package.bulkSkipEmpty', { channel: label }) }));
+      totals.channelsSkipped += 1;
+      continue;
+    }
+
+    dispatch(setBulkChannelOutcome({ channelId, state: 'running' }));
+    dispatch(addStatusEntry({ level: 'info', message: t('status.package.bulkChannelStart', { count: ids.length, channel: label }) }));
+    const doneBefore = messagesDone;
+    const result = await runChannelDelete({
+      ids,
+      channelId,
+      token,
+      getState,
+      dispatch,
+      shouldSkip: () => getState().package.bulkDelete.skipRequested,
+      onProgress: (current) => {
+        messagesDone = doneBefore + current;
+        dispatch(setBulkDeleteProgress({ messagesDone, messagesTotal: Math.max(plannedTotal, messagesDone) }));
+      },
+      onFlush: (deletedIds, alreadyGoneIds) => {
+        dispatch(packageChannelDeletionsApplied({ channelId, deletedIds, alreadyGoneIds }));
+        void recordDeletions(parsed.user.id, channelId, deletedIds, 'deleted');
+        void recordDeletions(parsed.user.id, channelId, alreadyGoneIds, 'gone');
+      },
+    });
+    const tried = result.deleted + result.alreadyGone + result.forbidden + result.failed;
+    messagesDone = doneBefore + tried;
+    dispatch(setBulkDeleteProgress({ messagesDone, messagesTotal: Math.max(plannedTotal, messagesDone) }));
+    // The flushes above are queued on the cache module's write chain; wait for them before the next channel.
+    await recordDeletions(parsed.user.id, channelId, [], 'deleted');
+
+    totals.deleted += result.deleted;
+    totals.alreadyGone += result.alreadyGone;
+    totals.forbidden += result.forbidden;
+    totals.failed += result.failed;
+
+    const skipped = getState().package.bulkDelete.skipRequested;
+    if (skipped) dispatch(clearBulkSkip());
+    if (result.cancelled) {
+      totals.cancelled = true;
+      dispatch(setBulkChannelOutcome({ channelId, state: 'done', result }));
+      dispatch(addStatusEntry({ level: 'warning', message: t('status.package.bulkChannelStopped', { channel: label, summary: formatDeleteSummary(result) }) }));
+      break;
+    }
+    if (skipped && tried < ids.length) {
+      totals.channelsSkipped += 1;
+      dispatch(setBulkChannelOutcome({ channelId, state: 'skipped', reason: 'user', result }));
+      dispatch(addStatusEntry({ level: 'info', message: t('status.package.bulkChannelSkipped', { channel: label, summary: formatDeleteSummary(result) }) }));
+      continue;
+    }
+    totals.channelsDone += 1;
+    dispatch(setBulkChannelOutcome({ channelId, state: 'done', result }));
+    dispatch(addStatusEntry({ level: deleteSummaryLevel(result), message: t('status.package.bulkChannelDone', { channel: label, summary: formatDeleteSummary(result) }) }));
+  }
+
+  dispatch(setBulkDeleteCurrent(null));
+  dispatch(addStatusEntry({
+    level: totals.cancelled || totals.failed > 0 || totals.forbidden > 0 ? 'warning' : 'success',
+    message: t(totals.cancelled ? 'status.package.bulkStopped' : 'status.package.bulkDone', {
+      deleted: totals.deleted,
+      gone: totals.alreadyGone,
+      failed: totals.failed + totals.forbidden,
+      done: totals.channelsDone,
+      skipped: totals.channelsSkipped,
+    }),
+  }));
+  return totals;
+});
 
 /** Best-effort HTTP-status extraction for errors surfaced by discord-service/fetch. */
 function extractHttpStatus(err: unknown): number | null {
@@ -1888,6 +2182,22 @@ export const enrichPackageChannel = createAsyncThunk<
   },
 );
 
+function applyChannelDeletions(state: PackageState, payload: { channelId: string; deletedIds: string[]; alreadyGoneIds: string[] }) {
+  const { channelId, deletedIds, alreadyGoneIds } = payload;
+  // The union keeps its "not on Discord any more" meaning, the gone
+  // subset records which of those Discrub never actually removed.
+  const existing = state.deletedMessageIds[channelId] ?? [];
+  state.deletedMessageIds[channelId] = Array.from(new Set([...existing, ...deletedIds, ...alreadyGoneIds]));
+  if (alreadyGoneIds.length > 0) {
+    const existingGone = state.goneMessageIds[channelId] ?? [];
+    state.goneMessageIds[channelId] = Array.from(new Set([...existingGone, ...alreadyGoneIds]));
+  }
+  // Clear the table selection (they're gone or intended to be).
+  delete state.selectedMessageIds[channelId];
+  // Confirmed-gone messages stay in `loadedChannels`; the table renders
+  // them with the `gone` treatment so users can see what was deleted.
+}
+
 const packageSlice = createSlice({
   name: 'package',
   initialState: initialPackageState,
@@ -1960,6 +2270,46 @@ const packageSlice = createSlice({
       state.deleteResult = null;
       state.deleteError = null;
       state.deleteStatus = 'idle';
+    },
+    /** 2.2.8: sidebar Multi-select for a bulk delete. */
+    toggleBulkChannelSelection(state, action: PayloadAction<string>) {
+      const idx = state.bulkSelectedChannelIds.indexOf(action.payload);
+      if (idx === -1) state.bulkSelectedChannelIds.push(action.payload);
+      else state.bulkSelectedChannelIds.splice(idx, 1);
+    },
+    setBulkChannelSelection(state, action: PayloadAction<string[]>) {
+      state.bulkSelectedChannelIds = Array.from(new Set(action.payload));
+    },
+    clearBulkChannelSelection(state) {
+      state.bulkSelectedChannelIds = [];
+    },
+    /** 2.2.8: the Skip control; the loop ends the current channel and moves on. */
+    requestBulkSkip(state) {
+      if (state.bulkDelete.status === 'running') state.bulkDelete.skipRequested = true;
+    },
+    clearBulkSkip(state) {
+      state.bulkDelete.skipRequested = false;
+    },
+    setBulkDeleteCurrent(state, action: PayloadAction<string | null>) {
+      state.bulkDelete.currentChannelId = action.payload;
+    },
+    setBulkDeleteProgress(state, action: PayloadAction<{ messagesDone: number; messagesTotal: number }>) {
+      state.bulkDelete.progress = action.payload;
+    },
+    setBulkChannelOutcome(state, action: PayloadAction<BulkDeleteChannelOutcome>) {
+      state.bulkDelete.outcomes[action.payload.channelId] = action.payload;
+    },
+    /** 2.2.8: back to idle after the run's summary is dismissed; the deleted cache keeps the history. */
+    dismissBulkDelete(state) {
+      state.bulkDelete = { ...initialBulkDeleteState, counts: state.bulkDelete.counts };
+    },
+    /**
+     * Merge a channel's accepted and already-gone ids into the persistent
+     * deleted set. Shared by the single channel delete's fulfilled case and
+     * each channel of a bulk run.
+     */
+    packageChannelDeletionsApplied(state, action: PayloadAction<{ channelId: string; deletedIds: string[]; alreadyGoneIds: string[] }>) {
+      applyChannelDeletions(state, action.payload);
     },
     setEnrichmentProgress(
       state,
@@ -2102,6 +2452,8 @@ const packageSlice = createSlice({
         state.validatedUserId = action.payload.validatedUserId ?? null;
         state.error = null;
         state.selectedChannelId = null;
+        state.bulkSelectedChannelIds = [];
+        state.bulkDelete = initialBulkDeleteState;
         state.loadedChannels = {};
         state.loadedOrder = [];
         // #236: the deleted cache rides in on the payload — applying it
@@ -2129,6 +2481,8 @@ const packageSlice = createSlice({
         state.validatedUserId = action.payload.validatedUserId ?? null;
         state.error = null;
         state.selectedChannelId = null;
+        state.bulkSelectedChannelIds = [];
+        state.bulkDelete = initialBulkDeleteState;
         state.loadedChannels = {};
         state.loadedOrder = [];
         // #236: same atomic treatment as importPackage.fulfilled —
@@ -2207,26 +2561,8 @@ const packageSlice = createSlice({
         state.deleteResult = action.payload;
         state.deleteProgress = null;
 
-        const channelId = action.meta.arg.channelId;
         const { deletedIds, alreadyGoneIds } = action.payload;
-
-        // Merge into the persistent deleted set for this channel: the
-        // union keeps its "not on Discord any more" meaning, the gone
-        // subset records which of those Discrub never actually removed.
-        const existing = state.deletedMessageIds[channelId] ?? [];
-        state.deletedMessageIds[channelId] = Array.from(new Set([...existing, ...deletedIds, ...alreadyGoneIds]));
-        if (alreadyGoneIds.length > 0) {
-          const existingGone = state.goneMessageIds[channelId] ?? [];
-          state.goneMessageIds[channelId] = Array.from(new Set([...existingGone, ...alreadyGoneIds]));
-        }
-
-        // Clear selection (they're gone or intended to be).
-        delete state.selectedMessageIds[channelId];
-
-        // Intentionally keep confirmed-gone messages in `loadedChannels`.
-        // The table renders them with the `gone` visual treatment via
-        // `deletedMessageIds`, so users can see *what* was deleted and
-        // its original content — rather than rows silently vanishing.
+        applyChannelDeletions(state, { channelId: action.meta.arg.channelId, deletedIds, alreadyGoneIds });
       })
       .addCase(deletePackageMessages.rejected, (state, action) => {
         state.deleteStatus = 'error';
@@ -2254,6 +2590,41 @@ const packageSlice = createSlice({
       })
       // #271: the live purge or the message table deleted messages that
       // belong to a channel in this package.
+      .addCase(countBulkDeleteTargets.pending, (state) => {
+        if (state.bulkDelete.status === 'idle' || state.bulkDelete.status === 'counting') state.bulkDelete.status = 'counting';
+      })
+      .addCase(countBulkDeleteTargets.fulfilled, (state, action) => {
+        state.bulkDelete.counts = { ...state.bulkDelete.counts, ...action.payload };
+        if (state.bulkDelete.status === 'counting') state.bulkDelete.status = 'idle';
+      })
+      .addCase(countBulkDeleteTargets.rejected, (state) => {
+        if (state.bulkDelete.status === 'counting') state.bulkDelete.status = 'idle';
+      })
+      .addCase(bulkDeletePackageChannels.pending, (state, action) => {
+        const { channelIds, criteria } = action.meta.arg;
+        state.bulkDelete = {
+          ...initialBulkDeleteState,
+          counts: state.bulkDelete.counts,
+          status: 'running',
+          queue: [...channelIds],
+          criteria,
+          outcomes: Object.fromEntries(channelIds.map((id) => [id, { channelId: id, state: 'pending' as const }])),
+        };
+      })
+      .addCase(bulkDeletePackageChannels.fulfilled, (state, action) => {
+        state.bulkDelete.status = 'done';
+        state.bulkDelete.currentChannelId = null;
+        state.bulkDelete.skipRequested = false;
+        state.bulkDelete.cancelled = action.payload.cancelled;
+        // The queue's channels are no longer ticked; a rerun starts from a clean selection.
+        state.bulkSelectedChannelIds = [];
+      })
+      .addCase(bulkDeletePackageChannels.rejected, (state, action) => {
+        state.bulkDelete.status = 'error';
+        state.bulkDelete.currentChannelId = null;
+        state.bulkDelete.skipRequested = false;
+        state.bulkDelete.error = action.payload ?? 'Bulk delete failed';
+      })
       .addCase(externalDeletionsRecorded, (state, action) => {
         const { channelId, ids } = action.payload;
         if (!state.parsed?.channels.some((c) => c.id === channelId)) return;
@@ -2323,6 +2694,16 @@ export const {
   setPackageFilterCriteria,
   clearPackageFilterCriteria,
   setImportProgress,
+  toggleBulkChannelSelection,
+  setBulkChannelSelection,
+  clearBulkChannelSelection,
+  requestBulkSkip,
+  clearBulkSkip,
+  setBulkDeleteCurrent,
+  setBulkDeleteProgress,
+  setBulkChannelOutcome,
+  dismissBulkDelete,
+  packageChannelDeletionsApplied,
 } = packageSlice.actions;
 export default packageSlice.reducer;
 
@@ -2367,6 +2748,10 @@ export const selectDeleteStatus = (state: RootState) => state.package.deleteStat
 export const selectDeleteProgress = (state: RootState) => state.package.deleteProgress;
 export const selectDeleteResult = (state: RootState) => state.package.deleteResult;
 export const selectDeleteError = (state: RootState) => state.package.deleteError;
+/** 2.2.8 */
+export const selectBulkSelectedChannelIds = (state: RootState) => state.package.bulkSelectedChannelIds;
+export const selectBulkDelete = (state: RootState) => state.package.bulkDelete;
+export const selectIsBulkDeleteRunning = (state: RootState) => state.package.bulkDelete.status === 'running';
 /** #269: compressed bytes read so far by a running import. */
 export const selectImportProgress = (state: RootState) => state.package.importProgress;
 export const selectPackageExportStatus = (state: RootState) =>

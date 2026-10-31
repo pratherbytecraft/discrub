@@ -238,6 +238,39 @@ const selectBaseSummary = createSelector(
       };
     }
 
+    // Package delete (heavy, 2.2.8): the bulk run across several package
+    // channels, or the single channel delete from the package table. Both
+    // ride the shared pause and cancel flags, so the status log's controls
+    // apply to them like a purge.
+    // Hand-built test states may predate the field, hence the optional chain.
+    if (packageState.bulkDelete?.status === 'running') {
+      const bd = packageState.bulkDelete;
+      const channelIndex = Math.max(0, bd.queue.indexOf(bd.currentChannelId ?? '')) + 1;
+      const current = bd.progress?.messagesDone ?? 0;
+      const total = bd.progress?.messagesTotal ?? 0;
+      const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+      return {
+        isRunning: true, isPaused, tier: 'heavy',
+        label: isPaused
+          ? t('operation.pausedPackageBulkDelete', { channel: channelIndex, channels: bd.queue.length, current, total })
+          : t('operation.packageBulkDelete', { channel: channelIndex, channels: bd.queue.length, current, total, pct }),
+        progress: pct,
+      };
+    }
+    if (packageState.deleteStatus === 'running') {
+      const progress = packageState.deleteProgress;
+      const current = progress?.current ?? 0;
+      const total = progress?.total ?? 0;
+      const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+      return {
+        isRunning: true, isPaused, tier: 'heavy',
+        label: isPaused
+          ? t('operation.pausedPackageDelete', { current, total })
+          : t('operation.packageDelete', { current, total, pct }),
+        progress: pct,
+      };
+    }
+
     // Package rehydration (heavy — per-message Discord API loop, can
     // take several minutes on large channels, supports pause/cancel)
     const activeEnrichId = packageState.activeEnrichmentChannelId;
@@ -326,7 +359,7 @@ const STATE_COLORS: Record<OperationState, OperationStateColor> = {
 const operationName = (exportState: RootState['export'], purgeState: RootState['purge'], packageState: RootState['package'], messageState: RootState['message']): string => {
   if (purgeState.isPurging) return t('operation.names.purge');
   if (exportState.isExporting) return t('operation.names.export');
-  if (packageState?.exportStatus === 'running' || packageState?.activeEnrichmentChannelId) return t('operation.names.package');
+  if (packageState?.exportStatus === 'running' || packageState?.activeEnrichmentChannelId || packageState?.deleteStatus === 'running' || packageState?.bulkDelete?.status === 'running') return t('operation.names.package');
   if (messageState.pagination?.isLoadingAll || Object.values(messageState.threadTabs ?? {}).some((tab) => tab.pagination?.isLoadingAll)) return t('operation.names.loadAll');
   return t('operation.names.operation');
 };
