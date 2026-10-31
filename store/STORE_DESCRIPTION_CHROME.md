@@ -7,7 +7,7 @@ Discord Data Package
 - Renders markdown, mentions, custom emojis, reply quotes, and embed previews
 - Multi-attachment messages render every attachment, not just the first
 - Optional rehydration fetches reactions, edits, and replies from Discord, cached so the API cost is paid once
-- Bulk delete or bulk edit straight from the package
+- Delete or edit your own messages straight from the package, from one channel or from several channels and DMs at once with Multi-select
 - Export package channels to HTML for portable archives
 - Mention analytics across an entire package
 

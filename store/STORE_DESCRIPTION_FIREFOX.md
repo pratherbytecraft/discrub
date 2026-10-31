@@ -3,6 +3,7 @@ Discrub is a Discord data management tool. It runs as a browser extension on Dis
 Features
 - Export to HTML, CSV, JSON, plain text, or media-only, with 10 built-in presets and custom preset creation
 - Discord data package import: drop the official Discord ZIP and browse it like a live account, with optional rehydration. Handles multi-gigabyte packages and packages from any Discord locale
+- Delete your own messages straight from the package, from one channel or from several channels and DMs at once with Multi-select
 - Bulk export and bulk purge with filter support across multiple channels
 - Workspaces keep loaded conversations in your browser, so a reload or a closed tab picks up where you left off, and Load All, Export, Purge and Bulk Edit continue with Resume. Export a workspace to a file and import it on another browser
 - Search by content, author, date, mentions, message type, embeds, files, images, links, audio, video, stickers, and pinned status
