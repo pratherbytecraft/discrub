@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import DonationFeed from './DonationFeed';
-import type { Donation } from 'discrub-core/types/discrub-types';
+import { DonationFeed as DonationFeed } from '@pratherbytecraft/supporter';
+import type { Donation } from '@pratherbytecraft/contributions';
 
 const generateDonations = (count: number): Donation[] =>
   Array.from({ length: count }, (_, i) => ({

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import DonationCard from './DonationCard';
-import type { Donation } from 'discrub-core/types/discrub-types';
+import { DonationCard as DonationCard } from '@pratherbytecraft/supporter';
+import type { Donation } from '@pratherbytecraft/contributions';
 
 const baseDonation: Donation = {
   donorId: 'donor-1',

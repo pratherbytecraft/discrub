@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import SubscriberList from './SubscriberList';
-import type { Donation } from 'discrub-core/types/discrub-types';
+import { SubscriberList as SubscriberList } from '@pratherbytecraft/supporter';
+import type { Donation } from '@pratherbytecraft/contributions';
 
 const now = new Date();
 const daysAgo = (days: number) => new Date(now.getTime() - days * 86400000).toISOString();

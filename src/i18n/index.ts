@@ -9,6 +9,7 @@
  */
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { registerSupporterResources } from '@pratherbytecraft/supporter';
 import en from './locales/en.json';
 import de from './locales/de.json';
 import { DEFAULT_LANGUAGE, type LanguageCode } from './language';
@@ -29,6 +30,8 @@ void i18next.use(initReactI18next).init({
   returnNull: false,
   returnEmptyString: false,
 });
+// The supporter wall and panel's strings; the app's own wording above wins where it differs.
+registerSupporterResources(i18next);
 
 /**
  * Switch the active language everywhere it is observable: React

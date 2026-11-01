@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import DonationLeaderboard from './DonationLeaderboard';
-import type { Donation } from 'discrub-core/types/discrub-types';
+import { DonationLeaderboard as DonationLeaderboard } from '@pratherbytecraft/supporter';
+import type { Donation } from '@pratherbytecraft/contributions';
 
 const names = [
   'Hannah', 'Sunglasses', 'Rain', 'Charlie', 'Diana', 'Eve', 'Frank',
