@@ -1,9 +1,9 @@
 import { Component } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { Box, Typography, Button, keyframes } from '@mui/material';
-import ghost from '@features/scrublings/sprites/ghost';
-import { frameDataUri } from '@features/scrublings/spriteRender';
-import { SPRITE_H, SPRITE_W } from '@features/scrublings/spriteTypes';
+import { SCRUBLINGS, SPRITE_H, SPRITE_W, frameDataUri } from '@pratherbytecraft/scrublings';
+
+const ghost = SCRUBLINGS.ghost.sheet;
 
 /** The Ghost on the fallback page (2.2.1): idle frames stepped by CSS, no scheduler and no store. */
 const ghostIdle = keyframes`

@@ -5,12 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { updateSetting } from '@features/app/appSlice';
 import { selectHasThemes } from '@features/supporter/supporterSlice';
-import { MAX_PICKED, SCRUBLINGS, SCRUBLING_IDS, type ScrublingDescriptor, type ScrublingId } from '@features/scrublings/descriptors';
+import { MAX_PICKED, SCRUBLINGS, SCRUBLING_IDS, frameDataUri, useStageSlots, SPRITE_H, SPRITE_W, type ScrublingDescriptor, type ScrublingId } from '@pratherbytecraft/scrublings';
 import { selectScrublingsEnabled, selectScrublingsPicked } from '@features/scrublings/selectors';
-import { frameDataUri } from '@features/scrublings/spriteRender';
 import { KOFI_COMMISSIONS_URL } from '@/services/kofiLinks';
-import { useStageSlots } from '@features/scrublings/stageSlots';
-import { SPRITE_H, SPRITE_W } from '@features/scrublings/spriteTypes';
 import { groupItems, isUnlocked, type ItemGroup } from '@features/appearance/groups';
 
 interface ScrublingsTabProps {

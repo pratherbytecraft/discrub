@@ -44,6 +44,7 @@
     "@mui/system": "^7.3.6",
     "@mui/x-date-pickers": "^7.22.2",
     "@pratherbytecraft/contributions": "^1.0.0",
+    "@pratherbytecraft/scrublings": "^1.0.0",
     "@reduxjs/toolkit": "^2.5.0",
     "@tanstack/react-virtual": "^3.13.13",
     "@transcend-io/conflux": "^6.1.3",

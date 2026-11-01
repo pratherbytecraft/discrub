@@ -3,10 +3,7 @@ import { Box, Portal, useMediaQuery, useTheme } from '@mui/material';
 import { keyframes } from '@mui/system';
 import { useAppSelector } from '@/app/hooks';
 import { selectSeasonalNoticeTheme } from '@features/appearance/noticeSlice';
-import { SCRUBLINGS, type ScrublingId } from '@features/scrublings/descriptors';
-import { frameDataUri } from '@features/scrublings/spriteRender';
-import { SPRITE_H, SPRITE_W } from '@features/scrublings/spriteTypes';
-import { OVERHEAD_TEXT_SX } from '@components/scrublings/overheadText';
+import { OVERHEAD_TEXT_SX, SCRUBLINGS, SPRITE_H, SPRITE_W, frameDataUri, type ScrublingId } from '@pratherbytecraft/scrublings';
 
 /**
  * Which Scrubling delivers the notice for a holiday theme, and what it says. The short line is

@@ -4,7 +4,7 @@ import { createBaseState } from '@/test/state-factories';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { defaultSettings } from '@features/app/storageKeys';
 import { initialSupporterState } from '@features/supporter/supporterTypes';
-import { setStageSlots } from '@features/scrublings/stageSlots';
+import { setStageSlots } from '@pratherbytecraft/scrublings';
 import AppearanceButton from './AppearanceButton';
 
 const supporter = { ...initialSupporterState, keyStatus: 'valid' as const, payload: { v: 2, kid: 'k', jti: 'j', name: 'Jordan', eh: 'x', ent: { themes: null }, iat: 1, exp: null }, lastRefreshAt: 1 };

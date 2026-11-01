@@ -86,7 +86,7 @@ describe('teleport on arrive and leave', () => {
   afterEach(() => { widthSpy.mockRestore(); vi.useRealTimers(); });
 
   it('teleports each character in on load, then clears the effect', async () => {
-    const { TELE_MS } = await import('./ScrublingsStage');
+    const { TELE_MS } = await import('@pratherbytecraft/scrublings');
     renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith() });
     expect(screen.getByTestId('scrubling-tele-in-suds')).toBeInTheDocument();
     expect(screen.getByTestId('scrubling-tele-in-mage')).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe('teleport on arrive and leave', () => {
   });
 
   it('teleports a character out when it is unpicked, and the rest stay', async () => {
-    const { TELE_MS } = await import('./ScrublingsStage');
+    const { TELE_MS } = await import('@pratherbytecraft/scrublings');
     const { store } = renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith() });
     act(() => { vi.advanceTimersByTime(TELE_MS + 200); });
     const settings = store.getState().app.settings;
@@ -110,7 +110,7 @@ describe('teleport on arrive and leave', () => {
   });
 
   it('teleports everyone out when the switch goes off', async () => {
-    const { TELE_MS } = await import('./ScrublingsStage');
+    const { TELE_MS } = await import('@pratherbytecraft/scrublings');
     const { store } = renderWithProviders(<ScrublingsStage />, { preloadedState: stateWith() });
     act(() => { vi.advanceTimersByTime(TELE_MS + 200); });
     const settings = store.getState().app.settings;
@@ -154,46 +154,5 @@ describe('short lines on a narrow window (2.2.2)', () => {
     renderWithProviders(<ScrublingsStage />, { preloadedState: loading() });
     act(() => { vi.advanceTimersByTime(200); });
     expect(screen.getByTestId('scrublings-caption')).toHaveTextContent('Hauling #chat, 1,204 so far');
-  });
-});
-
-describe('captionTop', () => {
-  it('leaves the same space above the text as between the text and the head', async () => {
-    const { captionTop } = await import('./ScrublingsStage');
-    // 64px bar, Suds: the head starts 28px down, the 12px line sits at 8, so 8 above and 8 below.
-    expect(captionTop(64, 'suds')).toBe(8);
-    expect(captionTop(56, 'mage')).toBe(4);
-  });
-  it('sits lower over a short character and never leaves the bar', async () => {
-    const { captionTop } = await import('./ScrublingsStage');
-    expect(captionTop(64, 'cat')).toBeGreaterThan(captionTop(64, 'suds'));
-    expect(captionTop(48, 'suds')).toBe(1);
-    // Native's head is 56 now, which gives the tall characters 4 above and 4 below.
-    expect(captionTop(56, 'suds')).toBe(4);
-  });
-});
-
-
-describe('captionLeft', () => {
-  const text = '#general, 1,204 gone. Mrow.'; // 27 characters, about 185 px
-  it('sits over the speaker when the text fits inside the stage there', async () => {
-    const { captionLeft } = await import('./ScrublingsStage');
-    expect(captionLeft(200, 460, 230, 'Zzz.', 1440)).toBe(430);
-  });
-  it('moves in so the text stays inside the stage near either end', async () => {
-    const { captionLeft } = await import('./ScrublingsStage');
-    const half = (text.length * 6.85) / 2;
-    expect(captionLeft(200, 460, 450, text, 1440)).toBe(Math.round(200 + 460 - half));
-    expect(captionLeft(200, 460, 5, text, 1440)).toBe(Math.round(200 + half));
-  });
-  it('centres a line wider than the stage on the stage', async () => {
-    const { captionLeft } = await import('./ScrublingsStage');
-    expect(captionLeft(180, 60, 50, text, 390)).toBe(210);
-  });
-  it('never lets the window cut the text off', async () => {
-    const { captionLeft } = await import('./ScrublingsStage');
-    const half = (text.length * 6.85) / 2;
-    expect(captionLeft(10, 60, 30, text, 390)).toBe(Math.round(half));
-    expect(captionLeft(340, 40, 20, text, 390)).toBe(Math.round(390 - half));
   });
 });

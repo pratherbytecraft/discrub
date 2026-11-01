@@ -8,10 +8,7 @@ import { selectRestBreakUntil } from '@features/app/appSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { getDmName } from '@/utils/dmListUtils';
-import { DEFAULT_PICKED, MAX_PICKED, SCRUBLINGS, isScrublingId, type ScrublingId } from './descriptors';
-import { SLOT_W, type OperationView } from './scheduler';
-import { EMPTY_LINE_CONTEXT, type LineContext } from './lines';
-import { isUnlocked, selectDayKey } from '@features/appearance/groups';
+import { DEFAULT_PICKED, EMPTY_LINE_CONTEXT, MAX_PICKED, SCRUBLINGS, SLOT_W, isScrublingId, isUnlocked, selectDayKey, type LineContext, type OperationView, type ScrublingId } from '@pratherbytecraft/scrublings';
 
 const selectSettingsState = (state: RootState) => state.app.settings;
 
