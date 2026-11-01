@@ -17,6 +17,7 @@ export type {
   TextReactionsStyle,
   TextRepliesStyle,
   TextBotIndicatorStyle,
+  TextTimestampsStyle,
   TextFormatOptions,
 } from 'discrub-core/types/export-types';
 export { defaultTextFormatOptions };

@@ -856,6 +856,8 @@
     "selected": "{{count, number}} selected",
     "delete": "Delete",
     "edit": "Edit",
+    "copy": "Copy",
+    "copied": "Copied",
     "embeds": "Embeds ({{count}})",
     "addReactions": "Add Reactions",
     "removeReactions": "Remove Reactions"
@@ -1044,6 +1046,7 @@
     "quoteLine": "Quote line",
     "authorOnly": "Author only",
     "botTag": "Bot tag",
+    "timestamps": "Timestamps",
     "content": "Content",
     "downloadThreads": "Download threads (fetch and export thread messages into individual files)",
     "filesAndMedia": "Files & Media",

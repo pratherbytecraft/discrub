@@ -3,6 +3,7 @@ import { Paper, Box, Button, Chip, Tooltip } from '@mui/material';
 import {
   Delete as DeleteIcon,
   Edit as EditIcon,
+  ContentCopy as CopyIcon,
   Code as CodeIcon,
   DeleteSweep as ReactionRemoveIcon,
   AddReaction as ReactionAddIcon,
@@ -10,6 +11,7 @@ import {
 import type { Emoji, Message, User } from 'discrub-core/types/discord-types';
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
 import { isSystemMessageType } from 'discrub-core/system-messages';
+import { getMessageContent } from 'discrub-core/discrub-utils';
 import type { SelectableEmoji } from '@/utils/emojiDataset';
 import DeleteConfirmModal from '@components/modals/DeleteConfirmModal';
 import EditMessageModal from '@components/modals/EditMessageModal';
@@ -93,6 +95,7 @@ const MessageActions = ({
   /** The reacted messages the Remove Reactions modal works on, read when it opened. */
   const [reacted, setReacted] = useState<ReactedMessage[]>(NO_REACTED);
   const [reading, setReading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const selectedRows = useMemo<SelectionRow[]>(() => {
     if (fromProp) return selectedMessagesProp.map(rowOfMessage);
@@ -163,6 +166,41 @@ const MessageActions = ({
     }
   }, [fromProp, selectedMessagesProp, selectedIds, rows, containerKey, hydrationSource]);
 
+  /**
+   * Copy the text of the selected messages, one message per line in feed
+   * order, read in batches like the reactions. Messages with no text are
+   * left out.
+   */
+  const handleCopy = async () => {
+    setReading(true);
+    try {
+      const lines: string[] = [];
+      if (fromProp) {
+        for (const message of selectedMessagesProp) {
+          const text = getMessageContent(message);
+          if (text) lines.push(text);
+        }
+      } else {
+        const wanted = new Set(selectedIds);
+        const ids: string[] = [];
+        for (const row of rows) if (wanted.has(row.id)) ids.push(row.id);
+        for (let at = 0; at < ids.length; at += REACTED_BATCH) {
+          for (const message of await hydrateMessages(containerKey, hydrationSource, ids.slice(at, at + REACTED_BATCH))) {
+            const text = getMessageContent(message);
+            if (text) lines.push(text);
+          }
+        }
+      }
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* clipboard permission denied, nothing to show */
+    } finally {
+      setReading(false);
+    }
+  };
+
   const openReactionRemoval = async () => {
     setReacted(await readReacted());
     setReactionRemovalOpen(true);
@@ -223,6 +261,16 @@ const MessageActions = ({
               </Button>
             </span>
           </Tooltip>
+
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<CopyIcon />}
+            disabled={selectedCount === 0 || !selectionReady}
+            onClick={() => void handleCopy()}
+          >
+            {copied ? t('messageActions.copied') : t('messageActions.copy')}
+          </Button>
 
           {singleMessage?.embeds && singleMessage.embeds.length > 0 && (
             <Button

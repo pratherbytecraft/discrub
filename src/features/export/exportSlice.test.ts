@@ -805,12 +805,14 @@ describe('exportSlice', () => {
         reactions: 'skip',
         replies: 'link',
         botIndicator: 'skip',
+        timestamps: 'skip',
       }));
       expect(selectTextOptions(store.getState())).toEqual({
         attachmentStyle: 'skip',
         reactions: 'skip',
         replies: 'link',
         botIndicator: 'skip',
+        timestamps: 'skip',
       });
     });
 

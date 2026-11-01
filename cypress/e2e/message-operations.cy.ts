@@ -73,6 +73,24 @@ describe('Message Operations', () => {
     cy.contains('button', 'Delete').should('not.be.disabled');
   });
 
+  it('Copy puts the selected messages on the clipboard, one per line in feed order', () => {
+    cy.contains('button', 'Copy').should('be.disabled');
+    cy.window().then((win) => {
+      const stub = cy.stub(win.navigator.clipboard, 'writeText').resolves();
+      cy.contains('[data-testid="message-feed-row"]','Sounds good, deploying now.').click();
+      cy.contains('[data-testid="message-feed-row"]','Sure! Let me finish this code first.').click();
+      cy.contains('2 selected').should('be.visible');
+      cy.contains('button', 'Copy').click().then(() => {
+        expect(stub).to.have.been.calledOnce;
+        const lines = (stub.firstCall.args[0] as string).split('\n');
+        expect(lines).to.have.length(2);
+        expect(lines).to.include('Sounds good, deploying now.');
+        expect(lines).to.include('Sure! Let me finish this code first.');
+      });
+      cy.contains('button', 'Copied').should('be.visible');
+    });
+  });
+
   // Backlog #139 regression guard: Edit (PATCH) is author-only at the
   // Discord API layer, so the toolbar disables it whenever any selected
   // message is by another user. Delete behavior depends on

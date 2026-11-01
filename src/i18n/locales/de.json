@@ -856,6 +856,8 @@
     "selected": "{{count, number}} ausgewählt",
     "delete": "Löschen",
     "edit": "Bearbeiten",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
     "embeds": "Embeds ({{count}})",
     "addReactions": "Reaktionen hinzufügen",
     "removeReactions": "Reaktionen entfernen"
@@ -1044,6 +1046,7 @@
     "quoteLine": "Zitatzeile",
     "authorOnly": "Nur Autor",
     "botTag": "Bot-Kennzeichen",
+    "timestamps": "Zeitstempel",
     "content": "Inhalt",
     "downloadThreads": "Threads herunterladen (Thread-Nachrichten laden und in einzelne Dateien exportieren)",
     "filesAndMedia": "Dateien & Medien",

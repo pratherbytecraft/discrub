@@ -108,6 +108,30 @@ describe('MessageActions', () => {
         expect(onBulkEdit).toHaveBeenCalledWith([{ id: 'a' }, { id: 'b' }], 'gone');
       });
 
+      it('Copy puts the text of the selected messages on the clipboard, one per line in feed order', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+        render(<MessageActions {...rest} currentUserId="me" />, stored());
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+        });
+        expect(writeText).toHaveBeenCalledWith('one\ntwo');
+        expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+      });
+
+      it('Copy leaves out messages with no text', async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+        const withEmpty = [...messages, createMockMessage({ id: 'c', author: me, content: '' })];
+        render(<MessageActions {...rest} currentUserId="me" />, {
+          preloadedState: { message: { ...initialMessageState, ...messageStateWith(initialMessageState, withEmpty), selectedIds: ['a', 'b', 'c'] } } as any,
+        });
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+        });
+        expect(writeText).toHaveBeenCalledWith('one\ntwo');
+      });
+
       it('Remove Reactions reads only the reacted messages, ids and reactions', async () => {
         const onBatchRemoveReactions = vi.fn();
         render(<MessageActions {...rest} currentUserId="me" onBatchRemoveReactions={onBatchRemoveReactions} />, stored());
@@ -171,6 +195,11 @@ describe('MessageActions', () => {
     it('should enable Delete when messages are selected', () => {
       render(<MessageActions {...defaultProps} selectedMessages={[createMockMessage()]} />);
       expect(screen.getByRole('button', { name: /Delete/ })).not.toBeDisabled();
+    });
+
+    it('should disable Copy when no messages selected', () => {
+      render(<MessageActions {...defaultProps} />);
+      expect(screen.getByRole('button', { name: 'Copy' })).toBeDisabled();
     });
 
     it('should disable Edit when no messages selected', () => {

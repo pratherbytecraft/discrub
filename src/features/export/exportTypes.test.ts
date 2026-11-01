@@ -33,12 +33,13 @@ describe('resolveMaxZipPartBytes (#207 Arm A)', () => {
 });
 
 describe('exportTypes — Plain Text (#184)', () => {
-  it('exposes the four defaults that match the signed-off format', () => {
+  it('exposes the five defaults that match the signed-off format', () => {
     expect(defaultTextFormatOptions).toEqual({
       attachmentStyle: 'inline',
       reactions: 'include',
       replies: 'quote',
       botIndicator: 'include',
+      timestamps: 'include',
     });
   });
 

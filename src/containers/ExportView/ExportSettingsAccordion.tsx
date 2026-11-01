@@ -39,7 +39,7 @@ import type {
   TextAttachmentStyle,
   TextReactionsStyle,
   TextRepliesStyle,
-  TextBotIndicatorStyle,
+  TextBotIndicatorStyle, TextTimestampsStyle,
 } from '@features/export/exportTypes';
 import type { MediaCategorySummary } from '@/utils/mediaUtils';
 import { formatBytes, getTotalMediaSize, SIZE_WARNING_THRESHOLD } from '@/utils/mediaUtils';
@@ -309,6 +309,19 @@ const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, package
                     value={exportState.textOptions.botIndicator}
                     label={t('export.botTag')}
                     onChange={(e) => dispatch(setTextOptions({ botIndicator: e.target.value as TextBotIndicatorStyle }))}
+                  >
+                    <MenuItem value="include">{t('export.include')}</MenuItem>
+                    <MenuItem value="skip">{t('export.skip')}</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl size="small">
+                  <InputLabel id="text-timestamps-label">{t('export.timestamps')}</InputLabel>
+                  <Select
+                    labelId="text-timestamps-label"
+                    data-testid="text-timestamps-select"
+                    value={exportState.textOptions.timestamps ?? 'include'}
+                    label={t('export.timestamps')}
+                    onChange={(e) => dispatch(setTextOptions({ timestamps: e.target.value as TextTimestampsStyle }))}
                   >
                     <MenuItem value="include">{t('export.include')}</MenuItem>
                     <MenuItem value="skip">{t('export.skip')}</MenuItem>

@@ -123,6 +123,36 @@ describe('ExportSettingsAccordion — text format (#184)', () => {
     expect(t.botIndicator).toBe('include');
   });
 
+  it('Timestamps defaults to Include and Skip dispatches setTextOptions', async () => {
+    const { store } = renderWithProviders(<ExportSettingsAccordion isBulk={false} />, {
+      preloadedState: {
+        export: { ...initialExportState, exportFormat: 'text' },
+      },
+    });
+
+    const panel = screen.getByTestId('text-format-options');
+    const combobox = within(panel).getAllByRole('combobox')[4];
+    expect(combobox).toHaveTextContent('Include');
+    fireEvent.mouseDown(combobox);
+    const skipOption = await screen.findByRole('option', { name: 'Skip' });
+    fireEvent.click(skipOption);
+
+    const t = store.getState().export.textOptions;
+    expect(t.timestamps).toBe('skip');
+    expect(t.botIndicator).toBe('include');
+  });
+
+  it('shows Include for text options saved before the Timestamps field existed', () => {
+    const { timestamps: _omit, ...older } = initialExportState.textOptions;
+    renderWithProviders(<ExportSettingsAccordion isBulk={false} />, {
+      preloadedState: {
+        export: { ...initialExportState, exportFormat: 'text', textOptions: older as typeof initialExportState.textOptions },
+      },
+    });
+    const panel = screen.getByTestId('text-format-options');
+    expect(within(panel).getAllByRole('combobox')[4]).toHaveTextContent('Include');
+  });
+
   it('Max zip size defaults to 4 GB, offers no single zip, and switching dispatches the size (#207 Arm A)', async () => {
     const { store } = renderWithProviders(<ExportSettingsAccordion isBulk={false} />);
     expect(store.getState().export.maxZipPartBytes).toBe(4_000_000_000);

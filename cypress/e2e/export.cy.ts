@@ -61,6 +61,7 @@ describe('Export', () => {
     cy.get('[data-testid="text-format-options"]').contains('Reactions').scrollIntoView().should('be.visible');
     cy.get('[data-testid="text-format-options"]').contains('Replies').scrollIntoView().should('be.visible');
     cy.get('[data-testid="text-format-options"]').contains('Bot tag').scrollIntoView().should('be.visible');
+    cy.get('[data-testid="text-format-options"]').contains('Timestamps').scrollIntoView().should('be.visible');
   });
 
   it('hides the text-format options panel when switching back to HTML', () => {
@@ -495,6 +496,52 @@ describe('Export zip contents (#230/#234/#235 + gifv skip, group DM naming, F26 
 
   beforeEach(() => {
     cy.login();
+  });
+
+  describe('Plain text timestamps (2.2.8)', () => {
+    const pickPlainText = () => {
+      cy.contains('button', 'Export').click();
+      cy.get('[role="dialog"]').contains('Plain Text - Human-readable').click();
+    };
+
+    it('writes the author line with the time by default', () => {
+      cy.task('downloads:clean');
+      openChannelWithMessages([
+        makeMessage({ id: '900000000000000201', content: 'first line of text' }),
+      ]);
+      cy.contains('first line of text').should('be.visible');
+      pickPlainText();
+      cy.get('[role="dialog"]').contains('button', /^Export$/).click();
+      cy.waitForDownload(/^general\.zip$/i).then((zipName) => {
+        cy.task<string>('zip:read', { fileName: zipName, entry: 'general/general-page-1.txt' }).then((page) => {
+          expect(page).to.match(/^@Discrub Tester \(02\/01\/2026 \d{1,2}:00 [AP]M\)$/m);
+          expect(page).to.contain('first line of text');
+        });
+      });
+      expectStatusEntry('Export: Completed general');
+    });
+
+    it('leaves the time off every line when Timestamps is Skip', () => {
+      cy.task('downloads:clean');
+      openChannelWithMessages([
+        makeMessage({ id: '900000000000000211', content: 'no clock on me', edited_timestamp: '2026-02-01T12:30:00.000Z' }),
+        makeMessage({ id: '900000000000000212', content: 'nor on me', timestamp: '2026-02-01T12:05:00.000Z' }),
+      ]);
+      cy.contains('nor on me').should('be.visible');
+      pickPlainText();
+      cy.get('[data-testid="text-timestamps-select"]').scrollIntoView().click();
+      cy.get('[role="listbox"]').contains('li', 'Skip').click();
+      cy.get('[role="dialog"]').contains('button', /^Export$/).click();
+      cy.waitForDownload(/^general\.zip$/i).then((zipName) => {
+        cy.task<string>('zip:read', { fileName: zipName, entry: 'general/general-page-1.txt' }).then((page) => {
+          expect(page).to.contain('@Discrub Tester\nno clock on me');
+          expect(page).to.contain('@Discrub Tester\nnor on me');
+          expect(page).not.to.match(/\d{1,2}:\d{2} [AP]M/);
+          expect(page).not.to.contain('edited');
+        });
+      });
+      expectStatusEntry('Export: Completed general');
+    });
   });
 
   describe('#230 per-message render isolation', () => {
