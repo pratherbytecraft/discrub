@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import en from './locales/en.json';
 import de from './locales/de.json';
+import zh from './locales/zh.json';
 
 const flatten = (node: unknown, prefix = ''): string[] => {
   if (node === null || typeof node !== 'object') return [prefix];
@@ -17,6 +18,15 @@ describe('locale key parity', () => {
     const extraInDe = [...deKeys].filter((k) => !enKeys.has(k));
     expect(missingInDe).toEqual([]);
     expect(extraInDe).toEqual([]);
+  });
+
+  it('zh.json carries every key en.json has, and nothing extra', () => {
+    const enKeys = new Set(flatten(en));
+    const zhKeys = new Set(flatten(zh));
+    const missingInZh = [...enKeys].filter((k) => !zhKeys.has(k));
+    const extraInZh = [...zhKeys].filter((k) => !enKeys.has(k));
+    expect(missingInZh).toEqual([]);
+    expect(extraInZh).toEqual([]);
   });
 
   it('carries the attachments-only purge keys (#272)', () => {
