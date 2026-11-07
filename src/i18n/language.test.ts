@@ -6,6 +6,8 @@ describe('language helpers (#124)', () => {
     expect(detectBrowserLanguage(['de-AT', 'en-US'])).toBe('de');
     expect(detectBrowserLanguage(['de_CH'])).toBe('de');
     expect(detectBrowserLanguage(['DE'])).toBe('de');
+    expect(detectBrowserLanguage(['zh-CN', 'en-US'])).toBe('zh');
+    expect(detectBrowserLanguage(['zh_TW'])).toBe('zh');
   });
 
   it('takes the first supported entry, not the first entry', () => {
@@ -20,10 +22,12 @@ describe('language helpers (#124)', () => {
 
   it('normalizes stored values to a supported code', () => {
     expect(normalizeLanguage('de')).toBe('de');
+    expect(normalizeLanguage('zh')).toBe('zh');
     expect(normalizeLanguage('')).toBe('en');
     expect(normalizeLanguage('xx')).toBe('en');
     expect(normalizeLanguage(undefined)).toBe('en');
     expect(isLanguageCode('en')).toBe(true);
+    expect(isLanguageCode('zh')).toBe(true);
     expect(isLanguageCode('pt')).toBe(false);
   });
 });

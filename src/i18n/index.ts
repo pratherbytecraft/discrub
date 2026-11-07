@@ -11,12 +11,14 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
 import de from './locales/de.json';
+import zh from './locales/zh.json';
 import { DEFAULT_LANGUAGE, type LanguageCode } from './language';
 import { syncCoreMessages } from './coreMessages';
 
 export const resources = {
   en: { translation: en },
   de: { translation: de },
+  zh: { translation: zh },
 } as const;
 
 void i18next.use(initReactI18next).init({

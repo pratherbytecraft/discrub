@@ -3,7 +3,7 @@
  * language and the fallback; every other entry is a machine-drafted
  * catalog that community members can correct in `src/i18n/locales/`.
  */
-export const SUPPORTED_LANGUAGES = ['en', 'de'] as const;
+export const SUPPORTED_LANGUAGES = ['en', 'de', 'zh'] as const;
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number];
 
 export const DEFAULT_LANGUAGE: LanguageCode = 'en';
@@ -12,6 +12,7 @@ export const DEFAULT_LANGUAGE: LanguageCode = 'en';
 export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   en: 'English',
   de: 'Deutsch',
+  zh: '简体中文',
 };
 
 export function isLanguageCode(value: unknown): value is LanguageCode {

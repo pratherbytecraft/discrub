@@ -163,7 +163,7 @@ Settings have moved:
 - **Discrub:** Settings are behind a gear icon in the top bar, in tabs (Display, Operation Delays, Export Preferences, Purge)
 
 All Discrub Classic settings carry over. New settings:
-- UI language (English or German; detected on a fresh install)
+- UI language (English, German or Simplified Chinese; detected on a fresh install)
 - Date and time format
 - Operation delays up to 30 seconds, with a Safest zone above 10 seconds for very long runs
 - Rest breaks: a long operation pauses for 10 minutes after every 45 minutes of activity (on by default)
