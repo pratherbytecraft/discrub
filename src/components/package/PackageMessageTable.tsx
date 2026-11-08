@@ -89,6 +89,10 @@ import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors'
 import type { Message } from 'discrub-core/types/discord-types';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { editMessages } from '@features/message/messageSlice';
+import {
+  generateEditReplacement,
+  type EditReplacement,
+} from '@features/message/editReplacement';
 import { toDiscordMessage } from '@features/package/packageMessageAdapter';
 import type {
   PackageChannel,
@@ -464,19 +468,29 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
   });
   const shift = rowShift(rowVirtualizer);
 
-  const handleEditSave = async (content: string) => {
+  const handleEditSave = async (content: string, replacement?: EditReplacement) => {
     if (!token || !parsed) return;
     setEditOpen(false);
     const messages = selectedMessages.map((pm) =>
       toDiscordMessage(pm, channel.id, parsed.user),
     );
-    const ids = messages.map((m) => m.id);
-    await dispatch(editMessages({ messages, channelId: channel.id, content, token }));
+    await dispatch(
+      editMessages({ messages, channelId: channel.id, content, replacement, token }),
+    );
     // Update local cache to reflect new content. The ZIP is immutable, so
     // re-reading the CSV would overwrite the edit; we patch the in-memory
     // copy instead. A fresh package import will show the old content until
-    // the user re-downloads from Discord.
-    dispatch(applyLocalMessageEdits({ channelId: channel.id, messageIds: ids, content }));
+    // the user re-downloads from Discord. A randomized replacement yields a
+    // different string per message id, so patch each row with its own text.
+    dispatch(
+      applyLocalMessageEdits({
+        channelId: channel.id,
+        updates: messages.map((m) => ({
+          id: m.id,
+          content: replacement ? generateEditReplacement(replacement, m.id) : content,
+        })),
+      }),
+    );
     dispatch(clearChannelMessageSelection(channel.id));
   };
 
@@ -779,7 +793,7 @@ const PackageMessageTable = ({ channel }: PackageMessageTableProps) => {
       <EditMessageModal
         open={editOpen}
         onClose={() => setEditOpen(false)}
-        onSave={(content) => void handleEditSave(content)}
+        onSave={(content, replacement) => void handleEditSave(content, replacement)}
         message={null}
         messages={
           parsed

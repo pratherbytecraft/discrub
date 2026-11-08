@@ -40,6 +40,7 @@ import {
   updateCachedMessage,
   type HydrationSource,
 } from './messageCache';
+import { generateEditReplacement, type EditReplacement } from './editReplacement';
 import { countRows, scan, searchCid } from '@services/workspaceStore';
 import { selectCurrentWid } from '@features/workspace/workspaceSlice';
 import { getDiscordService } from '@services/discordService';
@@ -320,11 +321,13 @@ export const editMessage = createAsyncThunk(
       messageId,
       channelId,
       content,
+      replacement,
       token,
     }: {
       messageId: string;
       channelId: string;
       content: string;
+      replacement?: EditReplacement;
       token: string;
     },
     { rejectWithValue, dispatch }
@@ -334,7 +337,7 @@ export const editMessage = createAsyncThunk(
       const response = await discordService.editMessage(
         token,
         messageId,
-        { content },
+        { content: replacement ? generateEditReplacement(replacement, messageId) : content },
         channelId
       );
 
@@ -355,7 +358,8 @@ export const editMessage = createAsyncThunk(
 );
 
 /**
- * Edit multiple messages to the same content
+ * Edit multiple messages, either to the same fixed content or, with a
+ * replacement, to text generated from each message's own id.
  */
 export const editMessages = createAsyncThunk(
   'message/editMessages',
@@ -364,12 +368,14 @@ export const editMessages = createAsyncThunk(
       messages,
       channelId,
       content,
+      replacement,
       token,
     }: {
       /** Only the ids are used (2.2.5 W4). */
       messages: Array<Pick<Message, 'id'>>;
       channelId: string;
       content: string;
+      replacement?: EditReplacement;
       token: string;
     },
     { dispatch, getState, rejectWithValue }
@@ -403,6 +409,7 @@ export const editMessages = createAsyncThunk(
       try {
         for (let i = 0; i < messages.length; i++) {
           const message = messages[i];
+          const body = replacement ? generateEditReplacement(replacement, message.id) : content;
 
           if (selectDiscrubPaused(getState() as RootState)) flushPendingEdits();
           await waitWhilePaused(getState as () => RootState);
@@ -417,7 +424,7 @@ export const editMessages = createAsyncThunk(
             const response = await discordService.editMessage(
               token,
               message.id,
-              { content },
+              { content: body },
               channelId
             );
             if (!response.success || !response.data) {
@@ -462,9 +469,10 @@ export const editMessages = createAsyncThunk(
  * for each selected channel it streams the CURRENT USER's own messages via
  * the shared search iterator (Discord only permits editing your own
  * messages, so scoping the search to the current user is both the correct
- * behavior and a safety gate) and PATCHes each to `content`. Modeled on
- * `bulkPurgeChannels` — outer channel loop, per-channel search, pause/cancel
- * guards, paced delay, per-channel + summary status entries.
+ * behavior and a safety gate) and PATCHes each to `content` or its own
+ * generated replacement. Modeled on `bulkPurgeChannels` — outer channel
+ * loop, per-channel search, pause/cancel guards, paced delay, per-channel
+ * + summary status entries.
  */
 /** 2.2.5 WP4b: Bulk Edit has no progress state; this tells the workspace record which channel is in hand. */
 export const bulkEditChannelStarted = createAction<{ index: number; total: number }>('message/bulkEditChannelStarted');
@@ -483,11 +491,24 @@ interface BulkEditRun {
  * The per-channel edit walk (2.2.7: the former body of `bulkEditChannels`,
  * shared with `bulkEditGuilds`). For each channel it streams the current
  * user's own messages through the search iterator and PATCHes each to
- * `content`, pause and cancel aware, paced by the delete delay. Status
- * lines per channel; the caller writes the summary.
+ * `content` (or each message's generated replacement), pause and cancel
+ * aware, paced by the delete delay. Status lines per channel; the caller
+ * writes the summary.
  */
 const executeBulkEdit = async (
-  { channels, content, guildId, searchCriteria }: { channels: Channel[]; content: string; guildId?: string | null; searchCriteria?: SearchCriteria | null },
+  {
+    channels,
+    content,
+    replacement,
+    guildId,
+    searchCriteria,
+  }: {
+    channels: Channel[];
+    content: string;
+    replacement?: EditReplacement;
+    guildId?: string | null;
+    searchCriteria?: SearchCriteria | null;
+  },
   { dispatch, getState }: { dispatch: ThunkDispatch<RootState, unknown, UnknownAction>; getState: () => RootState },
 ): Promise<BulkEditRun> => {
   const initialState = getState();
@@ -555,11 +576,13 @@ const executeBulkEdit = async (
           // run this one resumes (the record is per channel, so the
           // channel in hand starts over); editing it again would only
           // spend a request. The search answers the current content.
-          if (message.content === content) {
+          // A random run resolves the message's own body first, so the
+          // same check still recognises what this seed produced.
+          const body = replacement ? generateEditReplacement(replacement, message.id) : content;
+          if (message.content === body) {
             stats.skipped++;
             continue;
           }
-
           try {
             // Call the service directly rather than dispatching the
             // editMessage thunk: that thunk toggles state.isEditing off on
@@ -569,7 +592,7 @@ const executeBulkEdit = async (
             const response = await getDiscordService().editMessage(
               token,
               message.id,
-              { content },
+              { content: body },
               message.channel_id ?? channel.id,
             );
             if (response.success) {
@@ -617,6 +640,7 @@ export const bulkEditChannels = createAsyncThunk<
   {
     channels: Channel[];
     content: string;
+    replacement?: EditReplacement;
     guildId?: string | null;
     searchCriteria?: SearchCriteria | null;
   },
@@ -624,7 +648,7 @@ export const bulkEditChannels = createAsyncThunk<
 >(
   'message/bulkEditChannels',
   async (
-    { channels, content, guildId, searchCriteria },
+    { channels, content, replacement, guildId, searchCriteria },
     { dispatch, getState, rejectWithValue }
   ) => {
     dispatch(showOperationTip(t('operation.queued.edit')));
@@ -645,7 +669,7 @@ export const bulkEditChannels = createAsyncThunk<
 
     try {
       const run = await executeBulkEdit(
-        { channels, content, guildId, searchCriteria },
+        { channels, content, replacement, guildId, searchCriteria },
         { dispatch, getState: getState as () => RootState },
       );
       const { stats } = run;
@@ -682,11 +706,11 @@ export const bulkEditChannels = createAsyncThunk<
  */
 export const bulkEditGuilds = createAsyncThunk<
   { edited: number; skipped: number; failed: number; errors?: string[]; signInExpired?: true },
-  { guilds: Guild[]; content: string; searchCriteria?: SearchCriteria | null },
+  { guilds: Guild[]; content: string; replacement?: EditReplacement; searchCriteria?: SearchCriteria | null },
   { state: RootState; rejectValue: string }
 >(
   'message/bulkEditGuilds',
-  async ({ guilds, content, searchCriteria }, { dispatch, getState, rejectWithValue, signal }) => {
+  async ({ guilds, content, replacement, searchCriteria }, { dispatch, getState, rejectWithValue, signal }) => {
     const initialState = getState() as RootState;
     const token = selectAuthToken(initialState);
     if (!token) return rejectWithValue('Not authenticated');
@@ -769,7 +793,7 @@ export const bulkEditGuilds = createAsyncThunk<
         let run: BulkEditRun;
         try {
           run = await executeBulkEdit(
-            { channels, content, guildId: guild.id, searchCriteria },
+            { channels, content, replacement, guildId: guild.id, searchCriteria },
             { dispatch, getState: getState as () => RootState },
           );
         } catch (error) {

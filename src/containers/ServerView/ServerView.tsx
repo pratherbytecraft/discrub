@@ -95,6 +95,7 @@ import {
   setThreadRefineCriteria,
   clearThreadRefineCriteria,
 } from '@features/message/messageSlice';
+import type { EditReplacement } from '@features/message/editReplacement';
 import type { Message, User, Attachment } from 'discrub-core/types/discord-types';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import type { HtmlFormattingContext } from 'discrub-core/types/html-formatting-types';
@@ -639,7 +640,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
     );
   };
 
-  const handleEdit = async (message: Message, newContent: string) => {
+  const handleEdit = async (message: Message, newContent: string, replacement?: EditReplacement) => {
     if (!token) return;
     const channelId = activeTab || currentContext?.id;
     if (!channelId) return;
@@ -650,11 +651,16 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
         channelId,
         content: newContent,
         token,
+        ...(replacement ? { replacement } : {}),
       })
     );
   };
 
-  const handleBulkEdit = async (messagesToEdit: Array<Pick<Message, 'id'>>, newContent: string) => {
+  const handleBulkEdit = async (
+    messagesToEdit: Array<Pick<Message, 'id'>>,
+    newContent: string,
+    replacement?: EditReplacement,
+  ) => {
     if (!token || isOperationRunning) return;
     const channelId = activeTab || currentContext?.id;
     if (!channelId) return;
@@ -665,6 +671,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
         channelId,
         content: newContent,
         token,
+        ...(replacement ? { replacement } : {}),
       })
     );
   };

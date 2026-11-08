@@ -239,19 +239,35 @@ describe('Bulk Export and Bulk Edit records', () => {
     const record = await readBulkRecord(store.getState() as never);
     expect(record).toMatchObject({ kind: 'bulkEdit', done: ['c1', 'c2'], inHand: 'c3' });
     expect((record?.settings as { content: string }).content).toBe('redacted');
+    // A fixed-text run records no random spec; old records read as fixed.
+    expect((record?.settings as { replacement: unknown }).replacement).toBeNull();
+  });
+
+  it('Bulk Edit keeps a random replacement mode and seed for the resume', async () => {
+    const store = await openDefault();
+    const spec = { mode: 'words' as const, seed: 424242 };
+    const arg = { channels: CHANNELS, content: '', guildId: '42', searchCriteria: null, replacement: spec };
+    store.dispatch(bulkEditChannels.pending('b1', arg));
+    store.dispatch(bulkEditChannelStarted({ index: 1, total: 3 }));
+    await flush(store);
+    const record = await readBulkRecord(store.getState() as never);
+    expect(record).toMatchObject({ kind: 'bulkEdit', done: ['c1'], inHand: 'c2' });
+    expect((record?.settings as { content: string }).content).toBe('');
+    expect((record?.settings as { replacement: unknown }).replacement).toEqual(spec);
   });
 
   it('a multi-Server edit follows the server in hand and ignores the channel steps inside it (2.2.7)', async () => {
     const store = await openDefault();
     const guilds: Guild[] = [createMockGuild({ id: 'g1' }), createMockGuild({ id: 'g2' })];
-    const arg = { guilds, content: 'redacted', searchCriteria: null };
+    const arg = { guilds, content: '', searchCriteria: null, replacement: { mode: 'sentences' as const, seed: 77 } };
     store.dispatch(bulkEditGuilds.pending('e1', arg));
     store.dispatch(bulkEditServerStarted({ index: 1, total: 2, name: 'two' }));
     store.dispatch(bulkEditChannelStarted({ index: 0, total: 3 }));
     await flush(store);
     const record = await readBulkRecord(store.getState() as never);
     expect(record).toMatchObject({ kind: 'bulkEdit', mode: 'servers', guildId: null, queue: ['g1', 'g2'], done: ['g1'], inHand: 'g2' });
-    expect((record?.settings as { content: string }).content).toBe('redacted');
+    expect((record?.settings as { content: string }).content).toBe('');
+    expect((record?.settings as { replacement: unknown }).replacement).toEqual({ mode: 'sentences', seed: 77 });
     store.dispatch(bulkEditGuilds.fulfilled({ edited: 0, skipped: 0, failed: 0 }, 'e1', arg));
     await flush(store);
     expect(await readBulkRecord(store.getState() as never)).toBeNull();

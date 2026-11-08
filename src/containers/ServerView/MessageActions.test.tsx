@@ -492,6 +492,53 @@ describe('MessageActions', () => {
       // Clean up the pending promise
       await act(async () => { resolveEdit!(); });
     });
+
+    it('passes a random replacement for a single message without typed content', async () => {
+      const onEdit = vi.fn().mockResolvedValue(undefined);
+      const msg = createMockMessage({ id: 'm1', content: '' });
+      render(<MessageActions {...defaultProps} onEdit={onEdit} selectedMessages={[msg]} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /Edit/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Random words' }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      });
+
+      expect(onEdit).toHaveBeenCalledWith(
+        msg,
+        '',
+        expect.objectContaining({ mode: 'words', seed: expect.any(Number) }),
+      );
+    });
+
+    it('passes a random replacement for a bulk edit', async () => {
+      const onBulkEdit = vi.fn().mockResolvedValue(undefined);
+      const me = { id: 'me', username: 'me' } as any;
+      const messages = [
+        createMockMessage({ id: 'a', author: me }),
+        createMockMessage({ id: 'b', author: me }),
+      ];
+      render(
+        <MessageActions
+          {...defaultProps}
+          onBulkEdit={onBulkEdit}
+          currentUserId="me"
+          selectedMessages={messages}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: /Edit/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Random characters' }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      });
+
+      expect(onBulkEdit).toHaveBeenCalledWith(
+        messages,
+        '',
+        expect.objectContaining({ mode: 'characters', seed: expect.any(Number) }),
+      );
+    });
   });
 
   describe('Add Reactions button (Backlog #202)', () => {

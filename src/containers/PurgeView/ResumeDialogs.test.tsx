@@ -18,6 +18,7 @@ import BulkExportDialog from '@containers/ExportView/BulkExportDialog';
 import ExportDialog from '@containers/ExportView/ExportDialog';
 import { bulkPurgeChannels } from '@features/purge/purgeSlice';
 import { bulkEditChannels, bulkEditGuilds } from '@features/message/messageSlice';
+import { generateEditReplacement } from '@features/message/editReplacement';
 import { createMockGuild } from '@/test/fixtures';
 import { buildConfigSnapshot, bulkExportChannels, exportMessages } from '@features/export/exportSlice';
 import { initialExportState } from '@features/export/exportTypes';
@@ -151,7 +152,44 @@ describe('Bulk Edit resume', () => {
     fireEvent.click(screen.getByTestId('bulk-edit-confirm'));
     const arg = vi.mocked(bulkEditChannels).mock.calls[0][0];
     expect(arg.content).toBe('redacted');
+    expect(arg.replacement).toBeUndefined();
     expect(arg.channels.map((c) => c.id)).toEqual(['c2', 'c3']);
+  });
+
+  it('a random run brings back its mode and seed, and resumes without typed text', async () => {
+    const spec = { mode: 'words' as const, seed: 424242 };
+    await saveBulk({ kind: 'bulkEdit', settings: { content: '', searchCriteria: null, replacement: spec } });
+    renderWithProviders(<BulkEditDialog open onClose={vi.fn()} channels={[]} mode="channels" guildId={GUILD_ID} />, {
+      preloadedState: stateWith({ kind: 'bulkEdit', mode: 'channels', guildId: GUILD_ID, total: 3, doneCount: 1, remaining: 2 }),
+    });
+    expect(await screen.findByTestId('bulk-edit-resume-note')).toBeInTheDocument();
+    // The restored spec regenerates the same text for the channel in hand.
+    await waitFor(() =>
+      expect(screen.getByTestId('bulk-edit-preview')).toHaveTextContent(generateEditReplacement(spec, 'c2')),
+    );
+    expect(screen.getByRole('button', { name: 'Random words' })).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(screen.getByTestId('bulk-edit-confirm')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('bulk-edit-confirm'));
+    const arg = vi.mocked(bulkEditChannels).mock.calls[0][0];
+    expect(arg.content).toBe('');
+    expect(arg.replacement).toEqual(spec);
+    expect(arg.channels.map((c) => c.id)).toEqual(['c2', 'c3']);
+  });
+
+  it('switching a fresh dialog to a random mode enables confirm and generates a per-channel preview', async () => {
+    renderWithProviders(<BulkEditDialog open onClose={vi.fn()} channels={[CHANNELS[0], CHANNELS[1]]} mode="channels" guildId={GUILD_ID} />, {
+      preloadedState: stateWith(null),
+    });
+    expect(screen.getByTestId('bulk-edit-confirm')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Random words' }));
+    const preview = screen.getByTestId('bulk-edit-preview');
+    expect(preview.textContent?.trim().length).toBeGreaterThan(0);
+    expect(screen.getByTestId('bulk-edit-confirm')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('bulk-edit-confirm'));
+    const arg = vi.mocked(bulkEditChannels).mock.calls[0][0];
+    expect(arg.content).toBe('');
+    expect(arg.replacement).toMatchObject({ mode: 'words' });
+    expect(typeof arg.replacement?.seed).toBe('number');
   });
 
   it('a multi-Server edit brings back the text and the servers not yet finished (2.2.7)', async () => {

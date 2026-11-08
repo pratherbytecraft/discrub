@@ -818,7 +818,7 @@ listen({
       kind: 'bulkEdit',
       mode: arg.guildId ? 'channels' : 'dms',
       guildId: arg.guildId ?? null,
-      settings: { content: arg.content, searchCriteria: arg.searchCriteria ?? null },
+      settings: { content: arg.content, searchCriteria: arg.searchCriteria ?? null, replacement: arg.replacement ?? null },
       queue: idsOf(arg.channels),
     });
   },
@@ -833,7 +833,7 @@ listen({
       kind: 'bulkEdit',
       mode: 'servers',
       guildId: null,
-      settings: { content: arg.content, searchCriteria: arg.searchCriteria ?? null },
+      settings: { content: arg.content, searchCriteria: arg.searchCriteria ?? null, replacement: arg.replacement ?? null },
       queue: idsOf(arg.guilds),
     });
   },

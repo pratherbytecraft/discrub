@@ -27,6 +27,13 @@ import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors'
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectCurrentUser } from '@features/user/userSlice';
 import { bulkEditChannels, bulkEditGuilds } from '@features/message/messageSlice';
+import EditModeField from '@components/modals/EditModeField';
+import {
+  createEditReplacement,
+  generateEditReplacement,
+  type EditMode,
+  type EditReplacement,
+} from '@features/message/editReplacement';
 import { countActiveFilters } from 'discrub-core/filtering';
 import FilterModal from '@components/search/FilterModal';
 import BulkFilterButton from '@components/search/BulkFilterButton';
@@ -53,9 +60,11 @@ interface BulkEditDialogProps {
  * The single-channel Edit Messages flow lives in ServerView/EditMessageModal.
  * This dialog extends it to the multi-select channel scaffold (#155): every
  * message the current user authored across the selected channels is rewritten
- * to the same content. Discord only permits editing your own messages, so the
- * author target is locked to self — the optional FilterModal only narrows by
- * date / content, never author. Mirrors BulkPurgeDialog's shell.
+ * to the same content, or to random text generated per message from a saved
+ * {mode, seed} spec (so an interrupted run resumes with the same text). Discord
+ * only permits editing your own messages, so the author target is locked to
+ * self — the optional FilterModal only narrows by date / content, never author.
+ * Mirrors BulkPurgeDialog's shell.
  */
 const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guilds: selectedGuilds = [], guildId }: BulkEditDialogProps) => {
   const { t } = useTranslation();
@@ -68,6 +77,10 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
   const currentUserId = currentUser?.id || '';
 
   const [content, setContent] = useState('');
+  const [editMode, setEditMode] = useState<EditMode>('fixed');
+  // A random run keeps its spec (mode + seed) so a resume regenerates the
+  // same text per message. Null in fixed mode.
+  const [replacement, setReplacement] = useState<EditReplacement | null>(null);
   const [filterCriteria, setFilterCriteria] = useState<SearchCriteria | null>(null);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   // Bumped on each open so the keyed FilterModal remounts fresh (mirrors the
@@ -83,13 +96,23 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
   useEffect(() => {
     if (!open || !resumable) {
       setResumeTargets(null);
+      // Fixed text is the default for a fresh open; a resumable run restores
+      // its saved mode below.
+      if (open) {
+        setEditMode('fixed');
+        setReplacement(null);
+      }
       return;
     }
     let live = true;
     void readBulkRecord(store.getState()).then((record) => {
       if (!live || !record || record.kind !== 'bulkEdit') return;
-      const saved = record.settings as { content?: string; searchCriteria?: SearchCriteria | null } | undefined;
+      const saved = record.settings as
+        | { content?: string; searchCriteria?: SearchCriteria | null; replacement?: EditReplacement | null }
+        | undefined;
       setContent(saved?.content ?? '');
+      setReplacement(saved?.replacement ?? null);
+      setEditMode(saved?.replacement?.mode ?? 'fixed');
       setFilterCriteria(saved?.searchCriteria ?? null);
       const state = store.getState();
       const remaining = record.queue.filter((id) => !record.done.includes(id));
@@ -110,6 +133,8 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
     void dispatch(discardBulkRecord());
     setResumeTargets(null);
     setContent('');
+    setReplacement(null);
+    setEditMode('fixed');
     setFilterCriteria(null);
   };
 
@@ -120,20 +145,43 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
   const count = isServerMode ? guilds.length : channels.length;
   const filterCount = filterCriteria ? countActiveFilters(filterCriteria) : 0;
 
+  const isRandomMode = editMode !== 'fixed';
+  // The preview shows the text the first target would get; each message gets
+  // its own text from its own id.
+  const firstTargetId = isServerMode ? guilds[0]?.id ?? '' : channels[0]?.id ?? '';
+  const preview = replacement && firstTargetId ? generateEditReplacement(replacement, firstTargetId) : '';
+
+  const handleModeChange = (next: EditMode) => {
+    setEditMode(next);
+    if (next === 'fixed') {
+      setReplacement(null);
+      return;
+    }
+    // Switching random modes keeps the seed; the text still changes per id.
+    setReplacement((prev) => (prev && prev.mode === next ? prev : createEditReplacement(next)));
+  };
+
+  const handleRegenerate = () => {
+    if (editMode === 'fixed') return;
+    setReplacement(createEditReplacement(editMode));
+  };
+
   const openFilterModal = () => {
     setFilterModalKey((k) => k + 1);
     setFilterModalOpen(true);
   };
 
   const handleConfirm = () => {
+    const spec = isRandomMode ? replacement ?? undefined : undefined;
     if (isServerMode) {
-      dispatch(bulkEditGuilds({ guilds, content, searchCriteria: filterCriteria }));
+      dispatch(bulkEditGuilds({ guilds, content, searchCriteria: filterCriteria, replacement: spec }));
     } else {
       dispatch(bulkEditChannels({
         channels,
         content,
         guildId,
         searchCriteria: filterCriteria,
+        replacement: spec,
       }));
     }
     onClose();
@@ -172,16 +220,51 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
             {isServerMode ? t('bulkEdit.ownOnlyServers') : t('bulkEdit.ownOnly')}
           </Alert>
 
-          <TextField
-            label={t('bulkEdit.newContent')}
-            placeholder={t('bulkEdit.newContentPlaceholder')}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            multiline
-            minRows={3}
-            fullWidth
-            inputProps={{ 'aria-label': t('bulkEdit.newContentAria') }}
-          />
+          <EditModeField mode={editMode} onChange={handleModeChange} />
+
+          {isRandomMode ? (
+            <Box data-testid="bulk-edit-random">
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                {t('editModal.randomPreview')}
+              </Typography>
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 1,
+                  bgcolor: 'action.hover',
+                  border: 1,
+                  borderColor: 'divider',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  data-testid="bulk-edit-preview"
+                >
+                  {preview}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1, flexWrap: 'wrap' }}>
+                <Button size="small" onClick={handleRegenerate} data-testid="bulk-edit-regenerate">
+                  {t('editModal.regenerate')}
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  {t('editModal.randomHint')}
+                </Typography>
+              </Box>
+            </Box>
+          ) : (
+            <TextField
+              label={t('bulkEdit.newContent')}
+              placeholder={t('bulkEdit.newContentPlaceholder')}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              multiline
+              minRows={3}
+              fullWidth
+              inputProps={{ 'aria-label': t('bulkEdit.newContentAria') }}
+            />
+          )}
 
           <Box>
             <BulkFilterButton
@@ -218,7 +301,7 @@ const BulkEditDialog = ({ open, onClose, channels: selectedChannels, mode, guild
           variant="contained"
           color="primary"
           startIcon={<EditIcon />}
-          disabled={count === 0 || content.trim().length === 0 || isOperationRunning}
+          disabled={count === 0 || isOperationRunning || (isRandomMode ? !replacement : content.trim().length === 0)}
           data-testid="bulk-edit-confirm"
         >
           {resuming ? t('workspace.resume') : confirmLabel}

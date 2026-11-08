@@ -3,6 +3,17 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import EditMessageModal from './EditMessageModal';
 import { createMockMessage, createMockAttachment } from '../../test/fixtures';
 
+// Deterministic stand-in for the real generator: the tests here cover the
+// dialog wiring (mode, preview, seed regeneration), not the text itself.
+vi.mock('@features/message/editReplacement', () => {
+  let nextSeed = 1;
+  return {
+    createEditReplacement: (mode: string) => ({ mode, seed: nextSeed++ }),
+    generateEditReplacement: (spec: { mode: string; seed: number }, messageId: string) =>
+      `${spec.mode}:${spec.seed}:${messageId}`,
+  };
+});
+
 describe('EditMessageModal', () => {
   const defaultProps = {
     open: true,
@@ -174,6 +185,101 @@ describe('EditMessageModal', () => {
       fireEvent.change(textarea, { target: { value: 'Bulk content' } });
       fireEvent.click(screen.getByRole('button', { name: 'Save' }));
       expect(onSave).toHaveBeenCalledWith('Bulk content');
+    });
+  });
+
+  describe('Random replacement modes', () => {
+    it('defaults to fixed text with no preview', () => {
+      render(<EditMessageModal {...defaultProps} />);
+
+      expect(screen.getByRole('button', { name: 'Fixed text' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByLabelText('Message Content')).toBeEnabled();
+      expect(screen.queryByText('Preview')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull();
+    });
+
+    it('saves an empty bare message with a random words replacement', () => {
+      const onSave = vi.fn();
+      const message = createMockMessage({ id: 'm1', content: '' });
+      render(<EditMessageModal {...defaultProps} message={message} onSave={onSave} />);
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Random words' }));
+
+      expect(screen.getByLabelText('Message Content')).toBeDisabled();
+      expect(screen.getByText(/^words:\d+:m1$/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onSave).toHaveBeenCalledWith(
+        '',
+        expect.objectContaining({ mode: 'words', seed: expect.any(Number) }),
+      );
+    });
+
+    it('regenerates the preview with a new seed', () => {
+      render(<EditMessageModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Random words' }));
+      const first = screen.getByText(/^words:\d+:msg-123$/).textContent;
+
+      fireEvent.click(screen.getByRole('button', { name: 'Regenerate' }));
+      const second = screen.getByText(/^words:\d+:msg-123$/).textContent;
+
+      expect(second).not.toBe(first);
+    });
+
+    it('offers random characters and saves that mode', () => {
+      const onSave = vi.fn();
+      const message = createMockMessage({ id: 'm2', content: '' });
+      render(<EditMessageModal {...defaultProps} message={message} onSave={onSave} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Random characters' }));
+      expect(screen.getByText(/^characters:\d+:m2$/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        '',
+        expect.objectContaining({ mode: 'characters', seed: expect.any(Number) }),
+      );
+    });
+
+    it('restores fixed validation when switching back to fixed text', () => {
+      const message = createMockMessage({ id: 'm3', content: '' });
+      render(<EditMessageModal {...defaultProps} message={message} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Random sentences' }));
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Fixed text' }));
+
+      expect(screen.getByLabelText('Message Content')).toBeEnabled();
+      expect(screen.queryByText(/^sentences:/)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+
+    it('bulk mode saves a replacement without typed content', () => {
+      const onSave = vi.fn();
+      const messages = [
+        createMockMessage({ id: 'a', content: '', attachments: [createMockAttachment()] }),
+        createMockMessage({ id: 'b', content: '', attachments: [createMockAttachment()] }),
+      ];
+      render(
+        <EditMessageModal
+          {...defaultProps}
+          message={null}
+          messages={messages}
+          messageCount={2}
+          onSave={onSave}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Random sentences' }));
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        '',
+        expect.objectContaining({ mode: 'sentences', seed: expect.any(Number) }),
+      );
     });
   });
 });

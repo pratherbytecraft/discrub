@@ -167,7 +167,7 @@ It also has multi-channel selection with Select all, filters (author, content, d
 
 **Purge several servers at once.** Turn on multi-select in the server list, tick the servers, and click Purge. Discrub takes the servers one at a time: it loads each server's channels, keeps the readable ones, and runs the same per-channel purge a single server uses. Server purges target your own messages (Messages or Attachments Only). The status log gets a header per server and a final "N of N servers" summary, the status bar shows "Server 2/5 · Channel 3/12", and Cancel finishes the current channel first. A server whose channels cannot be loaded is reported and skipped. Pacing is unchanged, so a run across many servers can take hours, and the run stops on its own if Discord starts rate limiting.
 
-**Edit several servers at once.** The same multi-select has Edit next to Purge. It rewrites your own messages to one new text in every channel you can read in each selected server, one server at a time, with an optional date or content filter to narrow which messages. It uses the same pacing, pause, stop and resume as a server purge, and the status log gets the same per-server headers and summary.
+**Edit several servers at once.** The same multi-select has Edit next to Purge. It rewrites your own messages in every channel you can read in each selected server, one server at a time, with an optional date or content filter to narrow which messages. The replacement is one fixed text by default, or random text in one of three modes: plausible words, plausible sentences or random characters. Random text is generated per message from its ID, so the messages differ from each other, and a resumed run writes the same text again. It uses the same pacing, pause, stop and resume as a server purge, and the status log gets the same per-server headers and summary.
 
 Two options leave things alone. **Don't wake archived threads** skips archived threads instead of un-archiving them (Discord requires un-archiving to delete, which makes old threads reappear for other members); skipped threads are counted in the summary. **Keep messages with files or links** preserves any message with an attachment or a link and deletes only the plain-text messages around them; preserved counts appear in the summary.
 
@@ -197,7 +197,7 @@ View who reacted to any message and manage reactions per user:
 ### Message Operations
 
 - **Delete**: single or bulk deletion with confirmation
-- **Edit**: single or bulk editing, including across several selected channels or DMs at once (your own messages only), with pause, cancel and per-channel progress
+- **Edit**: single or bulk editing, including across several selected channels, DMs or servers at once (your own messages only), with fixed text as the default or per-message random words, sentences or characters, plus pause, cancel and per-channel progress
 - **Attachment Management**: delete one attachment or all attachments from a message
 - **Strip Attachments Only**: keep the text and remove the attachments (own messages only, a Discord API limit)
 - **Remove Reactions**: batch removal from the toolbar with emoji and user selection
@@ -226,7 +226,7 @@ Ten reports over the loaded messages: Overview (the headline numbers), Most ment
 
 ### Data Package Import & Rehydration
 
-Import the ZIP from Discord's "Request All of My Data" export and browse, analyze, bulk-edit, bulk-delete or re-export your full message history, including servers you have left. Processing happens in your browser; the package file never leaves your device. You do not need to sign in to read a package: the sign-in page has a Browse a data package button that opens Discrub with only the Package tab, so a package can be imported, read, filtered and exported without a Discord token. Delete and the other account features turn on once you sign in.
+Import the ZIP from Discord's "Request All of My Data" export and browse, analyze, bulk-edit, bulk-delete or re-export your full message history, including servers you have left. Processing happens in your browser; the package file never leaves your device. You do not need to sign in to read a package: the sign-in page has a Browse a data package button that opens Discrub with only the Package tab, so a package can be imported, read, filtered and exported without a Discord token. Delete and the other account features turn on once you sign in. Editing imported messages offers the same fixed or random replacement modes, so each selected message gets its own generated text in a random mode.
 
 The importer reads the ZIP in pieces, so a full package of several gigabytes opens without the file ever being loaded whole, and the Activity folders that make up most of it are skipped without being unpacked. A progress bar shows how much of the file has been read. Packages exported in any Discord locale (French, German, Spanish, Simplified Chinese, Cyrillic and others) work, and archives with tens of thousands of entries (ZIP64) too. Multi-attachment messages render every attachment. After an import the status log says how many channels and messages were read, and warns when a folder had to be skipped. Channels whose type Discord did not spell out are worked out from the rest of the record (recipients, server, name); anything that still cannot be placed is listed under Other.
 
@@ -285,7 +285,7 @@ A dropped connection does not end a run. Exports, purge scans, thread Load All a
 
 Every conversation Discrub loads past its first page is kept in your browser, in a workspace. Close the tab, reload, or come back the next day and the conversation opens from disk with the same filters, sort, selection, thread tabs and scroll position. Load All continues from where it stopped instead of starting over.
 
-A run that is cut short, such as Load All, Export, Bulk Export, Purge or Bulk Edit, leaves a record behind. Its button reads Resume, and the dialog opens with the same settings. A resumed Bulk Export skips the channels that finished and writes a new zip.
+A run that is cut short, such as Load All, Export, Bulk Export, Purge or Bulk Edit, leaves a record behind. Its button reads Resume, and the dialog opens with the same settings. A resumed Bulk Export skips the channels that finished and writes a new zip, and a resumed Bulk Edit restores its replacement mode, reproducing the same generated text for each message in a random mode.
 
 The workspace pill opens the Workspaces list. From there you can start a new workspace, rename, duplicate, clear or delete one, clear a single conversation, and export a workspace to a `.discrub-workspace` file that imports on any browser. The thin bar on the bottom edge shows how much browser storage Discrub uses and how much is left. If storage fills up during Load All, the run pauses so you can clear room and Resume.
 
