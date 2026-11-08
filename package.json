@@ -1,6 +1,6 @@
 {
   "name": "discrub",
-  "version": "2.2.8",
+  "version": "2.2.9",
   "type": "module",
   "private": true,
   "scripts": {
@@ -52,7 +52,7 @@
     "copy-to-clipboard": "^3.3.3",
     "date-fns": "^2.30.0",
     "date-fns-tz": "^3.2.0",
-    "discrub-core": "^1.0.18",
+    "discrub-core": "^1.0.20",
     "drip-fs": "^1.1.0",
     "emojibase": "^17.0.0",
     "emojibase-data": "^17.0.0",
