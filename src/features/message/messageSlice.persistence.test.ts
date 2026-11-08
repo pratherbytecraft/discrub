@@ -14,6 +14,7 @@ import messageReducer, {
   clearSavedMessages,
   clearSavedSearch,
   fetchAllMessages,
+  fetchNewerMessages,
   fetchMessages,
   fetchMoreMessages,
   openThreadTab,
@@ -383,3 +384,79 @@ describe('clearSavedMessages', () => {
     store.dispatch(toggleMessageSelection(page(1, 1)[0].id));
   });
 });
+
+// 2.2.9 (ws-fetch-newer): a saved conversation picks up what was posted
+// since without Start over. The walk goes forward from the newest row.
+describe('fetchNewerMessages', () => {
+  it('walks after the newest row, appends and writes every page, and leaves the Load All cursor alone', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(300, 300), { kind: 'channel', guildId: '42', name: 'general' });
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID, (c) => {
+      c.complete = true;
+      c.pagination = { ...c.pagination, mode: 'all', lastMessageId: '1', hasMore: false };
+    });
+    const fetchMessageData = vi.fn()
+      .mockResolvedValueOnce({ success: true, data: page(400, 100) })
+      .mockResolvedValueOnce({ success: true, data: page(450, 50) });
+    serviceWith({ fetchMessageData });
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+    const result = await store.dispatch(fetchNewerMessages({ channelId: CID, token: TOKEN }));
+    expect(result.type).toBe('message/fetchNewerMessages/fulfilled');
+    expect(fetchMessageData).toHaveBeenCalledTimes(2);
+    expect(fetchMessageData.mock.calls[0][1]).toBe('300');
+    expect(fetchMessageData.mock.calls[0][3]).toBe('after');
+    expect(fetchMessageData.mock.calls[1][1]).toBe('400');
+    expect(store.getState().message.rows).toHaveLength(450);
+    expect(store.getState().message.rows[0].id).toBe('450');
+    expect(store.getState().message.pagination.isLoadingAll).toBe(false);
+    expect(store.getState().message.pagination.hasMore).toBe(false);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(450);
+    const record = await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, CID);
+    expect(record).toMatchObject({ complete: true, count: 450, newestId: '450' });
+    expect(record?.pagination).toMatchObject({ mode: 'all', hasMore: false, lastMessageId: '1' });
+    const statusLines = store.getState().status.entries.map((e) => e.message);
+    expect(statusLines).toContain('150 newer messages loaded');
+  });
+
+  it('says so when nothing was posted since', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(120, 120), { kind: 'channel', guildId: '42', name: 'general' });
+    const fetchMessageData = vi.fn().mockResolvedValueOnce({ success: true, data: [] });
+    serviceWith({ fetchMessageData });
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+    const result = await store.dispatch(fetchNewerMessages({ channelId: CID, token: TOKEN }));
+    expect(result.type).toBe('message/fetchNewerMessages/fulfilled');
+    expect(fetchMessageData).toHaveBeenCalledTimes(1);
+    expect(fetchMessageData.mock.calls[0][1]).toBe('120');
+    expect(store.getState().message.rows).toHaveLength(120);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(120);
+    expect(store.getState().status.entries.map((e) => e.message)).toContain('No newer messages since the last load');
+  });
+
+  it('does nothing without a loaded row to continue from', async () => {
+    const store = makeStore();
+    const fetchMessageData = vi.fn();
+    serviceWith({ fetchMessageData });
+    const result = await store.dispatch(fetchNewerMessages({ channelId: CID, token: TOKEN }));
+    expect(result.type).toBe('message/fetchNewerMessages/fulfilled');
+    expect(fetchMessageData).not.toHaveBeenCalled();
+    expect(store.getState().status.entries.map((e) => e.level)).toContain('warning');
+  });
+
+  it('a failed page ends the run with an error line and keeps what was fetched', async () => {
+    const store = makeStore();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, CID, page(200, 200), { kind: 'channel', guildId: '42', name: 'general' });
+    const fetchMessageData = vi.fn()
+      .mockResolvedValueOnce({ success: true, data: page(300, 100) })
+      .mockResolvedValueOnce({ success: false, status: 403 });
+    serviceWith({ fetchMessageData });
+    await store.dispatch(fetchMessages({ channelId: CID, token: TOKEN }));
+    const result = await store.dispatch(fetchNewerMessages({ channelId: CID, token: TOKEN }));
+    expect(result.type).toBe('message/fetchNewerMessages/rejected');
+    expect(store.getState().message.rows).toHaveLength(300);
+    expect(await countRows(LEGACY_DEFAULT_WORKSPACE_ID, CID)).toBe(300);
+    expect(store.getState().message.pagination.isLoadingAll).toBe(false);
+    expect(store.getState().status.entries.some((e) => e.level === 'error' && /newer messages/i.test(e.message))).toBe(true);
+  });
+});
+

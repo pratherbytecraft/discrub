@@ -36,5 +36,16 @@ export function useLoadAllLabel(): string {
   const { t } = useTranslation();
   const unfinished = useLoadAllUnfinished();
   const running = useAppSelector(selectIsHeavyOperationRunning);
-  return unfinished && !running ? t('loadAll.resume') : t('serverView.loadAll');
+  const pagination = useAppSelector(selectActivePagination);
+  const activeTab = useAppSelector(selectActiveTab);
+  const restored = useAppSelector(selectRestored);
+  const cid = useAppSelector(selectActiveCid);
+  const saved = useAppSelector(selectConversationSavedCount(cid));
+  if (unfinished && !running) return t('loadAll.resume');
+  // 2.2.9: a plain conversation saved in full has nothing left to load all; the
+  // button says what its dialog will do (second VM pass: nothing on screen
+  // hinted that Fetch newer existed).
+  const completeOnDisk = !running && !activeTab && pagination.mode !== 'search' && !pagination.hasMore && (restored !== null || saved > 0);
+  if (completeOnDisk) return t('loadAll.fetchNewer');
+  return t('serverView.loadAll');
 }

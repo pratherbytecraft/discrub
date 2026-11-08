@@ -82,6 +82,7 @@ import {
   loadAllSearchResults,
   clearMessages,
   clearSavedMessages,
+  fetchNewerMessages,
   clearSavedSearch,
   fetchMessages,
   fetchMoreMessages,
@@ -886,6 +887,13 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
     await runLoadAll();
   };
 
+  // 2.2.9: Fetch newer appends what was posted since the newest loaded message.
+  const handleFetchNewer = async () => {
+    if (!token || isOperationRunning || !currentContext || activeTab) return;
+    closeDialog('loadAll');
+    await dispatch(fetchNewerMessages({ channelId: currentContext.id, token }));
+  };
+
   const runLoadAll = async () => {
     if (!token) return;
 
@@ -1366,6 +1374,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
         onClose={() => closeDialog('loadAll')}
         onConfirm={handleLoadAll}
         onStartOver={handleStartOver}
+        onFetchNewer={handleFetchNewer}
         contextLabel={contextLabel}
       />
 

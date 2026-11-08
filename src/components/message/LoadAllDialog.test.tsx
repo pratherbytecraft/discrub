@@ -106,10 +106,64 @@ describe('LoadAllDialog', () => {
       renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={onStartOver} />, {
         preloadedState: createBaseState({ message: { ...base.message, pagination: { ...base.message.pagination, hasMore: false } } }),
       });
-      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('All 12,480 messages in this channel are saved in this workspace. Start over fetches the channel again and picks up anything posted since.');
+      expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('All 12,480 messages in this channel are saved in this workspace. Fetch newer picks up what was posted since the last load. Start over loads the channel again from the top.');
       expect(screen.queryByTestId('load-all-confirm')).not.toBeInTheDocument();
       fireEvent.click(screen.getByTestId('load-all-start-over'));
       expect(onStartOver).toHaveBeenCalledTimes(1);
+    });
+
+    // 2.2.9: Fetch newer rides with Start over when the handler is given.
+    describe('Fetch newer (2.2.9)', () => {
+      it('is the primary action on a complete conversation, with Start over kept on the left', () => {
+        const onStartOver = vi.fn();
+        const onFetchNewer = vi.fn();
+        const base = restoredState();
+        renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={onStartOver} onFetchNewer={onFetchNewer} />, {
+          preloadedState: createBaseState({ message: { ...base.message, pagination: { ...base.message.pagination, hasMore: false } } }),
+        });
+        // Its own body: no Load All warning, bullets or "are you sure" above a Fetch newer button.
+        expect(screen.getByText('Fetch Newer Messages')).toBeInTheDocument();
+        expect(screen.queryByText('Load All Messages')).not.toBeInTheDocument();
+        expect(screen.getByTestId('load-all-complete-alert')).toHaveTextContent('All 12,480 messages in this channel are saved in this workspace.');
+        expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('Fetch newer picks up what was posted since the last load, in batches of 100 with the usual delays. Start over clears the saved messages and loads the channel again from the top.');
+        expect(screen.queryByText('Are you sure you want to continue?')).not.toBeInTheDocument();
+        expect(screen.queryByText('Loading all messages will:')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('load-all-confirm')).not.toBeInTheDocument();
+        const fetchNewer = screen.getByTestId('load-all-fetch-newer');
+        expect(fetchNewer).toHaveClass('MuiButton-contained');
+        fireEvent.click(fetchNewer);
+        expect(onFetchNewer).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByTestId('load-all-start-over'));
+        expect(onStartOver).toHaveBeenCalledTimes(1);
+      });
+
+      it('sits beside Start over on an unfinished conversation while Load All stays the primary action', () => {
+        const onFetchNewer = vi.fn();
+        renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={vi.fn()} onFetchNewer={onFetchNewer} />, { preloadedState: restoredState() });
+        expect(screen.getByTestId('load-all-restored-line')).toHaveTextContent('12,480 loaded so far in this workspace. Fetch newer picks up what was posted since the last load.');
+        expect(screen.getByTestId('load-all-confirm')).toHaveTextContent('Load All');
+        expect(screen.getByTestId('load-all-start-over')).toBeInTheDocument();
+        const fetchNewer = screen.getByTestId('load-all-fetch-newer');
+        expect(fetchNewer).not.toHaveClass('MuiButton-contained');
+        fireEvent.click(fetchNewer);
+        expect(onFetchNewer).toHaveBeenCalledTimes(1);
+      });
+
+      it('is not offered on a thread tab, during a search, or when nothing is saved', () => {
+        const base = restoredState();
+        const { unmount } = renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={vi.fn()} onFetchNewer={vi.fn()} />, {
+          preloadedState: createBaseState({ message: { ...base.message, activeTab: 'thread-1' } }),
+        });
+        expect(screen.queryByTestId('load-all-fetch-newer')).not.toBeInTheDocument();
+        unmount();
+        const { unmount: unmount2 } = renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={vi.fn()} onFetchNewer={vi.fn()} />, {
+          preloadedState: createBaseState({ message: { ...base.message, pagination: { ...base.message.pagination, mode: 'search' } } }),
+        });
+        expect(screen.queryByTestId('load-all-fetch-newer')).not.toBeInTheDocument();
+        unmount2();
+        renderWithProviders(<LoadAllDialog {...defaultProps} onStartOver={vi.fn()} onFetchNewer={vi.fn()} />, { preloadedState: createBaseState() });
+        expect(screen.queryByTestId('load-all-fetch-newer')).not.toBeInTheDocument();
+      });
     });
 
     // 2.2.5 B: a Load All that finished this session left nothing restored, but the

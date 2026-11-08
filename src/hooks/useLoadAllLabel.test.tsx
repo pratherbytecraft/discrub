@@ -3,7 +3,7 @@
  * the labels read Resume only when that record is there and nothing runs.
  */
 import { describe, it, expect } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, cleanup } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
 import { createAuthenticatedState } from '@/test/state-factories';
 import { initialWorkspaceState, type UnfinishedBulk } from '@features/workspace/workspaceSlice';
@@ -101,5 +101,21 @@ describe('useLoadAllAvailable (2.2.5 B)', () => {
   it('does not count a saved conversation while a search is showing', () => {
     renderWithProviders(<Available />, { preloadedState: availabilityState({ saved: 200, mode: 'search' }) });
     expect(screen.getByTestId('available').textContent).toBe('false');
+  });
+});
+
+// 2.2.9: the button says what its dialog will do on a complete conversation.
+describe('useLoadAllLabel on a complete conversation', () => {
+  it('reads Fetch newer when the plain conversation is saved in full and nothing runs', () => {
+    renderWithProviders(<Labels />, { preloadedState: availabilityState({ restored: true, hasMore: false }) });
+    expect(screen.getByTestId('labels')).toHaveTextContent(/^Fetch newer\|/);
+  });
+
+  it('keeps Load All while more pages exist or a search is showing', () => {
+    renderWithProviders(<Labels />, { preloadedState: availabilityState({ restored: true, hasMore: true }) });
+    expect(screen.getByTestId('labels')).toHaveTextContent(/^Load All\|/);
+    cleanup();
+    renderWithProviders(<Labels />, { preloadedState: availabilityState({ restored: true, hasMore: false, mode: 'search' }) });
+    expect(screen.getByTestId('labels')).toHaveTextContent(/^Load All\|/);
   });
 });

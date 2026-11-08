@@ -2,7 +2,7 @@ import { createAction, createSlice, createAsyncThunk, createSelector, isDraft, o
 import type { Message, Attachment, User, Channel, Guild } from 'discrub-core/types/discord-types';
 import type { RestoredConversation } from './messagePersistence';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
-import { ReactionType, IsPinnedType } from 'discrub-core/discord-enum';
+import { ReactionType, IsPinnedType, QueryStringParam } from 'discrub-core/discord-enum';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { MessageOrder, initialMessageState, initialPaginationState, ThreadTabState, type MessageContainer, type MessageState } from './messageTypes';
 import {
@@ -2465,6 +2465,126 @@ export const fetchAllMessages = createAsyncThunk(
   }
 );
 
+/**
+ * The highest snowflake among the rows, as a string. Snowflakes are decimal
+ * strings, so the longer one is the newer one and equal lengths compare as
+ * text. Rows without numeric ids (tests) fall back to the first row, which
+ * the default order keeps newest first.
+ */
+export function newestIdOf(rows: ReadonlyArray<{ id: string }>): string | null {
+  let best: string | null = null;
+  for (const row of rows) {
+    if (!/^\d+$/.test(row.id)) return rows[0]?.id ?? null;
+    if (best === null || row.id.length > best.length || (row.id.length === best.length && row.id > best)) best = row.id;
+  }
+  return best;
+}
+
+/**
+ * 2.2.9 (ws-fetch-newer, from a support@ email): walk forward from the newest
+ * message the feed holds and append what was posted since, page by page,
+ * without touching the saved conversation's Load All cursor, so a saved
+ * conversation picks up new messages without Start over. Each page is
+ * written to the workspace as it arrives. Pause, stop, the transient retry
+ * and the pacing work the way they do for Load All.
+ */
+export const fetchNewerMessages = createAsyncThunk(
+  'message/fetchNewerMessages',
+  async (
+    { channelId, token }: { channelId: string; token: string },
+    { rejectWithValue, dispatch, signal, getState }
+  ) => {
+    try {
+      const state = getState() as RootState;
+      const newest = newestIdOf(state.message.rows);
+      if (!newest) {
+        dispatch(addStatusEntry({ level: 'warning', message: t('status.msg.fetchNewerNoCursor') }));
+        return { count: 0 };
+      }
+      dispatch(showOperationTip(t('operation.queued.loadAll')));
+      dispatch(addStatusEntry({ level: 'info', message: t('status.msg.fetchNewerStarting') }));
+      const discordService = getDiscordService();
+      const searchDelay = selectSearchDelay(state);
+      const delayModifier = selectDelayModifier(state);
+      const seed = conversationSeedFromState(state, channelId);
+      const api = { dispatch, getState: getState as () => RootState };
+      const existing = cachedRowsOf(MAIN_CONTAINER, state.message.rows);
+
+      let afterId = newest;
+      let loadedCount = 0;
+      let hasMore = true;
+      const stopped = () => rejectWithValue('Load cancelled');
+
+      while (hasMore && !signal.aborted) {
+        await waitWhilePaused(getState as () => RootState);
+        if (checkCancelled(getState as () => RootState)) return stopped();
+
+        const response = await withTransientRetry(
+          () => discordService.fetchMessageData(token, afterId, channelId, QueryStringParam.AFTER),
+          {
+            getState: getState as () => RootState,
+            dispatch,
+            signal,
+            onRetry: (attempt, delayMs, last, max) => {
+              dispatch(addStatusEntry({
+                level: 'warning',
+                message: t('status.msg.loadAllRetry', { answer: describeAnswer(last), seconds: Math.round(delayMs / 1000), attempt, max }),
+              }));
+            },
+          },
+        );
+
+        if (!response.success || !response.data) {
+          if (isTransientApiFailure(response)) {
+            dispatch(setDiscrubPaused(true));
+            dispatch(setOperationHold({ kind: 'retryExhausted', answer: describeAnswer(response), loaded: loadedCount }));
+            dispatch(addStatusEntry({
+              level: 'warning',
+              message: t('status.msg.loadAllPaused', { answer: describeAnswer(response), count: loadedCount }),
+            }));
+            continue;
+          }
+          if (isSignInExpired(response)) dispatch(messageSlice.actions.markLoadAllSignInExpired());
+          const failure = describeFailure(response, 'fetchNewerFailed');
+          dispatch(addStatusEntry({ level: 'error', message: failure }));
+          return rejectWithValue(failure);
+        }
+
+        const messages = response.data as Message[];
+        if (messages.length === 0) break;
+        loadedCount += messages.length;
+
+        const outcome = await persistPage(api, channelId, messages, { seed, backfill: existing });
+        if (outcome === 'cancelled') return stopped();
+        dispatch(messageSlice.actions.appendLoadAllPage({ messages }));
+        dispatch(updateLoadAllProgress({
+          current: loadedCount,
+          total: 0,
+          message: t('status.msg.fetchNewerProgress', { count: loadedCount }),
+        }));
+
+        afterId = newestIdOf(messages) ?? afterId;
+        hasMore = messages.length >= 100;
+        if (hasMore) {
+          const delayCalc = calculateRandomDelay(searchDelay, delayModifier);
+          const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState as () => RootState);
+          if (wasCancelled) return stopped();
+        }
+      }
+
+      if (signal.aborted) return stopped();
+      dispatch(addStatusEntry(loadedCount > 0
+        ? { level: 'success', message: t('status.msg.fetchNewerComplete', { count: loadedCount }) }
+        : { level: 'info', message: t('status.msg.fetchNewerNone') }));
+      return { count: loadedCount };
+    } catch (error) {
+      return rejectWithValue(
+        error instanceof Error ? error.message : 'Failed to fetch newer messages'
+      );
+    }
+  }
+);
+
 /** Flips the light "Looking up users..." line; only the lookup queue sets it. */
 export const setEnriching = createAction<boolean>('message/setEnriching');
 
@@ -4264,6 +4384,25 @@ const messageSlice = createSlice({
         state.pagination.lastMessageId = action.payload.lastMessageId;
         state.pagination.hasMore = false;
         state.error = null;
+      })
+      // 2.2.9: Fetch newer shares the running state with Load All (the button
+      // greys, the feed shows the run) but never moves the Load All cursor
+      // or records a resumable run; a stop or a failure just ends it.
+      .addCase(fetchNewerMessages.pending, (state) => {
+        state.pagination.isLoadingAll = true;
+        state.pagination.loadAllCancelled = false;
+        state.pagination.loadAllFailed = null;
+        state.pagination.loadAllSignInExpired = false;
+        state.pagination.loadAllProgress = { current: 0, total: 0, message: t('status.msg.fetchNewerStarting') };
+        state.error = null;
+      })
+      .addCase(fetchNewerMessages.fulfilled, (state) => {
+        state.pagination.isLoadingAll = false;
+        state.pagination.loadAllProgress = null;
+      })
+      .addCase(fetchNewerMessages.rejected, (state) => {
+        state.pagination.isLoadingAll = false;
+        state.pagination.loadAllProgress = null;
       })
       .addCase(fetchAllMessages.rejected, (state, action) => {
         state.pagination.isLoadingAll = false;

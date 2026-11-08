@@ -28,11 +28,18 @@ function makePage(template: Record<string, unknown>, start: number, minutesApart
  * anything later answers nothing. With `freshFirstPageOnCall`, that call
  * answers page A again: the fresh first page Start over asks for.
  */
-function interceptPagedChannel(template: Record<string, unknown>, options: { freshFirstPageOnCall?: number; minutesApart?: number } = {}) {
+function interceptPagedChannel(template: Record<string, unknown>, options: { freshFirstPageOnCall?: number; minutesApart?: number; newer?: Record<string, unknown>[] } = {}) {
   const pageA = makePage(template, 9000, options.minutesApart);
   const pageB = makePage(template, 8900, options.minutesApart);
   let calls = 0;
+  let afterCalls = 0;
   cy.intercept('GET', '**/api/v10/channels/*/messages?*', (req) => {
+    // 2.2.9: an `after` cursor is Fetch newer; it answers the newer rows once, then nothing.
+    if (req.url.includes('after=')) {
+      afterCalls += 1;
+      req.reply({ statusCode: 200, body: afterCalls === 1 ? (options.newer ?? []) : [] });
+      return;
+    }
     calls += 1;
     const body = calls === 1 || calls === options.freshFirstPageOnCall ? pageA : calls === 2 ? pageB : [];
     req.reply({ statusCode: 200, body });
@@ -155,8 +162,10 @@ describe('Workspace persistence (2.2.5)', () => {
       countWorkspaceRows().should('eq', 200);
 
       // The list refresh follows the writes, so the button comes back within a moment.
-      cy.contains('button', 'Load All', { timeout: 10000 }).should('be.visible').and('not.be.disabled').click();
-      cy.get('[data-testid="load-all-restored-line"]').should('contain', 'All 200 messages in this channel are saved in this workspace');
+      // 2.2.9: the button reads Fetch newer once the conversation is saved in full.
+      cy.contains('button', 'Fetch newer', { timeout: 10000 }).should('be.visible').and('not.be.disabled').click();
+      // 2.2.9: a complete conversation shows the saved count in its info line and Fetch newer as the action.
+      cy.get('[data-testid="load-all-complete-alert"]').should('contain', 'All 200 messages in this channel are saved in this workspace');
       cy.get('[data-testid="load-all-confirm"]').should('not.exist');
       cy.get('[data-testid="load-all-start-over"]').click();
 
@@ -165,6 +174,40 @@ describe('Workspace persistence (2.2.5)', () => {
       cy.get('@pagedMessages.all').should('have.length', 5);
       cy.contains('100 messages').should('be.visible');
       countWorkspaceRows().should('eq', 100);
+    });
+  });
+
+  // 2.2.9 (ws-fetch-newer): a saved conversation picks up what was posted since without Start over.
+  it('Fetch newer appends what was posted since the newest saved message and keeps the saved walk', () => {
+    cy.fixture('messages.json').then((messages: Record<string, unknown>[]) => {
+      const newer = makePage(messages[0], 9003).slice(0, 3);
+      interceptPagedChannel(messages[0], { newer });
+      cy.contains(CHANNEL).click();
+      cy.wait('@pagedMessages');
+      cy.contains('button', 'Load All').click();
+      cy.get('[data-testid="load-all-confirm"]').click();
+      cy.contains('All loaded', { timeout: 15000 }).should('be.visible');
+      cy.contains('200 messages').should('be.visible');
+
+      // 2.2.9: the button reads Fetch newer once the conversation is saved in full.
+      cy.contains('button', 'Fetch newer', { timeout: 10000 }).should('be.visible').and('not.be.disabled').click();
+      cy.get('[data-testid="load-all-restored-line"]').should('contain', 'Fetch newer picks up what was posted since the last load');
+      cy.get('[data-testid="load-all-fetch-newer"]').click();
+
+      cy.contains('203 messages', { timeout: 15000 }).should('be.visible');
+      cy.get('@pagedMessages.all').then((calls) => {
+        const urls = (calls as unknown as Array<{ request: { url: string } }>).map((c) => c.request.url);
+        expect(urls.some((u) => u.includes('after=710000000000009000'))).to.eq(true);
+      });
+      cy.contains('[data-testid="message-feed-row"]', 'page message 9003').should('exist');
+      countWorkspaceRows().should('eq', 203);
+
+      // The saved walk is still complete: the dialog keeps Fetch newer as its action, not Resume.
+      // 2.2.9: the button reads Fetch newer once the conversation is saved in full.
+      cy.contains('button', 'Fetch newer', { timeout: 10000 }).should('be.visible').and('not.be.disabled').click();
+      cy.get('[data-testid="load-all-complete-alert"]').should('contain', 'All 203 messages in this channel are saved in this workspace');
+      cy.get('[data-testid="load-all-confirm"]').should('not.exist');
+      cy.get('[data-testid="load-all-fetch-newer"]').should('be.visible');
     });
   });
 

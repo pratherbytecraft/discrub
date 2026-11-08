@@ -9,7 +9,7 @@ import {
   Typography,
   Alert,
 } from '@mui/material';
-import { Warning as WarningIcon } from '@mui/icons-material';
+import { Warning as WarningIcon, InfoOutlined as InfoIcon } from '@mui/icons-material';
 import { useAppSelector } from '@/app/hooks';
 import {
   selectActiveRows,
@@ -32,13 +32,15 @@ interface LoadAllDialogProps {
   onConfirm: () => void;
   /** 2.2.5: drop the saved messages for this conversation and load from the top. Shown when the conversation was restored from the workspace. */
   onStartOver?: () => void;
+  /** 2.2.9: walk forward from the newest saved message and append what was posted since. Offered with Start over. */
+  onFetchNewer?: () => void;
   contextLabel: string;
 }
 
 /**
  * LoadAllDialog component - confirmation dialog before loading all messages
  */
-const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: LoadAllDialogProps) => {
+const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, onFetchNewer, contextLabel }: LoadAllDialogProps) => {
   const messages = useAppSelector(selectActiveRows);
   const { t, i18n } = useTranslation();
   const activeTab = useAppSelector(selectActiveTab);
@@ -59,6 +61,11 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
   // Nothing left to resume once the saved walk reached the end: Start over
   // is the only action, and it is what refreshes a complete conversation.
   const completeOnDisk = resumable && !pagination.hasMore;
+  // 2.2.9: Fetch newer rides with Start over: a saved plain conversation, never a thread tab or a search.
+  const canFetchNewer = resumable && !!onFetchNewer;
+  // A complete conversation with Fetch newer as its action gets its own short body: the
+  // Load All warning, bullets and "are you sure" would be about a walk that is not offered.
+  const completeWithFetchNewer = completeOnDisk && canFetchNewer;
   const resumeDate = resumable && restored?.oldestTimestamp
     ? new Date(restored.oldestTimestamp).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' })
     : null;
@@ -73,7 +80,7 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
     ? countActiveFilters(searchCriteria)
     : 0;
 
-  const title = isFilteredSearch ? t('loadAll.titleFiltered') : t('loadAll.title');
+  const title = completeWithFetchNewer ? t('loadAll.titleComplete') : isFilteredSearch ? t('loadAll.titleFiltered') : t('loadAll.title');
   const alertCopy = isFilteredSearch
     ? t('loadAll.alertFiltered', { count: filterCount, scope: t('loadAll.scope', { context: scope }) })
     : t('loadAll.alert', { context: scope });
@@ -82,12 +89,23 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pr: 5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <WarningIcon color="warning" />
+          {completeWithFetchNewer ? <InfoIcon color="info" /> : <WarningIcon color="warning" />}
           {title}
         </Box>
         <DialogCloseIcon onClose={onClose} />
       </DialogTitle>
       <DialogContent>
+        {completeWithFetchNewer ? (
+          <>
+            <Alert severity="info" sx={{ mb: 2 }} data-testid="load-all-complete-alert">
+              {t('loadAll.completeAlert', { count: savedCount.toLocaleString(i18n.language), context: scope })}
+            </Alert>
+            <DialogContentText data-testid="load-all-restored-line">
+              {t('loadAll.completeBody')}
+            </DialogContentText>
+          </>
+        ) : (
+          <>
         <Alert severity="warning" sx={{ mb: 2 }}>
           {alertCopy}
         </Alert>
@@ -102,6 +120,7 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
               : resumeDate && unfinished
                 ? t('loadAll.restoredLine', { count: savedCount.toLocaleString(i18n.language), date: resumeDate })
                 : t('loadAll.restoredLineNoDate', { count: savedCount.toLocaleString(i18n.language) })}
+            {canFetchNewer && !completeOnDisk ? ` ${t('loadAll.fetchNewerLine')}` : ''}
           </DialogContentText>
         )}
         <DialogContentText sx={{ mt: 1 }}>
@@ -125,9 +144,21 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
         <DialogContentText sx={{ mt: 2 }}>
           {t('loadAll.confirmQuestion')}
         </DialogContentText>
+          </>
+        )}
       </DialogContent>
       <DialogActions>
         {resumable && !completeOnDisk && (
+          <Button onClick={onStartOver} color="inherit" sx={{ mr: canFetchNewer ? 0 : 'auto' }} data-testid="load-all-start-over">
+            {t('loadAll.startOver')}
+          </Button>
+        )}
+        {canFetchNewer && !completeOnDisk && (
+          <Button onClick={onFetchNewer} color="inherit" sx={{ mr: 'auto' }} data-testid="load-all-fetch-newer">
+            {t('loadAll.fetchNewer')}
+          </Button>
+        )}
+        {completeOnDisk && canFetchNewer && (
           <Button onClick={onStartOver} color="inherit" sx={{ mr: 'auto' }} data-testid="load-all-start-over">
             {t('loadAll.startOver')}
           </Button>
@@ -136,9 +167,15 @@ const LoadAllDialog = ({ open, onClose, onConfirm, onStartOver, contextLabel }: 
           {t('common.cancel')}
         </Button>
         {completeOnDisk ? (
-          <Button onClick={onStartOver} variant="contained" color="primary" data-testid="load-all-start-over">
-            {t('loadAll.startOver')}
-          </Button>
+          canFetchNewer ? (
+            <Button onClick={onFetchNewer} variant="contained" color="primary" data-testid="load-all-fetch-newer">
+              {t('loadAll.fetchNewer')}
+            </Button>
+          ) : (
+            <Button onClick={onStartOver} variant="contained" color="primary" data-testid="load-all-start-over">
+              {t('loadAll.startOver')}
+            </Button>
+          )
         ) : (
           <Button onClick={onConfirm} variant="contained" color="primary" data-testid="load-all-confirm">
             {unfinished ? t('loadAll.resume') : t('loadAll.confirm')}
