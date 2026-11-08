@@ -20,7 +20,19 @@
     "permissionMissingSkippingEdit": "Permission missing for message, skipping edit",
     "noPermissionToModifyMessage": "You do not have permission to modify this message!",
     "noPermissionToModifyLocation": "You do not have permission to modify content in this location, skipping",
-    "unableToRemoveReaction": "Unable to remove reaction from {{user}}"
+    "unableToRemoveReaction": "Unable to remove reaction from {{user}}",
+    "unknownUser": "Unknown User",
+    "textUnknownAuthor": "Unknown",
+    "textBotTag": "[BOT]",
+    "textEdited": "edited {{time}}",
+    "textReplyUnavailable": "(referenced message unavailable)",
+    "textReplyTo": "reply to @{{author}}",
+    "textReplyNoContent": "(no content)",
+    "textAttachmentName": "attachment",
+    "textAttachment": "[Attachment: {{filename}} \u2014 {{target}}]",
+    "textReactions": "Reactions: {{list}}",
+    "textSystemEvent": "system event",
+    "textForwarded": "[Forwarded]"
   },
   "common": {
     "dismissNotification": "Dismiss notification",

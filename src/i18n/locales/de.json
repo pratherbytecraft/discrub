@@ -20,7 +20,19 @@
     "permissionMissingSkippingEdit": "Keine Berechtigung für diese Nachricht, Bearbeitung übersprungen",
     "noPermissionToModifyMessage": "Du hast keine Berechtigung, diese Nachricht zu ändern!",
     "noPermissionToModifyLocation": "Du hast keine Berechtigung, Inhalte an diesem Ort zu ändern, übersprungen",
-    "unableToRemoveReaction": "Reaktion von {{user}} konnte nicht entfernt werden"
+    "unableToRemoveReaction": "Reaktion von {{user}} konnte nicht entfernt werden",
+    "unknownUser": "Unbekannter Benutzer",
+    "textUnknownAuthor": "Unbekannt",
+    "textBotTag": "[BOT]",
+    "textEdited": "bearbeitet {{time}}",
+    "textReplyUnavailable": "(Nachricht, auf die geantwortet wurde, nicht verfügbar)",
+    "textReplyTo": "Antwort an @{{author}}",
+    "textReplyNoContent": "(kein Inhalt)",
+    "textAttachmentName": "Anhang",
+    "textAttachment": "[Anhang: {{filename}} \u2014 {{target}}]",
+    "textReactions": "Reaktionen: {{list}}",
+    "textSystemEvent": "Systemereignis",
+    "textForwarded": "[Weitergeleitet]"
   },
   "common": {
     "dismissNotification": "Benachrichtigung schließen",

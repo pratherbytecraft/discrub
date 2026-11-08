@@ -31,5 +31,18 @@ export function syncCoreMessages(): void {
     noPermissionToModifyMessage: () => t('core.noPermissionToModifyMessage'),
     noPermissionToModifyLocation: () => t('core.noPermissionToModifyLocation'),
     unableToRemoveReaction: (user) => t('core.unableToRemoveReaction', { user }),
+    // 2.2.9 (core 1.0.20): the words of the plain text export and the unknown user stand-in.
+    unknownUser: () => t('core.unknownUser'),
+    textUnknownAuthor: () => t('core.textUnknownAuthor'),
+    textBotTag: () => t('core.textBotTag'),
+    textEdited: (time) => t('core.textEdited', { time }),
+    textReplyUnavailable: () => t('core.textReplyUnavailable'),
+    textReplyTo: (author) => t('core.textReplyTo', { author }),
+    textReplyNoContent: () => t('core.textReplyNoContent'),
+    textAttachmentName: () => t('core.textAttachmentName'),
+    textAttachment: (filename, target) => t('core.textAttachment', { filename, target }),
+    textReactions: (list) => t('core.textReactions', { list }),
+    textSystemEvent: () => t('core.textSystemEvent'),
+    textForwarded: () => t('core.textForwarded'),
   });
 }
