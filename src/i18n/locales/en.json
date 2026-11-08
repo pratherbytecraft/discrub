@@ -578,6 +578,20 @@
       }
     }
   },
+  "failures": {
+    "skipList": "Skip list",
+    "skipListCount": "Skip list ({{count, number}})",
+    "skipHint": "Load a failed list saved from an earlier run to leave those messages alone.",
+    "skipLoaded_one": "{{file}}. {{count, number}} message Discord refused will be left alone.",
+    "skipLoaded_other": "{{file}}. {{count, number}} messages Discord refused will be left alone.",
+    "skipRetry_one": "{{count, number}} that failed on a connection error will be tried again.",
+    "skipRetry_other": "{{count, number}} that failed on a connection error will be tried again.",
+    "clear": "Clear",
+    "badFile": "That file isn't a failed list saved by Discrub.",
+    "lastRun_one": "The last run couldn't delete {{count, number}} message.",
+    "lastRun_other": "The last run couldn't delete {{count, number}} messages.",
+    "save": "Save failed list"
+  },
   "storage": {
     "sessionOnly": "This browser window can't save Discrub's data. Settings, history and loaded messages will be gone when it closes."
   },
@@ -2024,6 +2038,8 @@
       "progress": "Progress: {{detail}} so far",
       "skippedOtherAuthors_one": "Skipped {{count}} message authored by other users. Discord only lets you edit your own messages.",
       "skippedOtherAuthors_other": "Skipped {{count}} messages authored by other users. Discord only lets you edit your own messages.",
+      "skippedListed_one": "Skipped {{count}} message on the skip list",
+      "skippedListed_other": "Skipped {{count}} messages on the skip list",
       "skippedUnexpectedAuthor_one": "Skipped {{count}} message returned by search whose author didn't match the target, likely an API anomaly.",
       "skippedUnexpectedAuthor_other": "Skipped {{count}} messages returned by search whose author didn't match the target, likely an API anomaly.",
       "preservedPinned_one": "Preserved {{count}} pinned message. Your filter excludes pinned messages.",

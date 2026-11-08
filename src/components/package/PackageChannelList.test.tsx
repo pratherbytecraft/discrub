@@ -250,6 +250,31 @@ describe('<PackageChannelList /> — Multi-select bulk delete (2.2.8)', () => {
   });
 });
 
+describe('<PackageChannelList /> — Save failed list on the finished note (2.2.9, GitHub issue 23)', () => {
+  const done = (failures: unknown[]) => {
+    const state = statePackageLoaded() as any;
+    state.package.bulkDelete = {
+      ...initialPackageState.bulkDelete,
+      status: 'done',
+      queue: ['200'],
+      outcomes: { '200': { channelId: '200', state: 'done', result: { deleted: 5, alreadyGone: 0, forbidden: 1, failed: 0, cancelled: false, deletedIds: [], alreadyGoneIds: [] } } },
+    };
+    state.failures = { purge: [], package: failures, loadedFor: null };
+    return state;
+  };
+
+  it('offers the link when the run kept failures and not when it kept none', () => {
+    const { unmount } = renderWithProviders(<PackageChannelList />, {
+      preloadedState: done([{ messageId: '1', channelId: '200', guildId: 'g1', channelName: 'general', status: 403, kind: 'permanent', at: '2026-11-08T10:00:00.000Z' }]),
+    });
+    expect(screen.getByTestId('package-bulk-finished')).toHaveTextContent('Done. 5 deleted, 0 already gone, 1 failed.');
+    expect(within(screen.getByTestId('package-bulk-finished')).getByTestId('save-failed-list')).toHaveTextContent('Save failed list');
+    unmount();
+    renderWithProviders(<PackageChannelList />, { preloadedState: done([]) });
+    expect(screen.queryByTestId('save-failed-list')).not.toBeInTheDocument();
+  });
+});
+
 describe('<PackageChannelList /> — one group per Server (2.2.9, GitHub issue 23)', () => {
   const signedIn = {
     auth: { token: 'tok', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },

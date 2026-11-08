@@ -63,6 +63,7 @@ import PreviewBar from '@components/appearance/PreviewBar';
 import DiskBar from '@components/workspace/DiskBar';
 import StorageFullDialog from '@components/workspace/StorageFullDialog';
 import { useWallOverlay } from '@components/donations/useWallOverlay';
+import { selectFailureCount } from '@features/failures/failuresSlice';
 import { useTranslation } from 'react-i18next';
 import { perfCount } from '@/utils/perfCounters';
 import { PerfProfiler } from '@/utils/PerfProfiler';
@@ -116,6 +117,7 @@ const MainLayout = () => {
   const purgeError = useAppSelector(selectPurgeError);
   const purgeChannelErrorCount = useAppSelector(selectPurgeChannelErrorCount);
   const purgeSignInExpired = useAppSelector(selectPurgeSignInExpired);
+  const purgeFailureCount = useAppSelector(selectFailureCount('purge'));
   const isOperationRunning = useAppSelector(selectIsOperationRunning);
   const rateLimitStopped = useAppSelector(selectRateLimitStopped);
   const requestsRefusedStopped = useAppSelector(selectRequestsRefusedStopped);
@@ -155,12 +157,20 @@ const MainLayout = () => {
         // #250: a run where a channel errored is not a clean success even
         // though the thunk fulfilled; the details are in the status log.
         dispatch(showToast({ level: 'warning', message: t('purge.channelErrorsToast', { count: purgeChannelErrorCount }) }));
+      } else if (purgeFailureCount > 0) {
+        // 2.2.9 (GitHub issue 23): the run left messages undeleted and kept a record of them.
+        dispatch(showToast({
+          level: 'warning',
+          message: t('failures.lastRun', { count: purgeFailureCount }),
+          duration: 12000,
+          action: { type: 'saveFailedList', source: 'purge', label: t('failures.save') },
+        }));
       } else {
         dispatch(showToast({ level: 'success', message: t('purge.completeToast') }));
       }
     }
     prevIsPurging.current = isPurging;
-  }, [isPurging, purgeError, purgeChannelErrorCount, purgeSignInExpired, dispatch, t]);
+  }, [isPurging, purgeError, purgeChannelErrorCount, purgeSignInExpired, purgeFailureCount, dispatch, t]);
 
   // Reset pause/cancel flags when any operation completes. Runs after the
   // per-operation completion effects above, so when the run was stopped

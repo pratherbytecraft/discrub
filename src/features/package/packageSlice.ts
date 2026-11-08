@@ -31,6 +31,8 @@ import {
 import type { MediaDownloadProgress } from '@features/export/exportTypes';
 import { calculateRandomDelay } from '@/utils/delayUtils';
 import { addStatusEntry } from '@features/status/statusSlice';
+import { buildFailure } from '@features/failures/deleteFailures';
+import { failureNoted, failureRunStarted, finishFailureRun } from '@features/failures/failuresSlice';
 import { fetchGuilds } from '@features/guild/guildSlice';
 import {
   selectDelayModifier,
@@ -810,6 +812,8 @@ interface RunChannelDeleteArgs {
    * not lose them (a lost id comes back as a 404 on the next run).
    */
   onFlush?: (deletedIds: string[], alreadyGoneIds: string[]) => void;
+  /** 2.2.9: called for each message Discord did not delete (403 included, 404 not: that one is gone). */
+  onFailure?: (messageId: string, status: number | undefined, code: number | undefined) => void;
 }
 
 /** 2.2.8: how many results between cache flushes during a package delete. */
@@ -823,7 +827,7 @@ export const DELETE_FLUSH_EVERY = 25;
  * closing summary lines; the callers do, since the bulk run words them per
  * channel.
  */
-async function runChannelDelete({ ids, channelId, token, getState, dispatch, onProgress, shouldSkip, onFlush }: RunChannelDeleteArgs): Promise<DeleteResult> {
+async function runChannelDelete({ ids, channelId, token, getState, dispatch, onProgress, shouldSkip, onFlush, onFailure }: RunChannelDeleteArgs): Promise<DeleteResult> {
   const state = getState();
   const deleteDelay = selectDeleteDelay(state);
   const delayModifier = selectDelayModifier(state);
@@ -880,8 +884,10 @@ async function runChannelDelete({ ids, channelId, token, getState, dispatch, onP
           wasAlreadyGone = true;
         } else if (apiResult.status === 403) {
           result.forbidden += 1;
+          onFailure?.(messageId, 403, (apiResult as { code?: number }).code);
         } else {
           result.failed += 1;
+          onFailure?.(messageId, apiResult.status, (apiResult as { code?: number }).code);
           dispatch(addStatusEntry({
             level: 'error',
             message: t('status.package.deleteFailedHttp', { id: messageId, status: apiResult.status ?? t('status.package.unknown') }),
@@ -896,8 +902,10 @@ async function runChannelDelete({ ids, channelId, token, getState, dispatch, onP
           wasAlreadyGone = true;
         } else if (status === 403) {
           result.forbidden += 1;
+          onFailure?.(messageId, 403, undefined);
         } else {
           result.failed += 1;
+          onFailure?.(messageId, status ?? undefined, undefined);
           dispatch(addStatusEntry({
             level: 'error',
             message: t('status.package.deleteFailed', { id: messageId, error: err instanceof Error ? err.message : t('status.package.unknownError') }),
@@ -993,12 +1001,16 @@ export const deletePackageMessages = createAsyncThunk<
     message: t('status.package.deleting', { count: ids.length }),
   }));
 
+  dispatch(failureRunStarted('package'));
   const result = await runChannelDelete({
     ids,
     channelId,
     token,
     getState,
     dispatch,
+    onFailure: (messageId, status, code) => {
+      dispatch(failureNoted({ source: 'package', failure: buildFailure({ messageId, channelId, guildId: channel.guildId, channelName: bulkChannelLabel(channel), status, code }) }));
+    },
     onProgress: (current, total) => dispatch(setDeleteProgress({ current, total })),
     onFlush: (deletedIds, alreadyGoneIds) => {
       const userId = getState().package.parsed?.user.id;
@@ -1029,6 +1041,7 @@ export const deletePackageMessages = createAsyncThunk<
     await recordDeletions(userId, channelId, result.deletedIds, 'deleted');
     await recordDeletions(userId, channelId, result.alreadyGoneIds, 'gone');
   }
+  await dispatch(finishFailureRun('package'));
 
   return result;
 });
@@ -1039,7 +1052,7 @@ export const ALREADY_GONE_LOG_EVERY = 50;
 export const ALREADY_GONE_DELAY_MS = 250;
 
 /** 2.2.8: the ids a bulk run would delete in one channel: the package's rows, filtered, minus the ones already gone. */
-async function bulkTargetIds(state: RootState, channel: PackageChannel, criteria: SearchCriteria | null): Promise<string[]> {
+async function bulkTargetIds(state: RootState, channel: PackageChannel, criteria: SearchCriteria | null, skipIds?: ReadonlySet<string>): Promise<string[]> {
   const userId = state.package.parsed?.user.id;
   if (!userId) return [];
   const cached = state.package.loadedChannels[channel.id];
@@ -1049,7 +1062,8 @@ async function bulkTargetIds(state: RootState, channel: PackageChannel, criteria
     ...(state.package.deletedMessageIds[channel.id] ?? []),
     ...(state.package.enrichmentMisses[channel.id]?.deleted ?? []),
   ]);
-  return filtered.filter((m) => !goneSet.has(m.id)).map((m) => m.id);
+  // 2.2.9: ids on a loaded skip list are left alone, so they are neither counted nor tried.
+  return filtered.filter((m) => !goneSet.has(m.id) && !skipIds?.has(m.id)).map((m) => m.id);
 }
 
 function bulkChannelLabel(channel: PackageChannel): string {
@@ -1064,9 +1078,10 @@ function bulkChannelLabel(channel: PackageChannel): string {
  */
 export const countBulkDeleteTargets = createAsyncThunk<
   Record<string, number>,
-  { channelIds: string[]; criteria: SearchCriteria | null },
+  { channelIds: string[]; criteria: SearchCriteria | null; skipMessageIds?: string[] },
   { state: RootState; rejectValue: string }
->('package/countBulkDeleteTargets', async ({ channelIds, criteria }, { getState, rejectWithValue }) => {
+>('package/countBulkDeleteTargets', async ({ channelIds, criteria, skipMessageIds }, { getState, rejectWithValue }) => {
+  const skipIds = skipMessageIds?.length ? new Set(skipMessageIds) : undefined;
   const state = getState();
   const parsed = state.package.parsed;
   if (!parsed) return rejectWithValue('No package loaded');
@@ -1075,7 +1090,7 @@ export const countBulkDeleteTargets = createAsyncThunk<
     const channel = parsed.channels.find((c) => c.id === id);
     if (!channel || channel.isOrphan) { counts[id] = 0; continue; }
     try {
-      counts[id] = (await bulkTargetIds(state, channel, criteria)).length;
+      counts[id] = (await bulkTargetIds(state, channel, criteria, skipIds)).length;
     } catch {
       counts[id] = 0;
     }
@@ -1094,9 +1109,10 @@ export const countBulkDeleteTargets = createAsyncThunk<
  */
 export const bulkDeletePackageChannels = createAsyncThunk<
   { cancelled: boolean; deleted: number; alreadyGone: number; forbidden: number; failed: number; channelsDone: number; channelsSkipped: number },
-  { channelIds: string[]; criteria: SearchCriteria | null },
+  { channelIds: string[]; criteria: SearchCriteria | null; skipMessageIds?: string[] },
   { state: RootState; rejectValue: string }
->('package/bulkDelete', async ({ channelIds, criteria }, { getState, dispatch, rejectWithValue }) => {
+>('package/bulkDelete', async ({ channelIds, criteria, skipMessageIds }, { getState, dispatch, rejectWithValue }) => {
+  const skipIds = skipMessageIds?.length ? new Set(skipMessageIds) : undefined;
   const state = getState();
   const token = state.auth.token;
   if (!token) return rejectWithValue('Not authenticated');
@@ -1109,6 +1125,7 @@ export const bulkDeletePackageChannels = createAsyncThunk<
   const totals = { cancelled: false, deleted: 0, alreadyGone: 0, forbidden: 0, failed: 0, channelsDone: 0, channelsSkipped: 0 };
   const plannedTotal = channelIds.reduce((n, id) => n + (state.package.bulkDelete.counts[id] ?? 0), 0);
   let messagesDone = 0;
+  dispatch(failureRunStarted('package'));
   dispatch(setBulkDeleteProgress({ messagesDone: 0, messagesTotal: plannedTotal }));
   const firstLabel = channelIds.length === 1 ? parsed.channels.find((c) => c.id === channelIds[0]) : null;
   dispatch(addStatusEntry({
@@ -1135,7 +1152,7 @@ export const bulkDeletePackageChannels = createAsyncThunk<
 
     let ids: string[] = [];
     try {
-      ids = await bulkTargetIds(live, channel, criteria);
+      ids = await bulkTargetIds(live, channel, criteria, skipIds);
     } catch (err) {
       dispatch(setBulkChannelOutcome({ channelId, state: 'skipped', reason: 'empty' }));
       dispatch(addStatusEntry({ level: 'error', message: t('status.package.bulkLoadFailed', { channel: label, error: err instanceof Error ? err.message : t('status.package.unknownError') }) }));
@@ -1159,6 +1176,9 @@ export const bulkDeletePackageChannels = createAsyncThunk<
       getState,
       dispatch,
       shouldSkip: () => getState().package.bulkDelete.skipRequested,
+      onFailure: (messageId, status, code) => {
+        dispatch(failureNoted({ source: 'package', failure: buildFailure({ messageId, channelId, guildId: channel.guildId, channelName: label, status, code }) }));
+      },
       onProgress: (current) => {
         messagesDone = doneBefore + current;
         dispatch(setBulkDeleteProgress({ messagesDone, messagesTotal: Math.max(plannedTotal, messagesDone) }));
@@ -1210,6 +1230,7 @@ export const bulkDeletePackageChannels = createAsyncThunk<
       skipped: totals.channelsSkipped,
     }),
   }));
+  await dispatch(finishFailureRun('package'));
   return totals;
 });
 

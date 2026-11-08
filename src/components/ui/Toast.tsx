@@ -10,6 +10,7 @@ import {
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { selectToast, hideToast } from '@features/status/statusSlice';
+import { saveFailedList } from '@features/failures/failuresSlice';
 import { updateSetting } from '@features/app/appSlice';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +63,8 @@ const Toast = () => {
   const handleAction = () => {
     if (toast.action?.type === 'switchLanguage') {
       dispatch(updateSetting({ key: DiscrubSetting.APP_LANGUAGE, value: toast.action.language }));
+    } else if (toast.action?.type === 'saveFailedList') {
+      void dispatch(saveFailedList(toast.action.source));
     }
     dispatch(hideToast());
   };

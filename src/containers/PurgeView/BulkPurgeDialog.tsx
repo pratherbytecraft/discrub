@@ -48,6 +48,8 @@ import BulkFilterButton from '@components/search/BulkFilterButton';
 import SelectedChannelsPill from '@components/dialogs/SelectedChannelsPill';
 import { canManageMessages as channelCanManageMessages } from '@/utils/permissionUtils';
 import { useFullScreenDialog } from '@/hooks/useFullScreenDialog';
+import LastRunFailures from '@components/failures/LastRunFailures';
+import SkipListRow, { type LoadedSkipList } from '@components/failures/SkipListRow';
 import { useTranslation } from 'react-i18next';
 
 // UI-level mode — promotes "Attachments Only" to a first-class choice.
@@ -105,6 +107,11 @@ const BulkPurgeDialog = ({ open, onClose, channels: selectedChannels, mode, guil
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
   const [filterCriteria, setFilterCriteria] = useState<SearchCriteria | null>(null);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
+  // 2.2.9: a failed list loaded as a skip list. It belongs to this open of the dialog.
+  const [skipList, setSkipList] = useState<LoadedSkipList | null>(null);
+  useEffect(() => {
+    if (open) setSkipList(null);
+  }, [open]);
   // Bumped each time we open the filter modal. Keyed FilterModal below
   // forces a fresh mount so its internal state always seeds from the
   // current savedSearchCriteria (fixes stale-typed-values-on-reopen).
@@ -293,13 +300,15 @@ const BulkPurgeDialog = ({ open, onClose, channels: selectedChannels, mode, guil
     // the primary target surface, reactions family uses it purely for
     // message-narrowing (orthogonal to the reactor UserPicker).
     const payloadSearchCriteria = filterCriteria;
+    // The skip list only means something where whole messages are deleted or edited.
+    const skipMessageIds = isMessagesFamily && skipList ? skipList.skipIds : undefined;
 
     if (isServerMode) {
-      dispatch(purgeGuilds({ guilds, config: purgeConfig, searchCriteria: payloadSearchCriteria }));
+      dispatch(purgeGuilds({ guilds, config: purgeConfig, searchCriteria: payloadSearchCriteria, skipMessageIds }));
     } else if (isDmMode) {
-      dispatch(bulkPurgeDMs({ channels, config: purgeConfig, searchCriteria: payloadSearchCriteria }));
+      dispatch(bulkPurgeDMs({ channels, config: purgeConfig, searchCriteria: payloadSearchCriteria, skipMessageIds }));
     } else {
-      dispatch(bulkPurgeChannels({ channels, config: purgeConfig, guildId, searchCriteria: payloadSearchCriteria }));
+      dispatch(bulkPurgeChannels({ channels, config: purgeConfig, guildId, searchCriteria: payloadSearchCriteria, skipMessageIds }));
     }
 
     onClose();
@@ -637,6 +646,10 @@ const BulkPurgeDialog = ({ open, onClose, channels: selectedChannels, mode, guil
               </AccordionDetails>
             </Accordion>
           )}
+
+          {/* 2.2.9 (GitHub issue 23): the last run's failed list, and a saved one to skip. */}
+          <LastRunFailures source="purge" />
+          {isMessagesFamily && <SkipListRow value={skipList} onChange={setSkipList} />}
 
           {/* Summary */}
           <Alert severity="warning" variant="outlined">

@@ -173,6 +173,44 @@ describe('Data package bulk delete (2.2.8)', () => {
     cy.get('@deleteDm.all').should('have.length', 0);
   });
 
+  // 2.2.9 (GitHub issue 23): the finished note offers the run's failed list
+  // as a file, and the dialog takes that file back as a skip list.
+  it('saves the failed list from the finished note and leaves those messages out when it is loaded', () => {
+    const file = `${Cypress.config('downloadsFolder')}/discrub-failed-${new Date().toISOString().slice(0, 10)}.json`;
+    cy.task('downloads:clean');
+    cy.intercept('DELETE', `${API}/channels/200/messages/1002`, { statusCode: 403, body: { message: 'Missing Access', code: 50001 } }).as('refused');
+
+    cy.get('[data-testid="package-multi-select-toggle"]').click();
+    tickRow('general');
+    cy.get('[data-testid="multi-select-purge"]').click();
+    cy.get('[data-testid="skip-list-button"]').should('contain', 'Skip list');
+    cy.get('[data-testid="last-run-failures"]').should('not.exist');
+    cy.get('[data-testid="package-bulk-delete-confirm"]').should('contain', 'Delete 4 messages').click();
+    cy.get('[data-testid="package-bulk-finished"]', { timeout: 90000 })
+      .should('contain', 'Done. 3 deleted, 0 already gone, 1 failed.');
+
+    cy.get('[data-testid="package-bulk-finished"] [data-testid="save-failed-list"]').click();
+    cy.readFile(file).then((saved) => {
+      expect(saved.failures).to.have.length(1);
+      expect(saved.failures[0]).to.include({ messageId: '1002', channelId: '200', guildId: '901000000000000001', status: 403, code: 50001, kind: 'permanent' });
+      expect(saved.failures[0].channelName).to.contain('general');
+    });
+
+    // Next time the same channel counts the one message left, until the file is loaded.
+    cy.get('[data-testid="package-bulk-finished"] [aria-label="Close"]').click();
+    cy.get('[data-testid="package-multi-select-toggle"]').click();
+    tickRow('general');
+    cy.get('[data-testid="multi-select-purge"]').click();
+    cy.get('[data-testid="package-bulk-delete-total"]').should('have.text', '1');
+    cy.get('[data-testid="last-run-failures"]').should('contain', "The last run couldn't delete 1 message.");
+    cy.get('[data-testid="skip-list-input"]').selectFile(file, { force: true });
+    cy.get('[data-testid="skip-list-button"]').should('contain', 'Skip list (1)');
+    cy.get('[data-testid="package-bulk-delete-total"]').should('have.text', '0');
+    cy.get('[data-testid="package-bulk-delete-nothing"]').should('be.visible');
+    cy.get('[data-testid="package-bulk-delete-confirm"]').should('be.disabled');
+    cy.get('@refused.all').should('have.length', 1);
+  });
+
   it('applies a content filter to every channel in the run', () => {
     cy.get('[data-testid="package-multi-select-toggle"]').click();
     tickRow('general');

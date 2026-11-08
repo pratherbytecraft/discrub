@@ -28,6 +28,7 @@ import devReducer from '@features/dev/devSlice';
 import supporterReducer from '@features/supporter/supporterSlice';
 import noticeReducer from '@features/appearance/noticeSlice';
 import workspaceReducer from '@features/workspace/workspaceSlice';
+import failuresReducer from '@features/failures/failuresSlice';
 
 interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
   preloadedState?: Partial<RootState>;
@@ -60,6 +61,7 @@ export function renderWithProviders(
         supporter: supporterReducer,
         notice: noticeReducer,
         workspace: workspaceReducer,
+        failures: failuresReducer,
       } as any,
       preloadedState,
     }),

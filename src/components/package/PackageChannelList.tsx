@@ -61,6 +61,8 @@ import {
   getPackageChannelSubtitle,
   type PackageChannelCategory,
 } from '@features/package/packageDisplayUtils';
+import { SaveFailedListLink } from '@components/failures/LastRunFailures';
+import { selectFailureCount } from '@features/failures/failuresSlice';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import { nameIncludes } from '@utils/nameMatch';
@@ -715,6 +717,7 @@ interface BulkFinishedNoteProps {
 /** 2.2.8: the run's totals, kept until dismissed so the marks in the list mean something. */
 const BulkFinishedNote = ({ cancelled, error, outcomes, onDismiss }: BulkFinishedNoteProps) => {
   const { t } = useTranslation();
+  const hasFailures = useAppSelector(selectFailureCount('package')) > 0;
   const sum = outcomes.reduce(
     (acc, o) => ({
       deleted: acc.deleted + (o.result?.deleted ?? 0),
@@ -733,6 +736,8 @@ const BulkFinishedNote = ({ cancelled, error, outcomes, onDismiss }: BulkFinishe
         data-testid="package-bulk-finished"
       >
         {error ?? t(cancelled ? 'package.bulk.stopped' : 'package.bulk.finished', sum)}
+        {/* 2.2.9 (GitHub issue 23): the run kept a record of what it could not delete. */}
+        {hasFailures && <SaveFailedListLink source="package" block />}
       </Alert>
     </Box>
   );

@@ -20,6 +20,7 @@ import { initialPackageState } from '@features/package/packageSlice';
 import { DEFAULT_HOTKEYS } from '@features/hotkeys/defaults';
 import { initialSupporterState } from '@features/supporter/supporterTypes';
 import { initialWorkspaceState } from '@features/workspace/workspaceSlice';
+import { initialFailuresState } from '@features/failures/failuresSlice';
 import { createMockUser, createMockGuild, createMockChannel, createMockMessages } from './fixtures';
 
 const initialPresetsState = { presets: {}, isLoaded: false };
@@ -53,6 +54,7 @@ export function createBaseState(overrides?: Partial<RootState>): RootState {
     supporter: { ...initialSupporterState },
     notice: { loaded: true, seenId: null },
     workspace: { ...initialWorkspaceState },
+    failures: { ...initialFailuresState },
     ...overrides,
   } as RootState;
 }

@@ -576,6 +576,57 @@ describe('Bulk Purge Operations', () => {
       }).as('lookupUser');
     });
 
+    // 2.2.9 (GitHub issue 23): a run keeps a record of what it could not
+    // delete, the record saves as a file, and a later run that loads the
+    // file leaves those messages alone.
+    it('saves a failed list after a run and skips those messages when the list is loaded', () => {
+      const refusal = { statusCode: 403, body: { message: 'Missing Permissions', code: 50013 } };
+      const file = `${Cypress.config('downloadsFolder')}/discrub-failed-${new Date().toISOString().slice(0, 10)}.json`;
+      cy.task('downloads:clean');
+      cy.intercept('DELETE', `${API}/channels/*/messages/780000000000000002`, refusal).as('refused');
+
+      selectChannelsForPurge('general');
+      openPurgeDialog();
+      cy.get('[data-testid="skip-list-button"]').should('contain', 'Skip list');
+      cy.get('[data-testid="last-run-failures"]').should('not.exist');
+      addUserById('111222333444555666');
+      cy.wait('@lookupUser');
+      confirmPurge();
+      waitForPurgeComplete();
+
+      cy.get('@refused.all').should('have.length', 1);
+      verifyStatusEntry(/Purge: Complete.*2 messages deleted, 1 failed/);
+      // The toast offers the file in place of the plain Purge complete.
+      cy.contains("The last run couldn't delete 1 message.").should('be.visible');
+      cy.contains('button', 'Save failed list').click();
+      cy.readFile(file).then((saved) => {
+        expect(saved.failures).to.have.length(1);
+        expect(saved.failures[0]).to.include({ messageId: '780000000000000002', status: 403, code: 50013, kind: 'permanent' });
+        expect(saved.discrubVersion).to.be.a('string');
+      });
+
+      // Second run with the file loaded: the refused message is not tried again.
+      interceptMessagesPurge();
+      cy.intercept('DELETE', `${API}/channels/*/messages/780000000000000002`, refusal).as('refusedAgain');
+      cy.get('body').then(($body) => {
+        const purge = $body.find('[aria-label="Purge selected channels"]');
+        if (purge.length === 0) cy.get('[aria-label="Toggle multi-select"]').first().click();
+        if (purge.length === 0 || purge.is(':disabled')) cy.get('[data-testid="channel-row"]').contains('general').click();
+      });
+      openPurgeDialog();
+      cy.get('[data-testid="last-run-failures"]').should('contain', "The last run couldn't delete 1 message.");
+      cy.get('[data-testid="skip-list-input"]').selectFile(file, { force: true });
+      cy.get('[data-testid="skip-list-button"]').should('contain', 'Skip list (1)');
+      cy.get('[data-testid="skip-list-line"]').should('contain', '1 message Discord refused will be left alone.');
+      addUserById('111222333444555666');
+      confirmPurge();
+      waitForPurgeComplete();
+
+      cy.get('@refusedAgain.all').should('have.length', 0);
+      verifyStatusEntry('Skipped 1 message on the skip list');
+      cy.contains('Purge complete').should('be.visible');
+    });
+
     it('should execute messages mode purge with thread discovery', () => {
       selectChannelsForPurge('general');
       openPurgeDialog();

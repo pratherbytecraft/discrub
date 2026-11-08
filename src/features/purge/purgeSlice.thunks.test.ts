@@ -17,6 +17,7 @@ import authReducer from '@features/auth/authSlice';
 import userReducer from '@features/user/userSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
+import failuresReducer from '@features/failures/failuresSlice';
 import channelReducer from '@features/channel/channelSlice';
 import packageReducer, { initialPackageState } from '@features/package/packageSlice';
 import { storage } from '@/extension/storage';
@@ -293,6 +294,7 @@ function createStore(overrides?: {
       status: statusReducer,
       channel: channelReducer,
       package: packageReducer,
+      failures: failuresReducer,
     },
     {
       auth: {
@@ -7171,6 +7173,114 @@ describe('purgeSlice thunks', () => {
 
       expect(seenAtCall26).toHaveLength(25);
       expect(store.getState().package.deletedMessageIds['ch1']).toHaveLength(30);
+    });
+  });
+  // ── 2.2.9 (GitHub issue 23): failed list and skip list ───────────────────
+
+  describe('failure records and the skip list (2.2.9)', () => {
+    const run = (extra: { skipMessageIds?: string[] } = {}) =>
+      store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+          ...extra,
+        }),
+      );
+    const answers = (byId: Record<string, { success: boolean; status?: number; code?: number }>) =>
+      mockDeleteMessage.mockImplementation((_token: string, id: string) => Promise.resolve(byId[id] ?? { success: true, status: 204 }));
+
+    it('keeps a record of every delete Discord did not make, except the ones already gone', async () => {
+      setupSearchResults([[mockMessage('m1'), mockMessage('m2'), mockMessage('m3'), mockMessage('m4')]]);
+      answers({
+        m1: { success: false, status: 403, code: 50013 },
+        m2: { success: false, status: 500 },
+        m3: { success: false, status: 404 },
+      });
+
+      await run();
+
+      const failures = (store.getState() as any).failures.purge;
+      expect(failures).toHaveLength(2);
+      expect(failures[0]).toMatchObject({ messageId: 'm1', channelId: 'ch1', guildId: 'guild1', channelName: '#general', status: 403, code: 50013, kind: 'permanent' });
+      expect(failures[1]).toMatchObject({ messageId: 'm2', status: 500, kind: 'retryable' });
+      // The counts still say three failed; the 404 is counted but has nothing to save.
+      const messages = store.getState().status.entries.map((e: any) => e.message);
+      expect(messages).toContain('Purge: Complete · 1 channel, 1 message deleted, 3 failed');
+    });
+
+    it('ends on a warning line and writes the list for the user', async () => {
+      setupSearchResults([[mockMessage('m1'), mockMessage('m2')]]);
+      answers({ m1: { success: false, status: 403 } });
+
+      await run();
+
+      const entries = store.getState().status.entries as { level: string; message: string }[];
+      const complete = entries.find((e) => e.message.includes('Complete'));
+      expect(complete?.level).toBe('warning');
+      const stored = await storage.state.get<{ purge: { messageId: string }[] }>(`deleteFailures:${CURRENT_USER.id}`);
+      expect(stored?.purge.map((f) => f.messageId)).toEqual(['m1']);
+    });
+
+    it('ends on a success line when nothing failed, and empties the last list', async () => {
+      setupSearchResults([[mockMessage('m1')]]);
+      answers({ m1: { success: false, status: 403 } });
+      await run();
+      expect((store.getState() as any).failures.purge).toHaveLength(1);
+
+      setupSearchResults([[mockMessage('m5')]]);
+      answers({});
+      await run();
+
+      expect((store.getState() as any).failures.purge).toEqual([]);
+      const entries = store.getState().status.entries as { level: string; message: string }[];
+      expect(entries.filter((e) => e.message.includes('Complete')).pop()?.level).toBe('success');
+    });
+
+    it('leaves the messages on a loaded skip list alone and says how many', async () => {
+      setupSearchResults([[mockMessage('m1'), mockMessage('m2'), mockMessage('m3')]]);
+      answers({});
+
+      await run({ skipMessageIds: ['m1', 'm3'] });
+
+      expect(mockDeleteMessage.mock.calls.map((c) => c[1])).toEqual(['m2']);
+      const messages = store.getState().status.entries.map((e: any) => e.message);
+      expect(messages).toContain('Skipped 2 messages on the skip list');
+      expect(messages.some((m: string) => m.startsWith('Purge: Complete') && m.includes('1 message deleted') && m.includes('2 skipped'))).toBe(true);
+      expect((store.getState() as any).failures.purge).toEqual([]);
+    });
+
+    it('carries the skip list and one failure list across a multi-Server run', async () => {
+      mockFetchChannels.mockReset();
+      mockFetchGuildUser.mockReset();
+      mockFetchGuildUser.mockResolvedValue({ success: true, status: 200, data: { roles: [] } });
+      mockFetchChannels.mockImplementation((_t: string, guildId: string) => Promise.resolve({
+        success: true,
+        status: 200,
+        data: [{ id: guildId === 'g1' ? 'c1' : 'c2', name: 'general', type: 0 }],
+      }));
+      mockFetchSearchMessageData.mockImplementation((_t: string, _o: number, channelId: string) => {
+        const page = channelId === 'c1' ? [mockMessage('a1'), mockMessage('a2')] : [mockMessage('b1'), mockMessage('b2')];
+        return Promise.resolve({ success: true, data: { messages: [page] } });
+      });
+      answers({ a2: { success: false, status: 403 }, b2: { success: false, status: 403 } });
+      const guild = (id: string, name: string): Guild =>
+        ({ id, name, icon: null, permissions: String((1n << 10n) | (1n << 16n)) } as unknown as Guild);
+
+      await store.dispatch(
+        purgeGuilds({
+          guilds: [guild('g1', 'Alpha'), guild('g2', 'Beta')],
+          config: messagesConfig([CURRENT_USER.id]),
+          skipMessageIds: ['a1'],
+        }),
+      );
+
+      expect(mockDeleteMessage.mock.calls.map((c) => c[1])).toEqual(['a2', 'b1', 'b2']);
+      // One list for the whole run: the second Server did not wipe the first one's failure.
+      const failures = (store.getState() as any).failures.purge as { messageId: string; guildId: string }[];
+      expect(failures.map((f) => [f.messageId, f.guildId])).toEqual([['a2', 'g1'], ['b2', 'g2']]);
+      const entries = store.getState().status.entries as { level: string; message: string }[];
+      expect(entries.find((e) => e.message.startsWith('Purge: Complete · 2 of 2 servers'))?.level).toBe('warning');
     });
   });
 });

@@ -20,6 +20,8 @@ import {
   Tag as TextChannelIcon,
   Tune as FilterIcon,
 } from '@mui/icons-material';
+import LastRunFailures from '@components/failures/LastRunFailures';
+import SkipListRow, { type LoadedSkipList } from '@components/failures/SkipListRow';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
@@ -63,6 +65,9 @@ const BulkPackageDeleteDialog = ({ open, onClose, channelIds }: BulkPackageDelet
   const fullScreen = useFullScreenDialog();
   const [criteria, setCriteria] = useState<SearchCriteria | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  // 2.2.9: a failed list loaded as a skip list. Like the filter, it belongs to one run.
+  const [skipList, setSkipList] = useState<LoadedSkipList | null>(null);
+  const skipMessageIds = skipList?.skipIds;
 
   const channels = useMemo(() => {
     const byId = new Map((parsed?.channels ?? []).map((c) => [c.id, c] as const));
@@ -73,14 +78,17 @@ const BulkPackageDeleteDialog = ({ open, onClose, channelIds }: BulkPackageDelet
   // over from an earlier run cannot shrink the counts without being noticed
   // (found on the 2.2.8 VM pass).
   useEffect(() => {
-    if (open) setCriteria(null);
+    if (open) {
+      setCriteria(null);
+      setSkipList(null);
+    }
   }, [open]);
 
   // Count what the run would delete whenever the dialog opens or the filter changes.
   useEffect(() => {
     if (!open || channelIds.length === 0) return;
-    void dispatch(countBulkDeleteTargets({ channelIds, criteria }));
-  }, [dispatch, open, channelIds, criteria]);
+    void dispatch(countBulkDeleteTargets({ channelIds, criteria, skipMessageIds }));
+  }, [dispatch, open, channelIds, criteria, skipMessageIds]);
 
   const counting = bulk.status === 'counting';
   const counts = bulk.counts;
@@ -89,7 +97,7 @@ const BulkPackageDeleteDialog = ({ open, onClose, channelIds }: BulkPackageDelet
   const fmt = (n: number) => n.toLocaleString(i18next.language);
 
   const handleConfirm = () => {
-    void dispatch(bulkDeletePackageChannels({ channelIds, criteria }));
+    void dispatch(bulkDeletePackageChannels({ channelIds, criteria, skipMessageIds }));
     onClose();
   };
 
@@ -147,6 +155,9 @@ const BulkPackageDeleteDialog = ({ open, onClose, channelIds }: BulkPackageDelet
               {filterCount > 0 ? t('package.bulk.filtersActive') : t('package.bulk.filtersHint')}
             </Typography>
           </Box>
+
+          <SkipListRow value={skipList} onChange={setSkipList} />
+          <LastRunFailures source="package" />
 
           {!counting && total === 0 ? (
             <Alert severity="info" variant="outlined" sx={{ py: 0.5 }} data-testid="package-bulk-delete-nothing">

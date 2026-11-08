@@ -23,7 +23,10 @@ export interface OperationTip {
 }
 
 /** #124 one-time offer to switch the UI language. */
-export type ToastAction = { type: 'switchLanguage'; language: string; label: string };
+export type ToastAction =
+  | { type: 'switchLanguage'; language: string; label: string }
+  /** 2.2.9: save the list of messages the run that just ended could not delete. */
+  | { type: 'saveFailedList'; source: 'purge' | 'package'; label: string };
 
 export interface ToastNotification {
   isVisible: boolean;

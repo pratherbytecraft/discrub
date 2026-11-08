@@ -578,6 +578,20 @@
       }
     }
   },
+  "failures": {
+    "skipList": "Überspringliste",
+    "skipListCount": "Überspringliste ({{count, number}})",
+    "skipHint": "Lade eine Fehlerliste aus einem früheren Lauf, um diese Nachrichten in Ruhe zu lassen.",
+    "skipLoaded_one": "{{file}}. {{count, number}} Nachricht, die Discord abgelehnt hat, bleibt unberührt.",
+    "skipLoaded_other": "{{file}}. {{count, number}} Nachrichten, die Discord abgelehnt hat, bleiben unberührt.",
+    "skipRetry_one": "{{count, number}} mit Verbindungsfehler wird erneut versucht.",
+    "skipRetry_other": "{{count, number}} mit Verbindungsfehler werden erneut versucht.",
+    "clear": "Entfernen",
+    "badFile": "Diese Datei ist keine von Discrub gespeicherte Fehlerliste.",
+    "lastRun_one": "Der letzte Lauf konnte {{count, number}} Nachricht nicht löschen.",
+    "lastRun_other": "Der letzte Lauf konnte {{count, number}} Nachrichten nicht löschen.",
+    "save": "Fehlerliste speichern"
+  },
   "storage": {
     "sessionOnly": "Dieses Browserfenster kann Discrubs Daten nicht speichern. Einstellungen, Verlauf und geladene Nachrichten sind weg, wenn es geschlossen wird."
   },
@@ -2024,6 +2038,8 @@
       "progress": "Fortschritt: bisher {{detail}}",
       "skippedOtherAuthors_one": "{{count}} Nachricht anderer Benutzer übersprungen. Discord erlaubt nur das Bearbeiten eigener Nachrichten.",
       "skippedOtherAuthors_other": "{{count}} Nachrichten anderer Benutzer übersprungen. Discord erlaubt nur das Bearbeiten eigener Nachrichten.",
+      "skippedListed_one": "{{count}} Nachricht auf der Überspringliste übersprungen",
+      "skippedListed_other": "{{count}} Nachrichten auf der Überspringliste übersprungen",
       "skippedUnexpectedAuthor_one": "{{count}} Nachricht aus der Suche übersprungen, deren Autor nicht zum Ziel passte, vermutlich eine API-Anomalie.",
       "skippedUnexpectedAuthor_other": "{{count}} Nachrichten aus der Suche übersprungen, deren Autor nicht zum Ziel passte, vermutlich eine API-Anomalie.",
       "preservedPinned_one": "{{count}} angepinnte Nachricht erhalten. Dein Filter schließt angepinnte Nachrichten aus.",

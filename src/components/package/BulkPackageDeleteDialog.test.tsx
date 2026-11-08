@@ -122,4 +122,33 @@ describe('<BulkPackageDeleteDialog /> (2.2.8)', () => {
     expect(screen.getByTestId('package-bulk-delete-filters')).toHaveTextContent('Edit filters (1)');
     expect(screen.getByText('Filters apply to every Channel in this run.')).toBeInTheDocument();
   });
+
+  // 2.2.9 (GitHub issue 23)
+  it('recounts without the messages on a loaded skip list and offers the last run\'s failed list', async () => {
+    const big = { '200': [msg('10001', 'a'), msg('10002', 'b'), msg('10003', 'c')], '300': [msg('10010', 'yo')], '400': [] };
+    renderWithProviders(
+      <BulkPackageDeleteDialog open onClose={() => {}} channelIds={['200', '300']} />,
+      {
+        preloadedState: {
+          ...(stateLoaded({ loadedChannels: big }) as object),
+          failures: { purge: [], package: [{ messageId: '10001', channelId: '200', guildId: 'g1', channelName: 'general', status: 403, kind: 'permanent', at: '2026-11-08T10:00:00.000Z' }], loadedFor: null },
+        } as never,
+      },
+    );
+    await waitFor(() => expect(screen.getByTestId('package-bulk-delete-total')).toHaveTextContent('4'));
+    expect(screen.getByTestId('last-run-failures')).toHaveTextContent("The last run couldn't delete 1 message.");
+
+    const text = JSON.stringify({ failures: [{ messageId: '10001', kind: 'permanent' }, { messageId: '10010', kind: 'retryable' }] });
+    const file = new File([text], 'discrub-failed-2026-11-08.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(text) });
+    fireEvent.change(screen.getByTestId('skip-list-input'), { target: { files: [file] } });
+
+    await waitFor(() => expect(screen.getByTestId('package-bulk-delete-total')).toHaveTextContent('3'));
+    expect(screen.getByTestId('package-bulk-delete-row-200')).toHaveTextContent('2');
+    expect(screen.getByTestId('package-bulk-delete-row-300')).toHaveTextContent('1');
+    expect(screen.getByTestId('package-bulk-delete-confirm')).toHaveTextContent('Delete 3 messages');
+
+    fireEvent.click(screen.getByTestId('skip-list-clear'));
+    await waitFor(() => expect(screen.getByTestId('package-bulk-delete-total')).toHaveTextContent('4'));
+  });
 });

@@ -22,6 +22,7 @@ import authReducer from '@features/auth/authSlice';
 import userReducer from '@features/user/userSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
+import failuresReducer from '@features/failures/failuresSlice';
 import { buildFixturePackage } from '@/test/package-fixtures';
 import { storage } from '@/extension/storage';
 import { checkCancelled } from '@utils/operationLoopUtils';
@@ -64,6 +65,7 @@ function makeStore(token: string | null = 'tok') {
       user: userReducer,
       app: appReducer,
       status: statusReducer,
+      failures: failuresReducer,
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   }) as unknown as {
@@ -301,5 +303,63 @@ describe('packageSlice — bulk delete cache flushes (2.2.8)', () => {
     // The final flush covers the rest, in state and on disk.
     expect(selectChannelDeletedMessageCount('200')(store.getState())).toBe(55);
     expect((await readDeletedCache(USER_ID))['200']).toHaveLength(55);
+  });
+});
+
+describe('packageSlice — failure records and the skip list (2.2.9, GitHub issue 23)', () => {
+  beforeEach(async () => {
+    mockDeleteMessage.mockReset();
+    vi.mocked(checkCancelled).mockReturnValue(false);
+    __testHelpers__.storeSourceFile(null);
+    await storage.package.clear();
+  });
+  const failuresOf = (store: ReturnType<typeof makeStore>) => (store.getState() as any).failures.package as Array<Record<string, unknown>>;
+
+  it('keeps a record of each refused or failed delete, the 403s included, and none for a 404', async () => {
+    const answers: Record<string, { success: boolean; status?: number; code?: number }> = {
+      '1': { success: false, status: 403, code: 50001 },
+      '2': { success: false, status: 404 },
+      '3': { success: false, status: 503 },
+    };
+    mockDeleteMessage.mockImplementation((_t: string, id: string) => Promise.resolve(answers[id] ?? { success: true, status: 204 }));
+    const store = await primedStore();
+    await store.dispatch(countBulkDeleteTargets({ channelIds: ['200', '300'], criteria: null }));
+
+    const action = await store.dispatch(bulkDeletePackageChannels({ channelIds: ['200', '300'], criteria: null }));
+
+    expect(action.payload).toMatchObject({ deleted: 1, alreadyGone: 1, forbidden: 1, failed: 1 });
+    const failures = failuresOf(store);
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toMatchObject({ messageId: '1', channelId: '200', status: 403, code: 50001, kind: 'permanent' });
+    expect(failures[0].guildId).toBeTruthy();
+    expect(String(failures[0].channelName)).toContain('general');
+    expect(failures[1]).toMatchObject({ messageId: '3', channelId: '200', status: 503, kind: 'retryable' });
+    // Written for the user so Save failed list still works after a reload; no toast, the finished note carries the link.
+    const stored = await storage.state.get<{ package: { messageId: string }[] }>(`deleteFailures:${USER_ID}`);
+    expect(stored?.package.map((f) => f.messageId)).toEqual(['1', '3']);
+    expect(store.getState().status.toast.isVisible).toBe(false);
+  });
+
+  it('starts each run with an empty list', async () => {
+    mockDeleteMessage.mockResolvedValueOnce({ success: false, status: 403 }).mockResolvedValue({ success: true, status: 204 });
+    const store = await primedStore();
+    await store.dispatch(bulkDeletePackageChannels({ channelIds: ['200'], criteria: null }));
+    expect(failuresOf(store)).toHaveLength(1);
+    await store.dispatch(bulkDeletePackageChannels({ channelIds: ['300'], criteria: null }));
+    expect(failuresOf(store)).toEqual([]);
+  });
+
+  it('drops the ids on a skip list from the counts and from the run', async () => {
+    mockDeleteMessage.mockResolvedValue({ success: true, status: 204 });
+    const store = await primedStore();
+    await store.dispatch(countBulkDeleteTargets({ channelIds: ['200', '300'], criteria: null, skipMessageIds: ['1', '10'] }));
+    expect(store.getState().package.bulkDelete.counts).toEqual({ '200': 2, '300': 0 });
+
+    const action = await store.dispatch(bulkDeletePackageChannels({ channelIds: ['200', '300'], criteria: null, skipMessageIds: ['1', '10'] }));
+
+    expect(mockDeleteMessage.mock.calls.map((c) => c[1]).sort()).toEqual(['2', '3']);
+    expect(action.payload).toMatchObject({ deleted: 2, channelsDone: 1, channelsSkipped: 1 });
+    // The skipped message is still in the package, not marked deleted.
+    expect(store.getState().package.deletedMessageIds['200']).not.toContain('1');
   });
 });

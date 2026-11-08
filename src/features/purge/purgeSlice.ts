@@ -10,6 +10,8 @@ import { selectAuthToken } from '@features/auth/authSlice';
 import { selectSearchDelay, selectDeleteDelay, selectDelayModifier, setDiscrubPaused } from '@features/app/appSlice';
 import { getDiscordService } from '@services/discordService';
 import { addStatusEntry, showOperationTip } from '@features/status/statusSlice';
+import { buildFailure, type DeleteFailure } from '@features/failures/deleteFailures';
+import { failureNoted, failureRunStarted, finishFailureRun } from '@features/failures/failuresSlice';
 import {
   waitWhilePaused,
   checkCancelled,
@@ -741,8 +743,25 @@ async function purgeChannelMessages(
   // summarized) — no delete, no content-clear. Wins over
   // retainAttachedMedia.
   preserveMediaAndLinks?: boolean,
+  // 2.2.9 (GitHub issue 23): message ids a loaded skip list says to leave
+  // alone, and a callback that gets a record of each failed delete or edit.
+  extras?: { skipMessageIds?: ReadonlySet<string>; onFailure?: (failure: DeleteFailure) => void },
 ): Promise<ChannelPurgeResult> {
   const discordService = getDiscordService();
+  const skipMessageIds = extras?.skipMessageIds;
+  let totalSkippedListed = 0;
+  const noteFailure = (messageId: string, failedChannelId: string, response: { status?: number; code?: number }) => {
+    // A 404 means the message is already gone; there is nothing to save or to skip next time.
+    if (response.status === 404) return;
+    extras?.onFailure?.(buildFailure({
+      messageId,
+      channelId: failedChannelId,
+      guildId,
+      channelName: channelLabel ?? '',
+      status: response.status,
+      code: response.code,
+    }));
+  };
   let totalDeleted = 0;
   let totalSkipped = 0;
   let totalEditedAttachmentsOnly = 0;
@@ -1081,6 +1100,19 @@ async function purgeChannelMessages(
         // deleted / edited. `message.pinned` is a required boolean on
         // every message object (discord-api-types), so the check is
         // safe to make unconditional.
+        // 2.2.9: a message on the loaded skip list failed for good in an
+        // earlier run (Discord refused it); leave it alone without a request.
+        if (skipMessageIds?.has(message.id)) {
+          totalSkipped++;
+          totalSkippedListed++;
+          totalProcessed++;
+          if (totalProcessed - lastProgressDispatch >= PROGRESS_THROTTLE_MESSAGES || mi === messages.length - 1) {
+            lastProgressDispatch = totalProcessed;
+            onProgress(totalProcessed, totalDeleted, totalSkipped, totalEditedAttachmentsOnly, totalFailed);
+          }
+          continue;
+        }
+
         if (
           filterOverrides?.isPinned === IsPinnedType.NO &&
           message.pinned === true
@@ -1227,6 +1259,7 @@ async function purgeChannelMessages(
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
               totalFailed++;
+              noteFailure(message.id, targetChannelId, response);
               dispatch(addStatusEntry({
                 level: 'warning',
                 message: t('status.purge.deleteAttachmentOnlyFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
@@ -1249,6 +1282,7 @@ async function purgeChannelMessages(
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
               totalFailed++;
+              noteFailure(message.id, targetChannelId, response);
               dispatch(addStatusEntry({
                 level: 'warning',
                 message: t('status.purge.stripFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
@@ -1276,6 +1310,7 @@ async function purgeChannelMessages(
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
               totalFailed++;
+              noteFailure(message.id, targetChannelId, response);
               dispatch(addStatusEntry({
                 level: 'warning',
                 message: t('status.purge.clearTextFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
@@ -1305,6 +1340,7 @@ async function purgeChannelMessages(
             throwIfSignInExpired(response);
             throwIfChannelGone(response);
             totalFailed++;
+            noteFailure(message.id, targetChannelId, response);
             dispatch(addStatusEntry({
               level: 'warning',
               message: t('status.purge.deleteFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
@@ -1389,6 +1425,13 @@ async function purgeChannelMessages(
     dispatch(addStatusEntry({
       level: 'info',
       message: t('status.purge.preservedPinned', { count: totalSkippedPinned }),
+    }));
+  }
+
+  if (totalSkippedListed > 0) {
+    dispatch(addStatusEntry({
+      level: 'info',
+      message: t('status.purge.skippedListed', { count: totalSkippedListed }),
     }));
   }
 
@@ -2010,6 +2053,8 @@ interface BulkPurgeParams {
   // Messages / Attachments Only / Reactions (as message-side narrowing)
   // / Clear All Reactions (same).
   searchCriteria?: SearchCriteria | null;
+  /** 2.2.9: message ids from a loaded skip list; the run leaves them alone. */
+  skipMessageIds?: string[];
 }
 
 interface BulkPurgeApi {
@@ -2053,6 +2098,12 @@ const executeBulkPurge = async (
     const { mode, targetUserIds, retainAttachedMedia, deleteAttachmentsOnly, systemMessageTypesToDelete, skipArchivedThreads, preserveMediaAndLinks } = config;
     const errors: string[] = [];
     const isDm = !guildId;
+    // 2.2.9: one failure list per run. A multi-Server run starts and ends it in purgeGuilds.
+    const skipSet = params.skipMessageIds?.length ? new Set(params.skipMessageIds) : undefined;
+    const failureExtras = {
+      skipMessageIds: skipSet,
+      onFailure: (failure: DeleteFailure) => { dispatch(failureNoted({ source: 'purge', failure })); },
+    };
     const isReactionsMode = mode === 'reactions';
     const isClearReactionsMode = mode === 'clearReactions';
     const modeLabel = purgeModeLabel(mode);
@@ -2100,6 +2151,7 @@ const executeBulkPurge = async (
     // Row 134: the channel the sign in expired on; the run stops there and keeps its record.
     let signInExpiredAt: number | null = null;
     try {
+      if (!serverContext) dispatch(failureRunStarted('purge'));
       // Thread discovery for guild channels only
       let threadMap: Map<string, Channel[]> | undefined;
       if (guildId) {
@@ -2424,6 +2476,7 @@ const executeBulkPurge = async (
               systemMessageTypesToDelete,
               skipArchivedThreads,
               preserveMediaAndLinks,
+              failureExtras,
             );
 
             if (
@@ -2551,7 +2604,8 @@ const executeBulkPurge = async (
           }));
         } else {
           dispatch(addStatusEntry({
-            level: 'success',
+            // 2.2.9: a run that left messages undeleted does not end on a green line.
+            level: completedStats.failed > 0 ? 'warning' : 'success',
             message: t('status.purge.completeDetail', { mode: modeLabel, label: completeLabel, scope: t('status.purge.scope', { count: channels.length, context: isDm ? 'dm' : 'channel' }), detail: totalDetail }),
           }));
         }
@@ -2564,6 +2618,9 @@ const executeBulkPurge = async (
         message: t('status.purge.failedToast', { mode: modeLabel, error: error instanceof Error ? error.message : t('status.purge.unknownError') }),
       }));
       throw error;
+    } finally {
+      // 2.2.9: keep the run's failure list however the run ended.
+      if (!serverContext) await dispatch(finishFailureRun('purge'));
     }
 };
 
@@ -2594,6 +2651,8 @@ export interface PurgeGuildsParams {
   guilds: Guild[];
   config: PurgeConfig;
   searchCriteria?: SearchCriteria | null;
+  /** 2.2.9: message ids from a loaded skip list; the run leaves them alone. */
+  skipMessageIds?: string[];
 }
 
 /**
@@ -2611,7 +2670,7 @@ export const purgeGuilds = createAsyncThunk<
   { state: RootState; rejectValue: string }
 >(
   'purge/purgeGuilds',
-  async ({ guilds, config, searchCriteria }, { rejectWithValue, dispatch, getState, signal }) => {
+  async ({ guilds, config, searchCriteria, skipMessageIds }, { rejectWithValue, dispatch, getState, signal }) => {
     const modeLabel = purgeModeLabel(config.mode);
     const initialState = getState();
     const token = selectAuthToken(initialState);
@@ -2638,6 +2697,7 @@ export const purgeGuilds = createAsyncThunk<
     let signInExpired = false;
 
     try {
+      dispatch(failureRunStarted('purge'));
       for (let i = 0; i < guilds.length; i++) {
         await waitWhilePaused(getState);
         if (checkCancelled(getState)) { cancelled = true; break; }
@@ -2704,7 +2764,7 @@ export const purgeGuilds = createAsyncThunk<
         let result: BulkPurgeRunResult;
         try {
           result = await executeBulkPurge(
-            { channels, config, guildId: guild.id, searchCriteria },
+            { channels, config, guildId: guild.id, searchCriteria, skipMessageIds },
             { dispatch, getState },
             serverContext,
           );
@@ -2742,7 +2802,7 @@ export const purgeGuilds = createAsyncThunk<
       } else if (cancelled || checkCancelled(getState)) {
         dispatch(addStatusEntry({ level: 'warning', message: t('status.purge.serversCancelled', { mode: modeLabel, servers: serverCount, detail }) }));
       } else {
-        dispatch(addStatusEntry({ level: 'success', message: t('status.purge.serversComplete', { mode: modeLabel, servers: serverCount, detail }) }));
+        dispatch(addStatusEntry({ level: totals.failed > 0 ? 'warning' : 'success', message: t('status.purge.serversComplete', { mode: modeLabel, servers: serverCount, detail }) }));
       }
       if (signInExpired) return { success: true, errors, signInExpired: true };
       return errors.length > 0 ? { success: true, errors } : { success: true };
@@ -2750,6 +2810,8 @@ export const purgeGuilds = createAsyncThunk<
       return rejectWithValue(
         error instanceof Error ? error.message : 'Failed to purge servers',
       );
+    } finally {
+      await dispatch(finishFailureRun('purge'));
     }
   },
 );
