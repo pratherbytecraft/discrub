@@ -782,9 +782,13 @@ export const bulkEditGuilds = createAsyncThunk<
         totals.edited += run.stats.edited;
         totals.skipped += run.stats.skipped;
         totals.failed += run.stats.failed;
-        // A server cut short (Stop, or the sign in expired) is not complete; the run's own summary line follows.
+        // A server cut short (Stop, the sign in expired, or the account-protection
+        // stop that sets the cancel flag after a 429 storm) is not complete; the
+        // run's own summary line follows. The 2.2.9 mock pass found the storm
+        // path logging "complete" because the walk ended on the failed edit
+        // before it saw the flag.
         if (run.signInExpiredAt !== null) { signInExpired = true; break; }
-        if (run.cancelled) { cancelled = true; break; }
+        if (run.cancelled || checkCancelled(getState as () => RootState)) { cancelled = true; break; }
         dispatch(addStatusEntry({ level: 'success', message: t('status.msg.bulkEditServerComplete', { name: guild.name, count: run.stats.edited }) }));
 
         // Delay between servers, the same cadence as between channels.
