@@ -5,6 +5,7 @@ import { exportSlug } from '@/utils/exportFileName';
 import { EXPORT_FONT_STACK, exportLangTag, scriptJson, viewerStrings } from './exportStrings';
 import { generateEmbeddedJs } from './exportHtmlJs';
 import { generateExportReadme, generatePlainTextReadme, getExportService } from './exportService';
+import { buildThemeSelectHtml, defaultExportThemeSet } from './exportThemes';
 
 const BOM = String.fromCharCode(0xfeff);
 // Built from code points so the test file itself stays ASCII.
@@ -96,5 +97,21 @@ describe('export strings follow the app language (2.2.9)', () => {
     await i18next.changeLanguage('de');
     const csv = getExportService().generateCSV([], {}, null);
     expect(csv.startsWith(`${BOM}ID,Timestamp,Username,Display Name,Server Nickname`)).toBe(true);
+  });
+
+  // VM pass 2026-11-11
+  it('underlines a Chinese heading across its full width in the plain text guide', async () => {
+    await i18next.changeLanguage('zh');
+    const lines = generatePlainTextReadme({ isBulk: true }).split('\n');
+    const title = lines[0];
+    const wide = Array.from(title).filter((ch) => ch.charCodeAt(0) > 0x2e7f).length;
+    expect(wide).toBeGreaterThan(0);
+    expect(lines[1]).toBe('='.repeat(title.length + wide));
+  });
+
+  it('labels the theme picker of an exported page in the app language', async () => {
+    expect(buildThemeSelectHtml(defaultExportThemeSet(), 'theme-select', 'theme-select')).toContain('title="Theme" aria-label="Theme"');
+    await i18next.changeLanguage('de');
+    expect(buildThemeSelectHtml(defaultExportThemeSet(), 'theme-select', 'theme-select')).toContain('title="Design" aria-label="Design"');
   });
 });

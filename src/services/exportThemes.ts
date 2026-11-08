@@ -14,6 +14,7 @@
  * palette. Exports stay static — accent animations never embed.
  */
 
+import { t as translate } from '@/i18n';
 import {
   THEME_DESCRIPTORS,
   findThemeDescriptor,
@@ -287,5 +288,6 @@ export function buildThemeSelectHtml(
         `<option value="${t.id}"${t.id === set.defaultId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`,
     )
     .join('');
-  return `<select id="${domId}" class="${className}" title="Theme" aria-label="Theme">${options}</select>`;
+  const themeLabel = translate('export.page.theme').replace(/"/g, '&quot;');
+  return `<select id="${domId}" class="${className}" title="${themeLabel}" aria-label="${themeLabel}">${options}</select>`;
 }

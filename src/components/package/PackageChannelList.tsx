@@ -128,6 +128,7 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
     [parsed],
   );
 
+  const deletedIds = useAppSelector((s) => s.package.deletedMessageIds);
   const grouped = useMemo(() => {
     const map: Record<PackageChannelCategory, PackageChannel[]> = {
       guildText: [],
@@ -144,9 +145,11 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
       const category = getPackageChannelCategory(c);
       const key = serverKeyOf(c);
       if ((category === 'guildText' || category === 'thread') && key) {
-        const group = servers.get(key) ?? { key, name: c.guildName || c.guildId || '', channels: [], messageCount: 0 };
+        const group = servers.get(key) ?? { key, name: c.guildName || c.guildId || '', channels: [], messageCount: 0, remaining: 0 };
         group.channels.push(c);
         group.messageCount += c.messageCount;
+        // Like the rows (#236), a Server counts what is left, not what the archive held.
+        group.remaining += Math.max(c.messageCount - (deletedIds[c.id]?.length ?? 0), 0);
         servers.set(key, group);
       } else {
         map[category].push(c);
@@ -156,7 +159,9 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
     (Object.keys(map) as PackageChannelCategory[]).forEach((k) =>
       map[k].sort((a, b) => b.messageCount - a.messageCount),
     );
-    const serverGroups = Array.from(servers.values()).sort((a, b) => b.messageCount - a.messageCount);
+    // Ordered by what is left, the number the header shows (VM pass 2026-11-11: ordering by the
+    // archive's count looked wrong after deletions), with the archive count as the tie break.
+    const serverGroups = Array.from(servers.values()).sort((a, b) => b.remaining - a.remaining || b.messageCount - a.messageCount);
     for (const group of serverGroups) {
       group.channels.sort(
         (a, b) =>
@@ -165,7 +170,7 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
       );
     }
     return { map, serverGroups };
-  }, [filtered]);
+  }, [filtered, deletedIds]);
 
   // 2.2.8: the sidebar Multi-select. Left Servers rows cannot be ticked
   // (Discord refuses deletes in a Server you are not in) and the run's
@@ -412,7 +417,10 @@ interface ServerGroup {
   key: string;
   name: string;
   channels: PackageChannel[];
+  /** What the archive held. */
   messageCount: number;
+  /** What is left after the deletions Discrub knows about. */
+  remaining: number;
 }
 
 /** The Server a package channel sits under, or '' when the package names none. */
@@ -434,13 +442,6 @@ interface ServerGroupHeaderProps {
 const ServerGroupHeader = ({ group, collapsed, onToggle, check, onCheck, children }: ServerGroupHeaderProps) => {
   const { t } = useTranslation();
   const name = group.name || t('pkgAnalytics.unknownServer');
-  // Like the rows (#236), the header counts what is left, not what the archive held.
-  const remaining = useAppSelector((state) =>
-    group.channels.reduce(
-      (n, c) => n + Math.max(c.messageCount - (state.package.deletedMessageIds[c.id]?.length ?? 0), 0),
-      0,
-    ),
-  );
   return (
     <>
       <Box
@@ -466,7 +467,7 @@ const ServerGroupHeader = ({ group, collapsed, onToggle, check, onCheck, childre
           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
             {t('package.serverChannels', { count: group.channels.length })}
             {' · '}
-            {t('package.serverMessages', { count: remaining })}
+            {t('package.serverMessages', { count: group.remaining })}
           </Typography>
         </Box>
         <IconButton

@@ -1072,7 +1072,8 @@
       "channelContent": "Channel content",
       "home": "Home",
       "directMessages": "Direct Messages",
-      "exportedStatus": "Exported"
+      "exportedStatus": "Exported",
+      "theme": "Theme"
     },
     "readme": {
       "title": "Discrub Export",

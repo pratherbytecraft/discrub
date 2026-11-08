@@ -1255,6 +1255,26 @@ describe('Thread Separation', () => {
     expect(threadHtml).toContain('Can you share more details?');
   });
 
+  // VM pass 2026-11-11 (wrong since 2.2.5): the thread's page was counted into the
+  // channel's page total, so a one page channel said "Page 1 of 2" and linked a page 2
+  // that was never written.
+  it('counts only the channel\'s own pages on the channel page when threads are exported apart', async () => {
+    await service.exportToZip(
+      THREAD_MESSAGES, 'test-channel', 'html', 100, false,
+      null, EXPORT_USER_MAP, EXPORT_GUILD_ID,
+      undefined, undefined, DEFAULT_EXPORT_CONFIG, undefined, undefined,
+      true, [THREAD_CHANNEL]
+    );
+
+    const paths = Array.from(capturedFiles.keys());
+    const mainPages = paths.filter(p => !p.includes('/threads/') && /-page-\d+\.html$/.test(p));
+    expect(mainPages).toHaveLength(1);
+    const mainHtml = capturedFiles.get(mainPages[0])!;
+    expect(mainHtml).not.toContain('Page 1 of');
+    expect(mainHtml).not.toContain('-page-2.html');
+    expect(mainHtml).not.toContain('class="bottom-nav"');
+  });
+
   it('should use ../ prefix for media paths in thread HTML files', async () => {
     // Mock media service to return local paths
     const { MediaDownloadService } = await import('./mediaDownloadService');

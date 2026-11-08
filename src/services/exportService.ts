@@ -154,7 +154,9 @@ export function generatePlainTextReadme(options: {
 }): string {
   const { isBulk, channelName } = options;
   const r = (key: string, vars?: Record<string, unknown>) => translate(`export.readme.${key}`, vars);
-  const underline = (text: string, mark: string) => mark.repeat(Math.max(text.length, 3));
+  // Chinese, Japanese and Korean characters take two columns in a text editor.
+  const columns = (text: string) => Array.from(text).reduce((n, ch) => n + (/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(ch) ? 2 : 1), 0);
+  const underline = (text: string, mark: string) => mark.repeat(Math.max(columns(text), 3));
   const lines: string[] = [];
   lines.push(r('title'));
   lines.push(underline(r('title'), '='));
@@ -508,7 +510,9 @@ class ExportService {
         }
         if (wantsFirstPage && page.pageNumber === 1) firstPage = page.messages;
 
-        const { parts, mimeType, ext } = buildPage(page.messages, channelName, page.pageNumber, totalPages, undefined, undefined);
+        // The channel's own pages count only themselves. Counting the thread pages in (2.2.5 to 2.2.8)
+        // made a one page channel say "Page 1 of 2" with a Next link to a file that was never written.
+        const { parts, mimeType, ext } = buildPage(page.messages, channelName, page.pageNumber, mainPageCount, undefined, undefined);
         const blob = new Blob(parts, { type: mimeType });
         await zipService.addFile(blob, `${sanitizedName}/${sanitizedName}-page-${page.pageNumber}.${ext}`);
         processedPages++;

@@ -327,6 +327,15 @@ describe('<PackageChannelList /> — one group per Server (2.2.9, GitHub issue 2
     expect(groups()[0]).toHaveTextContent('2 channels · 299 messages');
   });
 
+  // VM pass 2026-11-11: the order follows the number the header shows.
+  it('orders Servers by what is left, so a Server emptied by deletions drops below a fuller one', () => {
+    const state = loaded();
+    state.package.deletedMessageIds = { '4': Array.from({ length: 299 }, (_, i) => `m${i}`) };
+    renderWithProviders(<PackageChannelList />, { preloadedState: state });
+    expect(groups().map((g) => g.getAttribute('data-server'))).toEqual(['ga', 'gb']);
+    expect(groups()[1]).toHaveTextContent('2 channels · 3 messages');
+  });
+
   it('drops the Server name line from rows under a Server header', () => {
     renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
     expect(screen.getAllByText('Alpha Server')).toHaveLength(1);

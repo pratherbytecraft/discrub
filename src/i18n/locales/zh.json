@@ -1072,7 +1072,8 @@
       "channelContent": "频道内容",
       "home": "主页",
       "directMessages": "私信",
-      "exportedStatus": "已导出"
+      "exportedStatus": "已导出",
+      "theme": "主题"
     },
     "readme": {
       "title": "Discrub 导出",
@@ -1091,7 +1092,7 @@
       "theHtmlFile": "<code>该 HTML 文件</code>",
       "htmlTheme": "<strong>选择主题</strong>：使用右上角的主题下拉菜单更换导出的样式。打开时使用的是导出时应用所用的主题。",
       "phoneTitle": "在手机上查看",
-      "phoneBody": "请在电脑上打开此导出。手机的文件查看器会阻止页面所需的脚本和本地媒体，所以页面在手机上看起来是空的。文件完好无损，把文件夹复制到电脑上，然后在浏览器中打开 {{file}} 即可。",
+      "phoneBody": "请在电脑上打开此导出。手机的文件查看器会阻止页面所需的脚本和本地媒体，所以页面在手机上看起来是空的。文件完好无损，把文件夹复制到电脑上，然后在浏览器中打开{{file}}即可。",
       "phoneAnyPage": "任意 <code>.html</code> 文件",
       "features": "功能",
       "featureSearch": "<strong>搜索</strong>：使用搜索栏按内容查找消息。匹配项以黄色高亮显示。",
