@@ -1,3 +1,4 @@
+import { exportSlug } from '@/utils/exportFileName';
 import { createSlice, createAsyncThunk, createAction, PayloadAction } from '@reduxjs/toolkit';
 import type { Message, Channel } from 'discrub-core/types/discord-types';
 import { getThreadsFromMessages } from 'discrub-core/discrub-utils';
@@ -85,7 +86,7 @@ export const dmExportName = (dm: Channel): string =>
   dm.name || dm.recipients?.map(r => r.username).join(', ') || `dm-${dm.id}`;
 
 export function buildUniqueFolderNames(items: { id: string; name: string }[]): Map<string, string> {
-  const sanitize = (name: string) => name.replace(/[^a-z0-9]/gi, '_').toLowerCase().replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const sanitize = exportSlug;
   const nameToIds = new Map<string, string[]>();
 
   // Group by sanitized name to find collisions

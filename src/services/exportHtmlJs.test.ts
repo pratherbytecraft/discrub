@@ -315,7 +315,9 @@ describe('generateEmbeddedJs', () => {
     const js = generateEmbeddedJs();
     expect(js).toContain('reaction-popup-tabs');
     expect(js).toContain('data-tab="all"');
-    expect(js).toContain('>All<');
+    // 2.2.9: the label comes from the page's string table, in the export's language.
+    expect(js).toContain('"all":"All"');
+    expect(js).toContain('escapeHtml(L.all)');
   });
 
   it('reaction popup handles count-only mode when no user data', () => {

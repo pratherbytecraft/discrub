@@ -20,6 +20,9 @@ import {
   defaultExportThemeSet,
   buildThemeOptionsJson,
 } from './exportThemes';
+import { scriptJson, viewerStrings } from './exportStrings';
+import { exportSlug } from '@/utils/exportFileName';
+import { t as translate } from '@/i18n';
 
 export interface ExportUserData {
   username: string;
@@ -98,11 +101,7 @@ export function buildExportPageData(
     // name had uppercase or non-alphanumeric chars.
     const thread = (msg as any).thread;
     if (thread?.id && thread?.name) {
-      const slug = (thread.name as string)
-        .replace(/[^a-z0-9]/gi, '_')
-        .toLowerCase()
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '');
+      const slug = exportSlug(thread.name as string);
       const threadFilename = `threads/${slug}_${thread.id}.html`;
       threadMap[msg.id] = threadFilename;
     }
@@ -140,7 +139,7 @@ export function buildExportPageData(
         : '';
 
     users[userId] = {
-      username: contextUser?.userName || author.username || 'Unknown',
+      username: contextUser?.userName || author.username || translate('export.unknownUser'),
       discriminator: author.discriminator || '0',
       displayName: contextUser?.displayName || author.global_name || undefined,
       avatar: avatarHash,
@@ -194,7 +193,7 @@ export function buildExportPageData(
     for (const [userId, userData] of Object.entries(formattingContext.userMap)) {
       if (!users[userId]) {
         users[userId] = {
-          username: userData.userName || 'Unknown',
+          username: userData.userName || translate('export.unknownUser'),
           displayName: userData.displayName,
           messageCount: userMessageCounts[userId] || 0,
         };
@@ -215,7 +214,7 @@ export function buildExportPageData(
         const reactionUsers: ReactionUserInfo[] = exportReactions.map((er) => {
           // Prefer user data from the reaction API response (stored on ExportReaction)
           const avatarHash = er.avatar || seenAuthors.get(er.id)?.avatar;
-          const username = er.username || formattingContext?.userMap?.[er.id]?.userName || seenAuthors.get(er.id)?.username || 'Unknown';
+          const username = er.username || formattingContext?.userMap?.[er.id]?.userName || seenAuthors.get(er.id)?.username || translate('export.unknownUser');
           // Check avatarMap for locally downloaded avatar, fall back to CDN
           const avatarMapKey = avatarHash ? `${er.id}/${avatarHash}` : '';
           const localAvatar = avatarMapKey ? avatarMap?.[avatarMapKey] : undefined;
@@ -271,6 +270,10 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
   // ── Data Access ──────────────────────────────────────────────
   var dataEl = document.getElementById('export-data');
   var DATA = dataEl ? JSON.parse(dataEl.textContent || '{}') : {};
+
+  // 2.2.9: the page's own wording, in the language the export ran in.
+  var L = ${scriptJson(viewerStrings())};
+  function fill(s, o) { for (var k in o) { s = s.split('{' + k + '}').join(o[k]); } return s; }
 
   // ── Popup System ─────────────────────────────────────────────
   var activePopup = null;
@@ -439,7 +442,7 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
       }
     }
     return badges.length > 0
-      ? '<div class="user-popup-section"><div class="user-popup-section-title">BADGES</div><div class="user-popup-badges">' + badges.join('') + '</div></div>'
+      ? '<div class="user-popup-section"><div class="user-popup-section-title">' + escapeHtml(L.badges) + '</div><div class="user-popup-badges">' + badges.join('') + '</div></div>'
       : '';
   }
 
@@ -461,7 +464,7 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
       + (user.avatarUrl
         ? '<img src="' + user.avatarUrl + '" class="user-popup-avatar" alt="' + escapeHtml(user.username) + '">'
         : '<div class="user-popup-avatar-placeholder">' + escapeHtml((user.username || '?')[0].toUpperCase()) + '</div>')
-      + (user.bot ? '<span class="user-popup-bot-badge">BOT</span>' : '')
+      + (user.bot ? '<span class="user-popup-bot-badge">' + escapeHtml(L.bot) + '</span>' : '')
       + '</div>'
       // Primary name
       + '<div class="user-popup-name"' + (user.roleColor ? ' style="color:' + user.roleColor + '"' : '') + '>' + escapeHtml(primaryName) + '</div>'
@@ -471,20 +474,20 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
       + '<div class="user-popup-divider"></div>'
       // Names section (if display name differs from username)
       + (user.serverNickname
-        ? '<div class="user-popup-row"><span class="user-popup-label">Server Nickname</span><span class="user-popup-value">' + escapeHtml(user.serverNickname) + '</span></div>'
+        ? '<div class="user-popup-row"><span class="user-popup-label">' + escapeHtml(L.serverNickname) + '</span><span class="user-popup-value">' + escapeHtml(user.serverNickname) + '</span></div>'
         : '')
       + (user.displayName && user.displayName !== user.username
-        ? '<div class="user-popup-row"><span class="user-popup-label">Display Name</span><span class="user-popup-value">' + escapeHtml(user.displayName) + '</span></div>'
+        ? '<div class="user-popup-row"><span class="user-popup-label">' + escapeHtml(L.displayName) + '</span><span class="user-popup-value">' + escapeHtml(user.displayName) + '</span></div>'
         : '')
       // Account details
-      + '<div class="user-popup-section"><div class="user-popup-section-title">ACCOUNT DETAILS</div>'
-      + '<div class="user-popup-row"><span class="user-popup-label">User ID</span><span class="user-popup-value user-popup-mono">' + escapeHtml(userId) + '</span></div>'
+      + '<div class="user-popup-section"><div class="user-popup-section-title">' + escapeHtml(L.accountDetails) + '</div>'
+      + '<div class="user-popup-row"><span class="user-popup-label">' + escapeHtml(L.userId) + '</span><span class="user-popup-value user-popup-mono">' + escapeHtml(userId) + '</span></div>'
       + '</div>'
       // Badges
       + getFlagBadges(user.flags)
       // Roles
       + (user.roles && user.roles.length > 0
-        ? '<div class="user-popup-section"><div class="user-popup-section-title">ROLES</div><div class="user-popup-badges">'
+        ? '<div class="user-popup-section"><div class="user-popup-section-title">' + escapeHtml(L.roles) + '</div><div class="user-popup-badges">'
           + user.roles.map(function(r) {
               var style = r.color ? 'background:' + r.color + '22;color:' + r.color + ';border-color:' + r.color + '66' : '';
               var iconSrc = r.iconLocalUrl
@@ -505,7 +508,7 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
         : '')
       // Message count
       + '<div class="user-popup-divider"></div>'
-      + '<div class="user-popup-count">' + user.messageCount + ' message' + (user.messageCount !== 1 ? 's' : '') + ' in this export</div>'
+      + '<div class="user-popup-count">' + escapeHtml(fill(user.messageCount === 1 ? L.messagesOne : L.messagesOther, { count: user.messageCount })) + '</div>'
       + '</div>';
 
     createPopup(html, el);
@@ -549,7 +552,7 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
 
     // Build tabs
     var tabsHtml = '<div class="reaction-popup-tabs">';
-    tabsHtml += '<button class="reaction-tab active" data-tab="all">All</button>';
+    tabsHtml += '<button class="reaction-tab active" data-tab="all">' + escapeHtml(L.all) + '</button>';
     for (var i = 0; i < emojiKeys.length; i++) {
       var key = emojiKeys[i];
       var rd = msgReactions[key];
@@ -559,7 +562,7 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
 
     // Search bar (only if user data exists)
     var searchHtml = hasUserData
-      ? '<div class="reaction-search-bar"><input class="reaction-search-input" type="text" placeholder="Search users..." /></div>'
+      ? '<div class="reaction-search-bar"><input class="reaction-search-input" type="text" placeholder="' + escapeHtml(L.searchUsers) + '" /></div>'
       : '';
 
     // Content container (will be populated dynamically)
@@ -626,13 +629,13 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
       html += '</div>';
 
       if (remaining > 0) {
-        html += '<button class="reaction-show-more">Show more (' + remaining + ' remaining)</button>';
+        html += '<button class="reaction-show-more">' + escapeHtml(fill(L.showMore, { count: remaining })) + '</button>';
       }
 
       if (filtered.length === 0 && currentSearch) {
-        html = '<div class="reaction-count-only">No users matching "' + escapeHtml(currentSearch) + '"</div>';
+        html = '<div class="reaction-count-only">' + escapeHtml(fill(L.noUsersMatching, { query: currentSearch })) + '</div>';
       } else if (filtered.length === 0 && tabData[currentTab] && tabData[currentTab].unavailable) {
-        html = '<div class="reaction-count-only reaction-unavailable">Reactor names unavailable. The message was deleted or is no longer readable when this export ran.</div>';
+        html = '<div class="reaction-count-only reaction-unavailable">' + escapeHtml(L.reactorsUnavailable) + '</div>';
       }
 
       contentEl.innerHTML = html;
@@ -819,7 +822,7 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
     function addBtn(icon, label, handler) {
       var btn = document.createElement('button');
       btn.className = 'msg-toolbar-btn';
-      btn.innerHTML = icon + '<span class="msg-toolbar-label">' + label + '</span>';
+      btn.innerHTML = icon + '<span class="msg-toolbar-label">' + escapeHtml(label) + '</span>';
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         handler();
@@ -828,13 +831,13 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
     }
 
     // Copy text
-    addBtn(ICON_COPY, 'Copy Text', function() {
+    addBtn(ICON_COPY, L.copyText, function() {
       var textEl = messageEl.querySelector('.message-text');
       if (textEl) navigator.clipboard.writeText(textEl.textContent || '');
     });
 
     // Copy message ID
-    addBtn(ICON_ID, 'Copy ID', function() {
+    addBtn(ICON_ID, L.copyId, function() {
       navigator.clipboard.writeText(msgId);
     });
 
@@ -1070,7 +1073,7 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
 
     // Update count display
     var total = messages.length;
-    if (searchCount) searchCount.textContent = matchCount + ' of ' + total;
+    if (searchCount) searchCount.textContent = fill(L.searchCount, { count: matchCount, total: total });
     if (searchClear) searchClear.style.display = '';
   }
 

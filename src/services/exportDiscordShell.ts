@@ -10,6 +10,8 @@
  * Completely isolated from the standard template — does not modify generateHTMLPage.
  */
 
+import { t as translate } from '@/i18n';
+import { EXPORT_FONT_STACK, exportLangTag } from './exportStrings';
 import {
   type ExportThemeSet,
   defaultExportThemeSet,
@@ -58,7 +60,7 @@ export function generateDiscordShellSingle(
   const themeSet = options.themeSet ?? defaultExportThemeSet();
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${exportLangTag()}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -76,7 +78,7 @@ export function generateDiscordShellSingle(
           id="channel-frame"
           srcdoc="${contentHtml.replace(/"/g, '&quot;')}"
           class="shell-iframe"
-          title="Channel content"
+          title="${translate('export.page.channelContent')}"
         ></iframe>
       </div>
     </div>
@@ -98,7 +100,7 @@ export function generateDiscordShellBulk(
   const themeSet = options.themeSet ?? defaultExportThemeSet();
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${exportLangTag()}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -116,7 +118,7 @@ export function generateDiscordShellBulk(
           id="channel-frame"
           src="${activeChannel?.filename || ''}"
           class="shell-iframe"
-          title="Channel content"
+          title="${translate('export.page.channelContent')}"
         ></iframe>
       </div>
     </div>
@@ -135,7 +137,7 @@ function renderServerSidebar(options: DiscordShellOptions): string {
 
   return `
     <div class="server-sidebar">
-      <div class="server-icon-home" title="Home">
+      <div class="server-icon-home" title="${translate('export.page.home')}">
         <svg width="28" height="20" viewBox="0 0 28 20"><path fill="currentColor" d="M23.0212 1.67671C21.3107 0.879656 19.5079 0.318797 17.6584 0C17.4062 0.461742 17.1749 0.934541 16.9708 1.4184C15.003 1.12145 12.9974 1.12145 11.0292 1.4184C10.8251 0.934541 10.5765 0.461742 10.3416 0C8.49079 0.318797 6.68533 0.8824 4.9788 1.67933C1.00996 7.92987 -0.0602092 14.0315 0.488283 20.0515C2.72065 21.7527 4.92398 22.7769 7.0925 23.4557C7.5691 22.8175 7.99568 22.1394 8.36294 21.4266C7.6823 21.1579 7.02723 20.8332 6.40461 20.4568C6.56213 20.3417 6.71698 20.2236 6.8672 20.1043C12.1765 22.5752 17.9553 22.5752 23.1939 20.1043C23.3454 20.2236 23.5003 20.3417 23.6553 20.4568C23.03 20.8345 22.3736 21.1592 21.6943 21.4266C22.0616 22.1394 22.4869 22.8175 22.9648 23.4557C25.1346 22.7769 27.3393 21.7527 29.5765 20.0515C30.2075 13.0568 28.5579 6.99907 23.0212 1.67671Z"/></svg>
       </div>
       <div class="server-separator"></div>
@@ -146,7 +148,7 @@ function renderServerSidebar(options: DiscordShellOptions): string {
 }
 
 function renderChannelSidebar(options: DiscordShellOptions): string {
-  const headerName = options.isDM ? 'Direct Messages' : options.serverName;
+  const headerName = options.isDM ? translate('export.page.directMessages') : options.serverName;
 
   let channelListHtml = '';
 
@@ -227,7 +229,7 @@ function renderChannelSidebar(options: DiscordShellOptions): string {
       <div class="user-status-bar">
         <div class="user-status-avatar"></div>
         <div class="user-status-info">
-          <span class="user-status-name">Exported</span>
+          <span class="user-status-name">${translate('export.page.exportedStatus')}</span>
           <span class="user-status-detail">${options.exportDate}</span>
         </div>
       </div>
@@ -264,7 +266,7 @@ function getShellCSS(themeSet: ExportThemeSet): string {
 
 ${buildShellThemeCSS(themeSet)}
 
-    html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--shell-bg); }
+    html, body { height: 100%; overflow: hidden; font-family: ${EXPORT_FONT_STACK}; background: var(--shell-bg); }
 
     .discord-shell {
       display: grid;
