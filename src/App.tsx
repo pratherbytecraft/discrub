@@ -12,6 +12,9 @@ import { loadHotkeys } from '@features/hotkeys/hotkeysSlice';
 import { initializeSupporter } from '@features/supporter/supporterSlice';
 import { loadSeasonalNotice } from '@features/appearance/noticeSlice';
 import { requestPersistentStorage } from '@/utils/persistentStorage';
+import { onStorageFallback } from '@/extension/storage';
+import { addStatusEntry, showToast } from '@features/status/statusSlice';
+import { t } from '@/i18n';
 import { initializeWorkspaces } from '@features/workspace/workspaceSlice';
 import { sweepStagedDownloads } from 'drip-fs';
 import { isOverlayMode } from '@/extension/messaging';
@@ -44,6 +47,12 @@ function App() {
     // Fire-and-forget: upgrade the origin to persistent storage so the
     // per-purpose IDB databases can't be evicted under disk pressure.
     void requestPersistentStorage();
+    // 2.2.9: a browser that refuses IndexedDB (a private window in some browsers)
+    // runs on memory; say so once instead of losing settings and history quietly.
+    onStorageFallback(() => {
+      dispatch(addStatusEntry({ level: 'warning', message: t('storage.sessionOnly') }));
+      dispatch(showToast({ level: 'warning', message: t('storage.sessionOnly'), duration: 8000 }));
+    });
     // Staged download parts left by an earlier session (iOS OPFS path); no-op elsewhere.
     void sweepStagedDownloads();
     // 2.2.5: open Default (or the last workspace) so message pages can be written to disk.

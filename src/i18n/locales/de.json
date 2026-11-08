@@ -578,6 +578,9 @@
       }
     }
   },
+  "storage": {
+    "sessionOnly": "Dieses Browserfenster kann Discrubs Daten nicht speichern. Einstellungen, Verlauf und geladene Nachrichten sind weg, wenn es geschlossen wird."
+  },
   "errorPage": {
     "title": "Etwas ist schiefgelaufen",
     "fallback": "Ein unerwarteter Fehler ist aufgetreten.",

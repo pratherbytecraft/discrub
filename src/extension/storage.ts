@@ -139,12 +139,120 @@ export interface StorageAdapter {
   entries<T = unknown>(): Promise<Array<[string, T]>>;
 }
 
+/**
+ * Error names a browser raises when IndexedDB cannot be opened at all in
+ * this context (a private window in some browsers, storage switched off,
+ * a sandboxed frame). Anything else (quota, version, a flaky transaction)
+ * is a different problem and keeps the normal error policy.
+ */
+const STORAGE_UNAVAILABLE_ERRORS = new Set(['InvalidStateError', 'SecurityError', 'NotAllowedError']);
+
+/**
+ * 2.2.9: who to tell when a database falls back to memory. The app shows one
+ * toast and one status line so nobody loses settings without a word; the
+ * listener fires once per page, for the first database that falls back.
+ */
+type StorageFallbackListener = (storeName: StoreName, errorName: string) => void;
+let fallbackListener: StorageFallbackListener | null = null;
+let fallbackAnnounced = false;
+export function onStorageFallback(listener: StorageFallbackListener | null): void {
+  fallbackListener = listener;
+}
+function announceFallback(storeName: StoreName, errorName: string): void {
+  if (fallbackAnnounced) return;
+  fallbackAnnounced = true;
+  try {
+    fallbackListener?.(storeName, errorName);
+  } catch (error) {
+    logError('[storage] fallback listener failed', error);
+  }
+}
+/** Tests only. */
+export function resetStorageFallbackAnnouncement(): void {
+  fallbackAnnounced = false;
+}
+
+function isStorageUnavailableError(error: unknown): boolean {
+  const name = (error as { name?: unknown } | null)?.name;
+  return typeof name === 'string' && STORAGE_UNAVAILABLE_ERRORS.has(name);
+}
+
+/**
+ * 2.2.9: a stand-in for one database while IndexedDB cannot be opened.
+ * Lives only as long as the page. Values go through structuredClone so
+ * callers get the same copy semantics IndexedDB gives them, keys come
+ * back in IDB order (sorted), and a batch that cannot be cloned writes
+ * nothing, like a transaction that aborts.
+ */
+function makeMemoryAdapter(): StorageAdapter {
+  const values = new Map<string, unknown>();
+  const sortedKeys = () => [...values.keys()].sort();
+  const read = <T,>(key: string): T | null =>
+    values.has(key) ? structuredClone(values.get(key) as T) : null;
+
+  return {
+    async get<T>(key: string) {
+      return read<T>(key) ?? null;
+    },
+    async set<T>(key: string, value: T) {
+      values.set(key, structuredClone(value));
+    },
+    async remove(key: string) {
+      values.delete(key);
+    },
+    async clear() {
+      values.clear();
+    },
+    async keys() {
+      return sortedKeys();
+    },
+    async getMany<T>(keys: string[]) {
+      return keys.map((key) => read<T>(key) ?? null);
+    },
+    async setMany<T>(entries: Array<[string, T]>) {
+      const cloned = entries.map(([key, value]) => [key, structuredClone(value)] as const);
+      for (const [key, value] of cloned) values.set(key, value);
+    },
+    async entries<T>() {
+      return sortedKeys().map((key) => [key, structuredClone(values.get(key) as T)] as [string, T]);
+    },
+  };
+}
+
 function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
   const tag = `[storage.${storeName}]`;
+
+  // 2.2.9: the first call probes the database once. When the browser says
+  // IndexedDB cannot be opened here, every later call goes to a memory
+  // stand-in for the life of the page, so settings, history and the rest
+  // keep working instead of failing on every write. A working database is
+  // never swapped out: a later transaction error keeps the normal policy.
+  let fallback: StorageAdapter | null = null;
+  let probe: Promise<void> | null = null;
+  const probeOnce = (): Promise<void> => {
+    probe ??= Promise.resolve()
+      .then(() => store('readonly', () => undefined))
+      .then(
+        () => undefined,
+        (error: unknown) => {
+          if (!isStorageUnavailableError(error)) {
+            probe = null; // not a "cannot open" answer: try again next call
+            throw error;
+          }
+          const errorName = String((error as { name?: string }).name);
+          logInfo(`${tag} IndexedDB cannot be opened here (${errorName}); keeping this data in memory until the page closes`);
+          fallback = makeMemoryAdapter();
+          announceFallback(storeName, errorName);
+        },
+      );
+    return probe;
+  };
 
   return {
     async get<T>(key: string): Promise<T | null> {
       try {
+        await probeOnce();
+        if (fallback) return fallback.get<T>(key);
         const value = await idbGet<T>(key, store);
         return value ?? null;
       } catch (error) {
@@ -155,6 +263,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async set<T>(key: string, value: T): Promise<void> {
       try {
+        await probeOnce();
+        if (fallback) return fallback.set(key, value);
         await idbSet(key, value, store);
       } catch (error) {
         logError(`${tag} set(${key}) failed`, error);
@@ -164,6 +274,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async remove(key: string): Promise<void> {
       try {
+        await probeOnce();
+        if (fallback) return fallback.remove(key);
         await idbDel(key, store);
       } catch (error) {
         logError(`${tag} remove(${key}) failed`, error);
@@ -172,6 +284,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async clear(): Promise<void> {
       try {
+        await probeOnce();
+        if (fallback) return fallback.clear();
         await idbClear(store);
       } catch (error) {
         logError(`${tag} clear() failed`, error);
@@ -180,6 +294,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async keys(): Promise<string[]> {
       try {
+        await probeOnce();
+        if (fallback) return fallback.keys();
         const all = await idbKeys(store);
         return all.filter((k): k is string => typeof k === 'string');
       } catch (error) {
@@ -191,6 +307,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
     async getMany<T>(keys: string[]): Promise<Array<T | null>> {
       if (keys.length === 0) return [];
       try {
+        await probeOnce();
+        if (fallback) return fallback.getMany<T>(keys);
         const values = await idbGetMany<T>(keys, store);
         return values.map((v) => v ?? null);
       } catch (error) {
@@ -202,6 +320,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
     async setMany<T>(entries: Array<[string, T]>): Promise<void> {
       if (entries.length === 0) return;
       try {
+        await probeOnce();
+        if (fallback) return fallback.setMany(entries);
         await idbSetMany(entries, store);
       } catch (error) {
         logError(`${tag} setMany() failed`, error);
@@ -211,6 +331,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async entries<T>(): Promise<Array<[string, T]>> {
       try {
+        await probeOnce();
+        if (fallback) return fallback.entries<T>();
         const all = await idbEntries<string, T>(store);
         return all.filter(
           ([k]) => typeof k === 'string',

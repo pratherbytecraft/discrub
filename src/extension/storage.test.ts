@@ -226,6 +226,127 @@ describe('storage (namespaced IndexedDB adapters)', () => {
       expect(await mod.storage.history.entries()).toEqual([]);
     });
   });
+
+  // 2.2.9: when the browser refuses to open IndexedDB at all, each database
+  // falls back to memory for the life of the page instead of failing every
+  // write. The stubbed createStore returns the probe function, so a probe
+  // rejection stands in for an open that the browser refused.
+  describe('memory stand-in when IndexedDB cannot be opened', () => {
+    let mod: typeof import('./storage');
+    let stubs: Record<string, any>;
+    let probe: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      vi.resetModules();
+      probe = vi.fn().mockResolvedValue(undefined);
+      stubs = {
+        get: vi.fn(), set: vi.fn(), del: vi.fn(), clear: vi.fn(), keys: vi.fn(),
+        getMany: vi.fn(), setMany: vi.fn(), entries: vi.fn(),
+        createStore: vi.fn(() => probe),
+      };
+      vi.doMock('idb-keyval', () => stubs);
+      mod = await import('./storage');
+    });
+
+    afterEach(() => {
+      vi.doUnmock('idb-keyval');
+    });
+
+    it.each(['InvalidStateError', 'SecurityError', 'NotAllowedError'])(
+      'serves reads and writes from memory after the open fails with %s',
+      async (name) => {
+        probe.mockRejectedValue(new DOMException('cannot open', name));
+        const settings = mod.storage.settings;
+        await settings.set('delay', '2');
+        await settings.setMany([['theme', 'dark'], ['lang', 'de']]);
+        expect(await settings.get('delay')).toBe('2');
+        expect(await settings.getMany(['theme', 'missing', 'lang'])).toEqual(['dark', null, 'de']);
+        expect(await settings.keys()).toEqual(['delay', 'lang', 'theme']);
+        expect(await settings.entries()).toEqual([['delay', '2'], ['lang', 'de'], ['theme', 'dark']]);
+        await settings.remove('lang');
+        expect(await settings.get('lang')).toBeNull();
+        await settings.clear();
+        expect(await settings.keys()).toEqual([]);
+        // The database was probed once and never written to.
+        expect(probe).toHaveBeenCalledTimes(1);
+        expect(stubs.set).not.toHaveBeenCalled();
+        expect(stubs.get).not.toHaveBeenCalled();
+      },
+    );
+
+    it('hands back copies, not the stored object', async () => {
+      probe.mockRejectedValue(new DOMException('cannot open', 'InvalidStateError'));
+      const value = { list: [1], when: new Date(0) };
+      await mod.storage.state.set('v', value);
+      value.list.push(2);
+      const read = await mod.storage.state.get<typeof value>('v');
+      expect(read!.list).toEqual([1]);
+      expect(read!.when.getTime()).toBe(0);
+      read!.list.push(3);
+      expect((await mod.storage.state.get<typeof value>('v'))!.list).toEqual([1]);
+    });
+
+    it('keeps each database apart and forgets everything when the module reloads', async () => {
+      probe.mockRejectedValue(new DOMException('cannot open', 'SecurityError'));
+      await mod.storage.settings.set('k', 'from settings');
+      await mod.storage.cache.set('k', 'from cache');
+      await mod.storage.settings.clear();
+      expect(await mod.storage.cache.get('k')).toBe('from cache');
+      vi.resetModules();
+      vi.doMock('idb-keyval', () => stubs);
+      const again = await import('./storage');
+      expect(await again.storage.cache.get('k')).toBeNull();
+    });
+
+    it('does not switch a working database to memory when one transaction fails', async () => {
+      stubs.set.mockResolvedValueOnce(undefined);
+      await mod.storage.settings.set('first', 1);
+      const failure = new DOMException('transaction failed', 'InvalidStateError');
+      stubs.set.mockRejectedValueOnce(failure);
+      await expect(mod.storage.settings.set('second', 2)).rejects.toBe(failure);
+      stubs.get.mockResolvedValueOnce(1);
+      expect(await mod.storage.settings.get('first')).toBe(1);
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(stubs.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the normal error policy for a quota error on open and probes again next time', async () => {
+      const quota = new DOMException('full', 'QuotaExceededError');
+      probe.mockRejectedValueOnce(quota);
+      await expect(mod.storage.settings.set('k', 'v')).rejects.toBe(quota);
+      await mod.storage.settings.set('k', 'v');
+      expect(stubs.set).toHaveBeenCalledWith('k', 'v', expect.any(Function));
+      expect(probe).toHaveBeenCalledTimes(2);
+    });
+
+    it('tells the app once, for the first database that falls back', async () => {
+      probe.mockRejectedValue(new DOMException('cannot open', 'SecurityError'));
+      const heard = vi.fn();
+      mod.resetStorageFallbackAnnouncement();
+      mod.onStorageFallback(heard);
+      await mod.storage.settings.set('k', 1);
+      await mod.storage.cache.set('k', 2);
+      await mod.storage.history.get('k');
+      expect(heard).toHaveBeenCalledTimes(1);
+      expect(heard).toHaveBeenCalledWith('settings', 'SecurityError');
+      mod.onStorageFallback(null);
+    });
+
+    it('says nothing while IndexedDB opens', async () => {
+      const heard = vi.fn();
+      mod.resetStorageFallbackAnnouncement();
+      mod.onStorageFallback(heard);
+      await mod.storage.settings.set('k', 1);
+      expect(heard).not.toHaveBeenCalled();
+      mod.onStorageFallback(null);
+    });
+
+    it('writes nothing from a batch that cannot be cloned', async () => {
+      probe.mockRejectedValue(new DOMException('cannot open', 'InvalidStateError'));
+      await expect(mod.storage.cache.setMany<unknown>([['ok', 1], ['bad', () => 1]])).rejects.toThrow();
+      expect(await mod.storage.cache.keys()).toEqual([]);
+    });
+  });
 });
 
 describe('migrateAllStorage', () => {

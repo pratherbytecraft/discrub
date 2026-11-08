@@ -578,6 +578,9 @@
       }
     }
   },
+  "storage": {
+    "sessionOnly": "This browser window can't save Discrub's data. Settings, history and loaded messages will be gone when it closes."
+  },
   "errorPage": {
     "title": "Something went wrong",
     "fallback": "An unexpected error occurred.",
