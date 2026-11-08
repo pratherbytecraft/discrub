@@ -6,13 +6,11 @@
  */
 import i18next from 'i18next';
 import { t } from '@/i18n';
-import { normalizeLanguage, type LanguageCode } from '@/i18n/language';
-
-const LANG_TAGS: Record<string, string> = { en: 'en', de: 'de', zh: 'zh-CN' };
+import { LANGUAGE_TAGS, normalizeLanguage, type LanguageCode } from '@/i18n/language';
 
 /** BCP 47 tag for `<html lang>`, per app language. */
 export function exportLangTag(code: LanguageCode = normalizeLanguage(i18next.language)): string {
-  return LANG_TAGS[code] ?? 'en';
+  return LANGUAGE_TAGS[code] ?? 'en';
 }
 
 /** Families that carry Chinese, Japanese and Korean glyphs on macOS, Windows and Linux, tried after the Latin ones. */

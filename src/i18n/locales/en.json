@@ -1,7 +1,7 @@
 {
   "language": {
     "label": "Language",
-    "help": "Language for menus, dialogs and status messages. German is a machine-drafted translation. Corrections and new languages are welcome on GitHub.",
+    "help": "Language for menus, dialogs and status messages. Other languages are machine-drafted translations. To correct one or ask for a new language, open an issue on GitHub.",
     "machineDrafted": "machine-drafted",
     "suggestionToast": "Discrub ist auch auf Deutsch verfügbar.",
     "suggestionAction": "Auf Deutsch wechseln"

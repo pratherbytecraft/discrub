@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { deDE as coreDeDE } from '@mui/material/locale';
-import { deDE as pickersDeDE } from '@mui/x-date-pickers/locales';
+import { deDE as coreDeDE, zhCN as coreZhCN } from '@mui/material/locale';
+import { deDE as pickersDeDE, zhCN as pickersZhCN } from '@mui/x-date-pickers/locales';
 import { useTranslation } from 'react-i18next';
 import CssBaseline from '@mui/material/CssBaseline';
 import { GlobalStyles } from '@mui/material';
@@ -13,6 +13,12 @@ import { getThemeById, findThemeDescriptor, resolveThemeIdFromSetting } from './
 import { globalStyles } from './globalStyles';
 import ThemeEffects from './ThemeEffects';
 import { isUnlocked } from '@features/appearance/groups';
+
+/** MUI's own labels per app language (core components and the date pickers). English is MUI's default. */
+export const MUI_LOCALES: Record<string, { core: object; pickers: object } | undefined> = {
+  de: { core: coreDeDE, pickers: pickersDeDE },
+  zh: { core: coreZhCN, pickers: pickersZhCN },
+};
 
 interface ThemeWrapperProps {
   children: React.ReactNode;
@@ -47,7 +53,10 @@ const ThemeWrapper = ({ children }: ThemeWrapperProps) => {
   // picker buttons) follow the app language. English is MUI's default.
   const { i18n } = useTranslation();
   const language = i18n.language;
-  const theme = useMemo(() => (language === 'de' ? createTheme(baseTheme, coreDeDE, pickersDeDE) : baseTheme), [baseTheme, language]);
+  const theme = useMemo(() => {
+    const locale = MUI_LOCALES[language];
+    return locale ? createTheme(baseTheme, locale.core, locale.pickers) : baseTheme;
+  }, [baseTheme, language]);
 
   return (
     <ThemeProvider theme={theme}>

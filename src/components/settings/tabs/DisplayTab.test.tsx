@@ -160,14 +160,14 @@ describe('DisplayTab', () => {
   });
 
   describe('language picker (#124)', () => {
-    it('lists English and machine-drafted German, English selected by default', () => {
+    it('lists English and the machine-drafted languages, English selected by default', () => {
       const onChange = vi.fn();
       render(<DisplayTab formValues={defaultSettings} onChange={onChange} />);
       const selects = screen.getAllByRole('combobox');
       expect(selects[0]).toHaveTextContent('English');
       fireEvent.mouseDown(selects[0]);
       const options = screen.getAllByRole('option');
-      expect(options.map((o) => o.textContent)).toEqual(['English', 'Deutsch (machine-drafted)']);
+      expect(options.map((o) => o.textContent)).toEqual(['English', 'Deutsch (machine-drafted)', '简体中文 (machine-drafted)']);
     });
 
     it('reports a language change under APP_LANGUAGE', () => {

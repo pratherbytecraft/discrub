@@ -175,4 +175,85 @@ describe('Localization (#124)', () => {
       cy.contains('[role="tab"]', 'Package').should('be.visible');
     });
   });
+  // 2.2.9: Simplified Chinese. The words asserted here are read from the
+  // catalog so a corrected translation does not break the spec.
+  describe('Simplified Chinese (2.2.9)', () => {
+    type Catalog = { landing: { signIn: string }; sidebar: { tabPackage: string }; settings: { saved: string; tabDisplay: string }; statusPanel: { title: string }; language: { suggestionToast: string; suggestionAction: string } };
+    const withCatalog = (run: (zh: Catalog) => void) => cy.readFile('src/i18n/locales/zh.json').then((zh: Catalog) => run(zh));
+
+    it('switches from the Display tab, tags the page zh-CN and persists across reload', () => {
+      cy.login();
+      withCatalog((zh) => {
+        cy.get('[aria-label="Settings"]').click();
+        cy.get('[role="dialog"]').contains('button', 'Display').click();
+        cy.get('[data-testid="language-select"]').parent().click();
+        cy.get('[data-testid="language-option-zh"]').should('contain', '简体中文').click();
+        cy.get('[role="dialog"]').contains('button', 'Save Settings').click();
+        cy.get('[role="dialog"]').contains(zh.settings.saved).should('be.visible');
+        cy.get('body').type('{esc}');
+        cy.contains('[role="tab"]', zh.sidebar.tabPackage).should('be.visible');
+        cy.get('html').should('have.attr', 'lang', 'zh-CN');
+        cy.contains(zh.statusPanel.title).should('exist');
+        // No key came through untranslated or with raw braces on the first screen.
+        cy.get('body').invoke('text').should('not.match', /\{\{|\}\}/);
+
+        cy.reload();
+        cy.get('[data-tour="user-profile"]', { timeout: 15000 }).should('be.visible');
+        cy.contains('[role="tab"]', zh.sidebar.tabPackage).should('be.visible');
+        cy.readIdbStore('settings').then((values) => {
+          expect(values).to.include('zh');
+        });
+      });
+    });
+
+    it('offers 简体中文 on the sign in screen beside Deutsch and applies it at once', () => {
+      cy.blockAutoAuth();
+      cy.visit('/', { onBeforeLoad: wipeIdb });
+      cy.get('[data-testid="landing-sign-in"]', { timeout: 10000 }).should('be.visible');
+      withCatalog((zh) => {
+        cy.get('[data-testid="landing-language-de"]').should('be.visible');
+        cy.get('[data-testid="landing-language-zh"]').should('have.text', '简体中文').and('have.attr', 'lang', 'zh-CN').click();
+        cy.contains('button', zh.landing.signIn).should('be.visible');
+        cy.get('[data-testid="landing-language-zh"]').should('not.exist');
+        cy.get('[data-testid="landing-language-en"]').click();
+        cy.contains('button', 'Sign In').should('be.visible');
+      });
+    });
+
+    it('follows a Simplified Chinese browser on a fresh install and leaves a Traditional one on English', () => {
+      cy.blockAutoAuth();
+      cy.visit('/', {
+        onBeforeLoad(win) {
+          wipeIdb(win);
+          setBrowserLanguage(win, ['zh-CN', 'en-US']);
+        },
+      });
+      withCatalog((zh) => {
+        cy.contains('button', zh.landing.signIn, { timeout: 10000 }).should('be.visible');
+      });
+      cy.visit('/', {
+        onBeforeLoad(win) {
+          wipeIdb(win);
+          setBrowserLanguage(win, ['zh-TW', 'en-US']);
+        },
+      });
+      cy.contains('button', 'Sign In', { timeout: 10000 }).should('be.visible');
+    });
+
+    it('offers the switch once, in Chinese, to an existing install on a Chinese browser', () => {
+      cy.login();
+      cy.get('[aria-label="Settings"]').click();
+      cy.get('[role="dialog"]').contains('button', 'Save Settings').click();
+      cy.get('[role="dialog"]').contains('Settings saved').should('be.visible');
+      forgetStoredLanguage();
+      cy.interceptDiscordApi();
+      cy.visit('/', { onBeforeLoad: (win) => setBrowserLanguage(win, ['zh-CN']) });
+      withCatalog((zh) => {
+        cy.contains(zh.language.suggestionToast, { timeout: 20000 }).should('be.visible');
+        cy.contains('[role="tab"]', 'Package').should('be.visible');
+        cy.get('[role="alert"]').contains('button', zh.language.suggestionAction).click();
+        cy.contains('[role="tab"]', zh.sidebar.tabPackage).should('be.visible');
+      });
+    });
+  });
 });

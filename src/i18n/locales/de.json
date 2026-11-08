@@ -1,7 +1,7 @@
 {
   "language": {
     "label": "Sprache",
-    "help": "Sprache für Menüs, Dialoge und Statusmeldungen. Deutsch ist eine maschinell erstellte Übersetzung. Korrekturen und weitere Sprachen sind auf GitHub willkommen.",
+    "help": "Sprache für Menüs, Dialoge und Statusmeldungen. Andere Sprachen sind maschinell erstellte Übersetzungen. Für Korrekturen oder eine neue Sprache öffne ein Issue auf GitHub.",
     "machineDrafted": "maschinell übersetzt",
     "suggestionToast": "Discrub ist auch auf Deutsch verfügbar.",
     "suggestionAction": "Auf Deutsch wechseln"

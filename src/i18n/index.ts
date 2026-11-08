@@ -12,12 +12,14 @@ import { initReactI18next } from 'react-i18next';
 import { registerSupporterResources } from '@pratherbytecraft/supporter';
 import en from './locales/en.json';
 import de from './locales/de.json';
-import { DEFAULT_LANGUAGE, type LanguageCode } from './language';
+import zh from './locales/zh.json';
+import { DEFAULT_LANGUAGE, LANGUAGE_TAGS, type LanguageCode } from './language';
 import { syncCoreMessages } from './coreMessages';
 
 export const resources = {
   en: { translation: en },
   de: { translation: de },
+  zh: { translation: zh },
 } as const;
 
 void i18next.use(initReactI18next).init({
@@ -43,7 +45,7 @@ export async function applyLanguage(code: LanguageCode): Promise<void> {
     await i18next.changeLanguage(code);
   }
   if (typeof document !== 'undefined') {
-    document.documentElement.lang = code;
+    document.documentElement.lang = LANGUAGE_TAGS[code];
   }
   syncCoreMessages();
 }

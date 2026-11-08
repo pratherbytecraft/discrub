@@ -69,7 +69,7 @@ Supporters
 - Every feature is free, workspaces included. Supporters unlock more layouts, themes and Scrublings, the small pixel characters on the top bar.
 
 Additional
-- Interface in English or German, auto-detected on first run and switchable in Settings
+- Interface in English, German or Simplified Chinese, auto-detected on first run and switchable in Settings
 - Appearance menu on the top bar for layouts, themes and Scrublings, with a look-only preview before you pick
 - Layouts: Classic and Native (looks like Discord) are free, with more for supporters
 - Themes from Discord-style dark and light to terminal, high contrast, and more

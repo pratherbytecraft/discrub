@@ -254,7 +254,7 @@ Exports work like live exports (same dialog, all presets, all templates) and use
 
 Settings are split across tabs:
 
-- **Display**: language (English or German; a fresh install follows your browser, and the sign-in screen has a one-word Deutsch / English link), date and time format, DM list order (most recent first, alphabetical, or Discord's own order)
+- **Display**: language (English, German or Simplified Chinese; a fresh install follows your browser, and the sign-in screen has a link for each language), date and time format, DM list order (most recent first, alphabetical, or Discord's own order)
 - **User Data**: display name and nickname lookup toggles, reaction enrichment, replied-to message lookup, user data refresh rate
 - **Operation Delays**: search and delete delays with a randomization modifier (with a `?` explainer on Discord rate limits), plus rest breaks: after 45 minutes of activity a long operation pauses for 10 minutes on its own (on by default), and a retry wait: how long to wait before the first retry when a request fails, doubling each retry (1 second by default, up to 30)
 - **Export Preferences**: default format, template, media types and all export options
@@ -312,7 +312,7 @@ To use a supporter key, open Appearance, then Supporter, and paste the key from 
 
 ### Language
 
-Discrub runs in English or German. A fresh install follows the browser language. An existing install stays English and, when the browser prefers German, offers the switch once. Change it any time in Settings > Display or with the link on the sign-in screen. The German catalog is machine-drafted. Report a wrong line or ask for another language by opening an issue.
+Discrub runs in English, German or Simplified Chinese. A fresh install follows the browser language. An existing install stays English and, when the browser prefers German or Simplified Chinese, offers the switch once. Change it any time in Settings > Display or with the links on the sign-in screen. Exports use the same language for their own labels, dates and guide. The German and Chinese catalogs are machine-drafted. Report a wrong line or ask for another language by opening an issue.
 
 ### Additional Features
 

@@ -6,13 +6,15 @@
 import { describe, it, expect } from 'vitest';
 import en from '@/i18n/locales/en.json';
 import de from '@/i18n/locales/de.json';
+import zh from '@/i18n/locales/zh.json';
 import { tourCatalog } from './tourSteps';
 
 const tourOf = (locale: Record<string, unknown>) => locale.tour as Record<string, { title?: string; content?: string }>;
 
 describe('tour catalog locale entries', () => {
-  it.each(Object.keys(tourCatalog))('%s has a title and content in English and German', (key) => {
+  it.each(Object.keys(tourCatalog))('%s has a title and content in every language', (key) => {
     expect(tourOf(en)[key]).toMatchObject({ title: expect.any(String), content: expect.any(String) });
     expect(tourOf(de)[key]).toMatchObject({ title: expect.any(String), content: expect.any(String) });
+    expect(tourOf(zh)[key]).toMatchObject({ title: expect.any(String), content: expect.any(String) });
   });
 });

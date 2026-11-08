@@ -3,7 +3,7 @@ import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '@/app/hooks';
 import { updateSetting } from '@features/app/appSlice';
-import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES, normalizeLanguage } from '@/i18n/language';
+import { LANGUAGE_LABELS, SUPPORTED_LANGUAGES, normalizeLanguage, LANGUAGE_TAGS } from '@/i18n/language';
 
 /**
  * Login-screen language switch (#124): one text link per language
@@ -23,7 +23,7 @@ const LanguageLink = () => {
           type="button"
           variant="caption"
           color="primary"
-          lang={code}
+          lang={LANGUAGE_TAGS[code]}
           data-testid={`landing-language-${code}`}
           onClick={() => dispatch(updateSetting({ key: DiscrubSetting.APP_LANGUAGE, value: code }))}
         >

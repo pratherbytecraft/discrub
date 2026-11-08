@@ -11,6 +11,10 @@ const sharedTypography = {
     'Roboto',
     '"Helvetica Neue"',
     'Arial',
+    // 2.2.9: families that carry Chinese glyphs on macOS, Windows and Linux.
+    '"PingFang SC"',
+    '"Microsoft YaHei"',
+    '"Noto Sans CJK SC"',
     'sans-serif',
   ].join(','),
   h5: {
