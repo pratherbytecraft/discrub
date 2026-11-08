@@ -47,6 +47,8 @@ export interface ReactionEmojiData {
   emoji: string; // rendered emoji text or name
   count: number;
   users: ReactionUserInfo[];
+  /** 2.2.9: the reactor lookup was attempted and refused (message deleted or no longer readable), so the list is empty while the count is not. */
+  unavailable?: boolean;
 }
 
 // messageId -> { emojiKey -> ReactionEmojiData }
@@ -228,10 +230,15 @@ export function buildExportPageData(
           };
         });
 
+        // 2.2.9: core answers a refused lookup with an empty list (reactionMap holds
+        // the key), so an empty list behind a non-zero count means "unavailable".
+        const attempted = !!reactionMap?.[msg.id]?.[emojiKey];
+        const unavailable = attempted && reactionUsers.length === 0 && (r.count || 0) > 0;
         reactions[msg.id][emojiKey] = {
           emoji: renderEmojiAsHtml(r.emoji || { name: '?' }, emojiMap, sanitizedName),
           count: r.count,
           users: reactionUsers,
+          ...(unavailable ? { unavailable: true } : {}),
         };
       }
     }
@@ -531,9 +538,12 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
           allItems.push(item);
         }
       }
-      tabData[rk] = { items: items, emoji: rData.emoji, count: rData.count };
+      tabData[rk] = { items: items, emoji: rData.emoji, count: rData.count, unavailable: !!rData.unavailable };
     }
-    tabData['all'] = { items: allItems, emoji: '', count: allItems.length };
+    // 2.2.9: a refused lookup leaves an empty list behind a count; say so instead of showing nothing.
+    var anyUnavailable = false;
+    for (var q = 0; q < emojiKeys.length; q++) { if (msgReactions[emojiKeys[q]].unavailable) anyUnavailable = true; }
+    tabData['all'] = { items: allItems, emoji: '', count: allItems.length, unavailable: allItems.length === 0 && anyUnavailable };
 
     var hasUserData = allItems.length > 0;
 
@@ -621,6 +631,8 @@ export function generateEmbeddedJs(themeSet?: ExportThemeSet): string {
 
       if (filtered.length === 0 && currentSearch) {
         html = '<div class="reaction-count-only">No users matching "' + escapeHtml(currentSearch) + '"</div>';
+      } else if (filtered.length === 0 && tabData[currentTab] && tabData[currentTab].unavailable) {
+        html = '<div class="reaction-count-only reaction-unavailable">Reactor names unavailable. The message was deleted or is no longer readable when this export ran.</div>';
       }
 
       contentEl.innerHTML = html;

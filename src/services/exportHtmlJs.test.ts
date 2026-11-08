@@ -1,3 +1,4 @@
+import { createMockMessage } from '@/test/fixtures';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { buildExportPageData, generateEmbeddedJs } from './exportHtmlJs';
 import { resolveExportThemeSet, buildThemeSelectHtml } from './exportThemes';
@@ -134,6 +135,32 @@ describe('buildExportPageData', () => {
       expect(data.threads[b.id]).toBe(`threads/${service.sanitizeFilename('GT3 RS!', '222')}.html`);
       expect(data.threads[a.id]).not.toBe(data.threads[b.id]);
     });
+  });
+});
+
+// 2.2.9: a refused reactor lookup (core answers an empty list behind a count) is marked.
+describe('buildExportPageData reaction availability', () => {
+  const reacted = createMockMessage({
+    id: 'r-1',
+    reactions: [{ count: 2, count_details: { burst: 0, normal: 2 }, me: false, me_burst: false, burst_colors: [], emoji: { id: null, name: '👍' } }],
+  });
+
+  it('marks an empty reactor list behind a non-zero count as unavailable when a lookup was attempted', () => {
+    const data = buildExportPageData([reacted], 1, 1, 'chan', undefined, { 'r-1': { '👍': [] } });
+    expect(data.reactions['r-1']['👍'].unavailable).toBe(true);
+    expect(data.reactions['r-1']['👍'].count).toBe(2);
+  });
+
+  it('leaves a list with names, and an export without lookups, unmarked', () => {
+    const withNames = buildExportPageData([reacted], 1, 1, 'chan', undefined, { 'r-1': { '👍': [{ id: 'u1', username: 'one', avatar: null, burst: false }] } });
+    expect(withNames.reactions['r-1']['👍'].unavailable).toBeUndefined();
+    expect(withNames.reactions['r-1']['👍'].users).toHaveLength(1);
+    const noLookup = buildExportPageData([reacted], 1, 1, 'chan', undefined, undefined);
+    expect(noLookup.reactions['r-1']['👍'].unavailable).toBeUndefined();
+  });
+
+  it('ships the unavailable note in the viewer script', () => {
+    expect(generateEmbeddedJs()).toContain('Reactor names unavailable');
   });
 });
 

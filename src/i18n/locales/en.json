@@ -868,6 +868,7 @@
   "loadAll": {
     "titleFiltered": "Load All Filtered Messages",
     "title": "Load All Messages",
+    "titleComplete": "Fetch Newer Messages",
     "alertFiltered_one": "This will load every message in this {{scope}} that matches your active filter ({{count}} active). Clear filters first if you want every message.",
     "alertFiltered_other": "This will load every message in this {{scope}} that matches your active filters ({{count}} active). Clear filters first if you want every message.",
     "alert_thread": "This will load all messages from this thread, which may take a significant amount of time for large threads.",

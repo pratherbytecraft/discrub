@@ -868,6 +868,7 @@
   "loadAll": {
     "titleFiltered": "Alle gefilterten Nachrichten laden",
     "title": "Alle Nachrichten laden",
+    "titleComplete": "Neuere Nachrichten laden",
     "alertFiltered_one": "Das lädt jede Nachricht in diesem Bereich ({{scope}}), die zu deinem aktiven Filter passt ({{count}} aktiv). Leere zuerst die Filter, wenn du alle Nachrichten möchtest.",
     "alertFiltered_other": "Das lädt jede Nachricht in diesem Bereich ({{scope}}), die zu deinen aktiven Filtern passt ({{count}} aktiv). Leere zuerst die Filter, wenn du alle Nachrichten möchtest.",
     "alert_thread": "Das lädt alle Nachrichten dieses Threads, was bei großen Threads sehr lange dauern kann.",

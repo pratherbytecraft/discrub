@@ -139,23 +139,25 @@ async function fetchReactionData(
   const settings = selectSettings(getState());
   if (settings?.[DiscrubSetting.REACTIONS_ENABLED] !== 'true') return undefined;
 
-  // 2.2.5 WP6c: one walk over the windows keeps only the messages that have reactions.
-  const messagesWithReactions = await collectMessages(toSource(messages), (m) => !!m.reactions && m.reactions.length > 0);
-  if (messagesWithReactions.length === 0) return undefined;
-
-  const totalReactors = messagesWithReactions.reduce(
-    (sum, m) => sum + (m.reactions?.reduce((s, r) => s + (r.count || 0), 0) || 0), 0
-  );
-  const totalEmojis = messagesWithReactions.reduce(
-    (sum, m) => sum + (m.reactions?.length || 0), 0
-  );
-
-  dispatch(addStatusEntry({
-    level: 'info',
-    message: t('status.export.fetchingReactions', { messages: messagesWithReactions.length, reactions: totalEmojis, reactors: totalReactors }),
-  }));
-
+  // 2.2.9: the whole lookup sits inside one try so a failure anywhere in it
+  // (the window walk, the module load, the reactor fetch) reaches the catch.
   try {
+    // 2.2.5 WP6c: one walk over the windows keeps only the messages that have reactions.
+    const messagesWithReactions = await collectMessages(toSource(messages), (m) => !!m.reactions && m.reactions.length > 0);
+    if (messagesWithReactions.length === 0) return undefined;
+
+    const totalReactors = messagesWithReactions.reduce(
+      (sum, m) => sum + (m.reactions?.reduce((s, r) => s + (r.count || 0), 0) || 0), 0
+    );
+    const totalEmojis = messagesWithReactions.reduce(
+      (sum, m) => sum + (m.reactions?.length || 0), 0
+    );
+
+    dispatch(addStatusEntry({
+      level: 'info',
+      message: t('status.export.fetchingReactions', { messages: messagesWithReactions.length, reactions: totalEmojis, reactors: totalReactors }),
+    }));
+
     const { DiscordServiceAdapter, ReactionEnrichmentService } = await import('discrub-core/messages');
     const apiClient = new DiscordServiceAdapter(settings);
 
@@ -178,6 +180,19 @@ async function fetchReactionData(
 
     const result = await reactionService.generateReactionMap(messagesWithReactions);
 
+    // 2.2.9 (core 1.0.19): a lookup Discord refused used to leave an empty
+    // reactor list and no trace. The refusals come back with the map. A
+    // deleted message (404) or one the user can no longer read (403) keeps
+    // the export going with a warning naming how many lists are missing;
+    // an expired sign in fails it, since nothing after that could succeed.
+    if (result.signInExpired) {
+      throw new Error(t('status.export.reactionSignInExpired'));
+    }
+    const missing = (result.failedMessageIds ?? []).length;
+    if (missing > 0) {
+      dispatch(addStatusEntry({ level: 'warning', message: t('status.export.reactorsMissing', { count: missing }) }));
+    }
+
     const reactionCount = Object.keys(result.reactionMap).length;
     if (reactionCount > 0) {
       dispatch(addStatusEntry({ level: 'success', message: t('status.export.collectedReactions', { count: reactionCount }) }));
@@ -185,10 +200,21 @@ async function fetchReactionData(
 
     return result.reactionMap;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : t('status.export.unknownError');
+    // 2.2.9: a failed lookup used to be swallowed here, so an HTML export with
+    // Reactions on could finish with empty reactor lists and read as a success.
+    // Now the warning names the cause and the error goes on to fail the export.
+    if (error instanceof CancelledError) throw error;
+    const msg = errorMessageOf(error) ?? t('status.export.unknownError');
     dispatch(addStatusEntry({ level: 'warning', message: t('status.export.reactionsFailed', { error: msg }) }));
-    return undefined;
+    throw error;
   }
+}
+
+/** The message of an Error or a DOMException (which is not an Error in every runtime). */
+function errorMessageOf(error: unknown): string | null {
+  if (error instanceof Error) return error.message;
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException) return error.message;
+  return null;
 }
 
 /**
@@ -568,13 +594,11 @@ export const exportMessages = createAsyncThunk<
         // Fetch reaction user data for HTML exports (other formats use counts only)
         let reactionMap: ExportReactionMap | undefined;
         if (format === 'html') {
-          try {
-            const token = selectAuthToken(getState());
-            if (token) {
-              reactionMap = await fetchReactionData(material.everything, token, getState, dispatch as ExportDispatch);
-            }
-          } catch {
-            // Non-fatal — continue without reaction data
+          // 2.2.9: no catch here. A failed reactor lookup fails the export
+          // (the outer catch logs it) instead of writing an archive without them.
+          const token = selectAuthToken(getState());
+          if (token) {
+            reactionMap = await fetchReactionData(material.everything, token, getState, dispatch as ExportDispatch);
           }
         }
 
@@ -656,7 +680,7 @@ export const exportMessages = createAsyncThunk<
         }));
         return rejectWithValue('Export cancelled');
       }
-      const errorMsg = error instanceof Error ? error.message : t('status.export.failedDefault');
+      const errorMsg = errorMessageOf(error) ?? t('status.export.failedDefault');
       dispatch(addStatusEntry({
         level: 'error',
         message: t('status.export.failedOn', { name: channelName, error: errorMsg }),

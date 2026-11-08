@@ -36,6 +36,8 @@ import exportReducer, {
   selectTextOptions,
 } from './exportSlice';
 import cacheReducer from '@features/cache/cacheSlice';
+import appReducer from '@features/app/appSlice';
+import authReducer from '@features/auth/authSlice';
 import { initialExportState, MediaDownloadProgress, DEFAULT_MAX_ZIP_PART_BYTES } from './exportTypes';
 import { createMockMessages } from '@/test/fixtures';
 import * as exportService from '@services/exportService';
@@ -127,7 +129,10 @@ describe('exportSlice', () => {
   let store: TestStore;
 
   beforeEach(() => {
-    store = createTestStore({ export: exportReducer, cache: cacheReducer });
+    // 2.2.9: the single export reads the app settings and the auth token for
+    // the reactor lookup, and a failed lookup now fails the export instead of
+    // being swallowed, so the fixture carries both slices.
+    store = createTestStore({ export: exportReducer, cache: cacheReducer, app: appReducer, auth: authReducer });
     vi.clearAllMocks();
   });
 
