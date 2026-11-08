@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
+import { renderWithProviders, screen, fireEvent, within } from '@/test/test-utils';
 import PackageChannelList from './PackageChannelList';
 import { initialPackageState } from '@features/package/packageSlice';
 import {
@@ -113,7 +113,8 @@ describe('<PackageChannelList /> — sections per category (#270)', () => {
     state.package.parsed = mixed;
     renderWithProviders(<PackageChannelList />, { preloadedState: state });
     expect(screen.getByText('Servers')).toBeInTheDocument();
-    expect(screen.getByText('Threads')).toBeInTheDocument();
+    // 2.2.9: a thread that names its Server sits under that Server, so no Threads section.
+    expect(screen.queryByText('Threads')).not.toBeInTheDocument();
     expect(screen.getByText('Direct Messages')).toBeInTheDocument();
     expect(screen.getByText('Group DMs')).toBeInTheDocument();
     expect(screen.getByText('Left Servers')).toBeInTheDocument();
@@ -246,5 +247,107 @@ describe('<PackageChannelList /> — Multi-select bulk delete (2.2.8)', () => {
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(store.getState().package.bulkDelete.status).toBe('idle');
     expect(screen.getByTestId('package-multi-select-toggle')).toBeInTheDocument();
+  });
+});
+
+describe('<PackageChannelList /> — one group per Server (2.2.9, GitHub issue 23)', () => {
+  const signedIn = {
+    auth: { token: 'tok', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+  };
+  const ch = (id: string, name: string, guild: 'a' | 'b' | null, messageCount: number, type: PackageChannel['type'] = PACKAGE_CHANNEL_TYPE.GUILD_TEXT): PackageChannel => ({
+    id,
+    type,
+    name,
+    ...(guild ? { guildId: guild === 'a' ? 'ga' : 'gb', guildName: guild === 'a' ? 'Alpha Server' : 'Beta Server' } : {}),
+    messageCount,
+    isOrphan: false,
+  });
+  const twoServers: ParsedPackage = {
+    ...parsed,
+    channels: [
+      ch('1', 'alpha-small', 'a', 5),
+      ch('2', 'alpha-thread', 'a', 90, PACKAGE_CHANNEL_TYPE.GUILD_PUBLIC_THREAD),
+      ch('3', 'alpha-big', 'a', 40),
+      ch('4', 'beta-one', 'b', 300),
+      ch('5', 'beta-thread', 'b', 2, PACKAGE_CHANNEL_TYPE.GUILD_PUBLIC_THREAD),
+      ch('6', 'loose-thread', null, 7, PACKAGE_CHANNEL_TYPE.GUILD_PUBLIC_THREAD),
+      { id: '7', type: PACKAGE_CHANNEL_TYPE.DM, name: 'Direct Message with pal#0', messageCount: 9, isOrphan: false },
+    ],
+    totalMessages: 453,
+  };
+
+  function loaded() {
+    const state = statePackageLoaded() as any;
+    state.package.parsed = twoServers;
+    return { ...state, ...signedIn };
+  }
+  const groups = () => screen.getAllByTestId('package-server-group');
+  const rowNames = () => screen.getAllByTestId('package-channel-row').map((r) => r.querySelector('.MuiTypography-body2')?.textContent);
+
+  it('lists Servers by message count with their counts, text channels first and threads after', () => {
+    renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
+    expect(groups().map((g) => g.getAttribute('data-server'))).toEqual(['gb', 'ga']);
+    expect(groups()[0]).toHaveTextContent('Beta Server');
+    expect(groups()[0]).toHaveTextContent('2 channels · 302 messages');
+    expect(groups()[1]).toHaveTextContent('3 channels · 135 messages');
+    expect(rowNames()).toEqual(['beta-one', 'beta-thread', 'alpha-big', 'alpha-small', 'alpha-thread', 'loose-thread', 'pal']);
+    // A thread with no Server on record keeps the Threads section.
+    expect(screen.getByText('Threads')).toBeInTheDocument();
+  });
+
+  it('counts what is left on the Server header once messages were deleted', () => {
+    const state = loaded();
+    state.package.deletedMessageIds = { '4': ['m1', 'm2'], '5': ['m3'] };
+    renderWithProviders(<PackageChannelList />, { preloadedState: state });
+    expect(groups()[0]).toHaveTextContent('2 channels · 299 messages');
+  });
+
+  it('drops the Server name line from rows under a Server header', () => {
+    renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
+    expect(screen.getAllByText('Alpha Server')).toHaveLength(1);
+    expect(screen.getAllByText('Beta Server')).toHaveLength(1);
+  });
+
+  it('folds one Server from its arrow and leaves the others open', () => {
+    renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
+    fireEvent.click(screen.getByLabelText('Show or hide Beta Server'));
+    expect(screen.getByLabelText('Show or hide Beta Server')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByLabelText('Show or hide Alpha Server')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('alpha-big')).toBeInTheDocument();
+  });
+
+  it('hides a Server when the filter matches none of its channels and keeps one matched by Server name', () => {
+    const { unmount } = renderWithProviders(<PackageChannelList filterText="alpha-big" />, { preloadedState: loaded() });
+    expect(groups()).toHaveLength(1);
+    expect(groups()[0]).toHaveTextContent('1 channel · 40 messages');
+    unmount();
+    renderWithProviders(<PackageChannelList filterText="beta server" />, { preloadedState: loaded() });
+    expect(groups()).toHaveLength(1);
+    expect(rowNames()).toEqual(['beta-one', 'beta-thread']);
+  });
+
+  it('shows a checkbox on each Server header only in Multi-select, and it ticks and clears the whole Server', () => {
+    const { store } = renderWithProviders(<PackageChannelList />, { preloadedState: loaded() });
+    expect(screen.queryAllByTestId('package-server-tick')).toHaveLength(0);
+    fireEvent.click(screen.getByTestId('package-multi-select-toggle'));
+    expect(screen.getAllByTestId('package-server-tick')).toHaveLength(2);
+
+    const alpha = within(groups()[1]).getByRole('checkbox');
+    fireEvent.click(alpha);
+    expect([...store.getState().package.bulkSelectedChannelIds].sort()).toEqual(['1', '2', '3']);
+    expect(alpha).toBeChecked();
+    expect(screen.getByTestId('multi-select-count')).toHaveTextContent('3 of 7');
+
+    // One row cleared leaves the header on a dash; the header then ticks the rest back on.
+    fireEvent.click(screen.getByText('alpha-small'));
+    expect(alpha).not.toBeChecked();
+    expect(alpha).toHaveAttribute('data-indeterminate', 'true');
+    fireEvent.click(alpha);
+    expect([...store.getState().package.bulkSelectedChannelIds].sort()).toEqual(['1', '2', '3']);
+
+    // A tick in another Server survives clearing this one.
+    fireEvent.click(screen.getByText('beta-one'));
+    fireEvent.click(alpha);
+    expect(store.getState().package.bulkSelectedChannelIds).toEqual(['4']);
   });
 });

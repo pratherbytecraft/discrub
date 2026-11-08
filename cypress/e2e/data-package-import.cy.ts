@@ -139,9 +139,9 @@ describe('Data package import', () => {
       cy.uploadPackage();
       cy.wait('@getOrphanChannel');
       cy.contains('Left Servers').should('not.exist');
-      cy.contains('.MuiListItemButton-root', 'Old Guild Channel').within(() => {
-        cy.contains('Cypress Test Server').should('be.visible');
-      });
+      // 2.2.9: the row now sits under its Server's header instead of carrying the name itself.
+      cy.contains('.MuiListItemButton-root', 'Old Guild Channel').should('be.visible');
+      cy.get('[data-testid="package-server-group"]').should('contain', 'Cypress Test Server').and('contain', '2 channels');
       cy.window().then((win) => {
         const store = (win as any).__store__;
         const messages = (store.getState().status.entries ?? []).map((e: any) => e.message);

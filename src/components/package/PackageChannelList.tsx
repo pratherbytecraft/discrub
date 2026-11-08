@@ -72,8 +72,11 @@ interface PackageChannelListProps {
 /**
  * Sidebar channel browser for a loaded data package.
  *
- * Channels are grouped by category (servers / DMs / threads / left servers)
- * so the user can scan "what's in here" at a glance. Within each group
+ * Channels are grouped by category (servers / DMs / left servers) so the
+ * user can scan "what's in here" at a glance. Since 2.2.9 the Servers
+ * section holds one collapsible group per Server, its text channels first
+ * and its threads after them, and in Multi-select each Server header has a
+ * checkbox for everything under it (GitHub issue 23). Within each group
  * entries are sorted by message count descending. A type icon sits next
  * to each row so the kind of channel (text, DM, thread, orphan) is
  * identifiable without reading the subtitle.
@@ -104,6 +107,8 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
     orphan: true, // collapsed by default — less noise
     unknown: false,
   });
+  // 2.2.9: fold state per Server, keyed like the groups. Every Server starts open.
+  const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({});
 
   const filtered = useMemo(() => {
     if (!parsed) return [];
@@ -130,14 +135,34 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
       orphan: [],
       unknown: [],
     };
+    // 2.2.9: Server channels and the threads that name a Server go into one
+    // group per Server. A thread with no Server on record keeps the Threads section.
+    const servers = new Map<string, ServerGroup>();
     for (const c of filtered) {
-      map[getPackageChannelCategory(c)].push(c);
+      const category = getPackageChannelCategory(c);
+      const key = serverKeyOf(c);
+      if ((category === 'guildText' || category === 'thread') && key) {
+        const group = servers.get(key) ?? { key, name: c.guildName || c.guildId || '', channels: [], messageCount: 0 };
+        group.channels.push(c);
+        group.messageCount += c.messageCount;
+        servers.set(key, group);
+      } else {
+        map[category].push(c);
+      }
     }
     // Sort each bucket by message count desc.
     (Object.keys(map) as PackageChannelCategory[]).forEach((k) =>
       map[k].sort((a, b) => b.messageCount - a.messageCount),
     );
-    return map;
+    const serverGroups = Array.from(servers.values()).sort((a, b) => b.messageCount - a.messageCount);
+    for (const group of serverGroups) {
+      group.channels.sort(
+        (a, b) =>
+          Number(getPackageChannelCategory(a) === 'thread') - Number(getPackageChannelCategory(b) === 'thread') ||
+          b.messageCount - a.messageCount,
+      );
+    }
+    return { map, serverGroups };
   }, [filtered]);
 
   // 2.2.8: the sidebar Multi-select. Left Servers rows cannot be ticked
@@ -177,6 +202,13 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
       dispatch(setBulkChannelSelection([...bulkSelected, ...selectableIds]));
     }
   };
+  /** 2.2.9: the Server header checkbox ticks every channel under it, or clears them when all are ticked. */
+  const handleToggleServer = (group: ServerGroup) => {
+    const ids = group.channels.filter((c) => !c.isOrphan).map((c) => c.id);
+    const allOn = ids.length > 0 && ids.every((id) => bulkSelectedSet.has(id));
+    const rest = bulkSelected.filter((id) => !ids.includes(id));
+    dispatch(setBulkChannelSelection(allOn ? rest : [...rest, ...ids]));
+  };
   const handleCopyNames = useCallback(() => {
     if (!parsed) return;
     const names = parsed.channels.filter((c) => bulkSelectedSet.has(c.id)).map((c) => getPackageChannelLabel(c));
@@ -208,15 +240,36 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
     label: string;
     items: PackageChannel[];
   }> = [
-    { key: 'guildText', label: t('package.sectionServers'), items: grouped.guildText },
-    { key: 'thread', label: t('package.sectionThreads'), items: grouped.thread },
-    { key: 'dm', label: t('package.sectionDms'), items: grouped.dm },
-    { key: 'groupDm', label: t('package.sectionGroupDms'), items: grouped.groupDm },
-    { key: 'orphan', label: t('package.sectionLeftServers'), items: grouped.orphan },
-    { key: 'unknown', label: t('package.sectionOther'), items: grouped.unknown },
+    { key: 'guildText', label: t('package.sectionServers'), items: grouped.map.guildText },
+    { key: 'thread', label: t('package.sectionThreads'), items: grouped.map.thread },
+    { key: 'dm', label: t('package.sectionDms'), items: grouped.map.dm },
+    { key: 'groupDm', label: t('package.sectionGroupDms'), items: grouped.map.groupDm },
+    { key: 'orphan', label: t('package.sectionLeftServers'), items: grouped.map.orphan },
+    { key: 'unknown', label: t('package.sectionOther'), items: grouped.map.unknown },
   ];
+  const serverChannelCount = grouped.serverGroups.reduce((n, g) => n + g.channels.length, 0);
+  const countOf = (key: PackageChannelCategory, items: PackageChannel[]) =>
+    key === 'guildText' ? items.length + serverChannelCount : items.length;
 
-  const totalShown = sections.reduce((n, s) => n + s.items.length, 0);
+  const totalShown = sections.reduce((n, s) => n + countOf(s.key, s.items), 0);
+
+  const renderRow = (channel: PackageChannel, inServer = false) => (
+    <ChannelRow
+      key={channel.id}
+      channel={channel}
+      inServer={inServer}
+      selected={showChecks ? bulkSelectedSet.has(channel.id) : channel.id === selectedId}
+      check={showChecks ? (channel.isOrphan ? 'blocked' : bulkSelectedSet.has(channel.id) ? 'on' : 'off') : null}
+      mark={marks[channel.id] ?? null}
+      onSelect={() => {
+        if (showChecks) {
+          if (!channel.isOrphan) dispatch(toggleBulkChannelSelection(channel.id));
+        } else {
+          dispatch(selectPackageChannel(channel.id));
+        }
+      }}
+    />
+  );
 
   return (
     <>
@@ -299,11 +352,11 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
         <List dense disablePadding>
           {sections.map(
             (section) =>
-              section.items.length > 0 && (
+              countOf(section.key, section.items) > 0 && (
                 <SidebarSection
                   key={section.key}
                   label={section.label}
-                  count={section.items.length}
+                  count={countOf(section.key, section.items)}
                   collapsed={collapsed[section.key]}
                   onToggle={() =>
                     setCollapsed((c) => ({ ...c, [section.key]: !c[section.key] }))
@@ -326,27 +379,107 @@ const PackageChannelList = ({ filterText = '' }: PackageChannelListProps) => {
                     ) : null
                   }
                 >
-                  {section.items.map((channel) => (
-                    <ChannelRow
-                      key={channel.id}
-                      channel={channel}
-                      selected={showChecks ? bulkSelectedSet.has(channel.id) : channel.id === selectedId}
-                      check={showChecks ? (channel.isOrphan ? 'blocked' : bulkSelectedSet.has(channel.id) ? 'on' : 'off') : null}
-                      mark={marks[channel.id] ?? null}
-                      onSelect={() => {
-                        if (showChecks) {
-                          if (!channel.isOrphan) dispatch(toggleBulkChannelSelection(channel.id));
-                        } else {
-                          dispatch(selectPackageChannel(channel.id));
-                        }
-                      }}
-                    />
-                  ))}
+                  {section.key === 'guildText' &&
+                    grouped.serverGroups.map((group) => {
+                      const ticked = group.channels.filter((c) => bulkSelectedSet.has(c.id)).length;
+                      return (
+                        <ServerGroupHeader
+                          key={group.key}
+                          group={group}
+                          collapsed={!!collapsedServers[group.key]}
+                          onToggle={() => setCollapsedServers((c) => ({ ...c, [group.key]: !c[group.key] }))}
+                          check={!showChecks ? null : ticked === 0 ? 'off' : ticked === group.channels.length ? 'on' : 'some'}
+                          onCheck={() => handleToggleServer(group)}
+                        >
+                          {group.channels.map((channel) => renderRow(channel, true))}
+                        </ServerGroupHeader>
+                      );
+                    })}
+                  {section.items.map((channel) => renderRow(channel))}
                 </SidebarSection>
               ),
           )}
         </List>
       )}
+    </>
+  );
+};
+
+/** 2.2.9: one Server's channels and threads in the package sidebar. */
+interface ServerGroup {
+  key: string;
+  name: string;
+  channels: PackageChannel[];
+  messageCount: number;
+}
+
+/** The Server a package channel sits under, or '' when the package names none. */
+function serverKeyOf(channel: PackageChannel): string {
+  return channel.guildId || channel.guildName || '';
+}
+
+interface ServerGroupHeaderProps {
+  group: ServerGroup;
+  collapsed: boolean;
+  onToggle: () => void;
+  /** Multi-select state of the whole Server; null when Multi-select is off. */
+  check: 'on' | 'off' | 'some' | null;
+  onCheck: () => void;
+  children: React.ReactNode;
+}
+
+/** 2.2.9: a Server's name, its channel and message counts, the fold arrow and, in Multi-select, a checkbox for everything under it. */
+const ServerGroupHeader = ({ group, collapsed, onToggle, check, onCheck, children }: ServerGroupHeaderProps) => {
+  const { t } = useTranslation();
+  const name = group.name || t('pkgAnalytics.unknownServer');
+  // Like the rows (#236), the header counts what is left, not what the archive held.
+  const remaining = useAppSelector((state) =>
+    group.channels.reduce(
+      (n, c) => n + Math.max(c.messageCount - (state.package.deletedMessageIds[c.id]?.length ?? 0), 0),
+      0,
+    ),
+  );
+  return (
+    <>
+      <Box
+        data-testid="package-server-group"
+        data-server={group.key}
+        sx={{ display: 'flex', alignItems: 'center', pl: '15px', pr: 1.5, py: 0.75 }}
+      >
+        {check !== null && (
+          <Checkbox
+            size="small"
+            checked={check === 'on'}
+            indeterminate={check === 'some'}
+            onChange={onCheck}
+            inputProps={{ 'aria-label': t('package.bulk.selectServerAria', { name }) }}
+            data-testid="package-server-tick"
+            sx={{ p: 0, mr: 1 }}
+          />
+        )}
+        <Box sx={{ flexGrow: 1, minWidth: 0, cursor: 'pointer' }} onClick={onToggle}>
+          <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+            {name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+            {t('package.serverChannels', { count: group.channels.length })}
+            {' · '}
+            {t('package.serverMessages', { count: remaining })}
+          </Typography>
+        </Box>
+        <IconButton
+          size="small"
+          onClick={onToggle}
+          aria-label={t('package.toggleServer', { name })}
+          aria-expanded={!collapsed}
+          sx={{ p: 0.25 }}
+        >
+          {collapsed ? <ExpandMore fontSize="small" /> : <ExpandLess fontSize="small" />}
+        </IconButton>
+      </Box>
+      <Collapse in={!collapsed} unmountOnExit>
+        {children}
+      </Collapse>
     </>
   );
 };
@@ -406,6 +539,8 @@ const SidebarSection = ({
 
 interface ChannelRowProps {
   channel: PackageChannel;
+  /** 2.2.9: the row sits under its Server's header, so it is indented and drops the Server name line. */
+  inServer?: boolean;
   selected: boolean;
   /** 2.2.8: Multi-select state of the row; null when Multi-select is off. Blocked rows are Left Servers. */
   check: 'on' | 'off' | 'blocked' | null;
@@ -421,7 +556,7 @@ const MARK_COLOR: Record<BulkDeleteChannelState, string> = {
   skipped: 'warning.main',
 };
 
-const ChannelRow = ({ channel, selected, check, mark, onSelect }: ChannelRowProps) => {
+const ChannelRow = ({ channel, inServer = false, selected, check, mark, onSelect }: ChannelRowProps) => {
   const { t } = useTranslation();
   const primary = getPackageChannelLabel(channel);
   const subtitle = getPackageChannelSubtitle(channel);
@@ -447,7 +582,8 @@ const ChannelRow = ({ channel, selected, check, mark, onSelect }: ChannelRowProp
       data-testid="package-channel-row"
       data-bulk-mark={mark ?? undefined}
       sx={{
-        px: 1.5,
+        pl: inServer ? 3.5 : 1.5,
+        pr: 1.5,
         py: 0.75,
         opacity: check === 'blocked' ? 0.4 : channel.isOrphan ? 0.82 : 1,
         borderLeft: '3px solid transparent',
@@ -509,16 +645,18 @@ const ChannelRow = ({ channel, selected, check, mark, onSelect }: ChannelRowProp
             </Typography>
           )}
         </Stack>
-        <Typography
-          variant="caption"
-          noWrap
-          sx={{
-            color: channel.isOrphan ? 'warning.main' : 'text.secondary',
-            display: 'block',
-          }}
-        >
-          {subtitle}
-        </Typography>
+        {!inServer && (
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{
+              color: channel.isOrphan ? 'warning.main' : 'text.secondary',
+              display: 'block',
+            }}
+          >
+            {subtitle}
+          </Typography>
+        )}
       </Box>
     </ListItemButton>
   );

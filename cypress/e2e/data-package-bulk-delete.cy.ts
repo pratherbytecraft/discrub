@@ -145,6 +145,34 @@ describe('Data package bulk delete (2.2.8)', () => {
     cy.get('@deleteGeneral.all').should('have.length', 4);
   });
 
+  // 2.2.9 (GitHub issue 23): the sidebar groups channels under their Server and
+  // the Server header's checkbox ticks everything under it.
+  it('ticks a whole Server from its header and deletes every channel under it', () => {
+    cy.get('[data-testid="package-server-group"]').should('have.length', 1)
+      .and('contain', 'Cypress Test Server').and('contain', '2 channels · 64 messages');
+    cy.get('[data-testid="package-server-tick"]').should('not.exist');
+    cy.get('[data-testid="package-multi-select-toggle"]').click();
+    cy.get('[data-testid="package-server-tick"] input').click();
+    cy.get('[data-testid="multi-select-count"]').should('contain', '2 of');
+    cy.get('[data-testid="package-bulk-tick"] input:checked').should('have.length', 2);
+
+    // One row cleared puts the header on a dash; the header then ticks it back.
+    tickRow('busy');
+    cy.get('[data-testid="package-server-tick"] input').should('have.attr', 'data-indeterminate', 'true');
+    cy.get('[data-testid="package-server-tick"] input').click();
+    cy.get('[data-testid="multi-select-count"]').should('contain', '2 of');
+
+    cy.get('[data-testid="multi-select-purge"]').click();
+    cy.contains('Delete your messages in 2 Channels').should('be.visible');
+    cy.get('[data-testid="package-bulk-delete-total"]').should('have.text', '64');
+    cy.get('[data-testid="package-bulk-delete-confirm"]').should('contain', 'Delete 64 messages').click();
+    cy.get('[data-testid="package-bulk-finished"]', { timeout: 90000 })
+      .should('contain', 'Done. 4 deleted, 60 already gone, 0 failed.');
+    cy.get('@deleteGeneral.all').should('have.length', 4);
+    cy.get('@deleteBusy404.all').should('have.length', 60);
+    cy.get('@deleteDm.all').should('have.length', 0);
+  });
+
   it('applies a content filter to every channel in the run', () => {
     cy.get('[data-testid="package-multi-select-toggle"]').click();
     tickRow('general');
