@@ -36,6 +36,7 @@ import exportReducer, {
   selectTextOptions,
 } from './exportSlice';
 import cacheReducer from '@features/cache/cacheSlice';
+import authReducer from '@features/auth/authSlice';
 import { initialExportState, MediaDownloadProgress, DEFAULT_MAX_ZIP_PART_BYTES } from './exportTypes';
 import { createMockMessages } from '@/test/fixtures';
 import * as exportService from '@services/exportService';
@@ -127,7 +128,7 @@ describe('exportSlice', () => {
   let store: TestStore;
 
   beforeEach(() => {
-    store = createTestStore({ export: exportReducer, cache: cacheReducer });
+    store = createTestStore({ export: exportReducer, cache: cacheReducer, auth: authReducer });
     vi.clearAllMocks();
   });
 

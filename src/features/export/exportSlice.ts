@@ -139,23 +139,23 @@ async function fetchReactionData(
   const settings = selectSettings(getState());
   if (settings?.[DiscrubSetting.REACTIONS_ENABLED] !== 'true') return undefined;
 
-  // 2.2.5 WP6c: one walk over the windows keeps only the messages that have reactions.
-  const messagesWithReactions = await collectMessages(toSource(messages), (m) => !!m.reactions && m.reactions.length > 0);
-  if (messagesWithReactions.length === 0) return undefined;
-
-  const totalReactors = messagesWithReactions.reduce(
-    (sum, m) => sum + (m.reactions?.reduce((s, r) => s + (r.count || 0), 0) || 0), 0
-  );
-  const totalEmojis = messagesWithReactions.reduce(
-    (sum, m) => sum + (m.reactions?.length || 0), 0
-  );
-
-  dispatch(addStatusEntry({
-    level: 'info',
-    message: t('status.export.fetchingReactions', { messages: messagesWithReactions.length, reactions: totalEmojis, reactors: totalReactors }),
-  }));
-
   try {
+    // 2.2.5 WP6c: one walk over the windows keeps only the messages that have reactions.
+    const messagesWithReactions = await collectMessages(toSource(messages), (m) => !!m.reactions && m.reactions.length > 0);
+    if (messagesWithReactions.length === 0) return undefined;
+
+    const totalReactors = messagesWithReactions.reduce(
+      (sum, m) => sum + (m.reactions?.reduce((s, r) => s + (r.count || 0), 0) || 0), 0
+    );
+    const totalEmojis = messagesWithReactions.reduce(
+      (sum, m) => sum + (m.reactions?.length || 0), 0
+    );
+
+    dispatch(addStatusEntry({
+      level: 'info',
+      message: t('status.export.fetchingReactions', { messages: messagesWithReactions.length, reactions: totalEmojis, reactors: totalReactors }),
+    }));
+
     const { DiscordServiceAdapter, ReactionEnrichmentService } = await import('discrub-core/messages');
     const apiClient = new DiscordServiceAdapter(settings);
 
@@ -185,9 +185,10 @@ async function fetchReactionData(
 
     return result.reactionMap;
   } catch (error) {
-    const msg = error instanceof Error ? error.message : t('status.export.unknownError');
+    if (error instanceof CancelledError) throw error;
+    const msg = error instanceof Error || error instanceof DOMException ? error.message : t('status.export.unknownError');
     dispatch(addStatusEntry({ level: 'warning', message: t('status.export.reactionsFailed', { error: msg }) }));
-    return undefined;
+    throw error;
   }
 }
 
@@ -568,13 +569,9 @@ export const exportMessages = createAsyncThunk<
         // Fetch reaction user data for HTML exports (other formats use counts only)
         let reactionMap: ExportReactionMap | undefined;
         if (format === 'html') {
-          try {
-            const token = selectAuthToken(getState());
-            if (token) {
-              reactionMap = await fetchReactionData(material.everything, token, getState, dispatch as ExportDispatch);
-            }
-          } catch {
-            // Non-fatal — continue without reaction data
+          const token = selectAuthToken(getState());
+          if (token) {
+            reactionMap = await fetchReactionData(material.everything, token, getState, dispatch as ExportDispatch);
           }
         }
 
@@ -656,7 +653,7 @@ export const exportMessages = createAsyncThunk<
         }));
         return rejectWithValue('Export cancelled');
       }
-      const errorMsg = error instanceof Error ? error.message : t('status.export.failedDefault');
+      const errorMsg = error instanceof Error || error instanceof DOMException ? error.message : t('status.export.failedDefault');
       dispatch(addStatusEntry({
         level: 'error',
         message: t('status.export.failedOn', { name: channelName, error: errorMsg }),
