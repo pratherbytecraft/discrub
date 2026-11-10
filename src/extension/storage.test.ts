@@ -154,9 +154,11 @@ describe('storage (namespaced IndexedDB adapters)', () => {
   describe('error handling (idb-keyval rejects)', () => {
     let mod: typeof import('./storage');
     let stubs: Record<string, any>;
+    let openStore: ReturnType<typeof vi.fn>;
 
     beforeEach(async () => {
       vi.resetModules();
+      openStore = vi.fn().mockResolvedValue(undefined);
       stubs = {
         get: vi.fn(),
         set: vi.fn(),
@@ -166,7 +168,7 @@ describe('storage (namespaced IndexedDB adapters)', () => {
         getMany: vi.fn(),
         setMany: vi.fn(),
         entries: vi.fn(),
-        createStore: vi.fn(() => () => undefined),
+        createStore: vi.fn(() => openStore),
       };
       vi.doMock('idb-keyval', () => stubs);
       mod = await import('./storage');
@@ -224,6 +226,48 @@ describe('storage (namespaced IndexedDB adapters)', () => {
     it('entries returns [] on rejection', async () => {
       stubs.entries.mockRejectedValueOnce(new Error('boom'));
       expect(await mod.storage.history.entries()).toEqual([]);
+    });
+
+    it.each(['InvalidStateError', 'SecurityError', 'NotAllowedError'])('uses session storage when opening IDB fails with %s', async (name) => {
+      openStore.mockRejectedValue(new DOMException('Storage unavailable', name));
+      const settings = mod.storage.settings;
+      await Promise.all([settings.set('first', { enabled: true }), settings.set('second', 2)]);
+      expect(openStore).toHaveBeenCalledTimes(1);
+      expect(await settings.get('first')).toEqual({ enabled: true });
+      expect(await settings.getMany(['second', 'missing'])).toEqual([2, null]);
+      expect(await settings.keys()).toEqual(['first', 'second']);
+      expect(stubs.set).not.toHaveBeenCalled();
+      expect(stubs.get).not.toHaveBeenCalled();
+    });
+
+    it('keeps each unavailable database isolated for the life of the view', async () => {
+      openStore.mockRejectedValue(new DOMException('Private storage unavailable', 'InvalidStateError'));
+      await mod.storage.settings.set('same', 'settings');
+      await mod.storage.cache.set('same', 'cache');
+      await mod.storage.settings.clear();
+      expect(await mod.storage.cache.get('same')).toBe('cache');
+      vi.resetModules();
+      const reloaded = await import('./storage');
+      expect(await reloaded.storage.cache.get('same')).toBeNull();
+    });
+
+    it('does not replace an already working database after an operation fails', async () => {
+      await mod.storage.settings.set('saved', 'persistent');
+      const failure = new DOMException('Transaction failed', 'InvalidStateError');
+      stubs.set.mockRejectedValueOnce(failure);
+      await expect(mod.storage.settings.set('next', 'value')).rejects.toBe(failure);
+      stubs.get.mockResolvedValueOnce('persistent');
+      expect(await mod.storage.settings.get('saved')).toBe('persistent');
+      expect(openStore).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves quota errors and retries an unexpected probe failure', async () => {
+      const quota = new DOMException('Disk full', 'QuotaExceededError');
+      openStore.mockRejectedValueOnce(quota);
+      await expect(mod.storage.settings.set('key', 'value')).rejects.toBe(quota);
+      await mod.storage.settings.set('key', 'value');
+      expect(stubs.set).toHaveBeenCalledWith('key', 'value', expect.any(Function));
+      expect(openStore).toHaveBeenCalledTimes(2);
     });
   });
 });

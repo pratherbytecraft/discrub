@@ -34,6 +34,8 @@
  * booleans, plain objects, arrays, Blobs, Maps, Sets, Date all work.
  * NO `JSON.stringify` round-trips. DevTools renders objects as
  * expandable trees.
+ * If a database cannot initially be opened, that store falls back to
+ * structured-cloned memory for this view. Closing the view discards it.
  *
  * ───────────────────────────────────────────────────────────────────────
  * CROSS-TAB CONSISTENCY (regression vs the localStorage backend)
@@ -71,6 +73,7 @@ import {
   type UseStore,
 } from 'idb-keyval';
 import { deleteWorkspaceDatabase } from '@/services/workspaceStore';
+import { createSessionStorage } from './sessionStorage';
 
 const DB_PREFIX = 'Discrub-';
 
@@ -141,10 +144,31 @@ export interface StorageAdapter {
 
 function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
   const tag = `[storage.${storeName}]`;
+  let backend: Promise<StorageAdapter | null> | undefined;
+
+  const sessionFallback = (): Promise<StorageAdapter | null> => {
+    // Probe once, before any data is read or written. Do not switch a working
+    // database to an empty memory store after a transient error or a full disk.
+    backend ??= Promise.resolve()
+      .then(() => store('readonly', () => undefined))
+      .then(() => null)
+      .catch((error: unknown) => {
+        const name = error && typeof error === 'object' && 'name' in error ? error.name : undefined;
+        if (name !== 'InvalidStateError' && name !== 'SecurityError' && name !== 'NotAllowedError') {
+          backend = undefined;
+          throw error;
+        }
+        logInfo(`${tag} IndexedDB unavailable; using temporary memory until this view closes`);
+        return createSessionStorage();
+      });
+    return backend;
+  };
 
   return {
     async get<T>(key: string): Promise<T | null> {
       try {
+        const session = await sessionFallback();
+        if (session) return await session.get<T>(key);
         const value = await idbGet<T>(key, store);
         return value ?? null;
       } catch (error) {
@@ -155,6 +179,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async set<T>(key: string, value: T): Promise<void> {
       try {
+        const session = await sessionFallback();
+        if (session) return await session.set(key, value);
         await idbSet(key, value, store);
       } catch (error) {
         logError(`${tag} set(${key}) failed`, error);
@@ -164,6 +190,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async remove(key: string): Promise<void> {
       try {
+        const session = await sessionFallback();
+        if (session) return await session.remove(key);
         await idbDel(key, store);
       } catch (error) {
         logError(`${tag} remove(${key}) failed`, error);
@@ -172,6 +200,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async clear(): Promise<void> {
       try {
+        const session = await sessionFallback();
+        if (session) return await session.clear();
         await idbClear(store);
       } catch (error) {
         logError(`${tag} clear() failed`, error);
@@ -180,6 +210,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async keys(): Promise<string[]> {
       try {
+        const session = await sessionFallback();
+        if (session) return await session.keys();
         const all = await idbKeys(store);
         return all.filter((k): k is string => typeof k === 'string');
       } catch (error) {
@@ -191,6 +223,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
     async getMany<T>(keys: string[]): Promise<Array<T | null>> {
       if (keys.length === 0) return [];
       try {
+        const session = await sessionFallback();
+        if (session) return await session.getMany<T>(keys);
         const values = await idbGetMany<T>(keys, store);
         return values.map((v) => v ?? null);
       } catch (error) {
@@ -202,6 +236,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
     async setMany<T>(entries: Array<[string, T]>): Promise<void> {
       if (entries.length === 0) return;
       try {
+        const session = await sessionFallback();
+        if (session) return await session.setMany(entries);
         await idbSetMany(entries, store);
       } catch (error) {
         logError(`${tag} setMany() failed`, error);
@@ -211,6 +247,8 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
 
     async entries<T>(): Promise<Array<[string, T]>> {
       try {
+        const session = await sessionFallback();
+        if (session) return await session.entries<T>();
         const all = await idbEntries<string, T>(store);
         return all.filter(
           ([k]) => typeof k === 'string',
