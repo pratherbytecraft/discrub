@@ -34,8 +34,6 @@
  * booleans, plain objects, arrays, Blobs, Maps, Sets, Date all work.
  * NO `JSON.stringify` round-trips. DevTools renders objects as
  * expandable trees.
- * If a database cannot initially be opened, that store falls back to
- * structured-cloned memory for this view. Closing the view discards it.
  *
  * ───────────────────────────────────────────────────────────────────────
  * CROSS-TAB CONSISTENCY (regression vs the localStorage backend)
@@ -147,8 +145,6 @@ function makeAdapter(storeName: StoreName, store: UseStore): StorageAdapter {
   let backend: Promise<StorageAdapter | null> | undefined;
 
   const sessionFallback = (): Promise<StorageAdapter | null> => {
-    // Probe once, before any data is read or written. Do not switch a working
-    // database to an empty memory store after a transient error or a full disk.
     backend ??= Promise.resolve()
       .then(() => store('readonly', () => undefined))
       .then(() => null)

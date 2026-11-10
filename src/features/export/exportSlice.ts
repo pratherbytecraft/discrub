@@ -128,8 +128,7 @@ export function createReactionProgressLogger(dispatch: ExportDispatch) {
 
 /**
  * Fetch reaction user data for messages if REACTIONS_ENABLED setting is true.
- * Returns undefined when disabled or there are no reactions. Failures reject
- * the export instead of silently writing HTML with empty reactor lists.
+ * Returns the ExportReactionMap or undefined if disabled/unavailable.
  */
 async function fetchReactionData(
   messages: Message[] | MessageSource,
@@ -141,7 +140,7 @@ async function fetchReactionData(
   if (settings?.[DiscrubSetting.REACTIONS_ENABLED] !== 'true') return undefined;
 
   try {
-    // Reading the source can fail before the enrichment service is reached.
+    // 2.2.5 WP6c: one walk over the windows keeps only the messages that have reactions.
     const messagesWithReactions = await collectMessages(toSource(messages), (m) => !!m.reactions && m.reactions.length > 0);
     if (messagesWithReactions.length === 0) return undefined;
 

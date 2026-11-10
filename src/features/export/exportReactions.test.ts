@@ -59,7 +59,6 @@ const params = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // These regression tests never make authenticated or unauthenticated requests.
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network disabled in this test')));
   generateReactionMap.mockResolvedValue({ messages: [message], reactionMap });
   exportToZip.mockResolvedValue(undefined);

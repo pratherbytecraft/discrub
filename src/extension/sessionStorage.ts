@@ -1,6 +1,5 @@
 import type { StorageAdapter } from './storage';
 
-/** Per-view storage for environments that cannot open IndexedDB. */
 export function createSessionStorage(): StorageAdapter {
   const values = new Map<string, unknown>();
   const keys = () => [...values.keys()].sort();
@@ -26,7 +25,6 @@ export function createSessionStorage(): StorageAdapter {
       return requested.map((key) => get<T>(key));
     },
     async setMany<T>(entries: Array<[string, T]>) {
-      // Clone the whole batch before writing, matching IDB transaction atomicity.
       const cloned = structuredClone(entries);
       for (const [key, value] of cloned) values.set(key, value);
     },
