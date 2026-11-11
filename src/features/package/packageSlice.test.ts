@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { configureStore, type ThunkDispatch, type UnknownAction } from '@reduxjs/toolkit';
 import type { RootState } from '@/app/store';
 import packageReducer, {
+  applyLocalMessageEdits,
   importPackage,
+  initialPackageState,
   loadPackageChannelMessages,
   loadAllPackageTimestamps,
   selectPackageChannel,
@@ -219,6 +221,58 @@ describe('packageSlice — reducers', () => {
     // AND the persisted cache was cleared.
     expect(await enrichmentCache.get(USER, '200')).toBeNull();
     expect(await enrichmentCache.get(USER, '300')).toBeNull();
+  });
+
+  it('applyLocalMessageEdits stores per-message content instead of one sample', () => {
+    const store = configureStore({
+      reducer: { package: packageReducer },
+      preloadedState: {
+        package: {
+          ...initialPackageState,
+          loadedChannels: {
+            '200': [
+              { id: '1', timestamp: 't1', content: 'original one', attachments: [] },
+              { id: '2', timestamp: 't2', content: 'original two', attachments: [] },
+              { id: '3', timestamp: 't3', content: 'untouched', attachments: [] },
+            ],
+          },
+          loadedOrder: ['200'],
+        },
+      },
+    });
+
+    store.dispatch(
+      applyLocalMessageEdits({
+        channelId: '200',
+        updates: [
+          { id: '1', content: 'generated one' },
+          { id: '2', content: 'generated two' },
+        ],
+      }),
+    );
+
+    expect(
+      store.getState().package.loadedChannels['200'].map((m) => m.content),
+    ).toEqual(['generated one', 'generated two', 'untouched']);
+  });
+
+  it('applyLocalMessageEdits ignores channels that are not cached', () => {
+    const store = configureStore({
+      reducer: { package: packageReducer },
+      preloadedState: {
+        package: { ...initialPackageState, loadedChannels: {}, loadedOrder: [] },
+      },
+    });
+
+    expect(() =>
+      store.dispatch(
+        applyLocalMessageEdits({
+          channelId: '999',
+          updates: [{ id: '1', content: 'x' }],
+        }),
+      ),
+    ).not.toThrow();
+    expect(store.getState().package.loadedChannels).toEqual({});
   });
 });
 

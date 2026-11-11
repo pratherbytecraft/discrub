@@ -97,6 +97,7 @@ import { createMockMessages, createMockMessage, createMockAttachment, createMock
 import type { Message } from 'discrub-core/types/discord-types';
 import { SortDirection } from 'discrub-core/common-enum';
 import { addStatusEntry, showToast } from '@features/status/statusSlice';
+import { generateEditReplacement } from './editReplacement';
 
 // Mock dependencies
 vi.mock('@services/discordService', () => ({
@@ -2491,6 +2492,32 @@ describe('messageSlice', () => {
       expect(mockDiscordService.editMessage).toHaveBeenCalledWith('token', 'msg-1', { content: 'edited content' }, 'channel-1');
     });
 
+    it('sends a replacement generated from the message id, not once for the call', async () => {
+      const replacement = { mode: 'words' as const, seed: 20261107 };
+      const expected = generateEditReplacement(replacement, 'msg-1');
+      const mockDiscordService = {
+        editMessage: vi.fn().mockResolvedValue({
+          success: true,
+          data: createMockMessage({ id: 'msg-1', content: expected }),
+        }),
+      };
+      vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
+      store.dispatch(setMessages([createMockMessage({ id: 'msg-1', content: 'original' })]));
+
+      await store.dispatch(
+        editMessage({ messageId: 'msg-1', channelId: 'channel-1', content: 'fixed text', replacement, token: 'token' })
+      );
+
+      expect(expected).not.toContain('fixed text');
+      expect(mockDiscordService.editMessage).toHaveBeenCalledWith(
+        'token',
+        'msg-1',
+        { content: expected },
+        'channel-1'
+      );
+      expect(cachedContent('msg-1')).toBe(expected);
+    });
+
     it('logs the edit, and a warning when Discord refuses it (pass 3, row 166)', async () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue({
         editMessage: vi.fn()
@@ -2606,6 +2633,39 @@ describe('messageSlice', () => {
       expect(cachedContent('msg-1')).toBe('new content');
       expect(cachedContent('msg-2')).toBe('new content');
       expect(state.selectedIds).toEqual([]);
+    });
+
+    it('generates a distinct replacement for each id and lands those bodies in state', async () => {
+      const replacement = { mode: 'sentences' as const, seed: 4242 };
+      const msgs = createMockMessages(3);
+      const bodies = new Map(msgs.map((m) => [m.id, generateEditReplacement(replacement, m.id)]));
+      expect(new Set(bodies.values()).size).toBe(msgs.length);
+
+      const mockDiscordService = {
+        editMessage: vi.fn().mockImplementation((_token: string, messageId: string) =>
+          Promise.resolve({
+            success: true,
+            data: createMockMessage({ id: messageId, content: bodies.get(messageId) }),
+          })
+        ),
+      };
+      vi.mocked(discordService.getDiscordService).mockReturnValue(mockDiscordService as any);
+
+      const testStore = await createStoreWithApp({
+        ...initialMessageState,
+        ...loaded(msgs),
+      });
+
+      await testStore.dispatch(
+        editMessages({ messages: msgs, channelId: 'channel-1', content: 'fixed text', replacement, token: 'token' })
+      );
+
+      // One request per message, each with that id's own generated body.
+      expect(mockDiscordService.editMessage.mock.calls.map((call) => call[2].content)).toEqual(
+        msgs.map((m) => bodies.get(m.id))
+      );
+      for (const m of msgs) expect(cachedContent(m.id)).toBe(bodies.get(m.id));
+      expect(cachedContent('msg-1')).not.toBe(cachedContent('msg-2'));
     });
 
     it('should handle error from editMessages', async () => {

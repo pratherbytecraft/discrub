@@ -2,13 +2,71 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderWithProviders, screen, waitFor, fireEvent } from '@/test/test-utils';
 import { virtualizerMock } from '@/test/virtualizer-mock';
 import PackageMessageTable from './PackageMessageTable';
-
-vi.mock('@tanstack/react-virtual', () => virtualizerMock);
 import {
   PACKAGE_CHANNEL_TYPE,
   type PackageChannel,
   type ParsedPackage,
 } from '@features/package/packageTypes';
+import { generateEditReplacement } from '@features/message/editReplacement';
+
+vi.mock('@tanstack/react-virtual', () => virtualizerMock);
+
+const { mockEditMessage, stubSaveState } = vi.hoisted(() => ({
+  mockEditMessage: vi.fn(),
+  stubSaveState: {
+    replacement: undefined as
+      | { mode: 'words' | 'sentences' | 'characters'; seed: number }
+      | undefined,
+  },
+}));
+
+vi.mock('@services/discordService', () => ({
+  getDiscordService: vi.fn(() => ({ editMessage: mockEditMessage })),
+}));
+
+vi.mock('@/utils/delayUtils', () => ({
+  calculateRandomDelay: vi.fn(() => ({
+    delayMs: 0,
+    delaySec: 0,
+    baseDelay: 0,
+    modifier: 0,
+    randomComponent: 0,
+  })),
+}));
+
+vi.mock('@/utils/operationLoopUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/operationLoopUtils')>();
+  return {
+    ...actual,
+    waitWhilePaused: vi.fn().mockResolvedValue(undefined),
+    checkCancelled: vi.fn().mockReturnValue(false),
+    cancellableDelay: vi.fn().mockResolvedValue(false),
+  };
+});
+
+// The real modal owns the random-mode controls; the table only needs to
+// receive its onSave callback with (or without) a replacement spec.
+vi.mock('@components/modals/EditMessageModal', () => ({
+  default: ({
+    open,
+    onSave,
+  }: {
+    open: boolean;
+    onSave: (
+      content: string,
+      replacement?: { mode: 'words' | 'sentences' | 'characters'; seed: number },
+    ) => void;
+  }) =>
+    open ? (
+      <button
+        type="button"
+        data-testid="stub-edit-save"
+        onClick={() => onSave('fixed text', stubSaveState.replacement)}
+      >
+        stub save
+      </button>
+    ) : null,
+}));
 
 const channel: PackageChannel = {
   id: '200',
@@ -228,6 +286,79 @@ describe('<PackageMessageTable />', () => {
       }),
     });
     expect(screen.getByRole('button', { name: /Edit selected/i })).toBeDisabled();
+  });
+
+  it('caches a distinct generated body per message after a randomized edit', async () => {
+    mockEditMessage.mockReset();
+    mockEditMessage.mockImplementation(async (_token: string, id: string) => ({
+      success: true,
+      data: { id, content: 'discord-echo' },
+    }));
+    stubSaveState.replacement = { mode: 'words', seed: 7 };
+    const loadedChannels = {
+      '200': [
+        { id: '1', timestamp: '2022-07-28 22:30:52.800000+00:00', content: 'first original', attachments: [] },
+        { id: '2', timestamp: '2022-07-29 00:00:00.000000+00:00', content: 'second original', attachments: [] },
+      ],
+    };
+    const { store, container } = renderWithProviders(
+      <PackageMessageTable channel={channel} />,
+      {
+        preloadedState: stateWith({
+          loadedChannels,
+          selectedMessageIds: { '200': ['1', '2'] },
+        }),
+      },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit selected/i }));
+    fireEvent.click(screen.getByTestId('stub-edit-save'));
+
+    const spec = { mode: 'words' as const, seed: 7 };
+    const expected1 = generateEditReplacement(spec, '1');
+    const expected2 = generateEditReplacement(spec, '2');
+    expect(expected1).not.toBe(expected2);
+
+    await waitFor(() => {
+      expect(
+        store.getState().package.loadedChannels['200'].map((m) => m.content),
+      ).toEqual([expected1, expected2]);
+    });
+    // Both cached bodies are actually rendered, and neither is the single
+    // sample a batch-wide patch would have produced.
+    expect(container.textContent).toContain(expected1);
+    expect(container.textContent).toContain(expected2);
+    expect(container.textContent).not.toContain('fixed text');
+  });
+
+  it('applies the fixed content to every edited row', async () => {
+    mockEditMessage.mockReset();
+    mockEditMessage.mockImplementation(async (_token: string, id: string) => ({
+      success: true,
+      data: { id, content: 'discord-echo' },
+    }));
+    stubSaveState.replacement = undefined;
+    const loadedChannels = {
+      '200': [
+        { id: '3', timestamp: 't1', content: 'alpha original', attachments: [] },
+        { id: '4', timestamp: 't2', content: 'beta original', attachments: [] },
+      ],
+    };
+    const { store } = renderWithProviders(<PackageMessageTable channel={channel} />, {
+      preloadedState: stateWith({
+        loadedChannels,
+        selectedMessageIds: { '200': ['3', '4'] },
+      }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit selected/i }));
+    fireEvent.click(screen.getByTestId('stub-edit-save'));
+
+    await waitFor(() => {
+      expect(
+        store.getState().package.loadedChannels['200'].map((m) => m.content),
+      ).toEqual(['fixed text', 'fixed text']);
+    });
   });
 
   it('export button enabled when messages exist and not exporting', () => {

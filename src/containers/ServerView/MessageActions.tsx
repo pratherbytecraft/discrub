@@ -23,6 +23,7 @@ import { useAppSelector } from '@/app/hooks';
 import { selectActiveContainerKey, selectActiveHydrationSource, selectActiveRows, selectActiveSelectedIds } from '@features/message/messageSlice';
 import { hydrateMessages, useHydratedAll } from '@features/message/messageCache';
 import { RowFlag, messageFlags, type MessageRow } from '@features/message/messageRows';
+import type { EditReplacement } from '@features/message/editReplacement';
 import { perfCount } from '@/utils/perfCounters';
 
 interface MessageActionsProps {
@@ -31,8 +32,8 @@ interface MessageActionsProps {
    *  may still pass it. */
   selectedMessages?: Message[];
   onDelete: (messages: MessageRef[]) => Promise<void>;
-  onEdit: (message: Message, newContent: string) => Promise<void>;
-  onBulkEdit?: (messages: MessageRef[], newContent: string) => Promise<void>;
+  onEdit: (message: Message, newContent: string, replacement?: EditReplacement) => Promise<void>;
+  onBulkEdit?: (messages: MessageRef[], newContent: string, replacement?: EditReplacement) => Promise<void>;
   formattingContext: HtmlFormattingContext;
   isOperationRunning?: boolean;
   canManageMessages?: boolean;
@@ -215,12 +216,14 @@ const MessageActions = ({
     await onDelete(selectedRefs());
   };
 
-  const handleEdit = async (newContent: string) => {
+  const handleEdit = async (newContent: string, replacement?: EditReplacement) => {
     setEditModalOpen(false);
     if (selectedCount === 1 && singleMessage) {
-      await onEdit(singleMessage, newContent);
+      if (replacement) await onEdit(singleMessage, newContent, replacement);
+      else await onEdit(singleMessage, newContent);
     } else if (selectedCount > 1 && onBulkEdit) {
-      await onBulkEdit(selectedRefs(), newContent);
+      if (replacement) await onBulkEdit(selectedRefs(), newContent, replacement);
+      else await onBulkEdit(selectedRefs(), newContent);
     }
   };
 

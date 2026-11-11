@@ -9,6 +9,7 @@ import * as searchPagination from '@utils/searchPagination';
 import type { Channel, Guild, Message } from 'discrub-core/types/discord-types';
 import * as operationLoopUtils from '@/utils/operationLoopUtils';
 import { addStatusEntry } from '@features/status/statusSlice';
+import { generateEditReplacement } from './editReplacement';
 
 // #215 — drive bulkEditChannels through a controlled search iterator so the
 // test asserts the multi-channel orchestration (edit every own message in
@@ -95,6 +96,30 @@ describe('bulkEditChannels (#215)', () => {
     const result = await store.dispatch(bulkEditChannels({ channels: [channel('c1', 'general')], content: 'redacted', guildId: 'g1' })).unwrap();
     expect(mockDiscordService.editMessage).toHaveBeenCalledTimes(1);
     expect(mockDiscordService.editMessage).toHaveBeenCalledWith('tok', 'm2', { content: 'redacted' }, expect.anything());
+    expect(result).toMatchObject({ edited: 1, skipped: 1, failed: 0 });
+  });
+
+  it('resolves each body from the replacement and skips a message already carrying its own generated text (resume)', async () => {
+    const replacement = { mode: 'characters' as const, seed: 42 };
+    const firstBody = generateEditReplacement(replacement, 'm1');
+    const secondBody = generateEditReplacement(replacement, 'm2');
+    expect(firstBody).not.toBe(secondBody);
+    yieldPage([
+      { ...ownMsg('m1'), content: firstBody } as Message,
+      { ...ownMsg('m2'), content: 'stale text' } as Message,
+    ]);
+
+    const result = await store.dispatch(
+      bulkEditChannels({
+        channels: [channel('c1', 'general')],
+        content: 'fixed text',
+        replacement,
+        guildId: 'g1',
+      }),
+    ).unwrap();
+
+    expect(mockDiscordService.editMessage).toHaveBeenCalledTimes(1);
+    expect(mockDiscordService.editMessage).toHaveBeenCalledWith('tok', 'm2', { content: secondBody }, expect.anything());
     expect(result).toMatchObject({ edited: 1, skipped: 1, failed: 0 });
   });
 
@@ -255,6 +280,20 @@ describe('bulkEditGuilds, multi-Server edit (2.2.7, GitHub 16)', () => {
       'Bulk edit: Complete · 2 of 2 servers, 3 edited',
     ]));
     expect(store.getState().message.isEditing).toBe(false);
+  });
+
+  it('carries a random replacement through the server walk, one body per id', async () => {
+    channelsByGuild({ g1: [textChannel('c1', 'general')] });
+    pagesByChannel({ c1: [ownMsg('m1'), ownMsg('m2')] });
+    const replacement = { mode: 'sentences' as const, seed: 9 };
+
+    await store.dispatch(
+      bulkEditGuilds({ guilds: [guild('g1', 'Alpha')], content: 'fixed text', replacement }),
+    ).unwrap();
+
+    const sent = service.editMessage.mock.calls.map((call) => call[2].content);
+    expect(sent).toEqual(['m1', 'm2'].map((id) => generateEditReplacement(replacement, id)));
+    expect(new Set(sent).size).toBe(2);
   });
 
   it('skips channels the user cannot read, using member roles for the overwrite check', async () => {

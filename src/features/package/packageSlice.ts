@@ -2435,17 +2435,26 @@ const packageSlice = createSlice({
       delete state.enrichmentError[channelId];
       state.enrichedOrder = state.enrichedOrder.filter((id) => id !== channelId);
     },
+    /**
+     * Patch the in-memory channel cache after a successful edit run. Takes
+     * per-message content because a randomized edit generates different text
+     * for every message id (fixed edits just repeat the same string).
+     */
     applyLocalMessageEdits(
       state,
-      action: PayloadAction<{ channelId: string; messageIds: string[]; content: string }>,
+      action: PayloadAction<{
+        channelId: string;
+        updates: Array<{ id: string; content: string }>;
+      }>,
     ) {
-      const { channelId, messageIds, content } = action.payload;
+      const { channelId, updates } = action.payload;
       const cached = state.loadedChannels[channelId];
       if (!cached) return;
-      const idSet = new Set(messageIds);
-      state.loadedChannels[channelId] = cached.map((m) =>
-        idSet.has(m.id) ? { ...m, content } : m,
-      );
+      const contentById = new Map(updates.map((u) => [u.id, u.content]));
+      state.loadedChannels[channelId] = cached.map((m) => {
+        const next = contentById.get(m.id);
+        return next === undefined ? m : { ...m, content: next };
+      });
     },
     clearPackage(state) {
       if (state.parsed?.avatarBlobUrl) {
