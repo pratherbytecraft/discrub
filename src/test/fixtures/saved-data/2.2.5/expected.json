@@ -1,0 +1,912 @@
+{
+  "tag": "v2.2.5",
+  "appVersion": "2.2.5",
+  "coreVersion": "1.0.15",
+  "workspaceDatabase": {
+    "meta": {
+      "lastWid": "00000000-0000-4000-8000-000000000002",
+      "order": [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002"
+      ],
+      "defaultWid": "00000000-0000-4000-8000-000000000001"
+    },
+    "workspaces": [
+      {
+        "wid": "00000000-0000-4000-8000-000000000001",
+        "name": "Default",
+        "openable": true,
+        "record": {
+          "wid": "00000000-0000-4000-8000-000000000001",
+          "name": "Default",
+          "color": "#5865f2",
+          "schema": 1,
+          "appVersion": "2.2.5",
+          "createdAt": 1792497600000,
+          "lastOpened": 1792497900000,
+          "bytes": 23727,
+          "scope": {
+            "tab": "channels",
+            "guildId": "811000000000000001",
+            "channelId": "811000000000000100",
+            "dmId": null
+          },
+          "conversations": {
+            "811000000000000100": {
+              "cid": "811000000000000100",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "general",
+              "parentName": null,
+              "count": 20,
+              "bytes": 12547,
+              "oldestId": "1529483152588800001",
+              "newestId": "1529510080020480027",
+              "complete": false,
+              "searchCriteria": null,
+              "refineCriteria": {"searchBeforeDate":null,"searchAfterDate":{"$type":"Date","value":"2026-06-22T12:00:00.000Z"},"searchMessageContents":[],"selectedHasTypes":["image","forward"],"userIds":[],"mentionIds":[],"channelIds":[],"isPinned":"null","systemMessageGroups":["members"],"systemMessageMode":"hide"},
+              "order": {"order":"asc","orderBy":"timestamp"},
+              "pagination": {"mode":"all","lastMessageId":"1529483152588800001","hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": "1529484410880000006",
+              "threadTabs": ["1529468053094400007"],
+              "activeTab": "1529468053094400007",
+              "action": {"kind":"loadAll","settings":{"startedAt":1792497600000,"loaded":20}},
+              "enrichment": {"reactions":"done","replies":"running","names":"off"}
+            },
+            "1529468053094400007": {
+              "cid": "1529468053094400007",
+              "kind": "thread",
+              "guildId": "811000000000000001",
+              "name": "ore prices",
+              "parentName": "general",
+              "count": 4,
+              "bytes": 1796,
+              "oldestId": "1529533484236800040",
+              "newestId": "1529534239211520043",
+              "complete": false,
+              "searchCriteria": null,
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"paginated","lastMessageId":null,"hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            },
+            "search:811000000000000100": {
+              "cid": "search:811000000000000100",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "general",
+              "parentName": null,
+              "count": 5,
+              "bytes": 3240,
+              "oldestId": "1529483152588800001",
+              "newestId": "1529509828362240026",
+              "complete": false,
+              "searchCriteria": {"searchBeforeDate":{"$type":"Date","value":"2026-10-20T12:00:00.000Z"},"searchAfterDate":null,"searchMessageContents":["runite"],"selectedHasTypes":[],"userIds":["700000000000000001"],"mentionIds":[],"channelIds":[],"isPinned":"null","authorType":null,"attachmentExtensions":["png"]},
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"search","lastMessageId":null,"hasMore":true,"totalCount":31,"searchOffset":25,"searchBeforeDate":"2026-07-22T13:40:00.000000+00:00"},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            },
+            "822000000000000001": {
+              "cid": "822000000000000001",
+              "kind": "dm",
+              "guildId": null,
+              "name": "ashley",
+              "parentName": null,
+              "count": 8,
+              "bytes": 6144,
+              "oldestId": "1529558650060800001",
+              "newestId": "1529584570859520063",
+              "complete": true,
+              "searchCriteria": null,
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"all","lastMessageId":"1529558650060800001","hasMore":false,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"done","replies":"done","names":"done"}
+            }
+          },
+          "bulk": null,
+          "authors": {
+            "700000000000000001": {
+              "id": "700000000000000001",
+              "username": "jordan",
+              "globalName": "Jordan",
+              "nickname": "Jord",
+              "avatar": "a000001",
+              "bot": false
+            },
+            "700000000000000002": {
+              "id": "700000000000000002",
+              "username": "ashley",
+              "globalName": "Ashley",
+              "nickname": null,
+              "avatar": "a000002",
+              "bot": false
+            },
+            "700000000000000003": {
+              "id": "700000000000000003",
+              "username": "scour",
+              "globalName": null,
+              "nickname": null,
+              "avatar": "a000003",
+              "bot": true
+            }
+          },
+          "guilds": {
+            "811000000000000001": "Runite Mining Co"
+          }
+        },
+        "authorIds": [
+          "700000000000000001",
+          "700000000000000002",
+          "700000000000000003",
+          "700000000000000004"
+        ],
+        "conversations": {
+          "811000000000000100": {
+            "conversation": {
+              "cid": "811000000000000100",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "general",
+              "parentName": null,
+              "count": 20,
+              "bytes": 12547,
+              "oldestId": "1529483152588800001",
+              "newestId": "1529510080020480027",
+              "complete": false,
+              "searchCriteria": null,
+              "refineCriteria": {"searchBeforeDate":null,"searchAfterDate":{"$type":"Date","value":"2026-06-22T12:00:00.000Z"},"searchMessageContents":[],"selectedHasTypes":["image","forward"],"userIds":[],"mentionIds":[],"channelIds":[],"isPinned":"null","systemMessageGroups":["members"],"systemMessageMode":"hide"},
+              "order": {"order":"asc","orderBy":"timestamp"},
+              "pagination": {"mode":"all","lastMessageId":"1529483152588800001","hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": "1529484410880000006",
+              "threadTabs": ["1529468053094400007"],
+              "activeTab": "1529468053094400007",
+              "action": {"kind":"loadAll","settings":{"startedAt":1792497600000,"loaded":20}},
+              "enrichment": {"reactions":"done","replies":"running","names":"off"}
+            },
+            "count": 20,
+            "messages": [
+              {"id":"1529483152588800001","content":"Selling 400 runite ore, see https://example.com/ore","attachments":[],"reactions":[],"hash":"f700997b36fe3132"},
+              {"id":"1529483404247040002","content":"Screenshot of the trade","attachments":["trade.png"],"reactions":[["👍",3],["runite",1]],"hash":"f7eddb98d3e4552a"},
+              {"id":"1529483655905280003","content":"Sounds good","attachments":[],"reactions":[],"hash":"8a61ecc0d168e4a4"},
+              {"id":"1529483907563520004","content":"","attachments":["kill.mp4","voice note.ogg","drops.csv"],"reactions":[],"hash":"9c76dda392d078a7"},
+              {"id":"1529484159221760005","content":"","attachments":[],"reactions":[],"hash":"a6b8fbcd75672317"},
+              {"id":"1529484410880000006","content":"","attachments":[],"reactions":[],"hash":"d3dde6effb0cc907"},
+              {"id":"1529484662538240007","content":"","attachments":[],"reactions":[],"hash":"887c689ce9b90d69"},
+              {"id":"1529484914196480008","content":"","attachments":[],"reactions":[],"hash":"2f894f26193afacd"},
+              {"id":"1529485165854720009","content":"Edited once","attachments":[],"reactions":[],"hash":"9367ce60aeb8ea11"},
+              {"id":"1529485417512960010","content":"Deploy finished","attachments":[],"reactions":[],"hash":"a44e652423163be6"},
+              {"id":"1529485669171200011","content":"","attachments":[],"reactions":[],"hash":"91da5ae63cc7aa74"},
+              {"id":"1529485920829440012","content":"Größe: 5 ✔ 日本語 \"quoted\" \\ back\nsecond line","attachments":[],"reactions":[],"hash":"2dddf46b87de0339"},
+              {"id":"1529508318412800020","content":"Message 20 in 100","attachments":[],"reactions":[],"hash":"6cb334bfec2d8a7e"},
+              {"id":"1529508570071040021","content":"Message 21 in 100","attachments":[],"reactions":[],"hash":"5bf841e0b2cfdf67"},
+              {"id":"1529508821729280022","content":"Message 22 in 100","attachments":[],"reactions":[],"hash":"86452f2fd611ad18"},
+              {"id":"1529509073387520023","content":"Message 23 in 100","attachments":[],"reactions":[],"hash":"4387d0677960f009"},
+              {"id":"1529509325045760024","content":"Message 24 in 100","attachments":[],"reactions":[],"hash":"26fbbf2e3772e259"},
+              {"id":"1529509576704000025","content":"Message 25 in 100","attachments":[],"reactions":[],"hash":"a66bcfc2cb204627"},
+              {"id":"1529509828362240026","content":"Message 26 in 100","attachments":[],"reactions":[],"hash":"7ef30499db748498"},
+              {"id":"1529510080020480027","content":"Message 27 in 100","attachments":[],"reactions":[],"hash":"381ee91bb515ca51"}
+            ],
+            "rowIds": [
+              "1529483152588800001",
+              "1529483404247040002",
+              "1529483655905280003",
+              "1529483907563520004",
+              "1529484159221760005",
+              "1529484410880000006",
+              "1529484662538240007",
+              "1529484914196480008",
+              "1529485165854720009",
+              "1529485417512960010",
+              "1529485669171200011",
+              "1529485920829440012",
+              "1529508318412800020",
+              "1529508570071040021",
+              "1529508821729280022",
+              "1529509073387520023",
+              "1529509325045760024",
+              "1529509576704000025",
+              "1529509828362240026",
+              "1529510080020480027"
+            ],
+            "refinedIds": [
+              "1529483404247040002",
+              "1529484410880000006"
+            ],
+            "selection": [
+              "1529483404247040002",
+              "1529483907563520004",
+              "1529508570071040021",
+              "1529510080020480027"
+            ],
+            "reactionDetail": null
+          },
+          "1529468053094400007": {
+            "conversation": {
+              "cid": "1529468053094400007",
+              "kind": "thread",
+              "guildId": "811000000000000001",
+              "name": "ore prices",
+              "parentName": "general",
+              "count": 4,
+              "bytes": 1796,
+              "oldestId": "1529533484236800040",
+              "newestId": "1529534239211520043",
+              "complete": false,
+              "searchCriteria": null,
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"paginated","lastMessageId":null,"hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            },
+            "count": 4,
+            "messages": [
+              {"id":"1529533484236800040","content":"Message 40 in 007","attachments":[],"reactions":[],"hash":"e8c1c4896c74a98d"},
+              {"id":"1529533735895040041","content":"Message 41 in 007","attachments":[],"reactions":[],"hash":"6a2999699624256c"},
+              {"id":"1529533987553280042","content":"Message 42 in 007","attachments":[],"reactions":[],"hash":"8b3a215c24973729"},
+              {"id":"1529534239211520043","content":"Message 43 in 007","attachments":[],"reactions":[],"hash":"8360568b7f1fbf0e"}
+            ],
+            "rowIds": [
+              "1529533484236800040",
+              "1529533735895040041",
+              "1529533987553280042",
+              "1529534239211520043"
+            ],
+            "refinedIds": null,
+            "selection": null,
+            "reactionDetail": null
+          },
+          "search:811000000000000100": {
+            "conversation": {
+              "cid": "search:811000000000000100",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "general",
+              "parentName": null,
+              "count": 5,
+              "bytes": 3240,
+              "oldestId": "1529483152588800001",
+              "newestId": "1529509828362240026",
+              "complete": false,
+              "searchCriteria": {"searchBeforeDate":{"$type":"Date","value":"2026-10-20T12:00:00.000Z"},"searchAfterDate":null,"searchMessageContents":["runite"],"selectedHasTypes":[],"userIds":["700000000000000001"],"mentionIds":[],"channelIds":[],"isPinned":"null","authorType":null,"attachmentExtensions":["png"]},
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"search","lastMessageId":null,"hasMore":true,"totalCount":31,"searchOffset":25,"searchBeforeDate":"2026-07-22T13:40:00.000000+00:00"},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            },
+            "count": 5,
+            "messages": [
+              {"id":"1529483152588800001","content":"Selling 400 runite ore, see https://example.com/ore","attachments":[],"reactions":[],"hash":"f700997b36fe3132"},
+              {"id":"1529483404247040002","content":"Screenshot of the trade","attachments":["trade.png"],"reactions":[["👍",3],["runite",1]],"hash":"f7eddb98d3e4552a"},
+              {"id":"1529484410880000006","content":"","attachments":[],"reactions":[],"hash":"d3dde6effb0cc907"},
+              {"id":"1529508821729280022","content":"Message 22 in 100","attachments":[],"reactions":[],"hash":"86452f2fd611ad18"},
+              {"id":"1529509828362240026","content":"Message 26 in 100","attachments":[],"reactions":[],"hash":"7ef30499db748498"}
+            ],
+            "rowIds": [
+              "1529483152588800001",
+              "1529483404247040002",
+              "1529484410880000006",
+              "1529508821729280022",
+              "1529509828362240026"
+            ],
+            "refinedIds": null,
+            "selection": null,
+            "reactionDetail": null
+          },
+          "822000000000000001": {
+            "conversation": {
+              "cid": "822000000000000001",
+              "kind": "dm",
+              "guildId": null,
+              "name": "ashley",
+              "parentName": null,
+              "count": 8,
+              "bytes": 6144,
+              "oldestId": "1529558650060800001",
+              "newestId": "1529584570859520063",
+              "complete": true,
+              "searchCriteria": null,
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"all","lastMessageId":"1529558650060800001","hasMore":false,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"done","replies":"done","names":"done"}
+            },
+            "count": 8,
+            "messages": [
+              {"id":"1529558650060800001","content":"Selling 400 runite ore, see https://example.com/ore","attachments":[],"reactions":[],"hash":"fcbba6a5b4b71af0"},
+              {"id":"1529558901719040002","content":"Screenshot of the trade","attachments":["trade.png"],"reactions":[["👍",3],["runite",1]],"hash":"0f8b70d27092761e"},
+              {"id":"1529559153377280003","content":"Sounds good","attachments":[],"reactions":[],"hash":"6b04fdf12efa3578"},
+              {"id":"1529559405035520004","content":"","attachments":["kill.mp4","voice note.ogg","drops.csv"],"reactions":[],"hash":"0868b17925c91aaa"},
+              {"id":"1529583815884800060","content":"Message 60 in 001","attachments":[],"reactions":[],"hash":"2436390cf5ae83e4"},
+              {"id":"1529584067543040061","content":"Message 61 in 001","attachments":[],"reactions":[],"hash":"f1dc5538a76b787c"},
+              {"id":"1529584319201280062","content":"Message 62 in 001","attachments":[],"reactions":[],"hash":"4e4e49c2f95192e3"},
+              {"id":"1529584570859520063","content":"Message 63 in 001","attachments":[],"reactions":[],"hash":"a46b0e5a74350e8f"}
+            ],
+            "rowIds": [
+              "1529558650060800001",
+              "1529558901719040002",
+              "1529559153377280003",
+              "1529559405035520004",
+              "1529583815884800060",
+              "1529584067543040061",
+              "1529584319201280062",
+              "1529584570859520063"
+            ],
+            "refinedIds": null,
+            "selection": [
+              "1529559153377280003",
+              "1529584067543040061",
+              "1529584570859520063"
+            ],
+            "reactionDetail": null
+          }
+        }
+      },
+      {
+        "wid": "00000000-0000-4000-8000-000000000002",
+        "name": "Raid: Größe #2",
+        "openable": true,
+        "record": {
+          "wid": "00000000-0000-4000-8000-000000000002",
+          "name": "Raid: Größe #2",
+          "color": "#3ba55d",
+          "schema": 1,
+          "appVersion": "2.2.5",
+          "createdAt": 1792497960000,
+          "lastOpened": 1792498020000,
+          "bytes": 7356,
+          "scope": {
+            "tab": "channels",
+            "guildId": "811000000000000001",
+            "channelId": "811000000000000200",
+            "dmId": null
+          },
+          "conversations": {
+            "811000000000000200": {
+              "cid": "811000000000000200",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "raids",
+              "parentName": null,
+              "count": 7,
+              "bytes": 6012,
+              "oldestId": "1529608981708800001",
+              "newestId": "1529634399191040081",
+              "complete": false,
+              "searchCriteria": {"searchBeforeDate":null,"searchAfterDate":null,"searchMessageContents":["trade"],"selectedHasTypes":[],"userIds":[],"mentionIds":[],"channelIds":[],"isPinned":"null"},
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"paginated","lastMessageId":null,"hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": "1529609485025280003",
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            },
+            "run:811000000000000300": {
+              "cid": "run:811000000000000300",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "bank",
+              "parentName": null,
+              "count": 3,
+              "bytes": 1344,
+              "oldestId": "1529659313356800090",
+              "newestId": "1529659816673280092",
+              "complete": false,
+              "searchCriteria": null,
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"paginated","lastMessageId":null,"hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            }
+          },
+          "bulk": {
+            "kind": "bulkExport",
+            "mode": "channels",
+            "guildId": "811000000000000001",
+            "settings": {
+              "snapshot": {"format":"html","messagesPerPage":500,"separateThreads":true},
+              "searchCriteria": null
+            },
+            "queue": [
+              "811000000000000200",
+              "811000000000000300",
+              "811000000000000100"
+            ],
+            "done": [
+              "811000000000000200"
+            ],
+            "inHand": "811000000000000300",
+            "total": 3,
+            "doneCount": 1
+          },
+          "authors": {
+            "700000000000000001": {
+              "id": "700000000000000001",
+              "username": "jordan",
+              "globalName": "Jordan",
+              "nickname": "Jord",
+              "avatar": "a000001",
+              "bot": false
+            },
+            "700000000000000002": {
+              "id": "700000000000000002",
+              "username": "ashley",
+              "globalName": "Ashley",
+              "nickname": null,
+              "avatar": "a000002",
+              "bot": false
+            }
+          },
+          "guilds": {
+            "811000000000000001": "Runite Mining Co"
+          }
+        },
+        "authorIds": [
+          "700000000000000001",
+          "700000000000000002",
+          "700000000000000003"
+        ],
+        "conversations": {
+          "811000000000000200": {
+            "conversation": {
+              "cid": "811000000000000200",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "raids",
+              "parentName": null,
+              "count": 7,
+              "bytes": 6012,
+              "oldestId": "1529608981708800001",
+              "newestId": "1529634399191040081",
+              "complete": false,
+              "searchCriteria": {"searchBeforeDate":null,"searchAfterDate":null,"searchMessageContents":["trade"],"selectedHasTypes":[],"userIds":[],"mentionIds":[],"channelIds":[],"isPinned":"null"},
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"paginated","lastMessageId":null,"hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": "1529609485025280003",
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            },
+            "count": 7,
+            "messages": [
+              {"id":"1529608981708800001","content":"Selling 400 runite ore, see https://example.com/ore","attachments":[],"reactions":[],"hash":"5e284736c878c600"},
+              {"id":"1529609233367040002","content":"Screenshot of the trade","attachments":["trade.png"],"reactions":[["👍",3],["runite",1]],"hash":"8a33572e51e83979"},
+              {"id":"1529609485025280003","content":"Sounds good","attachments":[],"reactions":[],"hash":"12fb89bff033baf1"},
+              {"id":"1529609736683520004","content":"","attachments":["kill.mp4","voice note.ogg","drops.csv"],"reactions":[],"hash":"a6641f4b17c56c1a"},
+              {"id":"1529609988341760005","content":"","attachments":[],"reactions":[],"hash":"4e24d3a0ec809192"},
+              {"id":"1529634147532800080","content":"Message 80 in 200","attachments":[],"reactions":[],"hash":"80a4720acdf759e6"},
+              {"id":"1529634399191040081","content":"Message 81 in 200","attachments":[],"reactions":[],"hash":"5378d08a475fe67b"}
+            ],
+            "rowIds": [
+              "1529608981708800001",
+              "1529609233367040002",
+              "1529609485025280003",
+              "1529609736683520004",
+              "1529609988341760005",
+              "1529634147532800080",
+              "1529634399191040081"
+            ],
+            "refinedIds": null,
+            "selection": null,
+            "reactionDetail": null
+          },
+          "run:811000000000000300": {
+            "conversation": {
+              "cid": "run:811000000000000300",
+              "kind": "channel",
+              "guildId": "811000000000000001",
+              "name": "bank",
+              "parentName": null,
+              "count": 3,
+              "bytes": 1344,
+              "oldestId": "1529659313356800090",
+              "newestId": "1529659816673280092",
+              "complete": false,
+              "searchCriteria": null,
+              "refineCriteria": null,
+              "order": {"order":"desc","orderBy":"timestamp"},
+              "pagination": {"mode":"paginated","lastMessageId":null,"hasMore":true,"totalCount":null,"searchOffset":0,"searchBeforeDate":null},
+              "scrollAnchorId": null,
+              "threadTabs": [],
+              "activeTab": null,
+              "action": null,
+              "enrichment": {"reactions":"off","replies":"off","names":"off"}
+            },
+            "count": 3,
+            "messages": [
+              {"id":"1529659313356800090","content":"Message 90 in 300","attachments":[],"reactions":[],"hash":"e00cdecabda952f1"},
+              {"id":"1529659565015040091","content":"Message 91 in 300","attachments":[],"reactions":[],"hash":"cfc70eeb60682104"},
+              {"id":"1529659816673280092","content":"Message 92 in 300","attachments":[],"reactions":[],"hash":"f0ce65cb148757c8"}
+            ],
+            "rowIds": [
+              "1529659313356800090",
+              "1529659565015040091",
+              "1529659816673280092"
+            ],
+            "refinedIds": null,
+            "selection": null,
+            "reactionDetail": {
+              "1529659313356800090": {"👍":[{"id":"700000000000000002","burst":false}],"runite:833000000000000001":[{"id":"700000000000000001","burst":true}]}
+            }
+          }
+        }
+      }
+    ]
+  },
+  "workspaceFile": {
+    "downloadName": "Raid_Groesse_2.discrub-workspace",
+    "manifest": {
+      "format": "discrub-workspace",
+      "schema": 1,
+      "appVersion": "2.2.5",
+      "wid": "00000000-0000-4000-8000-000000000002",
+      "name": "Raid: Größe #2",
+      "color": "#3ba55d",
+      "createdAt": 1792497960000,
+      "exportedAt": 1792498080000,
+      "conversations": 1,
+      "messages": 7,
+      "bytes": 7356
+    },
+    "record": {
+      "wid": "00000000-0000-4000-8000-000000000002",
+      "name": "Raid: Größe #2",
+      "color": "#3ba55d",
+      "schema": 1,
+      "appVersion": "2.2.5",
+      "createdAt": 1792497960000,
+      "lastOpened": 1792498020000,
+      "bytes": 7356,
+      "scope": {
+        "tab": "channels",
+        "guildId": "811000000000000001",
+        "channelId": "811000000000000200",
+        "dmId": null
+      },
+      "conversations": {
+        "811000000000000200": {
+          "cid": "811000000000000200",
+          "kind": "channel",
+          "guildId": "811000000000000001",
+          "name": "raids",
+          "parentName": null,
+          "count": 7,
+          "bytes": 6012,
+          "oldestId": "1529608981708800001",
+          "newestId": "1529634399191040081",
+          "complete": false,
+          "searchCriteria": {
+            "searchBeforeDate": null,
+            "searchAfterDate": null,
+            "searchMessageContents": [
+              "trade"
+            ],
+            "selectedHasTypes": [],
+            "userIds": [],
+            "mentionIds": [],
+            "channelIds": [],
+            "isPinned": "null"
+          },
+          "refineCriteria": null,
+          "order": {
+            "order": "desc",
+            "orderBy": "timestamp"
+          },
+          "pagination": {
+            "mode": "paginated",
+            "lastMessageId": null,
+            "hasMore": true,
+            "totalCount": null,
+            "searchOffset": 0,
+            "searchBeforeDate": null
+          },
+          "scrollAnchorId": "1529609485025280003",
+          "threadTabs": [],
+          "activeTab": null,
+          "action": null,
+          "enrichment": {
+            "reactions": "off",
+            "replies": "off",
+            "names": "off"
+          }
+        },
+        "run:811000000000000300": {
+          "cid": "run:811000000000000300",
+          "kind": "channel",
+          "guildId": "811000000000000001",
+          "name": "bank",
+          "parentName": null,
+          "count": 3,
+          "bytes": 1344,
+          "oldestId": "1529659313356800090",
+          "newestId": "1529659816673280092",
+          "complete": false,
+          "searchCriteria": null,
+          "refineCriteria": null,
+          "order": {
+            "order": "desc",
+            "orderBy": "timestamp"
+          },
+          "pagination": {
+            "mode": "paginated",
+            "lastMessageId": null,
+            "hasMore": true,
+            "totalCount": null,
+            "searchOffset": 0,
+            "searchBeforeDate": null
+          },
+          "scrollAnchorId": null,
+          "threadTabs": [],
+          "activeTab": null,
+          "action": null,
+          "enrichment": {
+            "reactions": "off",
+            "replies": "off",
+            "names": "off"
+          }
+        }
+      },
+      "bulk": {
+        "kind": "bulkExport",
+        "mode": "channels",
+        "guildId": "811000000000000001",
+        "settings": {
+          "snapshot": {
+            "format": "html",
+            "messagesPerPage": 500,
+            "separateThreads": true
+          },
+          "searchCriteria": null
+        },
+        "queue": [
+          "811000000000000200",
+          "811000000000000300",
+          "811000000000000100"
+        ],
+        "done": [
+          "811000000000000200"
+        ],
+        "inHand": "811000000000000300",
+        "total": 3,
+        "doneCount": 1
+      },
+      "authors": {
+        "700000000000000001": {
+          "id": "700000000000000001",
+          "username": "jordan",
+          "globalName": "Jordan",
+          "nickname": "Jord",
+          "avatar": "a000001",
+          "bot": false
+        },
+        "700000000000000002": {
+          "id": "700000000000000002",
+          "username": "ashley",
+          "globalName": "Ashley",
+          "nickname": null,
+          "avatar": "a000002",
+          "bot": false
+        }
+      },
+      "guilds": {
+        "811000000000000001": "Runite Mining Co"
+      }
+    },
+    "conversations": {
+      "811000000000000200": [
+        {
+          "id": "1529608981708800001",
+          "content": "Selling 400 runite ore, see https://example.com/ore",
+          "hash": "5e284736c878c600"
+        },
+        {
+          "id": "1529609233367040002",
+          "content": "Screenshot of the trade",
+          "hash": "8a33572e51e83979"
+        },
+        {
+          "id": "1529609485025280003",
+          "content": "Sounds good",
+          "hash": "12fb89bff033baf1"
+        },
+        {
+          "id": "1529609736683520004",
+          "content": "",
+          "hash": "a6641f4b17c56c1a"
+        },
+        {
+          "id": "1529609988341760005",
+          "content": "",
+          "hash": "4e24d3a0ec809192"
+        },
+        {
+          "id": "1529634147532800080",
+          "content": "Message 80 in 200",
+          "hash": "80a4720acdf759e6"
+        },
+        {
+          "id": "1529634399191040081",
+          "content": "Message 81 in 200",
+          "hash": "5378d08a475fe67b"
+        }
+      ]
+    }
+  },
+  "keyval": {
+    "written": {
+      "searchDelay2": "3",
+      "deleteDelay2": "4",
+      "delayModifier2": "0.5",
+      "reactionsEnabled": "true",
+      "repliesEnabled": "true",
+      "serverNickNameLookup": "true",
+      "displayNameLookup": "true",
+      "appUserDataRefreshRate": "daily",
+      "exportSeparateThreadAndForumPosts": "true",
+      "exportUseArtistMode": "false",
+      "exportMessageSortOrder": "desc",
+      "exportPreviewMedia_2": "true",
+      "exportDownloadMedia_2": "false",
+      "exportMessagesPerPage": "250",
+      "dateFormat": "MM/dd/yyyy",
+      "timeFormat": "h:mm aa",
+      "appShowKoFiFeed": "true",
+      "appThemeMode": "dark",
+      "appThemeAnimations": "true",
+      "appDmSortOrder": "recent",
+      "appLanguage": "de",
+      "restBreaks": "false",
+      "retryWait": "1",
+      "appLayout": "native",
+      "appScrublingsEnabled": "true",
+      "appScrublingsPicked": "[\"suds\",\"mage\"]",
+      "appScrublingsPositions": "{}",
+      "appScrublingsAvatar": "{}",
+      "appScrublingsUnlocks": "[]",
+      "appScrublingsCounters": "{}",
+      "purgeRetainAttachedMedia": "true",
+      "purgeDeleteAttachmentsOnly": "false",
+      "purgeReactionRemovalFrom": "all",
+      "purgeMode": "messages",
+      "exportMediaImages": "true",
+      "exportMediaVideos": "true",
+      "exportMediaAudio": "true",
+      "exportMediaOther": "true",
+      "exportFormat": "json",
+      "exportPresets": "[]",
+      "exportRecentHistory": "[]",
+      "exportTemplate": "discord",
+      "browserEnv": "web",
+      "cachedUserMap": "{}",
+      "cachedAnnouncementRev": "24",
+      "appTourShellCompleted": "false",
+      "appTourContextualCompleted": "false"
+    },
+    "settings": {
+      "searchDelay2": "3",
+      "deleteDelay2": "4",
+      "delayModifier2": "0.5",
+      "reactionsEnabled": "true",
+      "repliesEnabled": "true",
+      "serverNickNameLookup": "true",
+      "displayNameLookup": "true",
+      "appUserDataRefreshRate": "daily",
+      "exportSeparateThreadAndForumPosts": "true",
+      "exportUseArtistMode": "false",
+      "exportMessageSortOrder": "desc",
+      "exportPreviewMedia_2": "true",
+      "exportDownloadMedia_2": "false",
+      "exportMessagesPerPage": "250",
+      "dateFormat": "MM/dd/yyyy",
+      "timeFormat": "h:mm aa",
+      "appShowKoFiFeed": "true",
+      "appThemeMode": "dark",
+      "appThemeAnimations": "true",
+      "appDmSortOrder": "recent",
+      "appLanguage": "de",
+      "restBreaks": "false",
+      "retryWait": "1",
+      "appLayout": "native",
+      "appScrublingsEnabled": "true",
+      "appScrublingsPicked": "[\"suds\",\"mage\"]",
+      "appScrublingsPositions": "{}",
+      "appScrublingsAvatar": "{}",
+      "appScrublingsUnlocks": "[]",
+      "appScrublingsCounters": "{}",
+      "purgeRetainAttachedMedia": "true",
+      "purgeDeleteAttachmentsOnly": "false",
+      "purgeReactionRemovalFrom": "all",
+      "purgeMode": "messages",
+      "exportMediaImages": "true",
+      "exportMediaVideos": "true",
+      "exportMediaAudio": "true",
+      "exportMediaOther": "true",
+      "exportFormat": "json",
+      "exportPresets": "[]",
+      "exportRecentHistory": "[]",
+      "exportTemplate": "discord",
+      "browserEnv": "web",
+      "cachedUserMap": "{}",
+      "cachedAnnouncementRev": "24",
+      "appTourShellCompleted": "false",
+      "appTourContextualCompleted": "false"
+    },
+    "presets": {
+      "preset-text": {
+        "id": "preset-text",
+        "name": "Plain text, März",
+        "isBuiltIn": false,
+        "format": "text",
+        "messagesPerPage": 250,
+        "separateThreads": true,
+        "includeMedia": false,
+        "mediaConfig": {
+          "images": true,
+          "videos": false,
+          "audio": true,
+          "other": false
+        },
+        "artistMode": false,
+        "sortOrder": "ascending",
+        "previewMedia": true,
+        "maxZipPartBytes": null,
+        "dateRange": {
+          "after": "2026-01-01T00:00:00.000Z",
+          "before": null
+        }
+      },
+      "preset-weekly": {
+        "id": "preset-weekly",
+        "name": "Weekly backup",
+        "isBuiltIn": false,
+        "format": "html",
+        "messagesPerPage": 250,
+        "separateThreads": true,
+        "includeMedia": true,
+        "mediaConfig": {
+          "images": true,
+          "videos": false,
+          "audio": true,
+          "other": false
+        },
+        "artistMode": false,
+        "sortOrder": "ascending",
+        "previewMedia": true,
+        "category": "Backup"
+      }
+    }
+  }
+}

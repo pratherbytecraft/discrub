@@ -1,0 +1,76 @@
+[
+{
+  "name": "Discrub-settings",
+  "version": 1,
+  "stores": [
+    {"name":"keyval","keyPath":null,"autoIncrement":false,"indexes":[],"records":[
+      {"key":"appDmSortOrder","value":"recent"},
+      {"key":"appLanguage","value":"de"},
+      {"key":"appLayout","value":"native"},
+      {"key":"appScrublingsAvatar","value":"{}"},
+      {"key":"appScrublingsCounters","value":"{}"},
+      {"key":"appScrublingsEnabled","value":"true"},
+      {"key":"appScrublingsPicked","value":"[\"suds\",\"mage\"]"},
+      {"key":"appScrublingsPositions","value":"{}"},
+      {"key":"appScrublingsUnlocks","value":"[]"},
+      {"key":"appShowKoFiFeed","value":"true"},
+      {"key":"appThemeAnimations","value":"true"},
+      {"key":"appThemeMode","value":"dark"},
+      {"key":"appUserDataRefreshRate","value":"daily"},
+      {"key":"browserEnv","value":"web"},
+      {"key":"cachedUserMap","value":"{}"},
+      {"key":"dateFormat","value":"MM/dd/yyyy"},
+      {"key":"delayModifier2","value":"0.5"},
+      {"key":"deleteDelay2","value":"4"},
+      {"key":"displayNameLookup","value":"true"},
+      {"key":"exportDownloadMedia_2","value":"false"},
+      {"key":"exportFormat","value":"json"},
+      {"key":"exportMediaAudio","value":"true"},
+      {"key":"exportMediaImages","value":"true"},
+      {"key":"exportMediaOther","value":"true"},
+      {"key":"exportMediaVideos","value":"true"},
+      {"key":"exportMessageSortOrder","value":"desc"},
+      {"key":"exportMessagesPerPage","value":"250"},
+      {"key":"exportPresets","value":"[]"},
+      {"key":"exportPreviewMedia_2","value":"true"},
+      {"key":"exportRecentHistory","value":"[]"},
+      {"key":"exportSeparateThreadAndForumPosts","value":"true"},
+      {"key":"exportTemplate","value":"discord"},
+      {"key":"exportUseArtistMode","value":"false"},
+      {"key":"purgeDeleteAttachmentsOnly","value":"false"},
+      {"key":"purgeMode","value":"messages"},
+      {"key":"purgeReactionRemovalFrom","value":"all"},
+      {"key":"purgeRetainAttachedMedia","value":"true"},
+      {"key":"reactionsEnabled","value":"true"},
+      {"key":"repliesEnabled","value":"true"},
+      {"key":"restBreaks","value":"false"},
+      {"key":"retryWait","value":"1"},
+      {"key":"searchDelay2","value":"3"},
+      {"key":"serverNickNameLookup","value":"true"},
+      {"key":"timeFormat","value":"h:mm aa"}
+    ]}
+  ]
+},
+{
+  "name": "Discrub-state",
+  "version": 1,
+  "stores": [
+    {"name":"keyval","keyPath":null,"autoIncrement":false,"indexes":[],"records":[
+      {"key":"__migrated_to_per_key_storage__","value":true},
+      {"key":"appTourContextualCompleted","value":"false"},
+      {"key":"appTourShellCompleted","value":"false"},
+      {"key":"cachedAnnouncementRev","value":"24"}
+    ]}
+  ]
+},
+{
+  "name": "Discrub-presets",
+  "version": 1,
+  "stores": [
+    {"name":"keyval","keyPath":null,"autoIncrement":false,"indexes":[],"records":[
+      {"key":"preset-text","value":{"id":"preset-text","name":"Plain text, März","isBuiltIn":false,"format":"text","messagesPerPage":250,"separateThreads":true,"includeMedia":false,"mediaConfig":{"images":true,"videos":false,"audio":true,"other":false},"artistMode":false,"sortOrder":"ascending","previewMedia":true,"maxZipPartBytes":null,"dateRange":{"after":"2026-01-01T00:00:00.000Z","before":null}}},
+      {"key":"preset-weekly","value":{"id":"preset-weekly","name":"Weekly backup","isBuiltIn":false,"format":"html","messagesPerPage":250,"separateThreads":true,"includeMedia":true,"mediaConfig":{"images":true,"videos":false,"audio":true,"other":false},"artistMode":false,"sortOrder":"ascending","previewMedia":true,"category":"Backup"}}
+    ]}
+  ]
+}
+]
