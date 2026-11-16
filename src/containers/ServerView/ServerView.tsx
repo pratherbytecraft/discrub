@@ -376,11 +376,14 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   useEffect(() => {
     const lastMessageId = pagination.lastMessageId;
     if (!needsNextPage || pagination.isLoadingMore || !token || !lastMessageId || !currentContext) return;
+    // 2.2.10: a Purge that empties the open feed makes its own calls. The
+    // next page waits until the job is over, so the two do not run side by side.
+    if (isOperationRunning) return;
     if (emptiedCursorRef.current === lastMessageId) return;
     emptiedCursorRef.current = lastMessageId;
     if (activeTab) dispatch(fetchMoreThreadMessages({ threadId: activeTab, token, lastMessageId }));
     else dispatch(fetchMoreMessages({ channelId: currentContext.id, token, lastMessageId }));
-  }, [needsNextPage, pagination.isLoadingMore, pagination.lastMessageId, token, currentContext, activeTab, dispatch]);
+  }, [needsNextPage, pagination.isLoadingMore, pagination.lastMessageId, token, currentContext, activeTab, isOperationRunning, dispatch]);
   const contextLabel = isDm ? 'conversation' : 'channel';
   const scopeContext = isDm ? 'dm' : 'channel';
   const hasManageMessages = useMemo(() => {

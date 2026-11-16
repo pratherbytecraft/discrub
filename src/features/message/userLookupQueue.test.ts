@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createTestStore, type TestStore } from '@/test/test-utils';
-import messageReducer, { enrichMessageUsers, resetUserLookupQueue, stopUserLookups } from './messageSlice';
+import messageReducer, { enrichMessageUsers, LOOKUP_STAND_DOWN_POLL_MS, resetUserLookupQueue, stopUserLookups } from './messageSlice';
 import appReducer from '@features/app/appSlice';
 import cacheReducer from '@features/cache/cacheSlice';
 import { userEnrichmentService } from '@services/userEnrichmentService';
@@ -12,6 +12,13 @@ import type { ExportUserMap } from 'discrub-core/types/discrub-types';
 
 vi.mock('@services/userEnrichmentService', () => ({
   userEnrichmentService: { enrichUserIds: vi.fn() },
+}));
+
+// The long job check reads most of the store; here it is a switch.
+const longJob = { running: false };
+vi.mock('@features/app/operationSelectors', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@features/app/operationSelectors')>()),
+  selectIsHeavyOperationRunning: () => longJob.running,
 }));
 
 const enrich = vi.mocked(userEnrichmentService.enrichUserIds);
@@ -34,6 +41,7 @@ describe('user lookup queue (2.2.5 fix A)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    longJob.running = false;
     resetUserLookupQueue();
     const app = appReducer(undefined, { type: 'init' });
     store = createTestStore(
@@ -79,6 +87,51 @@ describe('user lookup queue (2.2.5 fix A)', () => {
     await vi.waitFor(() => expect(store.getState().message.isEnriching).toBe(false));
     expect(enrich).toHaveBeenCalledTimes(2);
     expect(Object.keys(store.getState().cache.userMap).sort()).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('stands down before each user while a long job runs, and carries on when it ends (2.2.10)', async () => {
+    vi.useFakeTimers();
+    try {
+      let stopAnswer: boolean | 'pending' = 'pending';
+      enrich.mockImplementation(async (ids, _guild, _token, _settings, _map, _progress, _status, _failed, shouldStop) => {
+        stopAnswer = await shouldStop!();
+        return { userMap: mapFor(ids) };
+      });
+      // A Load All is running on the open conversation.
+      longJob.running = true;
+
+      await lookup(['a']);
+      await vi.advanceTimersByTimeAsync(LOOKUP_STAND_DOWN_POLL_MS * 5);
+      expect(stopAnswer).toBe('pending');
+      expect(store.getState().cache.userMap).toEqual({});
+
+      longJob.running = false;
+      await vi.advanceTimersByTimeAsync(LOOKUP_STAND_DOWN_POLL_MS * 2);
+      expect(stopAnswer).toBe(false);
+      await vi.waitFor(() => expect(Object.keys(store.getState().cache.userMap)).toEqual(['a']));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a stood down lookup lets go when it is told to stop', async () => {
+    vi.useFakeTimers();
+    try {
+      let stopAnswer: boolean | 'pending' = 'pending';
+      enrich.mockImplementation(async (_ids, _guild, _token, _settings, _map, _progress, _status, _failed, shouldStop) => {
+        stopAnswer = await shouldStop!();
+        return { userMap: {} as ExportUserMap };
+      });
+      longJob.running = true;
+      await lookup(['a']);
+      await vi.advanceTimersByTimeAsync(LOOKUP_STAND_DOWN_POLL_MS);
+      const stopped = stopUserLookups();
+      await vi.advanceTimersByTimeAsync(LOOKUP_STAND_DOWN_POLL_MS * 2);
+      await stopped;
+      expect(stopAnswer).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('skips ids already asked for and ids that came back 404', async () => {

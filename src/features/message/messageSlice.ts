@@ -1,3 +1,4 @@
+import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { createAction, createSlice, createAsyncThunk, createSelector, isDraft, original, PayloadAction, type ThunkDispatch, type UnknownAction } from '@reduxjs/toolkit';
 import type { Message, Attachment, User, Channel, Guild } from 'discrub-core/types/discord-types';
 import type { RestoredConversation } from './messagePersistence';
@@ -2601,6 +2602,16 @@ export const setEnriching = createAction<boolean>('message/setEnriching');
  * that arrives while it runs is folded into its next round.
  */
 interface LookupJob { guildId: string | null; ids: Set<string> }
+/** A check that cannot answer must not hold the lookups forever, so it reads as no job. */
+const longJobRunning = (state: RootState): boolean => {
+  try {
+    return selectIsHeavyOperationRunning(state);
+  } catch {
+    return false;
+  }
+};
+/** How often a stood down lookup run looks whether the long job is over. */
+export const LOOKUP_STAND_DOWN_POLL_MS = 1000;
 const lookupQueue = {
   running: null as Promise<void> | null,
   stopped: false,
@@ -2651,7 +2662,15 @@ async function runLookupRound(
     undefined,
     undefined,
     state.cache.failedUserIds,
-    async () => lookupQueue.stopped,
+    // Checked before each user. While a long job runs the lookups stand
+    // down, so the job's own paced calls are the only ones going out, and
+    // they carry on when it ends (2.2.10).
+    async () => {
+      while (!lookupQueue.stopped && longJobRunning(getState())) {
+        await new Promise((resolve) => setTimeout(resolve, LOOKUP_STAND_DOWN_POLL_MS));
+      }
+      return lookupQueue.stopped;
+    },
   );
 
   if (result.failedUserIds && result.failedUserIds.length > 0) {

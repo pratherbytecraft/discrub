@@ -14,6 +14,10 @@ import { server as mswServer } from './msw/server';
 import { webcrypto } from 'node:crypto';
 import { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { applyLanguage } from '../i18n';
+import { setCallGate } from 'discrub-core/discord-service';
+
+// The gap discrub-core keeps between API calls is off for the unit tests.
+setCallGate({ minGapMs: 0 });
 
 // jsdom's crypto has getRandomValues but no SubtleCrypto; the supporter
 // key verification needs WebCrypto Ed25519, so borrow Node's.

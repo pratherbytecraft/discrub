@@ -8,6 +8,7 @@ import ThemeWrapper from './theme/ThemeWrapper';
 import ErrorBoundary from './components/ErrorBoundary';
 import { addStatusEntry, installUnloadFlushListener } from './features/status/statusSlice';
 import { setSleepImplementation } from 'discrub-core/common-utils';
+import { setCallGate } from 'discrub-core/discord-service';
 import { throttleImmuneSleep } from './utils/workerTimers';
 import { announcePageOpen } from './extension/updateHold';
 
@@ -29,10 +30,17 @@ announcePageOpen();
 // a running operation.
 setSleepImplementation(throttleImmuneSleep);
 
+// Every Discord API call waits its turn at one gate in discrub-core, 500 ms
+// apart plus a little random, whatever started it. The Cypress suite
+// answers every call itself and runs with the gate off; the one spec that
+// checks the spacing turns it back on through `__callGate__`.
+if ((window as any).Cypress) setCallGate({ minGapMs: 0 });
+
 // Expose Redux store on window for Cypress E2E testing, plus a work thunk
 // so the preview gate can be exercised by hand (appearance.cy.ts).
 if (import.meta.env.DEV) {
   (window as any).__store__ = store;
+  (window as any).__callGate__ = setCallGate;
   import('./features/guild/guildSlice').then((guild) => {
     (window as any).__thunks__ = { fetchGuilds: guild.fetchGuilds };
   });
