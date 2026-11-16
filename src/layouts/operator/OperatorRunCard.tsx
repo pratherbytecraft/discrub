@@ -31,7 +31,7 @@ const OperatorRunCard = () => {
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const loadAllAvailable = useLoadAllAvailable();
-  const { bulkExportLabel, purgeLabel, bulkExportResumable, purgeResumable } = useResumeLabels();
+  const { bulkExportLabel, purgeLabel, bulkExportResumable, purgeResumable, bulkExportResume, purgeResume } = useResumeLabels();
   const dispatch = useAppDispatch();
   // The counters move with every delete; drawing each one kept the card repainting for a whole purge.
   const liveSummary = useAppSelector(selectOperationSummary);
@@ -48,6 +48,12 @@ const OperatorRunCard = () => {
   const importing = useAppSelector(selectWorkspaceImporting);
   const dmMode = !guild;
   const queued = dmMode ? selectedDms.length : selectedChannels.length;
+  // Under a tile that reads Resume: how far that run got. A thread run that
+  // stopped before its list was complete has no counts to show yet.
+  const queueLine = (resume: { doneCount: number; total: number; thread?: { listed: boolean } } | null) =>
+    resume && resume.thread?.listed !== false
+      ? t('operator.resumeProgress', { done: resume.doneCount, total: resume.total })
+      : queued > 0 ? t('operator.queueCount', { count: queued }) : t('operator.queueNone');
   const openName = channel ? `#${channel.name}` : dm ? getDmName(dm) : '';
   const isForum = channel?.type === ChannelType.GUILD_FORUM || channel?.type === ChannelType.GUILD_MEDIA;
   const c = STATE_HEX[summary.stateColor] ?? STATE_HEX.neutral;
@@ -103,8 +109,8 @@ const OperatorRunCard = () => {
         <>
           <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap' }}>
             {tile(<LoadAllIcon fontSize="small" />, loadAllLabel, openName ? t('operator.loadAllIn', { name: openName }) : t('operator.loadAllNone'), () => open('loadAll'), { disabled: !openName || isForum || !loadAllAvailable, testId: 'op-load-all' })}
-            {tile(<ExportIcon fontSize="small" />, bulkExportLabel, queued > 0 ? t('operator.queueCount', { count: queued }) : t('operator.queueNone'), () => open('bulkExport'), { disabled: queued === 0 && !bulkExportResumable, testId: 'op-export' })}
-            {tile(<PurgeIcon fontSize="small" />, purgeLabel, queued > 0 ? t('operator.queueCount', { count: queued }) : t('operator.queueNone'), () => open('purge'), { disabled: queued === 0 && !purgeResumable, color: 'error', testId: 'op-purge' })}
+            {tile(<ExportIcon fontSize="small" />, bulkExportLabel, queueLine(bulkExportResume), () => open('bulkExport'), { disabled: queued === 0 && !bulkExportResumable, testId: 'op-export' })}
+            {tile(<PurgeIcon fontSize="small" />, purgeLabel, queueLine(purgeResume), () => open('purge'), { disabled: queued === 0 && !purgeResumable, color: 'error', testId: 'op-purge' })}
           </Box>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('operator.queueHint')}</Typography>
         </>

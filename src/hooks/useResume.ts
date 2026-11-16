@@ -56,6 +56,9 @@ export function useResumeLabels(listMode?: 'channels' | 'dms') {
     exportResumable: !running && exportResume !== null,
     purgeResumable: !running && purgeResume !== null,
     bulkExportResumable: !running && bulkExportResume !== null,
+    /** The runs behind the two Resume labels, for a place that also shows how far they got. */
+    bulkExportResume: running ? null : bulkExportResume,
+    purgeResume: running ? null : purgeResume,
     editResumable: !running && editResume !== null,
     exportLabel: !running && exportResume ? resume : t('serverView.export'),
     purgeLabel: !running && purgeResume ? resume : t('native.purge'),

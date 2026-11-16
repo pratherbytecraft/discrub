@@ -293,9 +293,10 @@ const ForumThreadList = ({
           />
         )}
         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, flexShrink: 0 }}>
-          {searchText || selectedTags.size > 0
-            ? `${filteredThreads.length} of ${totalResults || threads.length}`
-            : `${threads.length} of ${totalResults || threads.length}`} post{filteredThreads.length !== 1 ? 's' : ''}
+          {t('forum.shownOf', {
+            shown: searchText || selectedTags.size > 0 ? filteredThreads.length : threads.length,
+            count: totalResults || threads.length,
+          })}
         </Typography>
         <TextField
           size="small"

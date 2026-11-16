@@ -20,6 +20,13 @@ import { StatusLevel, initialStatusState } from './statusTypes';
 let nextId = 0;
 
 /**
+ * A key that is unique across sessions, for lists that render entries.
+ * `id` alone is not: the lines logged at boot, before the saved log is
+ * read, start again from 0 in every session.
+ */
+export const statusEntryKey = (entry: { id: string; timestamp: number }): string => `${entry.timestamp}-${entry.id}`;
+
+/**
  * One id per page-load. Stamped on every `addStatusEntry` so the panel
  * can group entries by session (#126). Tests can override via
  * `_setCurrentSessionIdForTesting`.

@@ -232,7 +232,7 @@ const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, package
                 ))}
               </Select>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                {t('export.maxZipHelp')}
+                {isSingleZip(exportState) ? t('export.zipSingleHelp') : t('export.maxZipHelp')}
               </Typography>
               {isSingleZip(exportState) && (
                 <Alert severity="warning" sx={{ mt: 1 }} data-testid="single-zip-warning">

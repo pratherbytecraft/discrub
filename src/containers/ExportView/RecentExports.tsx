@@ -87,7 +87,7 @@ const RecentExports = () => {
                 {entry.channelName}
                 {entry.isBulk && entry.channelCount && (
                   <Typography component="span" variant="caption" color="text.secondary">
-                    {t('export.channelsCount', { count: entry.channelCount })}
+                    {t('export.channelsCount', { count: entry.channelCount, context: entry.unit })}
                   </Typography>
                 )}
               </Typography>

@@ -10,7 +10,7 @@ import {
   UnfoldLess as CollapseIcon,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { selectStatusEntries, selectStatusCount, clearStatusLog, getCurrentSessionId } from '@features/status/statusSlice';
+import { selectStatusEntries, selectStatusCount, clearStatusLog, getCurrentSessionId, statusEntryKey } from '@features/status/statusSlice';
 import { groupEntriesBySession, LEGACY_SESSION_ID } from '@features/status/statusGrouping';
 import { storage } from '@/extension/storage';
 import { selectOperationSummary, type OperationSummary } from '@features/app/operationSelectors';
@@ -287,7 +287,7 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
     for (let i = sessionGroups.length - 1; i >= 0; i--) {
       const group = sessionGroups[i];
       if (isSessionExpanded(group.sessionId) && group.entries.length > 0) {
-        return group.entries[group.entries.length - 1].id;
+        return statusEntryKey(group.entries[group.entries.length - 1]);
       }
     }
     return null;
@@ -627,9 +627,9 @@ const StatusPanel = ({ sheetInset, sheetRightInset = 0, open, onOpenChange, hide
                       {expanded &&
                         group.entries.map((entry) => (
                           <EntryRow
-                            key={entry.id}
+                            key={statusEntryKey(entry)}
                             entry={entry}
-                            isLast={entry.id === lastVisibleEntryId}
+                            isLast={statusEntryKey(entry) === lastVisibleEntryId}
                           />
                         ))}
                     </Box>

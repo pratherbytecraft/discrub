@@ -1645,6 +1645,7 @@ export const bulkExportChannels = createAsyncThunk<
           currentIndex: i,
           totalChannels: expandedChannels.length,
           currentChannelName: channelName,
+          ...(unitContext ? { unit: unitContext } : {}),
         };
 
         dispatch(setExportProgress({
@@ -1810,9 +1811,10 @@ export const bulkExportChannels = createAsyncThunk<
       // #238: count expanded units (forum posts) so history matches the
       // progress UI and the zip contents.
       recordRecentExport(dispatch, getState, {
-        channelName: `${expandedChannels.length} channels`,
+        channelName: `${expandedChannels.length} ${postRun ? 'posts' : threadExport ? 'threads' : 'channels'}`,
         isBulk: true,
         channelCount: expandedChannels.length,
+        ...(unitContext ? { unit: unitContext } : {}),
         config: buildConfigSnapshot(getState()),
       });
 
@@ -1887,6 +1889,7 @@ export const bulkExportDMs = createAsyncThunk<
           currentIndex: i,
           totalChannels: channels.length,
           currentChannelName: dmName,
+          unit: 'dm' as const,
         };
 
         dispatch(setExportProgress({
@@ -2000,6 +2003,7 @@ export const bulkExportDMs = createAsyncThunk<
         channelName: `${channels.length} DMs`,
         isBulk: true,
         channelCount: channels.length,
+        unit: 'dm',
         config: buildConfigSnapshot(getState()),
       });
 

@@ -93,6 +93,23 @@ describe('operationSelectors', () => {
       });
     });
 
+    it.each([
+      ['thread', 'Thread 2/5: patch notes (downloading attachments)... 30%'],
+      ['post', 'Post 2/5: patch notes (downloading attachments)... 30%'],
+      ['dm', 'DM 2/5: patch notes (downloading attachments)... 30%'],
+    ] as const)('names the unit of a %s run in the bulk export label', (unit, label) => {
+      const progress: ExportProgress = {
+        stage: 'attachments',
+        current: 30,
+        total: 100,
+        bulk: { currentIndex: 1, totalChannels: 5, currentChannelName: 'patch notes', unit },
+      };
+      const state = createBaseState({
+        export: { ...createBaseState().export, isExporting: true, exportProgress: progress },
+      });
+      expect(selectOperationSummary(state).label).toBe(label);
+    });
+
     it('should return bulk export label without percentage when total is zero', () => {
       const progress: ExportProgress = {
         stage: 'avatars',

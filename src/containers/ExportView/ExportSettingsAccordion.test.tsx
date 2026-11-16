@@ -176,6 +176,9 @@ describe('ExportSettingsAccordion — text format (#184)', () => {
 
     expect(store.getState().export.maxZipPartBytes).toBe(-1);
     expect(screen.getByTestId('single-zip-warning')).toHaveTextContent('Zips past 4 GB need');
+    // The line under the menu describes the choice, not the split it turns off.
+    expect(screen.getByText('Saves the whole export as one zip file, whatever its size.')).toBeInTheDocument();
+    expect(screen.queryByText(/Splits very large exports/)).toBeNull();
 
     const picker = screen.getAllByRole('combobox').find((el) => el.textContent === 'Single zip (no limit)')!;
     fireEvent.mouseDown(picker);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { renderWithProviders, screen, fireEvent } from '@/test/test-utils';
+import { renderWithProviders, screen, fireEvent, within } from '@/test/test-utils';
 import { createAuthenticatedState } from '@/test/state-factories';
 import { createMockChannel, createMockGuild } from '@/test/fixtures';
 import OperatorShell from './OperatorShell';
@@ -38,6 +38,30 @@ describe('<OperatorShell />', () => {
     expect(screen.getByTestId('serverview')).toHaveAttribute('data-variant', 'operator');
     expect(screen.getByTestId('operator-recent')).toBeInTheDocument();
     expect(screen.queryByTestId('focus-pill')).toBeNull();
+  });
+
+
+  it('draws each status line once when two sessions logged a line under the same id', () => {
+    const state = withChannel();
+    const line = (id: string, timestamp: number, message: string) => ({ id, timestamp, level: 'info' as const, message, sessionId: `s-${timestamp}` });
+    // The lines logged at boot start from id 0 in every session.
+    (state as any).status = { ...(state as any).status, entries: [line('0', 1000, 'first session'), line('1', 1001, 'one'), line('0', 2000, 'second session'), line('1', 2001, 'two')] };
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(within(screen.getByTestId('operator-log')).getAllByText(/session$/)).toHaveLength(2);
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('same key'))).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('a tile that reads Resume says how far that run got', () => {
+    const state = withChannel();
+    const guildId = state.guild.selectedGuild!.id;
+    (state as any).workspace = { ...(state as any).workspace, bulk: { kind: 'bulkExport', mode: 'channels', guildId, total: 100, doneCount: 63, remaining: 37, thread: { parentId: 'c-1', parentName: 'general', kind: 'thread', listed: true } } };
+    renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(screen.getByTestId('op-export')).toBeEnabled();
+    expect(screen.getByTestId('op-export')).toHaveTextContent('Resume');
+    expect(screen.getByTestId('op-export')).toHaveTextContent('63 of 100 done');
+    expect(screen.getByTestId('op-purge')).toHaveTextContent('Nothing queued yet');
   });
 
   it('builds the queue from the ticks and the Export and Purge tiles follow it, Load All stays on the open channel', () => {

@@ -105,6 +105,18 @@ describe('RecentExports', () => {
     expect(screen.getByText('(3 channels)')).toBeInTheDocument();
   });
 
+  it('a thread, post or DM run names what it counted', () => {
+    renderRecent([
+      createRecentEntry({ id: 'a', isBulk: true, channelCount: 100, unit: 'thread' }),
+      createRecentEntry({ id: 'b', isBulk: true, channelCount: 30, unit: 'post' }),
+      createRecentEntry({ id: 'c', isBulk: true, channelCount: 4, unit: 'dm' }),
+    ]);
+    fireEvent.click(screen.getByText('Recent exports (3)'));
+    expect(screen.getByText('(100 threads)')).toBeInTheDocument();
+    expect(screen.getByText('(30 posts)')).toBeInTheDocument();
+    expect(screen.getByText('(4 DMs)')).toBeInTheDocument();
+  });
+
   it('limits to 5 entries', () => {
     const entries = Array.from({ length: 7 }, (_, i) =>
       createRecentEntry({ id: `r-${i}`, channelName: `channel-${i}` })

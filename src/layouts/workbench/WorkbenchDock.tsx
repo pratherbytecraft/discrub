@@ -61,7 +61,7 @@ const WorkbenchDock = ({ onOpenLog }: { onOpenLog: () => void }) => {
               {runs.slice(0, 8).map((r) => (
                 <Box key={r.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', fontSize: '0.8rem' }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 'inherit' }}>{t('serverView.export')}</Typography>
-                  <Typography variant="body2" noWrap sx={{ color: 'text.secondary', fontSize: 'inherit', flex: 1 }}>{r.isBulk ? t('workbench.channelCount', { count: r.channelCount ?? 0 }) : r.channelName}</Typography>
+                  <Typography variant="body2" noWrap sx={{ color: 'text.secondary', fontSize: 'inherit', flex: 1 }}>{r.isBulk ? t('workbench.channelCount', { count: r.channelCount ?? 0, context: r.unit }) : r.channelName}</Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{new Date(r.timestamp).toLocaleString(i18n.language)}</Typography>
                 </Box>
               ))}

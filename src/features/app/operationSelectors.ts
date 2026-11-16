@@ -150,9 +150,10 @@ const selectBaseSummary = createSelector(
     if (exportState.isExporting) {
       const progress = exportState.exportProgress;
       if (progress?.bulk) {
-        const { currentIndex, totalChannels, currentChannelName } = progress.bulk;
+        const { currentIndex, totalChannels, currentChannelName, unit } = progress.bulk;
         // Row 126 (pass 3): the bulk label in the app language, the stage as a phrase.
-        const channelLabel = t('operation.channelLabel', { channelIndex: currentIndex + 1, channelTotal: totalChannels, channelName: currentChannelName });
+        // A run over threads, posts or DMs names that unit, the way its log lines do.
+        const channelLabel = t('operation.channelLabel', { channelIndex: currentIndex + 1, channelTotal: totalChannels, channelName: currentChannelName, context: unit });
         if (progress.total > 0) {
           const pct = Math.round((progress.current / progress.total) * 100);
           const stage = t(`operation.stage.${progress.stage}`, { defaultValue: progress.stage });

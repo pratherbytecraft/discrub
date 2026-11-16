@@ -2202,6 +2202,7 @@ describe('exportSlice', () => {
         fetchForumThreadSearch,
         exportToZip: mockExportService.exportToZip,
         entries: testStore.getState().status.entries as Array<{ level: string; message: string }>,
+        history: () => (testStore.getState() as any).history,
       };
     }
 
@@ -2261,13 +2262,15 @@ describe('exportSlice', () => {
       });
 
       it("a forum's run counts posts in the log", async () => {
-        const { entries } = await runBulkForumExport({
+        const { entries, history } = await runBulkForumExport({
           exportChannels: [thread('t-2', 'Two')],
           threadExport: { parentId: 'c-1', parentName: 'help', all: false, kind: 'post' },
         });
         const messages = entries.map((e) => e.message);
         expect(messages).toContain('Bulk export: Starting post 1/1: Two');
         expect(messages).toContain('Bulk export: Finished, 1 of 1 posts exported, 0 failed');
+        // The history row says what the run counted, so the lists that show it can too.
+        await vi.waitFor(() => expect(history().exports[0]).toMatchObject({ isBulk: true, channelCount: 1, unit: 'post', channelName: '1 posts' }));
       });
 
       it('exports the ticked threads with no listing call', async () => {

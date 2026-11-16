@@ -30,6 +30,11 @@ describe('ForumThreadList export selection', () => {
     expect(screen.queryByTestId('forum-tick-900000000000000001')).toBeNull();
   });
 
+  it('counts the posts shown against the forum total', () => {
+    renderList({ hasMore: true, totalResults: 1300 });
+    expect(screen.getByText('3 of 1,300 posts')).toBeInTheDocument();
+  });
+
   it('with nothing ticked and the whole forum loaded, Export covers every post and lists nothing again', () => {
     renderList();
     expect(last()).toEqual({ all: false, posts, total: 3, everything: true });

@@ -43,6 +43,8 @@ export interface BulkContext {
   currentIndex: number;
   totalChannels: number;
   currentChannelName: string;
+  /** What one unit of the run is when it is not a Channel, so the progress line can name it. */
+  unit?: 'thread' | 'post' | 'dm';
 }
 
 export interface ExportProgress extends MediaDownloadProgress {
@@ -181,6 +183,8 @@ export interface RecentExport {
   timestamp: string;
   isBulk: boolean;
   channelCount?: number;
+  /** What the run counted when it was not Channels (2.2.10), so its row can say threads, posts or DMs. */
+  unit?: 'thread' | 'post' | 'dm';
   config: ExportSettingsSnapshot;
 }
 

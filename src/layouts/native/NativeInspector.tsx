@@ -10,7 +10,7 @@ import { selectOperationSummary } from '@features/app/operationSelectors';
 import { selectActiveFilteredRows, selectActivePagination, selectActiveRows, selectActiveSearchCriteria } from '@features/message/messageSlice';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
-import { selectStatusEntries } from '@features/status/statusSlice';
+import { selectStatusEntries, statusEntryKey } from '@features/status/statusSlice';
 import { countActiveFilters } from 'discrub-core/filtering';
 import PauseResumeControls from '@components/ui/PauseResumeControls';
 import { ChannelType } from 'discrub-core/discord-enum';
@@ -105,7 +105,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
 
       <Card title={t('statusPanel.title')} testId="inspector-log" action={<Button size="small" onClick={onOpenLog} sx={{ textTransform: 'none', py: 0 }} data-testid="inspector-log-open">{t('native.open')}</Button>}>
         <Box sx={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: '0.7rem', color: 'text.secondary', display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-          {peek.length === 0 ? <span>{t('native.logEmpty')}</span> : peek.map((e) => <Box key={e.id ?? e.timestamp} component="span" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.message}</Box>)}
+          {peek.length === 0 ? <span>{t('native.logEmpty')}</span> : peek.map((e) => <Box key={statusEntryKey(e)} component="span" sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.message}</Box>)}
         </Box>
       </Card>
     </Box>

@@ -47,7 +47,7 @@ export const OperatorRecent = () => {
       {runs.length === 0 ? <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('workbench.noRuns')}</Typography> : runs.slice(0, 5).map((r) => (
         <Box key={r.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', fontSize: '0.8rem' }}>
           <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'success.main', alignSelf: 'center', flexShrink: 0 }} />
-          <Typography variant="body2" noWrap sx={{ flex: 1, fontSize: 'inherit' }}>{r.isBulk ? t('workbench.channelCount', { count: r.channelCount ?? 0 }) : r.channelName}</Typography>
+          <Typography variant="body2" noWrap sx={{ flex: 1, fontSize: 'inherit' }}>{r.isBulk ? t('workbench.channelCount', { count: r.channelCount ?? 0, context: r.unit }) : r.channelName}</Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{new Date(r.timestamp).toLocaleDateString(i18n.language)}</Typography>
         </Box>
       ))}
