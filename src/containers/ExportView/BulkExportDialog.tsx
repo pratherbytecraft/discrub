@@ -31,6 +31,7 @@ import {
   setExportCriteria,
 } from '@features/export/exportSlice';
 import type { ExportConfig, ExportSettingsSnapshot } from '@features/export/exportTypes';
+import type { ThreadExportRef } from '@features/export/exportSlice';
 import type { SearchCriteria } from 'discrub-core/types/discrub-types';
 import type { Channel } from 'discrub-core/types/discord-types';
 import { selectAuthToken } from '@features/auth/authSlice';
@@ -55,12 +56,18 @@ interface BulkExportDialogProps {
   channels: Channel[];
   mode: 'channels' | 'dms';
   guildId?: string | null;
+  /**
+   * The channels are threads picked in the Load Thread dialog (GitHub 24).
+   * With `all`, `channels` holds the threads loaded so far for show, and
+   * the run lists every thread of `parent` itself.
+   */
+  threadExport?: { parent: Channel; all: boolean; total: number } | null;
 }
 
 /**
  * BulkExportDialog - configure and export multiple channels/DMs
  */
-const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guildId }: BulkExportDialogProps) => {
+const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guildId, threadExport = null }: BulkExportDialogProps) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { t } = useTranslation();
@@ -118,19 +125,24 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
   const bulkResume = useBulkResume('bulkExport', mode, guildId);
   const resumable = bulkResume !== null;
   const [resumeTargets, setResumeTargets] = useState<Channel[] | null>(null);
+  const [resumeThreadExport, setResumeThreadExport] = useState<ThreadExportRef | null>(null);
   useEffect(() => {
     if (!open || !resumable) {
       setResumeTargets(null);
+      setResumeThreadExport(null);
       return;
     }
     let live = true;
     void readBulkRecord(store.getState()).then((record) => {
       if (!live || !record || record.kind !== 'bulkExport') return;
-      const saved = record.settings as { snapshot?: ExportSettingsSnapshot; searchCriteria?: SearchCriteria | null } | undefined;
+      const saved = record.settings as { snapshot?: ExportSettingsSnapshot; searchCriteria?: SearchCriteria | null; threadExport?: ThreadExportRef; threadTargets?: Channel[] } | undefined;
+      setResumeThreadExport(saved?.threadExport ?? null);
       if (saved?.snapshot) dispatch(applyPreset(saved.snapshot));
       dispatch(setExportCriteria(saved?.searchCriteria ?? null));
       const state = store.getState();
-      setResumeTargets(resolveQueue(record.queue, [state.channel.channels, state.channel.forumThreads, state.dm.dms]));
+      // Threads and forum posts come from the run's own record first, so a
+      // resume finds them with no call and whatever is open.
+      setResumeTargets(resolveQueue(record.queue, [saved?.threadTargets, state.channel.channels, state.channel.forumThreads, state.dm.dms]));
     });
     return () => {
       live = false;
@@ -142,7 +154,19 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
     void dispatch(discardBulkRecord());
     dispatch(setExportCriteria(null));
     setResumeTargets(null);
+    setResumeThreadExport(null);
   };
+  // What this run is, from the record when resuming, from the Load Thread dialog otherwise.
+  const threadRun: ThreadExportRef | null = resuming
+    ? resumeThreadExport
+    : threadExport
+      ? { parentId: threadExport.parent.id, parentName: threadExport.parent.name || threadExport.parent.id, all: threadExport.all }
+      : null;
+  const unitCount = resuming
+    ? (threadRun && bulkResume ? Math.max(bulkResume.total, channels.length) : channels.length)
+    : threadExport
+      ? Math.max(threadExport.total, threadExport.all ? 0 : channels.length)
+      : channels.length;
 
   const filterCount = filterCriteria ? countActiveFilters(filterCriteria) : 0;
 
@@ -167,7 +191,9 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
     };
 
     const params = {
-      channels,
+      // Every thread of a channel: the run gets the channel and lists its threads itself.
+      channels: !resuming && threadExport?.all ? [threadExport.parent] : channels,
+      threadExport: threadRun,
       token,
       format: exportState.exportFormat,
       messagesPerPage: exportState.messagesPerPage,
@@ -199,9 +225,9 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth fullScreen={fullScreen}>
       <DialogTitle sx={{ pr: 5 }}>
-        {mode === 'channels' ? t('export.bulkTitleChannels') : t('export.bulkTitleDms')}
+        {threadRun ? t('export.bulkTitleThreads') : mode === 'channels' ? t('export.bulkTitleChannels') : t('export.bulkTitleDms')}
         <Chip
-          label={t('export.selectedCount', { count: channels.length })}
+          label={t('export.selectedCount', { count: unitCount })}
           size="small"
           sx={{
             ml: 1,
@@ -221,7 +247,12 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
             </Typography>
           )}
           {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="bulk-export-sign-in-again" />}
-          <SelectedChannelsPill channels={channels} mode={mode} />
+          <SelectedChannelsPill
+            channels={channels}
+            mode={mode}
+            threads={!!threadRun && !(resuming && threadRun.all)}
+            totalCount={!resuming && threadExport ? unitCount : undefined}
+          />
 
           <PresetSelector />
 
@@ -268,7 +299,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
             disabled={channels.length === 0 || isOperationRunning}
             data-testid="bulk-export-confirm"
           >
-            {resuming ? t('workspace.resume') : mode === 'channels' ? t('export.exportChannels', { count: channels.length }) : t('export.exportDms', { count: channels.length })}
+            {resuming ? t('workspace.resume') : threadRun ? t('export.exportThreads', { count: unitCount }) : mode === 'channels' ? t('export.exportChannels', { count: channels.length }) : t('export.exportDms', { count: channels.length })}
           </Button>
         </Box>
       </DialogActions>

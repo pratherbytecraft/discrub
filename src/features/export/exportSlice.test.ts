@@ -74,8 +74,12 @@ vi.mock('@/utils/searchPagination', async () => {
   };
 });
 
+const zipNames: string[] = [];
 vi.mock('@services/streamingZipService', () => ({
   StreamingZipService: class {
+    constructor(name: string) {
+      zipNames.push(name);
+    }
     async addFile() {}
     async finalize() {}
     dispose() {}
@@ -2103,7 +2107,9 @@ describe('exportSlice', () => {
       forumResponses?: Array<Record<string, unknown>>;
       emptyMessageChannels?: string[];
       sliceChannels?: any[];
+      threadExport?: { parentId: string; parentName: string; all: boolean };
     }) {
+      zipNames.length = 0;
       const { configureStore } = await import('@reduxjs/toolkit');
       const { bulkExportChannels } = await import('./exportSlice');
       const appReducer = (await import('@features/app/appSlice')).default;
@@ -2183,18 +2189,110 @@ describe('exportSlice', () => {
           includeMedia: false,
           guildId: 'g-1',
           exportConfig: { exportTemplate: 'discord' } as any,
+          threadExport: options.threadExport,
         }) as any,
       );
 
       const { generateDiscordShellBulk } = await import('@services/exportDiscordShell');
       return {
         result,
+        fetchMessageData,
+        zipName: zipNames[zipNames.length - 1],
         shellCalls: vi.mocked(generateDiscordShellBulk).mock.calls,
         fetchForumThreadSearch,
         exportToZip: mockExportService.exportToZip,
         entries: testStore.getState().status.entries as Array<{ level: string; message: string }>,
       };
     }
+
+    // GitHub 24: Export all threads from the Load Thread dialog. The run is
+    // handed the parent channel and lists its threads itself, or is handed
+    // the ticked threads.
+    describe('thread export (GitHub 24)', () => {
+      const general = { id: 'c-1', name: 'general', type: 0 };
+      const thread = (id: string, name: string) => ({ id, name, type: 11, parent_id: 'c-1' });
+      const threadPage = (threads: any[], has_more: boolean) => ({
+        success: true,
+        data: { threads, has_more, total_results: 0, first_messages: [], members: [] },
+      });
+      const all = { parentId: 'c-1', parentName: 'general', all: true };
+
+      it('lists every thread of the channel page by page and exports the threads, not the channel', async () => {
+        const { result, fetchForumThreadSearch, fetchMessageData, entries, zipName, shellCalls } = await runBulkForumExport({
+          exportChannels: [general],
+          threadExport: all,
+          forumPages: [
+            { threads: [thread('t-1', 'One'), thread('t-2', 'Two')], has_more: true },
+            { threads: [thread('t-3', 'Three')], has_more: false },
+          ],
+        });
+        expect(result.payload.errors).toBeUndefined();
+        expect(fetchForumThreadSearch).toHaveBeenCalledTimes(2);
+        expect(fetchForumThreadSearch.mock.calls.map((call) => [call[1], call[2].offset, 'archived' in call[2]])).toEqual([['c-1', 0, false], ['c-1', 25, false]]);
+        expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['t-1', 't-2', 't-3']);
+        expect(entries.find((e) => e.message.includes('Found 3 threads in general'))).toBeDefined();
+        expect(shellCalls[0][0].channels.map((c: { name: string }) => c.name)).toEqual(['One', 'Two', 'Three']);
+        expect(zipName).toBe('general-threads');
+      });
+
+      it('exports the ticked threads with no listing call', async () => {
+        const { fetchForumThreadSearch, fetchMessageData, zipName } = await runBulkForumExport({
+          exportChannels: [thread('t-2', 'Two'), thread('t-3', 'Three')],
+          threadExport: { parentId: 'c-1', parentName: 'general', all: false },
+        });
+        expect(fetchForumThreadSearch).not.toHaveBeenCalled();
+        expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['t-2', 't-3']);
+        expect(zipName).toBe('general-threads');
+      });
+
+      it('a listing that stops part way exports what it has and says so', async () => {
+        const { result, entries, fetchMessageData } = await runBulkForumExport({
+          exportChannels: [general],
+          threadExport: all,
+          forumResponses: [threadPage([thread('t-1', 'One')], true), { success: false, status: 403 }],
+        });
+        expect(result.payload.errors).toBeUndefined();
+        expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['t-1']);
+        expect(entries.find((e) => e.level === 'warning' && e.message.includes('stopped after 1 threads (403)'))).toBeDefined();
+      });
+
+      it('a listing that fails on its first page is an error, and the channel itself is not exported', async () => {
+        const { result, entries, fetchMessageData } = await runBulkForumExport({
+          exportChannels: [general],
+          threadExport: all,
+          forumResponses: [{ success: false, status: 403 }],
+        });
+        expect(result.payload.errors).toHaveLength(1);
+        expect(fetchMessageData).not.toHaveBeenCalled();
+        expect(entries.find((e) => e.level === 'error' && e.message.includes('Could not list the threads of general'))).toBeDefined();
+      });
+
+      it('a channel with no threads is skipped with a line', async () => {
+        const { entries, fetchMessageData } = await runBulkForumExport({
+          exportChannels: [general],
+          threadExport: all,
+          forumPages: [{ threads: [], has_more: false }],
+        });
+        expect(fetchMessageData).not.toHaveBeenCalled();
+        expect(entries.find((e) => e.message.includes('No threads in general'))).toBeDefined();
+      });
+
+      it('an empty page ends the listing even when Discord says there is more', async () => {
+        const { fetchForumThreadSearch } = await runBulkForumExport({
+          exportChannels: [general],
+          threadExport: all,
+          forumPages: [{ threads: [thread('t-1', 'One')], has_more: true }, { threads: [], has_more: true }],
+        });
+        expect(fetchForumThreadSearch).toHaveBeenCalledTimes(2);
+      });
+
+      it('without a thread export a text channel is exported as itself, in the usual zip', async () => {
+        const { fetchForumThreadSearch, fetchMessageData, zipName } = await runBulkForumExport({ exportChannels: [general] });
+        expect(fetchForumThreadSearch).not.toHaveBeenCalled();
+        expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['c-1']);
+        expect(zipName).toBe('bulk-export');
+      });
+    });
 
     it('records an error instead of silently truncating when a post page fails permanently (F28)', async () => {
       const forumPage = (threads: any[], has_more: boolean) => ({

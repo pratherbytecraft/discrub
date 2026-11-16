@@ -1107,6 +1107,8 @@ async function fetchAllForumThreads(
   dispatch: ExportDispatch,
   searchDelay: number,
   delayModifier: number,
+  /** Given, a page that fails after some were read ends the walk with what it has. */
+  onPartial?: (listed: number, reason: string) => void,
 ): Promise<Channel[]> {
   const discordService = getDiscordService();
   const collected: Channel[] = [];
@@ -1141,6 +1143,11 @@ async function fetchAllForumThreads(
     // don't misreport it as an API error.
     if (checkCancelled(getState)) break;
 
+    if ((!response.success || !response.data) && onPartial && collected.length > 0) {
+      onPartial(collected.length, String(response.status ?? 'network error'));
+      break;
+    }
+
     if (!response.success || !response.data) {
       throw new Error(
         `Could not list this forum's posts (${response.status ?? 'network error'}); ${collected.length} fetched before the failure`,
@@ -1148,7 +1155,8 @@ async function fetchAllForumThreads(
     }
 
     collected.push(...response.data.threads);
-    hasMore = response.data.has_more;
+    // An empty page ends the walk whatever has_more says.
+    hasMore = response.data.has_more && response.data.threads.length > 0;
     offset += 25;
 
     if (hasMore) {
@@ -1429,7 +1437,17 @@ async function exportUnit(o: ExportUnitOptions): Promise<UnitOutcome> {
   }
 }
 
+/** A run that exports one channel's threads from the Load Thread dialog (GitHub 24). */
+export interface ThreadExportRef {
+  parentId: string;
+  parentName: string;
+  /** Every thread of the parent: the parent is the only entry in `channels` and is listed here first. */
+  all: boolean;
+}
+
 interface BulkExportParams {
+  /** For a thread export of every thread, the parent channel alone. */
+  threadExport?: ThreadExportRef | null;
   channels: Channel[];
   token: string;
   format: ExportFormat;
@@ -1491,7 +1509,12 @@ export const bulkExportChannels = createAsyncThunk<
       selectedGuild = selectSelectedGuild(getState()) || null;
     } catch { /* guild slice may not be available in tests */ }
 
-    const zipService = new StreamingZipService('bulk-export', buildZipOptions(getState, dispatch));
+    const threadExport = params.threadExport ?? null;
+    const threadParentId = threadExport?.all ? threadExport.parentId : null;
+    const zipService = new StreamingZipService(
+      threadExport ? `${exportSlug(threadExport.parentName) || 'channel'}-threads` : 'bulk-export',
+      buildZipOptions(getState, dispatch),
+    );
     // Row 134: the unit the sign in expired on; the run stops there and keeps its record.
     let signInExpiredAt: number | null = null;
     const exportedChannels: { id: string; name: string; filename: string; category?: string }[] = [];
@@ -1507,12 +1530,39 @@ export const bulkExportChannels = createAsyncThunk<
     for (const channel of channels) {
       if (checkCancelled(getState)) break;
 
-      if (!FORUM_CHANNEL_TYPES.includes(channel.type as number)) {
+      const isThreadParent = channel.id === threadParentId;
+      if (!isThreadParent && !FORUM_CHANNEL_TYPES.includes(channel.type as number)) {
         expandedChannels.push(channel);
         continue;
       }
 
       const forumName = channel.name || `forum-${channel.id}`;
+      if (isThreadParent) {
+        // GitHub 24: every thread of one text channel, listed the way a
+        // forum's posts are. A listing that stops part way keeps what it
+        // has, so a long run is not lost to one bad page.
+        try {
+          const threads = await fetchAllForumThreads(channel, token, getState, dispatch as ExportDispatch, searchDelay, delayModifier, (listed, reason) => {
+            dispatch(addStatusEntry({
+              level: 'warning',
+              message: t('status.export.threadListingStopped', { name: forumName, count: listed, error: reason }),
+            }));
+          });
+          if (checkCancelled(getState)) break;
+          if (threads.length === 0) {
+            dispatch(addStatusEntry({ level: 'warning', message: t('status.export.noThreads', { name: forumName }) }));
+            continue;
+          }
+          dispatch(addStatusEntry({ level: 'info', message: t('status.export.expandedThreads', { name: forumName, count: threads.length }) }));
+          expandedChannels.push(...threads);
+        } catch (error) {
+          if (error instanceof CancelledError) break;
+          const errorMsg = error instanceof Error ? error.message : t('status.export.unknownError');
+          errors.push(`${forumName}: ${errorMsg}`);
+          dispatch(addStatusEntry({ level: 'error', message: t('status.export.threadListingFailed', { name: forumName, error: errorMsg }) }));
+        }
+        continue;
+      }
       try {
         const posts = await fetchAllForumThreads(channel, token, getState, dispatch as ExportDispatch, searchDelay, delayModifier);
         if (checkCancelled(getState)) break;

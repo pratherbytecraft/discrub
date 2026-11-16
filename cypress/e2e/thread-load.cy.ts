@@ -25,34 +25,29 @@ const loadThread = () => {
 
 const API = '**/api/v10';
 
+const PARENT_ID = '801000000000000001';
+const archivedThread = {
+  id: '802000000000000099',
+  name: 'retired-thread',
+  type: 11,
+  parent_id: PARENT_ID,
+  message_count: 12,
+  member_count: 4,
+  thread_metadata: { archived: true, archive_timestamp: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+};
+
 /**
- * Thread discovery (#150) hits three endpoints when the modal opens. The
- * active list comes from the fixture; the public-archived call returns one
- * archived thread so the #252 row styling has both states to show.
+ * The Load Thread dialog reads a channel's threads from Discord's thread
+ * search, one call per 25 (GitHub 24). The active thread comes from the
+ * fixture, plus one archived thread so the #252 row styling has both.
  */
 const interceptThreadDiscovery = () => {
   cy.fixture('active-guild-threads.json').then((active) => {
-    cy.intercept('GET', `${API}/guilds/*/threads/active*`, { statusCode: 200, body: active }).as('getActiveThreads');
-  });
-  cy.intercept('GET', `${API}/channels/*/threads/archived/public*`, {
-    statusCode: 200,
-    body: {
-      threads: [{
-        id: '802000000000000099',
-        name: 'retired-thread',
-        type: 11,
-        parent_id: '801000000000000001',
-        message_count: 12,
-        member_count: 4,
-        thread_metadata: { archived: true, archive_timestamp: new Date(Date.now() - 2 * 86_400_000).toISOString() },
-      }],
-      members: [],
-      has_more: false,
-    },
-  }).as('getPublicThreads');
-  cy.fixture('archived-threads-empty.json').then((empty) => {
-    cy.intercept('GET', `${API}/channels/*/threads/archived/private*`, { statusCode: 200, body: empty }).as('getPrivateThreads');
-    cy.intercept('GET', `${API}/channels/*/users/@me/threads/archived/private*`, { statusCode: 200, body: empty }).as('getJoinedPrivateThreads');
+    const threads = [...active.threads.filter((t: { parent_id: string }) => t.parent_id === PARENT_ID), archivedThread];
+    cy.intercept('GET', `${API}/channels/${PARENT_ID}/threads/search*`, {
+      statusCode: 200,
+      body: { threads, members: [], has_more: false, total_results: threads.length },
+    }).as('getThreads');
   });
 };
 
@@ -64,14 +59,164 @@ describe('Thread Load', () => {
     cy.contains('[data-testid="message-feed-row"]', 'Hello everyone! Welcome to the server.').should('exist');
   });
 
+  // GitHub 24: tick threads or take them all, and export them through the
+  // dialog a forum's posts use, without exporting the channel again.
+  describe('Thread export (GitHub 24)', () => {
+    const zeroDelays = () => {
+      cy.window().then((win) => {
+        const store = (win as any).__store__;
+        store.dispatch({
+          type: 'app/updateAllSettings/fulfilled',
+          payload: { ...store.getState().app.settings, searchDelay2: '0', deleteDelay2: '0', delayModifier2: '0' },
+        });
+      });
+    };
+    const thread = (n: number) => ({
+      id: `8030000000000000${String(n).padStart(2, '0')}`,
+      name: `thread-${n}`,
+      type: 11,
+      parent_id: PARENT_ID,
+      total_message_sent: n,
+      member_count: 1,
+      thread_metadata: { archived: n % 2 === 0, archive_timestamp: '2026-02-15T10:00:00.000Z' },
+    });
+    /** The thread search for the channel, in pages of 25, with every request URL kept. */
+    const interceptThreadPages = (count: number, urls: string[]) => {
+      const all = Array.from({ length: count }, (_, i) => thread(i + 1));
+      cy.intercept('GET', `${API}/channels/${PARENT_ID}/threads/search*`, (req) => {
+        urls.push(req.url);
+        const offset = Number(new URL(req.url).searchParams.get('offset') ?? 0);
+        req.reply({ statusCode: 200, body: { threads: all.slice(offset, offset + 25), members: [], has_more: offset + 25 < count, total_results: count } });
+      }).as('getThreads');
+    };
+    const interceptThreadMessages = (fetched: string[]) => {
+      cy.fixture('messages.json').then((messages) => {
+        cy.intercept('GET', `${API}/channels/*/messages?*`, (req) => {
+          const id = req.url.match(/channels\/(\d+)\/messages/)![1];
+          fetched.push(id);
+          req.reply({ statusCode: 200, body: req.url.includes('before=') ? [] : messages.map((m: object) => ({ ...m, channel_id: id })) });
+        });
+      });
+      cy.intercept('GET', `${API}/channels/*/messages/*/reactions/*`, { statusCode: 200, body: [] });
+    };
+
+    beforeEach(() => zeroDelays());
+
+    it('shows the count, a box per thread, and names the ticked ones on the button', () => {
+      interceptThreadDiscovery();
+      cy.contains('button', 'Load Thread').click();
+      cy.wait('@getThreads').its('request.url').should('satisfy', (url: string) => url.includes('limit=25') && url.includes('offset=0') && !url.includes('archived='));
+      cy.get('[data-testid="thread-total"]').should('contain.text', '2 found');
+      cy.get('[data-testid="export-threads"]').should('have.text', 'Export all threads (2)');
+      cy.get('[data-testid="thread-tick-802000000000000099"] input').check();
+      cy.get('[data-testid="export-threads"]').should('have.text', 'Export 1 thread');
+      // Ticking a box does not load the thread.
+      cy.get('[role="dialog"]').should('contain.text', 'Load Thread');
+      cy.get('[data-testid="thread-select-all"] input').check();
+      cy.get('[data-testid="export-threads"]').should('have.text', 'Export all threads (2)');
+      cy.get('[data-testid="thread-tick-802000000000000001"] input').should('be.checked');
+    });
+
+    it('a ticked thread opens the export dialog named for threads', () => {
+      interceptThreadDiscovery();
+      cy.contains('button', 'Load Thread').click();
+      cy.wait('@getThreads');
+      cy.get('[data-testid="thread-tick-802000000000000099"] input').check();
+      cy.get('[data-testid="export-threads"]').click();
+      cy.get('[role="dialog"]').should('contain.text', 'Export Threads').and('contain.text', '1 thread').and('contain.text', 'retired-thread');
+      cy.get('[data-testid="bulk-export-confirm"]').should('have.text', 'Export 1 Thread');
+      // Cancel leaves no thread export behind for the next dialog.
+      cy.get('[role="dialog"]').contains('button', 'Cancel').click();
+      cy.get('[role="dialog"]').should('not.exist');
+    });
+
+    it('exports every thread into a zip named after the channel, with one listing call and no read of the channel itself', () => {
+      cy.task('downloads:clean');
+      const urls: string[] = [];
+      const fetched: string[] = [];
+      interceptThreadPages(3, urls);
+      cy.contains('button', 'Load Thread').click();
+      cy.wait('@getThreads');
+      cy.then(() => interceptThreadMessages(fetched));
+      cy.get('[data-testid="export-threads"]').should('have.text', 'Export all threads (3)').click();
+      cy.get('[data-testid="bulk-export-confirm"]').should('have.text', 'Export 3 Threads').click();
+      cy.waitForDownload(/^general-threads\.zip$/i, 60000).then((fileName) => {
+        cy.then(() => {
+          expect(urls, 'the list is read once, when the dialog opens').to.have.length(1);
+          expect(fetched.filter((id) => id === PARENT_ID), 'the channel itself is not read').to.have.length(0);
+          expect([...new Set(fetched)].sort()).to.deep.eq([thread(1).id, thread(2).id, thread(3).id]);
+        });
+        cy.task<{ name: string }[]>('zip:list', fileName).then((entries) => {
+          const names = entries.map((e) => e.name);
+          expect(names).to.include('thread_1/thread_1-page-1.html');
+          expect(names).to.include('thread_2/thread_2-page-1.html');
+          expect(names).to.include('thread_3/thread_3-page-1.html');
+        });
+      });
+    });
+
+    it('a long list loads 25 at a time on scroll, and an export of all reads the whole list', () => {
+      cy.task('downloads:clean');
+      const urls: string[] = [];
+      const fetched: string[] = [];
+      interceptThreadPages(27, urls);
+      cy.contains('button', 'Load Thread').click();
+      cy.wait('@getThreads');
+      cy.get('[data-testid="thread-total"]').should('contain.text', '27 found');
+      cy.get('[data-testid^="discovered-thread-"]').should('have.length', 25);
+      cy.get('[data-testid="threads-loading-more"]').should('exist');
+      cy.then(() => expect(urls, 'opening reads one page').to.have.length(1));
+
+      cy.then(() => interceptThreadMessages(fetched));
+      cy.get('[data-testid="export-threads"]').should('have.text', 'Export all threads (27)').click();
+      cy.get('[role="dialog"]').should('contain.text', '27 threads');
+      cy.get('[data-testid="bulk-export-confirm"]').should('have.text', 'Export 27 Threads').click();
+      cy.waitForDownload(/^general-threads\.zip$/i, 90000).then((fileName) => {
+        cy.then(() => {
+          const offsets = urls.slice(1).map((url) => new URL(url).searchParams.get('offset'));
+          expect(offsets, 'the run reads the list from the start, page by page').to.deep.eq(['0', '25']);
+          expect(new Set(fetched).size).to.eq(27);
+          expect(fetched).to.not.include(PARENT_ID);
+        });
+        cy.task<{ name: string }[]>('zip:list', fileName).then((entries) => {
+          const pages = entries.map((e) => e.name).filter((name) => /^thread_\d+\/thread_\d+-page-1\.html$/.test(name));
+          expect(pages).to.have.length(27);
+        });
+      });
+      // From the log's data: the panel shows its latest 50 lines and a 27 thread run writes more.
+      cy.window().then((win) => {
+        const messages = ((win as any).__store__.getState().status.entries as { message: string }[]).map((e) => e.message);
+        expect(messages).to.include('Bulk export: Found 27 threads in general');
+      });
+    });
+
+    it('scrolling the list to its end loads the next page', () => {
+      const urls: string[] = [];
+      interceptThreadPages(27, urls);
+      cy.contains('button', 'Load Thread').click();
+      cy.wait('@getThreads');
+      cy.get('[data-testid="discovered-threads"]').scrollTo('bottom');
+      cy.get('[data-testid^="discovered-thread-"]').should('have.length', 27);
+      cy.get('[data-testid="threads-loading-more"]').should('not.exist');
+      cy.then(() => expect(urls.map((url) => new URL(url).searchParams.get('offset'))).to.deep.eq(['0', '25']));
+    });
+
+    it('a listing Discord refuses says so and leaves the ID field usable', () => {
+      cy.intercept('GET', `${API}/channels/${PARENT_ID}/threads/search*`, { statusCode: 403, body: { message: 'Missing Access' } }).as('getThreads');
+      cy.contains('button', 'Load Thread').click();
+      cy.get('[role="dialog"]').should('contain.text', "Couldn't load threads");
+      cy.get('[data-testid="export-threads"]').should('be.disabled');
+      cy.get('[role="dialog"]').find('input[type="text"], input:not([type])').last().should('not.be.disabled');
+    });
+  });
+
   // Backlog #252: discovered rows carry counts, an archived state, and
   // active threads list first. Clicking a row loads that thread.
   describe('Discovered thread rows (#252)', () => {
     beforeEach(() => {
       interceptThreadDiscovery();
       cy.contains('button', 'Load Thread').click();
-      cy.wait('@getActiveThreads');
-      cy.wait('@getPublicThreads');
+      cy.wait('@getThreads');
     });
 
     it('shows message and member counts under each thread name', () => {

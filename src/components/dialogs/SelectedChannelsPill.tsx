@@ -14,6 +14,10 @@ interface SelectedChannelsPillProps {
    * 'servers'  = whole servers (#255 multi-server purge)
    */
   mode: 'channels' | 'dms' | 'servers';
+  /** The entries are threads of one channel: counted and named as threads. */
+  threads?: boolean;
+  /** How many the run covers when the list holds only the ones loaded so far. */
+  totalCount?: number;
 }
 
 /**
@@ -22,14 +26,14 @@ interface SelectedChannelsPillProps {
  * inline; click to expand the full list. Keeps destructive / heavy
  * operations above the fold on standard viewports.
  */
-const SelectedChannelsPill = ({ channels = [], guilds = [], mode }: SelectedChannelsPillProps) => {
+const SelectedChannelsPill = ({ channels = [], guilds = [], mode, threads = false, totalCount }: SelectedChannelsPillProps) => {
   const theme = useTheme();
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   const isDmMode = mode === 'dms';
   const isServerMode = mode === 'servers';
-  const pillContext = isServerMode ? 'server' : isDmMode ? 'dm' : 'channel';
+  const pillContext = isServerMode ? 'server' : isDmMode ? 'dm' : threads ? 'thread' : 'channel';
 
   const getChannelName = (channel: Channel) => {
     if (isDmMode) {
@@ -46,16 +50,16 @@ const SelectedChannelsPill = ({ channels = [], guilds = [], mode }: SelectedChan
   const labels = isServerMode
     ? guilds.map((g) => g.name || `server-${g.id}`)
     : channels.map(getChannelLabel);
-  const count = labels.length;
+  const count = Math.max(totalCount ?? 0, labels.length);
 
   const summary = useMemo(() => {
     const names = labels;
     const visible = names.slice(0, 3);
-    const remaining = names.length - visible.length;
+    const remaining = Math.max(totalCount ?? 0, names.length) - visible.length;
     const joined = visible.join(', ');
     return remaining > 0 ? t('pill.more', { names: joined, count: remaining }) : joined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channels, guilds, isDmMode, isServerMode, t]);
+  }, [channels, guilds, isDmMode, isServerMode, totalCount, t]);
 
   return (
     <Box>
@@ -70,7 +74,7 @@ const SelectedChannelsPill = ({ channels = [], guilds = [], mode }: SelectedChan
           }
         }}
         aria-expanded={expanded}
-        aria-label={isServerMode ? t('pill.selectedServers') : isDmMode ? t('pill.selectedConversations') : t('pill.selectedChannels')}
+        aria-label={isServerMode ? t('pill.selectedServers') : isDmMode ? t('pill.selectedConversations') : threads ? t('pill.selectedThreads') : t('pill.selectedChannels')}
         sx={{
           display: 'flex',
           alignItems: 'center',

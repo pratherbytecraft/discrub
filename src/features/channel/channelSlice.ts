@@ -69,125 +69,114 @@ export const fetchChannelById = createAsyncThunk(
 );
 
 /**
- * Discover all threads (active + archived public + archived private/joined)
- * for a single channel. Used by the ThreadLoadModal to surface threads
- * whose type-21 starter message has been deleted from the parent channel —
- * those threads still exist on Discord but are invisible in our message
- * feed because nothing renders them. See backlog #150.
+ * The threads of one text or announcement channel, for the Load Thread
+ * dialog and the thread export.
  *
- * Returns the merged + de-duplicated list. Sorted newest-first by the
- * thread's `archive_timestamp` (or its own snowflake when not archived)
- * so the most recently active threads appear at the top.
+ * Read from `GET /channels/{id}/threads/search` with no `archived`
+ * parameter, the call the forum listing uses. For a user account it
+ * returns active and archived threads, public and private, 25 a page with
+ * a total (checked live 2026-11-16). The calls used before could not see
+ * an active thread at all: the guild's active list answers 403 for a
+ * user, and the archived lists were read one page only.
  *
- * Voice (type 2) and Stage (type 13) channels do not support threads —
- * Discord 400s the thread endpoints on those types — so we short-circuit
- * to an empty list. Forum / media channels have their own listing flow
- * (`fetchForumThreads`) and are out of scope for this thunk; callers
- * should branch on type before dispatching.
+ * This reads the first page. `loadMoreChannelThreads` reads the next one.
+ * A thread made in the last minute may not be in the search yet; the
+ * dialog's refresh reads the list again.
+ *
+ * Voice and Stage channels have no threads. Forum and media channels have
+ * their own listing (`fetchForumThreads`).
  */
+export interface ChannelThreadPage {
+  threads: Channel[];
+  total: number;
+  hasMore: boolean;
+  nextOffset: number;
+}
+
+const THREAD_PAGE = 25;
+
+const readThreadPage = async (token: string, channelId: string, offset: number) => {
+  const response = await getDiscordService().fetchForumThreadSearch(token, channelId, {
+    sort_by: 'last_message_time',
+    sort_order: 'desc',
+    limit: THREAD_PAGE,
+    offset,
+  });
+  if (!response.success || !response.data) {
+    throw new Error(`Discord answered ${response.status ?? 'with a network error'}`);
+  }
+  return response.data;
+};
+
 export const fetchChannelThreads = createAsyncThunk(
   'channel/fetchChannelThreads',
   async (
     {
       channel,
-      guildId,
       token,
       force = false,
     }: { channel: Channel; guildId: string; token: string; force?: boolean },
     { getState },
-  ) => {
+  ): Promise<ChannelThreadPage> => {
     if (
       channel.type === ChannelType.GUILD_VOICE ||
       channel.type === ChannelType.GUILD_STAGE_VOICE
     ) {
-      return [] as Channel[];
+      return { threads: [], total: 0, hasMore: false, nextOffset: 0 };
     }
 
-    // In-session cache (#165). Auto-discover from ThreadLoadModal
-    // passes force=false; the manual Refresh icon passes force=true.
-    // Cache miss falls through to the live fetch below.
+    // In-session cache (#165). Opening the dialog passes force=false and
+    // makes no call when the list is known; the refresh icon passes true.
     if (!force) {
-      const cached = (getState() as RootState).channel
-        .discoveredThreadsByChannel[channel.id];
-      if (cached) return cached;
+      const state = (getState() as RootState).channel;
+      const cached = state.discoveredThreadsByChannel[channel.id];
+      const meta = state.discoveredThreadMeta?.[channel.id];
+      if (cached) {
+        return {
+          threads: cached,
+          total: meta?.total ?? cached.length,
+          hasMore: meta?.hasMore ?? false,
+          nextOffset: meta?.nextOffset ?? cached.length,
+        };
+      }
     }
 
-    const discordService = getDiscordService();
-    const seen = new Map<string, Channel>();
+    const data = await readThreadPage(token, channel.id, 0);
+    const threads = data.threads as Channel[];
+    return {
+      threads,
+      total: Math.max(data.total_results ?? 0, threads.length),
+      hasMore: !!data.has_more,
+      nextOffset: THREAD_PAGE,
+    };
+  },
+);
 
-    // Active threads: scoped to guild, filter to children of this channel.
-    try {
-      const activeResp = await discordService.fetchActiveGuildThreads(token, guildId);
-      if (activeResp.success && activeResp.data) {
-        for (const t of activeResp.data.threads as Channel[]) {
-          if (t.parent_id === channel.id) seen.set(t.id, t);
-        }
-      }
-    } catch {
-      /* non-fatal — fall through to archived */
-    }
-
-    // Archived public — first page only for v1; pagination is a follow-up
-    // if we ever surface a "load older threads" affordance in the modal.
-    try {
-      const publicResp = await discordService.fetchPublicThreads(token, channel.id);
-      if (publicResp.success && publicResp.data) {
-        for (const t of publicResp.data.threads as Channel[]) {
-          if (!seen.has(t.id)) seen.set(t.id, t);
-        }
-      }
-    } catch {
-      /* non-fatal — public archive may be empty / restricted */
-    }
-
-    // Archived private — try MANAGE_THREADS endpoint first, fall back to
-    // joined-only (mirrors the discoverThreadsForChannels pattern in
-    // purgeSlice). 403 / 404 from either is a normal "no access", not an
-    // error worth surfacing here.
-    try {
-      const privateResp = await discordService.fetchPrivateThreads(token, channel.id);
-      if (privateResp.success && privateResp.data) {
-        for (const t of privateResp.data.threads as Channel[]) {
-          if (!seen.has(t.id)) seen.set(t.id, t);
-        }
-      } else {
-        const joinedResp = await discordService.fetchJoinedPrivateArchivedThreads(
-          token,
-          channel.id,
-        );
-        if (joinedResp.success && joinedResp.data) {
-          for (const t of joinedResp.data.threads as Channel[]) {
-            if (!seen.has(t.id)) seen.set(t.id, t);
-          }
-        }
-      }
-    } catch {
-      /* non-fatal */
-    }
-
-    // Sort: active threads first (they're the ones the user is most likely
-    // to want to revisit), then archived. Within each bucket newest-first
-    // by snowflake (active) or `archive_timestamp` (archived). Mixing the
-    // two time bases in a single comparator would be wrong (snowflake
-    // shifts to ms-since-Discord-epoch; archive_timestamp is unix ms), so
-    // bucket-then-sort sidesteps the conversion.
-    const all = Array.from(seen.values());
-    all.sort((a, b) => {
-      const aArchived = !!(a as any).thread_metadata?.archived;
-      const bArchived = !!(b as any).thread_metadata?.archived;
-      if (aArchived !== bArchived) return aArchived ? 1 : -1;
-      if (aArchived) {
-        const at = Date.parse((a as any).thread_metadata?.archive_timestamp ?? '');
-        const bt = Date.parse((b as any).thread_metadata?.archive_timestamp ?? '');
-        return (bt || 0) - (at || 0);
-      }
-      // Active: compare snowflake IDs as BigInt to avoid 53-bit truncation.
-      const aId = BigInt(a.id);
-      const bId = BigInt(b.id);
-      return aId < bId ? 1 : aId > bId ? -1 : 0;
-    });
-
-    return all;
+/** The next page of a channel's threads, added to the list the dialog shows. */
+export const loadMoreChannelThreads = createAsyncThunk(
+  'channel/loadMoreChannelThreads',
+  async (
+    { channel, token }: { channel: Channel; token: string },
+    { getState },
+  ): Promise<ChannelThreadPage> => {
+    const meta = (getState() as RootState).channel.discoveredThreadMeta?.[channel.id];
+    const offset = meta?.nextOffset ?? 0;
+    const data = await readThreadPage(token, channel.id, offset);
+    const threads = data.threads as Channel[];
+    return {
+      threads,
+      total: Math.max(data.total_results ?? 0, meta?.total ?? 0),
+      // An empty page ends the list whatever Discord says, so a scroll can never loop.
+      hasMore: !!data.has_more && threads.length > 0,
+      nextOffset: offset + THREAD_PAGE,
+    };
+  },
+  {
+    // One page at a time: a second scroll event while a page is on its way does nothing.
+    condition: ({ channel }, { getState }) => {
+      const state = (getState() as RootState).channel;
+      return !state.loadingMoreThreadsFor?.[channel.id] && !!state.discoveredThreadMeta?.[channel.id]?.hasMore;
+    },
   },
 );
 
@@ -398,7 +387,28 @@ const channelSlice = createSlice({
       // rendering while a Refresh re-fetch is in flight.
       .addCase(fetchChannelThreads.fulfilled, (state, action) => {
         const channelId = action.meta.arg.channel.id;
-        state.discoveredThreadsByChannel[channelId] = action.payload;
+        const { threads, total, hasMore, nextOffset } = action.payload;
+        state.discoveredThreadsByChannel[channelId] = threads;
+        state.discoveredThreadMeta = { ...state.discoveredThreadMeta, [channelId]: { total, hasMore, nextOffset } };
+      })
+      .addCase(loadMoreChannelThreads.pending, (state, action) => {
+        state.loadingMoreThreadsFor = { ...state.loadingMoreThreadsFor, [action.meta.arg.channel.id]: true };
+      })
+      .addCase(loadMoreChannelThreads.fulfilled, (state, action) => {
+        const channelId = action.meta.arg.channel.id;
+        const { threads, total, hasMore, nextOffset } = action.payload;
+        const known = state.discoveredThreadsByChannel[channelId] ?? [];
+        const ids = new Set(known.map((thread) => thread.id));
+        state.discoveredThreadsByChannel[channelId] = [...known, ...threads.filter((thread) => !ids.has(thread.id))];
+        state.discoveredThreadMeta = { ...state.discoveredThreadMeta, [channelId]: { total, hasMore, nextOffset } };
+        state.loadingMoreThreadsFor = { ...state.loadingMoreThreadsFor, [channelId]: false };
+      })
+      .addCase(loadMoreChannelThreads.rejected, (state, action) => {
+        const channelId = action.meta.arg.channel.id;
+        state.loadingMoreThreadsFor = { ...state.loadingMoreThreadsFor, [channelId]: false };
+        // A page that failed ends the scroll loading; refresh starts the list again.
+        const meta = state.discoveredThreadMeta?.[channelId];
+        if (meta) state.discoveredThreadMeta = { ...state.discoveredThreadMeta, [channelId]: { ...meta, hasMore: false } };
       })
       // Forum threads
       .addCase(fetchForumThreads.pending, (state) => {
@@ -478,6 +488,12 @@ export const selectForumThreads = (state: RootState) => state.channel.forumThrea
  * channels that haven't been queried yet — callers distinguish "no
  * cache" (undefined) from "cache says empty list" ([]).
  */
+export const selectDiscoveredThreadMeta = (channelId: string | null | undefined) =>
+  (state: RootState) =>
+    channelId ? state.channel.discoveredThreadMeta?.[channelId] : undefined;
+export const selectLoadingMoreThreads = (channelId: string | null | undefined) =>
+  (state: RootState) =>
+    !!(channelId && state.channel.loadingMoreThreadsFor?.[channelId]);
 export const selectDiscoveredThreadsForChannel = (channelId: string | null | undefined) =>
   (state: RootState): Channel[] | undefined =>
     channelId ? state.channel.discoveredThreadsByChannel[channelId] : undefined;

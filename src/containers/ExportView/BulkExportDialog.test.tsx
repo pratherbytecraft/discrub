@@ -134,6 +134,48 @@ describe('BulkExportDialog', () => {
     });
   });
 
+  // GitHub 24: threads picked in the Load Thread dialog.
+  describe('Thread export', () => {
+    const parent = { id: 'ch1', name: 'general', type: ChannelType.GUILD_TEXT } as Channel;
+    const threads = [
+      { id: 't1', name: 'Roadmap', type: 11, parent_id: 'ch1' },
+      { id: 't2', name: 'Bugs', type: 11, parent_id: 'ch1' },
+    ] as unknown as Channel[];
+    const auth = { token: 'test', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false };
+
+    it('names threads in the title, the pill and the button', () => {
+      renderWithProviders(
+        <BulkExportDialog open channels={threads} mode="channels" onClose={mockOnClose} guildId="g1" threadExport={{ parent, all: false, total: 2 }} />,
+        { preloadedState: createBaseState({ auth }) }
+      );
+      expect(screen.getByText('Export Threads')).toBeInTheDocument();
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      expect(screen.getByText('2 threads')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Export 2 Threads');
+      expect(screen.queryByText('Bulk Export Channels')).toBeNull();
+    });
+
+    it('counts every thread of the channel when the list has more than is loaded', () => {
+      renderWithProviders(
+        <BulkExportDialog open channels={threads} mode="channels" onClose={mockOnClose} guildId="g1" threadExport={{ parent, all: true, total: 140 }} />,
+        { preloadedState: createBaseState({ auth }) }
+      );
+      expect(screen.getByText('140 selected')).toBeInTheDocument();
+      expect(screen.getByText('140 threads')).toBeInTheDocument();
+      expect(screen.getByText(/\+138 more/)).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Export 140 Threads');
+    });
+
+    it('one thread reads in the singular', () => {
+      renderWithProviders(
+        <BulkExportDialog open channels={threads.slice(0, 1)} mode="channels" onClose={mockOnClose} guildId="g1" threadExport={{ parent, all: false, total: 1 }} />,
+        { preloadedState: createBaseState({ auth }) }
+      );
+      expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Export 1 Thread');
+      expect(screen.getByText('1 thread')).toBeInTheDocument();
+    });
+  });
+
   describe('DM mode', () => {
     it('should render dialog with DM count', () => {
       renderWithProviders(

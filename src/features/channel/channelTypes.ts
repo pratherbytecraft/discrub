@@ -27,6 +27,10 @@ export interface ChannelState {
    * re-fetch.
    */
   discoveredThreadsByChannel: Record<string, Channel[]>;
+  /** Per parent channel: how many threads Discord reports, and where the next page starts. */
+  discoveredThreadMeta?: Record<string, { total: number; hasMore: boolean; nextOffset: number }>;
+  /** Parent channels with a thread page on its way. */
+  loadingMoreThreadsFor?: Record<string, boolean>;
 }
 
 export const initialChannelState: ChannelState = {
@@ -42,4 +46,6 @@ export const initialChannelState: ChannelState = {
   forumThreadsTotalResults: 0,
   forumThreadsNextOffset: 0,
   discoveredThreadsByChannel: {},
+  discoveredThreadMeta: {},
+  loadingMoreThreadsFor: {},
 };

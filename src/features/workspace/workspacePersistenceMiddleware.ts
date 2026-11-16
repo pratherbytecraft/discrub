@@ -722,13 +722,23 @@ const idsOf = (items: Array<{ id: string }>): string[] => items.map((item) => it
 listen({
   matcher: isAnyOf(bulkExportChannels.pending, bulkExportDMs.pending),
   effect: (action, listenerApi) => {
-    const arg = argOf<{ channels: Array<{ id: string }>; guildId?: string | null; searchCriteria?: unknown; resume?: boolean }>(action);
+    const arg = argOf<{ channels: Array<{ id: string; name?: string; type?: number; parent_id?: string | null }>; guildId?: string | null; searchCriteria?: unknown; resume?: boolean; threadExport?: unknown }>(action);
+    // Threads and forum posts are not in any list a later session loads by
+    // itself, so a run keeps the few fields a resume needs to find them.
+    const threadTargets = arg.channels
+      .filter((channel) => channel.type === 10 || channel.type === 11 || channel.type === 12)
+      .map((channel) => ({ id: channel.id, name: channel.name, type: channel.type, parent_id: channel.parent_id ?? null }));
     const dms = bulkExportDMs.pending.match(action);
     recordBulkStart(api(listenerApi), {
       kind: 'bulkExport',
       mode: dms ? 'dms' : 'channels',
       guildId: dms ? null : arg.guildId ?? null,
-      settings: { snapshot: buildConfigSnapshot(listenerApi.getState()), searchCriteria: arg.searchCriteria ?? null },
+      settings: {
+        snapshot: buildConfigSnapshot(listenerApi.getState()),
+        searchCriteria: arg.searchCriteria ?? null,
+        ...(arg.threadExport ? { threadExport: arg.threadExport } : {}),
+        ...(threadTargets.length > 0 ? { threadTargets } : {}),
+      },
       queue: idsOf(arg.channels),
       keepDone: arg.resume === true,
     });

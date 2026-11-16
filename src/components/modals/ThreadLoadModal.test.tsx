@@ -13,17 +13,11 @@ const render = (ui: React.ReactElement) =>
     } as any,
   });
 
-const mockFetchActiveGuildThreads = vi.fn();
-const mockFetchPublicThreads = vi.fn();
-const mockFetchPrivateThreads = vi.fn();
-const mockFetchJoinedPrivateArchivedThreads = vi.fn();
+const mockSearch = vi.fn();
 
 vi.mock('@services/discordService', () => ({
   getDiscordService: () => ({
-    fetchActiveGuildThreads: mockFetchActiveGuildThreads,
-    fetchPublicThreads: mockFetchPublicThreads,
-    fetchPrivateThreads: mockFetchPrivateThreads,
-    fetchJoinedPrivateArchivedThreads: mockFetchJoinedPrivateArchivedThreads,
+    fetchForumThreadSearch: mockSearch,
   }),
 }));
 
@@ -42,10 +36,7 @@ describe('ThreadLoadModal', () => {
     // Default: every endpoint returns empty so non-discovery tests
     // (which don't pass channel/guildId) don't trigger any thunk calls
     // anyway, and discovery tests can override per-test.
-    mockFetchActiveGuildThreads.mockResolvedValue({ success: true, data: { threads: [] } });
-    mockFetchPublicThreads.mockResolvedValue({ success: true, data: { threads: [] } });
-    mockFetchPrivateThreads.mockResolvedValue({ success: true, data: { threads: [] } });
-    mockFetchJoinedPrivateArchivedThreads.mockResolvedValue({ success: true, data: { threads: [] } });
+    mockSearch.mockResolvedValue({ success: true, data: { threads: [], has_more: false, total_results: 0 } });
   });
 
   it('should render dialog with title', () => {
@@ -136,7 +127,7 @@ describe('ThreadLoadModal', () => {
     });
 
     it('renders discovered threads when channel + guildId are passed', async () => {
-      mockFetchActiveGuildThreads.mockResolvedValue({
+      mockSearch.mockResolvedValue({
         success: true,
         data: { threads: [{ id: '111', name: 'orphan-thread', type: 11, parent_id: 'parent' }] },
       });
@@ -146,7 +137,7 @@ describe('ThreadLoadModal', () => {
     });
 
     it('clicking a discovered thread row calls onLoad with that thread id', async () => {
-      mockFetchActiveGuildThreads.mockResolvedValue({
+      mockSearch.mockResolvedValue({
         success: true,
         data: { threads: [{ id: '222', name: 'pickme', type: 11, parent_id: 'parent' }] },
       });
@@ -158,7 +149,7 @@ describe('ThreadLoadModal', () => {
     });
 
     it('renders an "Archived" chip for archived threads', async () => {
-      mockFetchPublicThreads.mockResolvedValue({
+      mockSearch.mockResolvedValue({
         success: true,
         data: {
           threads: [{
@@ -180,7 +171,7 @@ describe('ThreadLoadModal', () => {
     // (messages · members · archived when), and a Private chip for
     // private threads. Active threads list before archived ones.
     it('renders message and member counts under the thread name', async () => {
-      mockFetchActiveGuildThreads.mockResolvedValue({
+      mockSearch.mockResolvedValue({
         success: true,
         data: { threads: [{ id: '444', name: 'busy', type: 11, parent_id: 'parent', total_message_sent: 1234, member_count: 1 }] },
       });
@@ -189,7 +180,7 @@ describe('ThreadLoadModal', () => {
     });
 
     it('marks private threads with a Private chip', async () => {
-      mockFetchActiveGuildThreads.mockResolvedValue({
+      mockSearch.mockResolvedValue({
         success: true,
         data: { threads: [{ id: '555', name: 'secret', type: 12, parent_id: 'parent' }] },
       });
@@ -199,13 +190,12 @@ describe('ThreadLoadModal', () => {
     });
 
     it('lists active threads before archived ones', async () => {
-      mockFetchPublicThreads.mockResolvedValue({
+      mockSearch.mockResolvedValue({
         success: true,
-        data: { threads: [{ id: '1', name: 'old', type: 11, parent_id: 'parent', thread_metadata: { archived: true } }] },
-      });
-      mockFetchActiveGuildThreads.mockResolvedValue({
-        success: true,
-        data: { threads: [{ id: '2', name: 'fresh', type: 11, parent_id: 'parent' }] },
+        data: { threads: [
+          { id: '1', name: 'old', type: 11, parent_id: 'parent', thread_metadata: { archived: true } },
+          { id: '2', name: 'fresh', type: 11, parent_id: 'parent' },
+        ] },
       });
       render(<ThreadLoadModal {...defaultProps} channel={textChannel} guildId="g1" />);
       await screen.findByText('old');
@@ -218,6 +208,127 @@ describe('ThreadLoadModal', () => {
       // beforeEach defaults all endpoints to empty.
       render(<ThreadLoadModal {...defaultProps} channel={textChannel} guildId="g1" />);
       expect(await screen.findByText(/No threads found/i)).toBeInTheDocument();
+    });
+  });
+
+  // GitHub 24: the list comes from Discord's thread search, a box per row
+  // picks threads, and the button exports the picked ones or all of them.
+  describe('thread export (GitHub 24)', () => {
+    const textChannel = { id: 'parent', name: 'general', type: 0 } as any;
+    const thread = (id: string, name = `t${id}`) => ({ id, name, type: 11, parent_id: 'parent' });
+    const page = (threads: unknown[], total: number, has_more: boolean) => ({ success: true, data: { threads, total_results: total, has_more } });
+    const onExport = vi.fn();
+    const open = (extra: Record<string, unknown> = {}) =>
+      render(<ThreadLoadModal {...defaultProps} channel={textChannel} guildId="g1" onExport={onExport} {...extra} />);
+
+    beforeEach(() => onExport.mockClear());
+
+    it('reads the list with one thread search call, first page, no archived filter', async () => {
+      mockSearch.mockResolvedValue(page([thread('1')], 1, false));
+      open();
+      await screen.findByText('t1');
+      expect(mockSearch).toHaveBeenCalledTimes(1);
+      expect(mockSearch).toHaveBeenCalledWith('tok', 'parent', { sort_by: 'last_message_time', sort_order: 'desc', limit: 25, offset: 0 });
+    });
+
+    it('shows how many threads Discord reports, not how many are loaded', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2')], 140, true));
+      open();
+      await screen.findByText('t1');
+      expect(screen.getByTestId('thread-total')).toHaveTextContent('140 found');
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Export all threads (140)');
+      expect(screen.getByTestId('threads-loading-more')).toBeInTheDocument();
+    });
+
+    it('with nothing ticked and the whole list loaded, the button hands over every thread so nothing is listed again', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2')], 2, false));
+      open();
+      await screen.findByText('t1');
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onExport).toHaveBeenCalledWith({ all: false, threads: [thread('1'), thread('2')], total: 2 });
+    });
+
+    it('with pages left to load, the button asks for every thread of the channel', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2')], 60, true));
+      open();
+      await screen.findByText('t1');
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onExport).toHaveBeenCalledWith({ all: true, threads: [thread('1'), thread('2')], total: 60 });
+    });
+
+    it('ticking rows exports only those, and the button says how many', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2'), thread('3')], 3, false));
+      open();
+      await screen.findByText('t1');
+      fireEvent.click(screen.getByTestId('thread-tick-2').querySelector('input')!);
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Export 1 thread');
+      fireEvent.click(screen.getByTestId('thread-tick-3').querySelector('input')!);
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Export 2 threads');
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onExport).toHaveBeenCalledWith({ all: false, threads: [thread('2'), thread('3')], total: 2 });
+      expect(mockOnLoad).not.toHaveBeenCalled();
+    });
+
+    it('the heading box means every thread, loaded or not', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2')], 60, true));
+      open();
+      await screen.findByText('t1');
+      fireEvent.click(screen.getByTestId('thread-select-all').querySelector('input')!);
+      expect((screen.getByTestId('thread-tick-1').querySelector('input') as HTMLInputElement).checked).toBe(true);
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onExport).toHaveBeenCalledWith(expect.objectContaining({ all: true, total: 60 }));
+    });
+
+    it('unticking one row after the heading box keeps the loaded rows minus that one', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2'), thread('3')], 3, false));
+      open();
+      await screen.findByText('t1');
+      fireEvent.click(screen.getByTestId('thread-select-all').querySelector('input')!);
+      fireEvent.click(screen.getByTestId('thread-tick-2').querySelector('input')!);
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Export 2 threads');
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onExport).toHaveBeenCalledWith({ all: false, threads: [thread('1'), thread('3')], total: 2 });
+    });
+
+    it('scrolling to the end of the list loads the next page once', async () => {
+      mockSearch.mockResolvedValueOnce(page([thread('1')], 30, true));
+      mockSearch.mockResolvedValueOnce(page([thread('2')], 30, false));
+      open();
+      await screen.findByText('t1');
+      const list = screen.getByTestId('discovered-threads');
+      fireEvent.scroll(list);
+      fireEvent.scroll(list);
+      expect(await screen.findByText('t2')).toBeInTheDocument();
+      expect(mockSearch).toHaveBeenCalledTimes(2);
+      expect(mockSearch).toHaveBeenLastCalledWith('tok', 'parent', expect.objectContaining({ offset: 25 }));
+      expect(screen.queryByTestId('threads-loading-more')).toBeNull();
+    });
+
+    it('the button is off with no threads and while another job runs', async () => {
+      open();
+      await screen.findByText(/No threads found/i);
+      expect(screen.getByTestId('export-threads')).toBeDisabled();
+    });
+
+    it('is off while another long job runs', async () => {
+      mockSearch.mockResolvedValue(page([thread('1')], 1, false));
+      open({ exportDisabled: true });
+      await screen.findByText('t1');
+      expect(screen.getByTestId('export-threads')).toBeDisabled();
+    });
+
+    it('a failed listing says so', async () => {
+      mockSearch.mockResolvedValue({ success: false, status: 403 });
+      open();
+      expect(await screen.findByText(/Couldn't load threads/)).toBeInTheDocument();
+    });
+
+    it('without onExport there are no boxes and no button', async () => {
+      mockSearch.mockResolvedValue(page([thread('1')], 1, false));
+      render(<ThreadLoadModal {...defaultProps} channel={textChannel} guildId="g1" />);
+      await screen.findByText('t1');
+      expect(screen.queryByTestId('export-threads')).toBeNull();
+      expect(screen.queryByTestId('thread-tick-1')).toBeNull();
     });
   });
 

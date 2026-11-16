@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -11,6 +11,7 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  Checkbox,
   Chip,
   Divider,
   CircularProgress,
@@ -22,13 +23,17 @@ import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import DownloadIcon from '@mui/icons-material/Download';
 import type { Channel } from 'discrub-core/types/discord-types';
 import { timeAgo } from '@utils/timeAgo';
 import DialogCloseIcon from '@components/ui/DialogCloseIcon';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   fetchChannelThreads,
+  loadMoreChannelThreads,
+  selectDiscoveredThreadMeta,
   selectDiscoveredThreadsForChannel,
+  selectLoadingMoreThreads,
 } from '@features/channel/channelSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
 import { t as translate } from '@/i18n';
@@ -45,8 +50,24 @@ interface ThreadLoadModalProps {
    * hidden and the manual ID field is the only path. Backlog #150.
    */
   channel?: Channel | null;
-  /** Guild that owns the channel — needed for the active-threads endpoint. */
+  /** Guild that owns the channel. Without it the list is hidden. */
   guildId?: string | null;
+  /**
+   * Export the ticked threads, or every thread of the channel when none
+   * is ticked (GitHub 24). `all` is true only when the list has pages it
+   * has not loaded: the run then reads the list itself and `threads` is
+   * what is loaded so far. Left out, the dialog has no export button.
+   */
+  onExport?: (selection: ThreadExportSelection) => void;
+  /** Another long job is running, so an export cannot start. */
+  exportDisabled?: boolean;
+}
+
+export interface ThreadExportSelection {
+  all: boolean;
+  threads: Channel[];
+  /** How many threads the export covers. */
+  total: number;
 }
 
 const ThreadLoadModal = ({
@@ -55,13 +76,20 @@ const ThreadLoadModal = ({
   onLoad,
   channel,
   guildId,
+  onExport,
+  exportDisabled = false,
 }: ThreadLoadModalProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const token = useAppSelector(selectAuthToken);
   const cached = useAppSelector(selectDiscoveredThreadsForChannel(channel?.id));
+  const meta = useAppSelector(selectDiscoveredThreadMeta(channel?.id));
+  const loadingMore = useAppSelector(selectLoadingMoreThreads(channel?.id));
   const [threadId, setThreadId] = useState('');
-  const [discovered, setDiscovered] = useState<Channel[]>(cached ?? []);
+  const discovered = useMemo(() => cached ?? [], [cached]);
+  // Ticked threads. `allTicked` is the box in the heading: every thread, loaded or not.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [allTicked, setAllTicked] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
 
@@ -77,12 +105,9 @@ const ThreadLoadModal = ({
 
       dispatch(fetchChannelThreads({ channel, guildId, token, force }))
         .unwrap()
-        .then((threads) => {
-          if (!cancelled) setDiscovered(threads);
-        })
         .catch((err) => {
           if (!cancelled) {
-            setDiscoverError(err instanceof Error ? err.message : String(err));
+            setDiscoverError(err instanceof Error ? err.message : String(err?.message ?? err));
           }
         })
         .finally(() => {
@@ -105,6 +130,56 @@ const ThreadLoadModal = ({
     if (!open) return;
     return runDiscovery(false);
   }, [open, runDiscovery]);
+
+  // Ticks belong to one opening of the dialog on one channel.
+  const channelId = channel?.id;
+  useEffect(() => {
+    setPicked(new Set());
+    setAllTicked(false);
+  }, [open, channelId]);
+
+  const total = Math.max(meta?.total ?? 0, discovered.length);
+  const hasMore = !!meta?.hasMore;
+
+  // The next 25 load when the list is scrolled near its end. The thunk
+  // lets one page through at a time.
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const loadMore = useCallback(() => {
+    if (!channel || !token || !hasMore || loadingMore) return;
+    void dispatch(loadMoreChannelThreads({ channel, token }));
+  }, [channel, token, hasMore, loadingMore, dispatch]);
+  const handleListScroll = (e: React.UIEvent<HTMLUListElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 64) loadMore();
+  };
+
+  const isTicked = (id: string) => allTicked || picked.has(id);
+  const toggleThread = (id: string) => {
+    if (allTicked) {
+      // Leaving "all": what is loaded stays ticked, minus this one.
+      setAllTicked(false);
+      setPicked(new Set(discovered.filter((thread) => thread.id !== id).map((thread) => thread.id)));
+      return;
+    }
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPicked(next);
+  };
+  const toggleAll = () => {
+    setPicked(new Set());
+    setAllTicked((value) => !value);
+  };
+  const pickedThreads = useMemo(() => discovered.filter((thread) => picked.has(thread.id)), [discovered, picked]);
+  const exportsAll = allTicked || pickedThreads.length === 0;
+  const handleExport = () => {
+    if (!onExport || total === 0) return;
+    // With the whole list loaded the run is handed the threads and lists
+    // nothing again. Only a list with pages left makes the run read it.
+    onExport(exportsAll
+      ? { all: hasMore, threads: discovered, total: hasMore ? total : discovered.length }
+      : { all: false, threads: pickedThreads, total: pickedThreads.length });
+  };
 
   const handleLoad = () => {
     const trimmed = threadId.trim();
@@ -144,9 +219,27 @@ const ThreadLoadModal = ({
           {showDiscoveryList && (
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography variant="subtitle2">
-                  {t('threadLoad.threadsInChannel')}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                  {onExport && discovered.length > 0 && (
+                    <Checkbox
+                      size="small"
+                      checked={allTicked}
+                      indeterminate={!allTicked && pickedThreads.length > 0}
+                      onChange={toggleAll}
+                      inputProps={{ 'aria-label': t('threadLoad.selectAll') }}
+                      data-testid="thread-select-all"
+                      sx={{ ml: 0.75, mr: 0.5, p: 0.5 }}
+                    />
+                  )}
+                  <Typography variant="subtitle2" noWrap>
+                    {t('threadLoad.threadsInChannel')}
+                    {total > 0 && (
+                      <Box component="span" data-testid="thread-total" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                        {' · '}{t('threadLoad.found', { count: total })}
+                      </Box>
+                    )}
+                  </Typography>
+                </Box>
                 <Tooltip title={t('threadLoad.refresh')} arrow>
                   <span>
                     <IconButton
@@ -161,7 +254,7 @@ const ThreadLoadModal = ({
                   </span>
                 </Tooltip>
               </Box>
-              {discovering && (
+              {discovering && discovered.length === 0 && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
                   <CircularProgress size={16} />
                   <Typography variant="body2" color="text.secondary">
@@ -179,10 +272,12 @@ const ThreadLoadModal = ({
                   {t('threadLoad.none')}
                 </Typography>
               )}
-              {!discovering && discovered.length > 0 && (
+              {discovered.length > 0 && (
                 <List
                   dense
                   disablePadding
+                  ref={listRef}
+                  onScroll={handleListScroll}
                   data-testid="discovered-threads"
                   sx={{
                     maxHeight: 264,
@@ -197,10 +292,20 @@ const ThreadLoadModal = ({
                     <ThreadRow
                       key={thread.id}
                       thread={thread}
-                      last={index === rows.length - 1}
+                      last={index === rows.length - 1 && !hasMore}
                       onPick={handlePickThread}
+                      ticked={onExport ? isTicked(thread.id) : undefined}
+                      onTick={toggleThread}
                     />
                   ))}
+                  {hasMore && (
+                    <Box data-testid="threads-loading-more" sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 1 }}>
+                      <CircularProgress size={14} />
+                      <Typography variant="caption" color="text.secondary">
+                        {t('threadLoad.loadingMore')}
+                      </Typography>
+                    </Box>
+                  )}
                 </List>
               )}
             </Box>
@@ -227,6 +332,19 @@ const ThreadLoadModal = ({
         </Box>
       </DialogContent>
       <DialogActions>
+        {onExport && showDiscoveryList && (
+          <Button
+            onClick={handleExport}
+            startIcon={<DownloadIcon />}
+            disabled={exportDisabled || total === 0 || (discovering && discovered.length === 0)}
+            data-testid="export-threads"
+            sx={{ mr: 'auto' }}
+          >
+            {exportsAll
+              ? t('threadLoad.exportAll', { count: total })
+              : t('threadLoad.exportPicked', { count: pickedThreads.length })}
+          </Button>
+        )}
         <Button onClick={handleClose}>
           {t('common.cancel')}
         </Button>
@@ -274,10 +392,15 @@ const ThreadRow = ({
   thread,
   last,
   onPick,
+  ticked,
+  onTick,
 }: {
   thread: Channel;
   last: boolean;
   onPick: (thread: Channel) => void;
+  /** Left out when the dialog has no export, and the row then has no box. */
+  ticked?: boolean;
+  onTick?: (id: string) => void;
 }) => {
   const archived = !!thread.thread_metadata?.archived;
   // Row 101 (pass 2): the Private chip is for private threads only; a locked public thread keeps the lock icon.
@@ -299,6 +422,17 @@ const ThreadRow = ({
         '&:hover .thread-row-go': { opacity: 1, transform: 'translateX(0)' },
       }}
     >
+      {ticked !== undefined && (
+        <Checkbox
+          size="small"
+          checked={ticked}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onTick?.(thread.id)}
+          inputProps={{ 'aria-label': translate('threadLoad.selectNamed', { name: thread.name || thread.id }) }}
+          data-testid={`thread-tick-${thread.id}`}
+          sx={{ p: 0.5, ml: -0.75 }}
+        />
+      )}
       <Box
         sx={{
           width: 30,

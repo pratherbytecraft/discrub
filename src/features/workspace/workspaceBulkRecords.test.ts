@@ -269,6 +269,37 @@ describe('boot and lookup', () => {
     expect(selectUnfinishedBulk(store.getState() as never)).toMatchObject({ kind: 'bulkPurge', remaining: 3 });
   });
 
+  it('a run keeps what a resume needs to find its threads and forum posts again (GitHub 24)', async () => {
+    const store = await openDefault();
+    const threads = [
+      { id: 't1', name: 'One', type: 11, parent_id: 'c1', topic: 'not kept' },
+      { id: 't2', name: 'Two', type: 12, parent_id: 'c1' },
+    ];
+    const threadExport = { parentId: 'c1', parentName: 'general', all: false };
+    const arg = { channels: [...threads, CHANNELS[0]] as never, token: 't', format: 'html' as const, messagesPerPage: 1000, separateThreads: false, includeMedia: false, guildId: '42', searchCriteria: null, threadExport };
+    store.dispatch(bulkExportChannels.pending('e1', arg));
+    await flush(store);
+    const record = await readBulkRecord(store.getState() as never);
+    const settings = record?.settings as { threadExport?: unknown; threadTargets?: Array<{ id: string }> };
+    expect(record?.queue).toEqual(['t1', 't2', CHANNELS[0].id]);
+    expect(settings.threadExport).toEqual(threadExport);
+    expect(settings.threadTargets).toEqual([
+      { id: 't1', name: 'One', type: 11, parent_id: 'c1' },
+      { id: 't2', name: 'Two', type: 12, parent_id: 'c1' },
+    ]);
+    // With nothing loaded but the channel list, the queue still resolves in order.
+    expect(resolveQueue(record!.queue, [settings.threadTargets as never, CHANNELS]).map((c) => c.id)).toEqual(['t1', 't2', CHANNELS[0].id]);
+  });
+
+  it('a run of plain channels keeps no thread list', async () => {
+    const store = await openDefault();
+    store.dispatch(bulkExportChannels.pending('e1', { channels: CHANNELS, token: 't', format: 'html' as const, messagesPerPage: 1000, separateThreads: false, includeMedia: false, guildId: '42', searchCriteria: null }));
+    await flush(store);
+    const settings = (await readBulkRecord(store.getState() as never))?.settings as Record<string, unknown>;
+    expect(settings).not.toHaveProperty('threadTargets');
+    expect(settings).not.toHaveProperty('threadExport');
+  });
+
   it('resolveQueue keeps run order and skips what is gone', () => {
     expect(resolveQueue(['c3', 'gone', 'c1'], [CHANNELS]).map((c) => c.id)).toEqual(['c3', 'c1']);
   });

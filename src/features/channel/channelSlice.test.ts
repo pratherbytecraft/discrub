@@ -9,6 +9,7 @@ import channelReducer, {
   fetchChannels,
   fetchChannelById,
   fetchChannelThreads,
+  loadMoreChannelThreads,
   fetchForumThreads,
   loadMoreForumThreads,
   searchForumThreads,
@@ -571,229 +572,155 @@ describe('channelSlice', () => {
   // Backlog #150: discover all threads (active + archived public + archived
   // private/joined) for a channel so users can find threads whose type-21
   // starter has been deleted (otherwise invisible in the message feed).
-  describe('fetchChannelThreads (Backlog #150)', () => {
+  // GitHub 24: the list is read from Discord's thread search, the one call
+  // that shows a user account active and archived threads alike.
+  describe('fetchChannelThreads', () => {
     const textChannel = { id: 'parent', name: 'general', type: 0 } as Channel;
     const voiceChannel = { id: 'voice', name: 'voice-chat', type: 2 } as Channel;
     const stageChannel = { id: 'stage', name: 'live', type: 13 } as Channel;
+    const thread = (id: string, archived = false): Channel =>
+      ({ id, name: `t-${id}`, type: 11, parent_id: 'parent', thread_metadata: { archived } } as unknown as Channel);
+    const page = (threads: Channel[], total: number, has_more: boolean) => ({ success: true, data: { threads, total_results: total, has_more } });
+    const useSearch = (...pages: unknown[]) => {
+      const fetchForumThreadSearch = vi.fn();
+      pages.forEach((p) => fetchForumThreadSearch.mockResolvedValueOnce(p));
+      vi.mocked(discordService.getDiscordService).mockReturnValue({ fetchForumThreadSearch } as any);
+      return fetchForumThreadSearch;
+    };
+    const get = () => store.dispatch(fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }));
 
-    const thread = (id: string, parent_id: string, archived = false, ts?: string): Channel =>
-      ({
-        id,
-        name: `t-${id}`,
-        type: 11,
-        parent_id,
-        thread_metadata: archived ? { archived: true, archive_timestamp: ts } : { archived: false },
-      } as unknown as Channel);
-
-    it('merges active + archived public + archived private threads, deduped by id', async () => {
-      const fetchActiveGuildThreads = vi.fn().mockResolvedValue({
-        success: true,
-        data: { threads: [thread('100', 'parent'), thread('200', 'other-parent')] },
-      });
-      const fetchPublicThreads = vi.fn().mockResolvedValue({
-        success: true,
-        data: { threads: [thread('300', 'parent', true, '2026-01-01T00:00:00Z')] },
-      });
-      const fetchPrivateThreads = vi.fn().mockResolvedValue({
-        // Same `100` already in active — must be deduped.
-        success: true,
-        data: { threads: [thread('400', 'parent', true, '2026-02-01T00:00:00Z'), thread('100', 'parent')] },
-      });
-      vi.mocked(discordService.getDiscordService).mockReturnValue({
-        fetchActiveGuildThreads,
-        fetchPublicThreads,
-        fetchPrivateThreads,
-        fetchJoinedPrivateArchivedThreads: vi.fn(),
-      } as any);
-
-      const result = await store.dispatch(
-        fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-      );
-
-      const ids = (result.payload as Channel[]).map((c) => c.id);
-      // 200 belongs to a different parent → filtered out by the active-thread step.
-      expect(ids).not.toContain('200');
-      // 100 appeared in both active + private — must show exactly once.
-      expect(ids.filter((id) => id === '100')).toHaveLength(1);
-      // All three children of `parent` present.
-      expect(new Set(ids)).toEqual(new Set(['100', '300', '400']));
+    it('makes one thread search call with no archived filter, and keeps active and archived threads', async () => {
+      const search = useSearch(page([thread('100'), thread('300', true)], 2, false));
+      const result = await get();
+      expect(search).toHaveBeenCalledTimes(1);
+      expect(search).toHaveBeenCalledWith('t', 'parent', { sort_by: 'last_message_time', sort_order: 'desc', limit: 25, offset: 0 });
+      expect(search.mock.calls[0][2]).not.toHaveProperty('archived');
+      expect(result.payload).toEqual({ threads: [thread('100'), thread('300', true)], total: 2, hasMore: false, nextOffset: 25 });
+      expect(store.getState().channel.discoveredThreadsByChannel.parent.map((c) => c.id)).toEqual(['100', '300']);
+      expect(store.getState().channel.discoveredThreadMeta?.parent).toEqual({ total: 2, hasMore: false, nextOffset: 25 });
     });
 
-    it('falls back to joined-private when fetchPrivateThreads returns success=false (no MANAGE_THREADS)', async () => {
-      const fetchActiveGuildThreads = vi.fn().mockResolvedValue({ success: true, data: { threads: [] } });
-      const fetchPublicThreads = vi.fn().mockResolvedValue({ success: true, data: { threads: [] } });
-      const fetchPrivateThreads = vi.fn().mockResolvedValue({ success: false, data: null });
-      const fetchJoinedPrivateArchivedThreads = vi.fn().mockResolvedValue({
-        success: true,
-        data: { threads: [thread('500', 'parent', true, '2026-03-01T00:00:00Z')] },
-      });
+    it('never calls the bot only active list or the archived lists', async () => {
+      const others = { fetchActiveGuildThreads: vi.fn(), fetchPublicThreads: vi.fn(), fetchPrivateThreads: vi.fn(), fetchJoinedPrivateArchivedThreads: vi.fn() };
       vi.mocked(discordService.getDiscordService).mockReturnValue({
-        fetchActiveGuildThreads,
-        fetchPublicThreads,
-        fetchPrivateThreads,
-        fetchJoinedPrivateArchivedThreads,
+        ...others,
+        fetchForumThreadSearch: vi.fn().mockResolvedValue(page([thread('1')], 1, false)),
       } as any);
-
-      const result = await store.dispatch(
-        fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-      );
-
-      expect((result.payload as Channel[]).map((c) => c.id)).toEqual(['500']);
-      expect(fetchJoinedPrivateArchivedThreads).toHaveBeenCalledOnce();
+      await get();
+      Object.values(others).forEach((fn) => expect(fn).not.toHaveBeenCalled());
     });
 
-    it('returns [] without hitting any thread endpoints for voice channels (#160 alignment)', async () => {
-      const fetchActiveGuildThreads = vi.fn();
-      const fetchPublicThreads = vi.fn();
-      const fetchPrivateThreads = vi.fn();
-      vi.mocked(discordService.getDiscordService).mockReturnValue({
-        fetchActiveGuildThreads,
-        fetchPublicThreads,
-        fetchPrivateThreads,
-        fetchJoinedPrivateArchivedThreads: vi.fn(),
-      } as any);
-
-      const voiceResult = await store.dispatch(
-        fetchChannelThreads({ channel: voiceChannel, guildId: 'g1', token: 't' }),
-      );
-      const stageResult = await store.dispatch(
-        fetchChannelThreads({ channel: stageChannel, guildId: 'g1', token: 't' }),
-      );
-
-      expect(voiceResult.payload).toEqual([]);
-      expect(stageResult.payload).toEqual([]);
-      expect(fetchActiveGuildThreads).not.toHaveBeenCalled();
-      expect(fetchPublicThreads).not.toHaveBeenCalled();
-      expect(fetchPrivateThreads).not.toHaveBeenCalled();
+    it('keeps the total Discord reports when only the first page is read', async () => {
+      useSearch(page([thread('1'), thread('2')], 140, true));
+      await get();
+      expect(store.getState().channel.discoveredThreadMeta?.parent).toEqual({ total: 140, hasMore: true, nextOffset: 25 });
     });
 
-    it('survives a per-endpoint failure and still returns whatever loaded', async () => {
-      const fetchActiveGuildThreads = vi.fn().mockResolvedValue({
-        success: true,
-        data: { threads: [thread('100', 'parent')] },
-      });
-      const fetchPublicThreads = vi.fn().mockRejectedValue(new Error('500 from Discord'));
-      const fetchPrivateThreads = vi.fn().mockResolvedValue({ success: true, data: { threads: [] } });
-      vi.mocked(discordService.getDiscordService).mockReturnValue({
-        fetchActiveGuildThreads,
-        fetchPublicThreads,
-        fetchPrivateThreads,
-        fetchJoinedPrivateArchivedThreads: vi.fn(),
-      } as any);
-
-      const result = await store.dispatch(
-        fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-      );
-
-      // Active threads survived even though public archived failed.
-      expect((result.payload as Channel[]).map((c) => c.id)).toEqual(['100']);
+    it('returns nothing and makes no call for voice and stage channels', async () => {
+      const search = useSearch();
+      const voice = await store.dispatch(fetchChannelThreads({ channel: voiceChannel, guildId: 'g1', token: 't' }));
+      const stage = await store.dispatch(fetchChannelThreads({ channel: stageChannel, guildId: 'g1', token: 't' }));
+      expect((voice.payload as { threads: Channel[] }).threads).toEqual([]);
+      expect((stage.payload as { threads: Channel[] }).threads).toEqual([]);
+      expect(search).not.toHaveBeenCalled();
     });
 
-    // Backlog #165: in-session cache. Auto-discover from the modal
-    // passes force=false; manual Refresh passes force=true.
+    it('rejects when Discord refuses the listing, and leaves an earlier list alone', async () => {
+      useSearch(page([thread('1')], 1, false), { success: false, status: 403 });
+      await get();
+      const result = await store.dispatch(fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't', force: true }));
+      expect(result.type).toBe('channel/fetchChannelThreads/rejected');
+      expect((result as { error: { message: string } }).error.message).toContain('403');
+      expect(store.getState().channel.discoveredThreadsByChannel.parent.map((c) => c.id)).toEqual(['1']);
+    });
+
     describe('in-session cache (Backlog #165)', () => {
-      function setupSpy(threads: Channel[]) {
-        const spy = vi.fn().mockResolvedValue({
-          success: true,
-          data: { threads },
-        });
-        vi.mocked(discordService.getDiscordService).mockReturnValue({
-          fetchActiveGuildThreads: spy,
-          fetchPublicThreads: vi.fn().mockResolvedValue({ success: true, data: { threads: [] } }),
-          fetchPrivateThreads: vi.fn().mockResolvedValue({ success: true, data: { threads: [] } }),
-          fetchJoinedPrivateArchivedThreads: vi.fn(),
-        } as any);
-        return spy;
-      }
-
-      it('populates discoveredThreadsByChannel on a fulfilled fetch', async () => {
-        setupSpy([thread('100', 'parent')]);
-        await store.dispatch(
-          fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-        );
-        expect(store.getState().channel.discoveredThreadsByChannel.parent).toBeDefined();
-        expect(store.getState().channel.discoveredThreadsByChannel.parent.map((c) => c.id))
-          .toEqual(['100']);
+      it('opening again makes no call, and gives back the list with its total', async () => {
+        const search = useSearch(page([thread('100')], 60, true));
+        await get();
+        const again = await get();
+        expect(search).toHaveBeenCalledOnce();
+        expect(again.payload).toEqual({ threads: [thread('100')], total: 60, hasMore: true, nextOffset: 25 });
       });
 
-      it('serves cached results without re-hitting the API on a non-forced re-fetch', async () => {
-        const spy = setupSpy([thread('100', 'parent')]);
-        await store.dispatch(
-          fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-        );
-        expect(spy).toHaveBeenCalledOnce();
-        // Second dispatch with force=false (default) should short-circuit.
-        await store.dispatch(
-          fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-        );
-        expect(spy).toHaveBeenCalledOnce(); // still 1 — cache hit
+      it('force reads the list again from the first page', async () => {
+        const search = useSearch(page([thread('100')], 1, false), page([thread('100'), thread('200')], 2, false));
+        await get();
+        await store.dispatch(fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't', force: true }));
+        expect(search).toHaveBeenCalledTimes(2);
+        expect(search.mock.calls[1][2]).toMatchObject({ offset: 0 });
+        expect(store.getState().channel.discoveredThreadsByChannel.parent.map((c) => c.id)).toEqual(['100', '200']);
       });
 
-      it('force=true bypasses the cache and re-fetches', async () => {
-        const spy = setupSpy([thread('100', 'parent')]);
-        await store.dispatch(
-          fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-        );
-        expect(spy).toHaveBeenCalledOnce();
-        await store.dispatch(
-          fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't', force: true }),
-        );
-        expect(spy).toHaveBeenCalledTimes(2);
-      });
-
-      it('cache is per-channel — fetching a different channel does not hit the cache', async () => {
-        const spy = setupSpy([thread('100', 'parent')]);
-        const otherChannel = { id: 'other-parent', name: 'random', type: 0 } as Channel;
-        await store.dispatch(
-          fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-        );
-        await store.dispatch(
-          fetchChannelThreads({ channel: otherChannel, guildId: 'g1', token: 't' }),
-        );
-        expect(spy).toHaveBeenCalledTimes(2);
+      it('is kept per channel', async () => {
+        const search = useSearch(page([thread('100')], 1, false), page([], 0, false));
+        await get();
+        await store.dispatch(fetchChannelThreads({ channel: { id: 'other', name: 'random', type: 0 } as Channel, guildId: 'g1', token: 't' }));
+        expect(search).toHaveBeenCalledTimes(2);
       });
     });
 
-    it('sorts archived threads by archive_timestamp newest-first; active threads by id snowflake', async () => {
-      // Real Discord snowflakes are 64-bit integers whose high bits are
-      // a millisecond timestamp since the Discord epoch (Jan 2015). Use
-      // believable values so the snowflake-shifted sort key actually
-      // reflects time order. Smaller snowflake → older.
-      const olderActive = thread('1100000000000000000', 'parent'); // older snowflake
-      const newerActive = thread('1300000000000000000', 'parent'); // newer snowflake
-      const olderArchived = thread('300', 'parent', true, '2026-01-01T00:00:00Z');
-      const newerArchived = thread('400', 'parent', true, '2026-06-01T00:00:00Z');
+    describe('loadMoreChannelThreads', () => {
+      const more = () => store.dispatch(loadMoreChannelThreads({ channel: textChannel, token: 't' }));
 
-      const fetchActiveGuildThreads = vi.fn().mockResolvedValue({
-        success: true,
-        data: { threads: [olderActive, newerActive] },
+      it('reads the next page from where the list ends and adds it', async () => {
+        const search = useSearch(page([thread('1')], 51, true), page([thread('2')], 51, true), page([thread('3')], 51, false));
+        await get();
+        await more();
+        expect(search.mock.calls[1][2]).toMatchObject({ limit: 25, offset: 25 });
+        await more();
+        expect(search.mock.calls[2][2]).toMatchObject({ offset: 50 });
+        expect(store.getState().channel.discoveredThreadsByChannel.parent.map((c) => c.id)).toEqual(['1', '2', '3']);
+        expect(store.getState().channel.discoveredThreadMeta?.parent).toEqual({ total: 51, hasMore: false, nextOffset: 75 });
       });
-      const fetchPublicThreads = vi.fn().mockResolvedValue({
-        success: true,
-        data: { threads: [olderArchived, newerArchived] },
+
+      it('makes no call when the list has ended', async () => {
+        const search = useSearch(page([thread('1')], 1, false));
+        await get();
+        await more();
+        expect(search).toHaveBeenCalledOnce();
       });
-      vi.mocked(discordService.getDiscordService).mockReturnValue({
-        fetchActiveGuildThreads,
-        fetchPublicThreads,
-        fetchPrivateThreads: vi.fn().mockResolvedValue({ success: true, data: { threads: [] } }),
-        fetchJoinedPrivateArchivedThreads: vi.fn(),
-      } as any);
 
-      const result = await store.dispatch(
-        fetchChannelThreads({ channel: textChannel, guildId: 'g1', token: 't' }),
-      );
+      it('lets one page through at a time', async () => {
+        let release: (value: unknown) => void = () => undefined;
+        const fetchForumThreadSearch = vi.fn()
+          .mockResolvedValueOnce(page([thread('1')], 60, true))
+          .mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
+        vi.mocked(discordService.getDiscordService).mockReturnValue({ fetchForumThreadSearch } as any);
+        await get();
+        const first = more();
+        const second = more();
+        release(page([thread('2')], 60, true));
+        await Promise.all([first, second]);
+        expect(fetchForumThreadSearch).toHaveBeenCalledTimes(2);
+      });
 
-      const ids = (result.payload as Channel[]).map((c) => c.id);
-      // Active threads' snowflake-derived ms timestamps are in the trillions
-      // (well past 2026 archive_timestamps), so they sort to the top.
-      // Within each bucket, newest first.
-      expect(ids).toEqual(['1300000000000000000', '1100000000000000000', '400', '300']);
+      it('does not add a thread the list already has', async () => {
+        useSearch(page([thread('1'), thread('2')], 3, true), page([thread('2'), thread('3')], 3, false));
+        await get();
+        await more();
+        expect(store.getState().channel.discoveredThreadsByChannel.parent.map((c) => c.id)).toEqual(['1', '2', '3']);
+      });
+
+      it('an empty page ends the list even when Discord says there is more', async () => {
+        useSearch(page([thread('1')], 60, true), page([], 60, true));
+        await get();
+        await more();
+        expect(store.getState().channel.discoveredThreadMeta?.parent.hasMore).toBe(false);
+      });
+
+      it('a page that fails ends the scroll loading and keeps the list', async () => {
+        const search = useSearch(page([thread('1')], 60, true), { success: false, status: 500 });
+        await get();
+        await more();
+        await more();
+        expect(search).toHaveBeenCalledTimes(2);
+        expect(store.getState().channel.discoveredThreadsByChannel.parent.map((c) => c.id)).toEqual(['1']);
+        expect(store.getState().channel.loadingMoreThreadsFor?.parent).toBe(false);
+      });
     });
   });
 
-  // Backlog #151: Forum channels were silently missing active posts because
-  // the thunks passed `archived: true`, which Discord treats as a strict
-  // filter. Omitting it returns the union (active + archived).
   describe('forum thread thunks (Backlog #151)', () => {
     let forumStore: TestStore;
 

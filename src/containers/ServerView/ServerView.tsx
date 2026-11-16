@@ -112,6 +112,7 @@ import ExportDialog from '@containers/ExportView/ExportDialog';
 import BulkExportDialog from '@containers/ExportView/BulkExportDialog';
 import LoadAllDialog from '@components/message/LoadAllDialog';
 import ThreadLoadModal from '@components/modals/ThreadLoadModal';
+import type { ThreadExportSelection } from '@components/modals/ThreadLoadModal';
 import MessageTable from '@components/message/MessageTable';
 import AnalyticsModal from '@components/modals/AnalyticsModal';
 import { addStatusEntry } from '@features/status/statusSlice';
@@ -202,6 +203,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   const threadTabs = useAppSelector(selectThreadTabs);
   const forumThreads = useAppSelector(selectForumThreads);
   const discoveredThreads = useAppSelector(selectDiscoveredThreadsForChannel(selectedChannel?.id));
+  const [threadExport, setThreadExport] = useState<ThreadExportSelection | null>(null);
   const isLoadingForumThreads = useAppSelector(selectIsLoadingForumThreads);
   const forumFirstMessages = useAppSelector(selectForumFirstMessages);
   const hasMoreForumThreads = useAppSelector(selectHasMoreForumThreads);
@@ -823,6 +825,14 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
     );
   }, [token, activeTab, currentContext?.id, dispatch]);
 
+  // GitHub 24: the threads ticked in Load Thread, or all of them, go to the
+  // export dialog a forum's posts use.
+  const handleThreadExport = (selection: ThreadExportSelection) => {
+    closeDialog('threadLoad');
+    setThreadExport(selection);
+    openDialog('forumExport');
+  };
+
   const handleThreadLoad = async (threadId: string) => {
     if (!token) return;
 
@@ -1363,10 +1373,11 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
 
       <BulkExportDialog
         open={forumExportDialogOpen}
-        onClose={() => closeDialog('forumExport')}
-        channels={forumThreads}
+        onClose={() => { closeDialog('forumExport'); setThreadExport(null); }}
+        channels={threadExport ? threadExport.threads : forumThreads}
         mode="channels"
         guildId={selectedGuild?.id}
+        threadExport={threadExport && selectedChannel ? { parent: selectedChannel, all: threadExport.all, total: threadExport.total } : null}
       />
 
       <LoadAllDialog
@@ -1382,6 +1393,8 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
         open={threadLoadOpen}
         onClose={() => closeDialog('threadLoad')}
         onLoad={handleThreadLoad}
+        onExport={handleThreadExport}
+        exportDisabled={isOperationRunning}
         channel={selectedChannel}
         guildId={selectedGuild?.id ?? null}
       />
