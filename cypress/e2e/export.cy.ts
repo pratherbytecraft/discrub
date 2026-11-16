@@ -50,6 +50,19 @@ describe('Export', () => {
     cy.contains('button', 'Export').click();
     cy.get('[role="dialog"]').contains('Max zip size').scrollIntoView().should('be.visible');
     cy.get('[role="dialog"]').contains('4 GB (recommended)').should('exist');
+    cy.get('[data-testid="single-zip-warning"]').should('not.exist');
+  });
+
+  it('offers a single zip with a warning, and a part size takes the warning away', () => {
+    cy.contains('button', 'Export').click();
+    cy.get('[role="dialog"]').contains('4 GB (recommended)').scrollIntoView().click();
+    cy.get('[role="listbox"] [role="option"]').last().should('have.text', 'Single zip (no limit)').click();
+    cy.get('[data-testid="single-zip-warning"]').scrollIntoView().should('be.visible')
+      .and('contain', 'Zips past 4 GB need');
+    cy.window().its('__store__').invoke('getState').its('export.maxZipPartBytes').should('eq', -1);
+    cy.get('[role="dialog"]').contains('Single zip (no limit)').click();
+    cy.contains('[role="option"]', '2 GB').click();
+    cy.get('[data-testid="single-zip-warning"]').should('not.exist');
   });
 
   it('reveals the text-format options panel when Plain Text is selected', () => {

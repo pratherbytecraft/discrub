@@ -1215,6 +1215,8 @@
     "cancel": "Abbrechen",
     "export": "Exportieren",
     "zipRecommended": "4 GB (empfohlen)",
+    "zipSingle": "Eine ZIP-Datei (kein Limit)",
+    "zipSingleWarning": "ZIP-Dateien über 4 GB brauchen ein aktuelles Entpackprogramm wie 7-Zip.",
     "saveAsPresetItem": "Als Vorlage speichern...",
     "mediaLabelEmpty": "{{label}} (0 Dateien)",
     "mediaLabelFiles_one": "{{count}} Datei, {{size}}",

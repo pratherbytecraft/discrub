@@ -153,17 +153,34 @@ describe('ExportSettingsAccordion — text format (#184)', () => {
     expect(within(panel).getAllByRole('combobox')[4]).toHaveTextContent('Include');
   });
 
-  it('Max zip size defaults to 4 GB, offers no single zip, and switching dispatches the size (#207 Arm A)', async () => {
+  it('Max zip size defaults to 4 GB and switching dispatches the size (#207 Arm A)', async () => {
     const { store } = renderWithProviders(<ExportSettingsAccordion isBulk={false} />);
     expect(store.getState().export.maxZipPartBytes).toBe(4_000_000_000);
 
     // The select renders its current value as text; open it from there.
     fireEvent.mouseDown(screen.getByText('4 GB (recommended)'));
     const twoGb = await screen.findByRole('option', { name: '2 GB' });
-    expect(screen.queryByRole('option', { name: /single zip/i })).toBeNull();
     fireEvent.click(twoGb);
 
     expect(store.getState().export.maxZipPartBytes).toBe(2_000_000_000);
+  });
+
+  it('offers the single zip last and shows a warning while it is selected', async () => {
+    const { store } = renderWithProviders(<ExportSettingsAccordion isBulk={false} />);
+    expect(screen.queryByTestId('single-zip-warning')).toBeNull();
+
+    fireEvent.mouseDown(screen.getByText('4 GB (recommended)'));
+    const options = await screen.findAllByRole('option');
+    expect(options[options.length - 1]).toHaveTextContent('Single zip (no limit)');
+    fireEvent.click(options[options.length - 1]);
+
+    expect(store.getState().export.maxZipPartBytes).toBe(-1);
+    expect(screen.getByTestId('single-zip-warning')).toHaveTextContent('Zips past 4 GB need');
+
+    const picker = screen.getAllByRole('combobox').find((el) => el.textContent === 'Single zip (no limit)')!;
+    fireEvent.mouseDown(picker);
+    fireEvent.click(await screen.findByRole('option', { name: '1 GB' }));
+    expect(screen.queryByTestId('single-zip-warning')).toBeNull();
   });
 
   it('shows the default size when older saved state still has the single zip choice', () => {
@@ -171,5 +188,6 @@ describe('ExportSettingsAccordion — text format (#184)', () => {
       preloadedState: { export: { ...initialExportState, maxZipPartBytes: null } },
     });
     expect(screen.getByText('4 GB (recommended)')).toBeInTheDocument();
+    expect(screen.queryByTestId('single-zip-warning')).toBeNull();
   });
 });

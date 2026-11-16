@@ -1,6 +1,7 @@
 import type { StreamDownloadWriter } from 'drip-fs';
 import { createDownloadWriter } from './downloadWriter';
 import { Writer } from '@transcend-io/conflux';
+import { Zip64Writer } from './zip64Writer';
 
 /**
  * 32-bit ceiling. @transcend-io/conflux's Writer emits no zip64, so offsets,
@@ -18,6 +19,13 @@ export interface StreamingZipOptions {
    * Should stay under 4 GiB since conflux has no zip64.
    */
   maxPartBytes?: number | null;
+  /**
+   * One archive with no size limit, written by Zip64Writer instead of conflux
+   * (the export "Single zip" choice). maxPartBytes is ignored. Leave it off for
+   * anything that must stay byte for byte what conflux writes, such as a
+   * workspace file.
+   */
+  singleZip?: boolean;
   /** Invoked when a part's download begins. partIndex is 1-based. */
   onPartStart?: (info: { partIndex: number; fileName: string }) => void;
   /** Invoked when a single file exceeds the 32-bit limit (cannot be split, will corrupt). */
@@ -42,6 +50,7 @@ export class StreamingZipService {
   private pipePromise: Promise<void> | null = null;
 
   private readonly maxPartBytes: number; // 0 = no limit
+  private readonly singleZip: boolean;
   private readonly onPartStart?: StreamingZipOptions['onPartStart'];
   private readonly onOversizeFile?: StreamingZipOptions['onOversizeFile'];
   private readonly onPathCollision?: StreamingZipOptions['onPathCollision'];
@@ -61,8 +70,9 @@ export class StreamingZipService {
   private partFiles = 0;
 
   constructor(private zipName: string, options: StreamingZipOptions = {}) {
+    this.singleZip = options.singleZip === true;
     this.maxPartBytes =
-      options.maxPartBytes && options.maxPartBytes > 0 ? options.maxPartBytes : 0;
+      !this.singleZip && options.maxPartBytes && options.maxPartBytes > 0 ? options.maxPartBytes : 0;
     this.onPartStart = options.onPartStart;
     this.onOversizeFile = options.onOversizeFile;
     this.onPathCollision = options.onPathCollision;
@@ -70,9 +80,9 @@ export class StreamingZipService {
     this.initWriter();
   }
 
-  /** Create a fresh conflux Writer for the next part (download opens lazily). */
+  /** Create a fresh zip writer for the next part (download opens lazily). */
   private initWriter(): void {
-    const { readable, writable } = new Writer();
+    const { readable, writable } = this.singleZip ? new Zip64Writer() : new Writer();
     this.readable = readable;
     this.writer = writable.getWriter();
   }

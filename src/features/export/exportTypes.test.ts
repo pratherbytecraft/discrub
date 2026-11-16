@@ -6,6 +6,9 @@ import {
   resolveMaxZipPartBytes,
   DEFAULT_MAX_ZIP_PART_BYTES,
   ZIP_SIZE_OPTIONS,
+  SINGLE_ZIP_BYTES,
+  isSingleZip,
+  zipSizeOptions,
 } from './exportTypes';
 
 describe('resolveMaxZipPartBytes (#207 Arm A)', () => {
@@ -18,8 +21,20 @@ describe('resolveMaxZipPartBytes (#207 Arm A)', () => {
     expect(resolveMaxZipPartBytes({ maxZipPartBytes: null })).toBe(DEFAULT_MAX_ZIP_PART_BYTES);
   });
 
-  it('offers no single zip choice', () => {
+  it('keeps every part size a real size and lists the single zip last', () => {
     expect(ZIP_SIZE_OPTIONS.every((o) => typeof o.value === 'number' && o.value > 0)).toBe(true);
+    const shown = zipSizeOptions();
+    expect(shown.slice(0, -1)).toEqual(ZIP_SIZE_OPTIONS);
+    expect(shown[shown.length - 1].value).toBe(SINGLE_ZIP_BYTES);
+  });
+
+  it('keeps the single zip choice, and only that value means a single zip', () => {
+    expect(resolveMaxZipPartBytes({ maxZipPartBytes: SINGLE_ZIP_BYTES })).toBe(SINGLE_ZIP_BYTES);
+    expect(isSingleZip({ maxZipPartBytes: SINGLE_ZIP_BYTES })).toBe(true);
+    expect(isSingleZip({ maxZipPartBytes: null })).toBe(false);
+    expect(isSingleZip({})).toBe(false);
+    expect(isSingleZip({ maxZipPartBytes: 0 })).toBe(false);
+    expect(isSingleZip({ maxZipPartBytes: 4_000_000_000 })).toBe(false);
   });
 
   it('passes a concrete byte value through', () => {

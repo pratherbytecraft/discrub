@@ -22,6 +22,7 @@ import exportReducer, {
   setSortOrder,
   setPreviewMedia,
   setMaxZipPartBytes,
+  buildZipOptions,
   applyPreset,
   initializeExportFromSettings,
   resetExport,
@@ -38,7 +39,7 @@ import exportReducer, {
 import cacheReducer from '@features/cache/cacheSlice';
 import appReducer from '@features/app/appSlice';
 import authReducer from '@features/auth/authSlice';
-import { initialExportState, MediaDownloadProgress, DEFAULT_MAX_ZIP_PART_BYTES } from './exportTypes';
+import { initialExportState, MediaDownloadProgress, DEFAULT_MAX_ZIP_PART_BYTES, SINGLE_ZIP_BYTES } from './exportTypes';
 import { createMockMessages } from '@/test/fixtures';
 import * as exportService from '@services/exportService';
 
@@ -690,6 +691,24 @@ describe('exportSlice', () => {
         maxZipPartBytes: null,
       }));
       expect(store.getState().export.maxZipPartBytes).toBe(DEFAULT_MAX_ZIP_PART_BYTES);
+    });
+
+    it('applyPreset keeps the single zip choice, and buildZipOptions asks for one archive', () => {
+      store.dispatch(applyPreset({
+        format: 'json', messagesPerPage: 500, separateThreads: false, includeMedia: false,
+        mediaConfig: { images: false, videos: false, audio: false, other: false },
+        artistMode: false, sortOrder: 'ascending', previewMedia: false,
+        maxZipPartBytes: SINGLE_ZIP_BYTES,
+      }));
+      expect(store.getState().export.maxZipPartBytes).toBe(SINGLE_ZIP_BYTES);
+      const single = buildZipOptions(store.getState, store.dispatch);
+      expect(single.singleZip).toBe(true);
+      expect(single.maxPartBytes).toBeNull();
+
+      store.dispatch(setMaxZipPartBytes(1_000_000_000));
+      const parted = buildZipOptions(store.getState, store.dispatch);
+      expect(parted.singleZip).toBe(false);
+      expect(parted.maxPartBytes).toBe(1_000_000_000);
     });
 
     it('applyPreset with format=media does not auto-enable includeMedia', () => {

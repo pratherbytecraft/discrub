@@ -86,4 +86,37 @@ describe('streamingZipService round-trip (#207 Arm A)', () => {
     expect(all['c.bin'].length).toBe(100);
     expect(all['b.bin'].every((b) => b === 2)).toBe(true);
   });
+
+  it('writes one archive whatever the size when a single zip is asked for (2.2.10)', async () => {
+    const onPartStart = vi.fn();
+    // maxPartBytes is ignored once singleZip is set.
+    const svc = new StreamingZipService('export', { singleZip: true, maxPartBytes: 1000, onPartStart });
+    await svc.addFile(blobOf(600, 1), 'a.bin');
+    await svc.addFile(blobOf(600, 2), 'b.bin');
+    await svc.addFile(blobOf(100, 3), 'c.bin');
+    await svc.finalize();
+
+    expect([...parts.keys()]).toEqual(['export.zip']);
+    expect(onPartStart).toHaveBeenCalledTimes(1);
+    const bytes = Uint8Array.from(parts.get('export.zip')!);
+    // Zip64Writer's layout: no data descriptor flag on the first local header.
+    expect(new DataView(bytes.buffer).getUint16(6, true)).toBe(0x0800);
+    const files = unzipPart('export.zip');
+    expect(Object.keys(files)).toEqual(['a.bin', 'b.bin', 'c.bin']);
+    expect(files['b.bin'].length).toBe(600);
+    expect(files['b.bin'].every((b) => b === 2)).toBe(true);
+    expect(files['c.bin'].every((b) => b === 3)).toBe(true);
+  });
+
+  it('stays on the conflux layout when no single zip is asked for, limit or not', async () => {
+    for (const options of [{ maxPartBytes: 100_000 }, {}]) {
+      parts.clear();
+      const svc = new StreamingZipService('export', options);
+      await svc.addFile(blobOf(50, 1), 'a.bin');
+      await svc.finalize();
+      const bytes = Uint8Array.from(parts.get('export.zip')!);
+      // conflux sets bit 3 (data descriptor) on every entry.
+      expect(new DataView(bytes.buffer).getUint16(6, true) & 0x0008).toBe(0x0008);
+    }
+  });
 });

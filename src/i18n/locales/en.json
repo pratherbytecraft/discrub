@@ -1215,6 +1215,8 @@
     "cancel": "Cancel",
     "export": "Export",
     "zipRecommended": "4 GB (recommended)",
+    "zipSingle": "Single zip (no limit)",
+    "zipSingleWarning": "Zips past 4 GB need a recent unzip tool like 7-Zip.",
     "saveAsPresetItem": "Save as Preset...",
     "mediaLabelEmpty": "{{label}} (0 files)",
     "mediaLabelFiles_one": "{{count}} file, {{size}}",

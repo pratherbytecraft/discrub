@@ -2,7 +2,7 @@ import { exportSlug } from '@/utils/exportFileName';
 import { createSlice, createAsyncThunk, createAction, PayloadAction } from '@reduxjs/toolkit';
 import type { Message, Channel } from 'discrub-core/types/discord-types';
 import { getThreadsFromMessages } from 'discrub-core/discrub-utils';
-import { initialExportState, resolveMaxZipPartBytes } from './exportTypes';
+import { initialExportState, isSingleZip, resolveMaxZipPartBytes } from './exportTypes';
 import type { ExportFormat, MediaConfig, ExportConfig, ExportProgress, MediaDownloadProgress, ExportSettingsSnapshot, RecentExport } from './exportTypes';
 import { getExportService, generateExportReadme, generatePlainTextReadme } from '@services/exportService';
 import { StreamingZipService } from '@services/streamingZipService';
@@ -314,8 +314,10 @@ export function buildZipOptions(
   getState: () => RootState,
   dispatch: ExportDispatch,
 ): StreamingZipOptions {
+  const singleZip = isSingleZip(getState().export);
   return {
-    maxPartBytes: resolveMaxZipPartBytes(getState().export),
+    maxPartBytes: singleZip ? null : resolveMaxZipPartBytes(getState().export),
+    singleZip,
     onPartStart: ({ partIndex, fileName }) => {
       // The first part is the normal case; only announce continuations.
       if (partIndex >= 2) {
@@ -1978,7 +1980,7 @@ const exportSlice = createSlice({
     setPreviewMedia: (state, action: PayloadAction<boolean>) => {
       state.previewMedia = action.payload;
     },
-    // #207 Arm A: max bytes per zip part before splitting; null = single zip.
+    // #207 Arm A: max bytes per zip part before splitting, or SINGLE_ZIP_BYTES.
     setMaxZipPartBytes: (state, action: PayloadAction<number>) => {
       state.maxZipPartBytes = action.payload;
     },

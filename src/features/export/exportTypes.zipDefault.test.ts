@@ -17,6 +17,8 @@ describe('defaultMaxZipPartBytes', () => {
     expect(m.defaultMaxZipPartBytes()).toBe(m.DEFAULT_MAX_ZIP_PART_BYTES);
     expect(m.initialExportState.maxZipPartBytes).toBe(4_000_000_000);
     expect(m.resolveMaxZipPartBytes({})).toBe(4_000_000_000);
+    expect(m.singleZipAvailable()).toBe(true);
+    expect(m.zipSizeOptions().some((o) => o.value === m.SINGLE_ZIP_BYTES)).toBe(true);
   });
 
   it('is 500 MB on the Firefox extension and phones', async () => {
@@ -30,6 +32,11 @@ describe('defaultMaxZipPartBytes', () => {
       // Saved sizes win over the context default; the old single zip does not.
       expect(m.resolveMaxZipPartBytes({ maxZipPartBytes: null })).toBe(500_000_000);
       expect(m.resolveMaxZipPartBytes({ maxZipPartBytes: 2_000_000_000 })).toBe(2_000_000_000);
+      // No single zip here: it is not listed and a stored one falls back.
+      expect(m.singleZipAvailable()).toBe(false);
+      expect(m.zipSizeOptions()).toEqual(m.ZIP_SIZE_OPTIONS);
+      expect(m.resolveMaxZipPartBytes({ maxZipPartBytes: m.SINGLE_ZIP_BYTES })).toBe(500_000_000);
+      expect(m.isSingleZip({ maxZipPartBytes: m.SINGLE_ZIP_BYTES })).toBe(false);
     }
   });
 

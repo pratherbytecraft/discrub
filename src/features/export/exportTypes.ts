@@ -3,7 +3,7 @@
 // emitter knobs consumed by lib-side text/html emitters. Re-exported here
 // so callers can keep their existing import paths.
 import { defaultTextFormatOptions } from 'discrub-core/types/export-types';
-import { detectCompatSetup, usesSmallZipParts } from '@services/compatibility';
+import { detectCompatSetup, supportsSingleZip, usesSmallZipParts } from '@services/compatibility';
 // `export type { ... } from` re-exports without creating a local binding, so
 // TextFormatOptions wasn't usable as a type annotation in this file (TS2304).
 // Import it locally for the annotations below; the re-export still serves
@@ -86,7 +86,9 @@ export interface ExportSettingsSnapshot {
    * file (export.zip, export-part2.zip, …). @transcend-io/conflux has no zip64,
    * so a single archive corrupts past ~4 GiB — splitting keeps each part safe
    * (#207 Arm A). `undefined` resolves to DEFAULT_MAX_ZIP_PART_BYTES (so existing
-   * presets gain the safe default); `null` means a single zip with no split.
+   * presets gain the safe default); `null` is the single zip choice as it was
+   * stored up to 2.2.4 and also resolves to the default. SINGLE_ZIP_BYTES is
+   * the single zip choice since 2.2.10.
    */
   maxZipPartBytes?: number | null;
 }
@@ -116,10 +118,15 @@ export interface ZipSizeOption {
 }
 
 /**
- * Choices for the export "Max zip size" control. There is no single zip
- * choice: a zip past 4 GiB needs zip64, which some unzip tools cannot
- * read, so every export splits.
+ * Stored value of the "Single zip (no limit)" choice (2.2.10). It is a number
+ * below zero and not `null` on purpose: `null` is how the choice was stored up
+ * to 2.2.4, it has meant the default part size since 2.2.5, and a setting
+ * saved back then must not turn into one huge zip after an update. A release
+ * before 2.2.10 reads a value below zero as the default too.
  */
+export const SINGLE_ZIP_BYTES = -1;
+
+/** Choices for the export "Max zip size" control that every setup gets. */
 export const ZIP_SIZE_OPTIONS: ZipSizeOption[] = [
   { label: '4 GB (recommended)', value: 4_000_000_000 },
   { label: '2 GB', value: 2_000_000_000 },
@@ -127,19 +134,35 @@ export const ZIP_SIZE_OPTIONS: ZipSizeOption[] = [
   { label: '500 MB', value: 500_000_000 },
 ];
 
+export const SINGLE_ZIP_OPTION: ZipSizeOption = { label: 'Single zip (no limit)', value: SINGLE_ZIP_BYTES };
+
+/** Whether this setup offers the single zip choice (Chrome on a computer). */
+export const singleZipAvailable = (): boolean => supportsSingleZip(detectCompatSetup());
+
+/** The choices to show: the single zip is listed last, where the setup has it. */
+export const zipSizeOptions = (): ZipSizeOption[] =>
+  singleZipAvailable() ? [...ZIP_SIZE_OPTIONS, SINGLE_ZIP_OPTION] : ZIP_SIZE_OPTIONS;
+
 /**
  * Resolve a snapshot's max-part-size to the concrete value the zip service uses.
- * `undefined` (presets saved before this existed) and `null` (the old single
- * zip choice, still in saved presets and resume snapshots) both get the
- * default.
+ * `undefined` (presets saved before this existed) and `null` (the single zip
+ * choice as stored up to 2.2.4, still in saved presets and resume snapshots)
+ * both get the default. SINGLE_ZIP_BYTES comes back as itself where the setup
+ * has the single zip, and as the default elsewhere (a preset made in Chrome
+ * and imported into Firefox).
  */
 export function resolveMaxZipPartBytes(
   source: { maxZipPartBytes?: number | null }
 ): number {
+  if (source.maxZipPartBytes === SINGLE_ZIP_BYTES && singleZipAvailable()) return SINGLE_ZIP_BYTES;
   return source.maxZipPartBytes == null || source.maxZipPartBytes <= 0
     ? defaultMaxZipPartBytes()
     : source.maxZipPartBytes;
 }
+
+/** True when the resolved choice is one zip with no size limit. */
+export const isSingleZip = (source: { maxZipPartBytes?: number | null }): boolean =>
+  resolveMaxZipPartBytes(source) === SINGLE_ZIP_BYTES;
 
 export type PresetCategory = 'Backup' | 'Data' | 'Media';
 
@@ -334,9 +357,9 @@ export interface ExportState {
   exportTemplate: ExportTemplate;
   textOptions: TextFormatOptions;
   /**
-   * Max bytes per zip part before splitting (#207 Arm A). null only comes
-   * from state saved when there was a single zip choice; read it through
-   * resolveMaxZipPartBytes.
+   * Max bytes per zip part before splitting (#207 Arm A), or
+   * SINGLE_ZIP_BYTES. null only comes from state saved up to 2.2.4; read it
+   * through resolveMaxZipPartBytes.
    */
   maxZipPartBytes: number | null;
   /**

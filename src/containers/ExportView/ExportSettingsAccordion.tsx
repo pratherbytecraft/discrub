@@ -32,7 +32,7 @@ import {
   setTextOptions,
   selectExport,
 } from '@features/export/exportSlice';
-import { resolveMaxZipPartBytes, ZIP_SIZE_OPTIONS } from '@features/export/exportTypes';
+import { isSingleZip, resolveMaxZipPartBytes, zipSizeOptions } from '@features/export/exportTypes';
 import type {
   ExportFormat,
   ExportTemplate,
@@ -50,6 +50,7 @@ import { isExtensionMode } from '@/extension/messaging';
 import { selectSettings, updateSetting } from '@features/app/appSlice';
 const ZIP_LABEL_KEYS: Record<string, string> = {
   '4 GB (recommended)': 'export.zipRecommended',
+  'Single zip (no limit)': 'export.zipSingle',
 };
 import { useTranslation } from 'react-i18next';
 
@@ -222,7 +223,7 @@ const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, package
                 label={t('export.maxZipSize')}
                 onChange={(e) => dispatch(setMaxZipPartBytes(Number(e.target.value)))}
               >
-                {ZIP_SIZE_OPTIONS.map((opt) => (
+                {zipSizeOptions().map((opt) => (
                   <MenuItem key={opt.label} value={String(opt.value)}>
                     {ZIP_LABEL_KEYS[opt.label] ? t(ZIP_LABEL_KEYS[opt.label]) : opt.label}
                   </MenuItem>
@@ -231,6 +232,11 @@ const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, package
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
                 {t('export.maxZipHelp')}
               </Typography>
+              {isSingleZip(exportState) && (
+                <Alert severity="warning" sx={{ mt: 1 }} data-testid="single-zip-warning">
+                  {t('export.zipSingleWarning')}
+                </Alert>
+              )}
             </FormControl>
 
             {exportState.exportFormat === 'html' && (

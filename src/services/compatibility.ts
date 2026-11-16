@@ -106,3 +106,11 @@ export const compatSetupLabel = (setup: CompatSetup): string =>
  */
 export const usesSmallZipParts = (setup: CompatSetup): boolean =>
   setup === 'firefox-ext' || setup === 'be-phone';
+
+/**
+ * Setups that offer one zip with no size limit. Chrome on a computer writes
+ * a download straight to disk. Firefox and phones stage it in browser
+ * storage first, which has a ceiling an export of that size would hit.
+ */
+export const supportsSingleZip = (setup: CompatSetup): boolean =>
+  setup === 'chrome-ext' || setup === 'be-chrome';

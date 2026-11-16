@@ -1215,6 +1215,8 @@
     "cancel": "取消",
     "export": "导出",
     "zipRecommended": "4 GB（推荐）",
+    "zipSingle": "单个 ZIP（无上限）",
+    "zipSingleWarning": "超过 4 GB 的 ZIP 需要较新的解压工具，如 7-Zip。",
     "saveAsPresetItem": "保存为预设...",
     "mediaLabelEmpty": "{{label}}（0个文件）",
     "mediaLabelFiles_one": "{{count}}个文件，{{size}}",
