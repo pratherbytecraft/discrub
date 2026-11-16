@@ -30,6 +30,13 @@ if (typeof globalThis.ReadableStream === 'undefined') {
 }
 const readSlice = (blob: Blob): Promise<ArrayBuffer> =>
   new Promise((resolve, reject) => {
+    // A stream still being pulled after its test file ended finds jsdom gone.
+    // Nothing reads the result then, so end it empty instead of an unhandled
+    // "FileReader is not defined" (seen once from ExportDialog.test.tsx).
+    if (typeof FileReader === 'undefined') {
+      resolve(new ArrayBuffer(0));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
