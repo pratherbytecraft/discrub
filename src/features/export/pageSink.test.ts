@@ -64,6 +64,17 @@ describe('storeSink', () => {
     expect((await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c1'))?.complete).toBe(true);
   });
 
+  it('a run with no messages has nothing to mark complete and logs nothing', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sink = storeSink({ wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'run:empty', seed });
+    await sink.add([]);
+    await sink.complete();
+    expect(sink.count).toBe(0);
+    expect(await getConversation(LEGACY_DEFAULT_WORKSPACE_ID, 'run:empty')).toBeNull();
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it('carries on in memory when the browser storage is full, warning once', async () => {
     const onStorageFull = vi.fn();
     const sink = storeSink({ wid: LEGACY_DEFAULT_WORKSPACE_ID, cid: 'run:c1', seed, onStorageFull });

@@ -99,7 +99,8 @@ export function storeSink({ wid, cid, seed, onStorageFull }: StoreSinkOptions): 
     source: () => (fallback ? arraySource(fallback) : storeSource(wid, cid, count)),
     inMemory: () => fallback,
     async complete() {
-      if (fallback) return;
+      // A unit with no messages never wrote its conversation, so there is nothing to mark.
+      if (fallback || count === 0) return;
       try {
         await updateConversation(wid, cid, (conversation) => {
           conversation.complete = true;
