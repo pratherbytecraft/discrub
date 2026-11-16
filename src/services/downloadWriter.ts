@@ -71,7 +71,18 @@ export const createBlobDownloadWriter = (
 
 /** drip-fs's staging folder, so its startup sweep also clears parts this writer left behind. */
 const STAGING_DIR = 'drip-fs-staging';
-const finishedStaged = new Set<string>();
+/** Staged parts already handed to the browser, oldest first. */
+const finishedStaged: { name: string; savedAt: number }[] = [];
+/** A saved part is never removed sooner than this after its save began. */
+export const MIN_STAGED_AGE_MS = 30_000;
+/**
+ * How long a saved part stays staged when nothing removes it sooner: a
+ * minute, or longer for a big part so a slow disk has time to copy it.
+ * Firefox 159 needs the file for about 20 ms after the click (measured
+ * 2026-11-15); this is there so the last parts of an export do not sit in
+ * storage until the page closes.
+ */
+export const stagedLifetimeMs = (bytes: number): number => Math.max(60_000, Math.ceil(bytes / 10_000));
 
 const formatBytes = (n: number): string =>
   n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : `${Math.ceil(n / 1024 ** 2)} MB`;
@@ -109,20 +120,39 @@ const saveFile = (file: Blob, filename: string): void => {
 
 /**
  * A writer with the drip-fs shape that stages the part in OPFS through
- * `createWritable` on the page. The previous part's staged file is
- * removed when the next one opens; the save has long finished by then.
+ * `createWritable` on the page.
+ *
+ * Firefox opens the staged file some time after the save link is
+ * clicked. A file removed before then gives a "File not found" tab and
+ * the part is never saved, while the export carries on (2.2.10). So the
+ * part saved last stays staged when the next one opens, and only the
+ * parts before it are removed. A saved part that nothing removed is
+ * removed on a timer (`stagedLifetimeMs`), which clears the last parts
+ * of an export.
  */
 export const createOpfsDownloadWriter = async (filename: string, size?: number): Promise<StreamDownloadWriter> => {
   const root = await navigator.storage.getDirectory();
   const dir = await root.getDirectoryHandle(STAGING_DIR, { create: true });
-  for (const name of [...finishedStaged]) {
-    finishedStaged.delete(name);
-    await dir.removeEntry(name).catch(() => undefined);
+  while (finishedStaged.length > 1) {
+    const old = finishedStaged.shift()!;
+    await dir.removeEntry(old.name).catch(() => undefined);
   }
   if (size && size > 0) {
-    const estimate = await navigator.storage.estimate?.().catch(() => undefined);
-    if (estimate?.quota != null && estimate.usage != null && estimate.quota - estimate.usage < size) {
-      throw new Error(`Not enough free storage to stage a ${formatBytes(size)} download part.`);
+    const hasRoom = async (): Promise<boolean> => {
+      const estimate = await navigator.storage.estimate?.().catch(() => undefined);
+      return !(estimate?.quota != null && estimate.usage != null && estimate.quota - estimate.usage < size);
+    };
+    if (!(await hasRoom())) {
+      // The kept part is the only thing left to free. Give its save time to start first.
+      const kept = finishedStaged.shift();
+      if (kept) {
+        const wait = MIN_STAGED_AGE_MS - (Date.now() - kept.savedAt);
+        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+        await dir.removeEntry(kept.name).catch(() => undefined);
+      }
+      if (!kept || !(await hasRoom())) {
+        throw new Error(`Not enough free storage to stage a ${formatBytes(size)} download part.`);
+      }
     }
   }
   const stagedName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -141,7 +171,14 @@ export const createOpfsDownloadWriter = async (filename: string, size?: number):
       closed = true;
       await stream.close();
       saveFile(await handle.getFile(), filename);
-      finishedStaged.add(stagedName);
+      const saved = { name: stagedName, savedAt: Date.now() };
+      finishedStaged.push(saved);
+      setTimeout(() => {
+        const at = finishedStaged.indexOf(saved);
+        if (at === -1) return;
+        finishedStaged.splice(at, 1);
+        void dir.removeEntry(stagedName).catch(() => undefined);
+      }, stagedLifetimeMs(bytesWritten));
     },
     async abort() {
       if (closed) return;

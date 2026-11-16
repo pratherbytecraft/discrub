@@ -5,7 +5,14 @@ vi.mock('@/extension/messaging', () => ({ isExtensionMode: vi.fn(() => false) })
 
 import { createStreamingDownload } from 'drip-fs';
 import { isExtensionMode } from '@/extension/messaging';
-import { createBlobDownloadWriter, createDownloadWriter, isIOSSafari, stagesThroughOpfs } from './downloadWriter';
+import {
+  createBlobDownloadWriter,
+  createDownloadWriter,
+  isIOSSafari,
+  MIN_STAGED_AGE_MS,
+  stagedLifetimeMs,
+  stagesThroughOpfs,
+} from './downloadWriter';
 
 const nav = (overrides: Partial<Navigator>): Navigator =>
   ({ userAgent: '', platform: '', maxTouchPoints: 0, ...overrides }) as Navigator;
@@ -176,7 +183,7 @@ describe('Firefox extension zips (WP6a)', () => {
     expect(stagesThroughOpfs(withOpfs(FIREFOX), true)).toBe(false);
   });
 
-  it('writes the part to an OPFS file, saves it on close, and removes it when the next part opens', async () => {
+  it('writes the part to an OPFS file, saves it on close, and keeps it staged when the next part opens', async () => {
     const first = await createDownloadWriter('export.zip', 500_000_000);
     expect(createStreamingDownload).not.toHaveBeenCalled();
     await first.write(new Uint8Array(10));
@@ -184,10 +191,65 @@ describe('Firefox extension zips (WP6a)', () => {
     expect(first.bytesWritten).toBe(15);
     await first.close();
     expect(saved).toEqual(['export.zip']);
-    const second = await createDownloadWriter('export_part2.zip');
-    expect(removed).toEqual([created[0]]);
-    await second.abort();
-    expect(removed).toEqual([created[0], created[1]]);
+    // Firefox may not have opened the first part's file yet, so it has to still be there.
+    const second = await createDownloadWriter('export_part2.zip', 500_000_000);
+    expect(removed).not.toContain(created[0]);
+    await second.close();
+    const third = await createDownloadWriter('export_part3.zip', 500_000_000);
+    expect(removed).toContain(created[0]);
+    expect(removed).not.toContain(created[1]);
+    await third.abort();
+    expect(removed).toContain(created[2]);
+    expect(removed).not.toContain(created[1]);
+  });
+
+  it('frees the kept part only after its save has had time to start when storage is short', async () => {
+    vi.useFakeTimers();
+    try {
+      const first = await createDownloadWriter('export.zip', 500_000_000);
+      await first.close();
+      const firstName = created[created.length - 1];
+      // Room comes back once the kept part is gone.
+      let usage = 9.9e9;
+      const storage = navigator.storage as unknown as { estimate: () => Promise<{ quota: number; usage: number }> };
+      storage.estimate = async () => ({ quota: 10e9, usage });
+      const dirRemoved = removed;
+      const opening = createDownloadWriter('export_part2.zip', 500_000_000);
+      await vi.advanceTimersByTimeAsync(MIN_STAGED_AGE_MS - 1000);
+      expect(dirRemoved).not.toContain(firstName);
+      usage = 0;
+      await vi.advanceTimersByTimeAsync(1000);
+      const second = await opening;
+      expect(dirRemoved).toContain(firstName);
+      expect(createStreamingDownload).not.toHaveBeenCalled();
+      await second.abort();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('removes a saved part on a timer when no later part does, a big part later', async () => {
+    expect(stagedLifetimeMs(15)).toBe(60_000);
+    expect(stagedLifetimeMs(4_000_000_000)).toBe(400_000);
+    vi.useFakeTimers();
+    try {
+      const last = await createDownloadWriter('export_part9.zip', 500_000_000);
+      await last.write(new Uint8Array(15));
+      await last.close();
+      const lastName = created[created.length - 1];
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(removed).not.toContain(lastName);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(removed).toContain(lastName);
+      // Nothing is left for the next writer to remove a second time.
+      const before = removed.length;
+      const next = await createDownloadWriter('other.zip', 500_000_000);
+      expect(removed.filter((n) => n === lastName)).toHaveLength(1);
+      expect(removed.length).toBeGreaterThanOrEqual(before);
+      await next.abort();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('buffers in memory when there is no room to stage the part', async () => {
