@@ -3440,6 +3440,53 @@ describe('purgeSlice thunks', () => {
       )).toBe(true);
     });
 
+    it('2.2.10: reopens a thread the list did not mark when Discord refuses the reaction removal (400 code 50083)', async () => {
+      const lateThread: Channel = {
+        id: 'thread-late',
+        name: 'late-post',
+        parent_id: 'ch1',
+        type: 11,
+        thread_metadata: { archived: false, auto_archive_duration: 60 } as any,
+      } as Channel;
+      setupThreadDiscovery({ ch1: [lateThread] });
+
+      const msg = mockMessage('m1');
+      msg.reactions = [{ emoji: { id: null, name: '❤️' }, count: 1, me: false, me_burst: false, count_details: { burst: 0, normal: 1 }, burst_colors: [] }];
+      mockFetchMessageData.mockImplementation((_token: string, _lastId: string, channelId: string) => {
+        if (channelId === 'ch1') return Promise.resolve({ success: true, data: [] });
+        return Promise.resolve({ success: true, data: [msg] });
+      });
+      mockGetReactions.mockResolvedValue({
+        success: true,
+        data: [{ id: 'targetUser', username: 'tgt', discriminator: '0', avatar: null }],
+      });
+      let open = false;
+      mockEditChannel.mockImplementation(async (_t: string, _id: string, body: { archived: boolean }) => {
+        open = !body.archived;
+        return { success: true, status: 200 };
+      });
+      mockDeleteReaction.mockImplementation(async () => (open ? { success: true, status: 204 } : { success: false, status: 400, code: 50083 }));
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: reactionsConfig(['targetUser']),
+          guildId: 'guild1',
+        }),
+      );
+
+      // Refused once, reopened, removed, archived again.
+      expect(mockDeleteReaction).toHaveBeenCalledTimes(2);
+      expect(mockEditChannel.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+        ['thread-late', { archived: false }],
+        ['thread-late', { archived: true }],
+      ]);
+      const entries = store.getState().status.entries;
+      expect(entries.some((e) => e.message.includes('Un-archived thread thread-late'))).toBe(true);
+      expect(entries.some((e) => e.message.includes('Re-archived thread thread-late'))).toBe(true);
+      expect(entries.some((e) => e.level === 'warning')).toBe(false);
+    });
+
     it('does NOT un-archive threads with no matching reactions (lazy guard saves API calls)', async () => {
       // The core of the optimization: user's 23-thread sample run burned
       // 46 PATCH calls (23 un-archive + 23 re-archive) on threads that

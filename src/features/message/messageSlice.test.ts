@@ -3107,6 +3107,25 @@ describe('messageSlice', () => {
 
     // 2.2.5 W1: `processed` counts the messages with reactions, and the ids
     // used to be cut from every message, naming the wrong ones.
+    it('2.2.10: in an archived thread it reopens the thread once and archives it again', async () => {
+      let open = false;
+      const editChannel = vi.fn(async (_t: string, _id: string, body: { archived: boolean }) => {
+        open = !body.archived;
+        return { success: true, status: 200 };
+      });
+      const deleteAllReactionsFromMessage = vi.fn(async () => (open ? { success: true, status: 204 } : { success: false, status: 400, code: 50083 }));
+      vi.mocked(discordService.getDiscordService).mockReturnValue({ deleteAllReactionsFromMessage, editChannel } as any);
+      const messages = [
+        { id: 'msg-1', reactions: [{ emoji: { id: null, name: '👍' }, count: 1 }] },
+        { id: 'msg-2', reactions: [{ emoji: { id: null, name: '🔥' }, count: 1 }] },
+      ];
+      const testStore = await createStoreWithApp();
+      await testStore.dispatch(batchRemoveReactions({ channelId: 'thread-1', messages, mode: 'all', token: 'token' }));
+      // msg-1 refused, msg-1 again after the reopen, msg-2.
+      expect(deleteAllReactionsFromMessage).toHaveBeenCalledTimes(3);
+      expect(editChannel.mock.calls.map((c) => c[2])).toEqual([{ archived: false }, { archived: true }]);
+    });
+
     it('reports the ids of the messages it processed, skipping those without reactions', async () => {
       vi.mocked(discordService.getDiscordService).mockReturnValue({
         deleteAllReactionsFromMessage: vi.fn().mockResolvedValue({ success: true }),
