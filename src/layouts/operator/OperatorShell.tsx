@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '@/app/hooks';
 import { selectSidebarView } from '@features/app/appSlice';
 import { selectExportProgress } from '@features/export/exportSlice';
+import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { selectPurgeProgress } from '@features/purge/purgeSlice';
 import { selectSelectedChannel, selectSelectedChannels } from '@features/channel/channelSlice';
 import { selectSelectedDm, selectSelectedDms } from '@features/dm/dmSlice';
@@ -45,6 +46,7 @@ const OperatorShell = ({ drawerOpen }: ShellProps) => {
   const selectedDms = useAppSelector(selectSelectedDms);
   const exportProgress = useAppSelector(selectExportProgress);
   const purgeProgress = useAppSelector(selectPurgeProgress);
+  const running = useAppSelector(selectIsHeavyOperationRunning);
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
   const [feedOpenChoice, setFeedOpen] = useState(false);
@@ -57,7 +59,8 @@ const OperatorShell = ({ drawerOpen }: ShellProps) => {
   const feedOpen = feedOpenChoice || !hasContext;
 
   // A bulk run walks the queue in order: rows before the current index are done, the current one runs.
-  const bulk = exportProgress?.bulk ?? purgeProgress?.bulk ?? null;
+  // A finished or stopped run keeps its last progress for the summary; the queue only counts while a run is going.
+  const bulk = running ? exportProgress?.bulk ?? purgeProgress?.bulk ?? null : null;
   const queue = guild ? selectedChannels : selectedDms;
   const marks = useMemo<QueueMarks>(() => {
     if (!bulk) return {};

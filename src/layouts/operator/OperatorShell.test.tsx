@@ -88,6 +88,24 @@ describe('<OperatorShell />', () => {
     expect(screen.getByTestId('operator-run-card')).not.toHaveAttribute('data-state', 'idle');
   });
 
+  it('counts one queued channel in the singular', () => {
+    const state = withChannel();
+    state.channel = { ...state.channel, selectedChannels: [general] };
+    renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(screen.getByTestId('operator-queue-count')).toHaveTextContent('1 channel queued');
+  });
+
+  it('stops counting the queue as running once the run is over', () => {
+    // A stopped Purge keeps its last progress for the summary (seen in the VM 2026-11-17: "0 done, 1 running, 0 queued" with nothing running).
+    const state = withChannel();
+    state.channel = { ...state.channel, selectedChannels: [general, random] };
+    const bulk = { currentIndex: 0, totalChannels: 2, currentChannelName: 'general', completedStats: { deleted: 0, skipped: 0, reactionsRemoved: 0 } };
+    state.purge = { ...state.purge, isPurging: false, purgeProgress: { processed: 50, deleted: 49, skipped: 1, reactionsRemoved: 0, bulk } } as never;
+    renderWithProviders(<OperatorShell {...props} focusedView={false} />, { preloadedState: state });
+    expect(screen.queryByTestId('queue-mark-running')).toBeNull();
+    expect(screen.getByTestId('operator-queue-count')).not.toHaveTextContent('running');
+  });
+
   it('gives the running label its own row, and the wait Discord asked for in its place (2.2.2)', () => {
     const state = withChannel();
     const bulk = { currentIndex: 0, totalChannels: 1, currentChannelName: 'general', completedStats: { deleted: 0, skipped: 0, reactionsRemoved: 0 } };
