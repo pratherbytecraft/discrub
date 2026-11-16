@@ -190,6 +190,40 @@ describe('Thread Load', () => {
       });
     });
 
+    it('the heading box, then one thread unticked, exports every thread but that one', () => {
+      cy.task('downloads:clean');
+      const urls: string[] = [];
+      const fetched: string[] = [];
+      interceptThreadPages(27, urls);
+      cy.contains('button', 'Load Thread').click();
+      cy.wait('@getThreads');
+      cy.get('[data-testid="thread-select-all"] input').check();
+      cy.get(`[data-testid="thread-tick-${thread(2).id}"] input`).uncheck();
+      // The box stays on for the rest, and the rows under it stay ticked.
+      cy.get('[data-testid="thread-select-all"] input').should('have.attr', 'data-indeterminate', 'true');
+      cy.get(`[data-testid="thread-tick-${thread(1).id}"] input`).should('be.checked');
+      cy.get('[data-testid="export-threads"]').should('have.text', 'Export 26 threads').click();
+      cy.then(() => interceptThreadMessages(fetched));
+      cy.get('[role="dialog"]').should('contain.text', '26 threads').and('not.contain.text', '# thread-');
+      cy.get('[data-testid="bulk-export-confirm"]').should('have.text', 'Export 26 Threads').click();
+      cy.waitForDownload(/^general-threads\.zip$/i, 90000).then((fileName) => {
+        cy.then(() => {
+          expect(new Set(fetched).size, 'threads read').to.eq(26);
+          expect(fetched, 'the unticked thread is not read').to.not.include(thread(2).id);
+        });
+        cy.task<{ name: string }[]>('zip:list', fileName).then((entries) => {
+          const pages = entries.map((e) => e.name).filter((name) => /^thread_\d+\/thread_\d+-page-1\.html$/.test(name));
+          expect(pages).to.have.length(26);
+          expect(pages).to.not.include('thread_2/thread_2-page-1.html');
+        });
+      });
+      cy.window().then((win) => {
+        const messages = ((win as any).__store__.getState().status.entries as { message: string }[]).map((e) => e.message);
+        expect(messages).to.include('Bulk export: Found 26 threads in general');
+        expect(messages).to.include('Bulk export: Finished, 26 of 26 threads exported, 0 failed');
+      });
+    });
+
     it('scrolling the list to its end loads the next page', () => {
       const urls: string[] = [];
       interceptThreadPages(27, urls);

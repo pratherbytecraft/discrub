@@ -68,6 +68,11 @@ export interface ThreadExportSelection {
   threads: Channel[];
   /** How many threads the export covers. */
   total: number;
+  /**
+   * Threads unticked after the heading box was ticked. Only set with
+   * `all`: the run lists every thread and leaves these out.
+   */
+  excludedIds?: string[];
 }
 
 const ThreadLoadModal = ({
@@ -90,6 +95,9 @@ const ThreadLoadModal = ({
   // Ticked threads. `allTicked` is the box in the heading: every thread, loaded or not.
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [allTicked, setAllTicked] = useState(false);
+  // Rows unticked while the heading box is on. The box then covers every
+  // thread but these, loaded or not.
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
 
@@ -136,6 +144,7 @@ const ThreadLoadModal = ({
   useEffect(() => {
     setPicked(new Set());
     setAllTicked(false);
+    setExcluded(new Set());
   }, [open, channelId]);
 
   const total = Math.max(meta?.total ?? 0, discovered.length);
@@ -164,16 +173,25 @@ const ThreadLoadModal = ({
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 64) loadMore();
   }, [open, loadedCount, hasMore, loadingMore, loadMore]);
 
-  const isTicked = (id: string) => allTicked || picked.has(id);
+  const isTicked = (id: string) => (allTicked ? !excluded.has(id) : picked.has(id));
   // The row handlers keep one identity so a tick redraws its own row and
   // not the whole list (a tick took half a second at 1,000 rows).
-  const latest = useRef({ allTicked, discovered, onLoad });
-  latest.current = { allTicked, discovered, onLoad };
+  const latest = useRef({ allTicked, total, onLoad });
+  latest.current = { allTicked, total, onLoad };
   const toggleThread = useCallback((id: string) => {
     if (latest.current.allTicked) {
-      // Leaving "all": what is loaded stays ticked, minus this one.
-      setAllTicked(false);
-      setPicked(new Set(latest.current.discovered.filter((thread) => thread.id !== id).map((thread) => thread.id)));
+      // The heading box stays on and covers every thread but the unticked ones.
+      setExcluded((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        if (next.size >= latest.current.total) {
+          // Every thread unticked by hand is the same as none ticked.
+          setAllTicked(false);
+          return new Set();
+        }
+        return next;
+      });
       return;
     }
     setPicked((current) => {
@@ -184,18 +202,32 @@ const ThreadLoadModal = ({
     });
   }, []);
   const toggleAll = () => {
+    // A box with rows unticked under it goes back to every thread; a full box clears.
+    const clearing = allTicked && excluded.size === 0;
     setPicked(new Set());
-    setAllTicked((value) => !value);
+    setExcluded(new Set());
+    setAllTicked(!clearing);
   };
   const pickedThreads = useMemo(() => discovered.filter((thread) => picked.has(thread.id)), [discovered, picked]);
-  const exportsAll = allTicked || pickedThreads.length === 0;
+  const keptThreads = useMemo(
+    () => (excluded.size === 0 ? discovered : discovered.filter((thread) => !excluded.has(thread.id))),
+    [discovered, excluded],
+  );
+  const exportsAll = (allTicked && excluded.size === 0) || (!allTicked && pickedThreads.length === 0);
+  const tickedCount = allTicked ? Math.max(total - excluded.size, 0) : pickedThreads.length;
   const handleExport = () => {
     if (!onExport || total === 0) return;
-    // With the whole list loaded the run is handed the threads and lists
-    // nothing again. Only a list with pages left makes the run read it.
-    onExport(exportsAll
-      ? { all: hasMore, threads: discovered, total: hasMore ? total : discovered.length }
-      : { all: false, threads: pickedThreads, total: pickedThreads.length });
+    if (allTicked || pickedThreads.length === 0) {
+      // With the whole list loaded the run is handed the threads and lists
+      // nothing again. Only a list with pages left makes the run read it,
+      // and it then leaves the unticked ones out itself.
+      const threads = allTicked ? keptThreads : discovered;
+      onExport(hasMore
+        ? { all: true, threads, total: allTicked ? tickedCount : total, ...(allTicked && excluded.size > 0 ? { excludedIds: [...excluded] } : {}) }
+        : { all: false, threads, total: threads.length });
+      return;
+    }
+    onExport({ all: false, threads: pickedThreads, total: pickedThreads.length });
   };
 
   const handleLoad = () => {
@@ -242,8 +274,8 @@ const ThreadLoadModal = ({
                   {onExport && discovered.length > 0 && (
                     <Checkbox
                       size="small"
-                      checked={allTicked}
-                      indeterminate={!allTicked && pickedThreads.length > 0}
+                      checked={allTicked && excluded.size === 0}
+                      indeterminate={allTicked ? excluded.size > 0 : pickedThreads.length > 0}
                       onChange={toggleAll}
                       inputProps={{ 'aria-label': t('threadLoad.selectAll') }}
                       data-testid="thread-select-all"
@@ -362,7 +394,7 @@ const ThreadLoadModal = ({
           >
             {exportsAll
               ? t('threadLoad.exportAll', { count: total })
-              : t('threadLoad.exportPicked', { count: pickedThreads.length })}
+              : t('threadLoad.exportPicked', { count: tickedCount })}
           </Button>
         )}
         <Button onClick={handleClose}>

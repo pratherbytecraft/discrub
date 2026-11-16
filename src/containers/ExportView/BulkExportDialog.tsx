@@ -61,7 +61,7 @@ interface BulkExportDialogProps {
    * With `all`, `channels` holds the threads loaded so far for show, and
    * the run lists every thread of `parent` itself.
    */
-  threadExport?: { parent: Channel; all: boolean; total: number; kind?: 'thread' | 'post' } | null;
+  threadExport?: { parent: Channel; all: boolean; total: number; kind?: 'thread' | 'post'; excludedIds?: string[] } | null;
   /** The close animation has finished. The owner clears its selection here, so the dialog keeps its wording while it closes. */
   onExited?: () => void;
 }
@@ -162,7 +162,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
   const threadRun: ThreadExportRef | null = resuming
     ? resumeThreadExport
     : threadExport
-      ? { parentId: threadExport.parent.id, parentName: threadExport.parent.name || threadExport.parent.id, all: threadExport.all, ...(threadExport.kind === 'post' ? { kind: 'post' as const } : {}) }
+      ? { parentId: threadExport.parent.id, parentName: threadExport.parent.name || threadExport.parent.id, all: threadExport.all, ...(threadExport.kind === 'post' ? { kind: 'post' as const } : {}), ...(threadExport.all && threadExport.excludedIds?.length ? { excludedIds: threadExport.excludedIds } : {}) }
       : null;
   const unitKind = threadRun ? threadRun.kind ?? 'thread' : null;
   const unitCount = resuming

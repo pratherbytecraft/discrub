@@ -1456,6 +1456,8 @@ export interface ThreadExportRef {
   all: boolean;
   /** What the units are called. A forum's are posts. Left out means threads. */
   kind?: 'thread' | 'post';
+  /** With `all`: threads the listing leaves out, unticked in the dialog. Saved with the run so a resume leaves them out too. */
+  excludedIds?: string[];
 }
 
 interface BulkExportParams {
@@ -1558,13 +1560,15 @@ export const bulkExportChannels = createAsyncThunk<
         // forum's posts are. A listing that stops part way keeps what it
         // has, so a long run is not lost to one bad page.
         try {
-          const threads = await fetchAllForumThreads(channel, token, getState, dispatch as ExportDispatch, searchDelay, delayModifier, (listed, reason) => {
+          const listed = await fetchAllForumThreads(channel, token, getState, dispatch as ExportDispatch, searchDelay, delayModifier, (count, reason) => {
             dispatch(addStatusEntry({
               level: 'warning',
-              message: t('status.export.threadListingStopped', { name: forumName, count: listed, error: reason }),
+              message: t('status.export.threadListingStopped', { name: forumName, count, error: reason }),
             }));
           });
           if (checkCancelled(getState)) break;
+          const excludedIds = new Set(threadExport?.excludedIds ?? []);
+          const threads = excludedIds.size > 0 ? listed.filter((thread) => !excludedIds.has(thread.id)) : listed;
           if (threads.length === 0) {
             dispatch(addStatusEntry({ level: 'warning', message: t('status.export.noThreads', { name: forumName }) }));
             continue;

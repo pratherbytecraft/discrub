@@ -2107,7 +2107,7 @@ describe('exportSlice', () => {
       forumResponses?: Array<Record<string, unknown>>;
       emptyMessageChannels?: string[];
       sliceChannels?: any[];
-      threadExport?: { parentId: string; parentName: string; all: boolean; kind?: 'thread' | 'post' };
+      threadExport?: { parentId: string; parentName: string; all: boolean; kind?: 'thread' | 'post'; excludedIds?: string[] };
     }) {
       zipNames.length = 0;
       const { configureStore } = await import('@reduxjs/toolkit');
@@ -2258,6 +2258,22 @@ describe('exportSlice', () => {
         expect(fetchForumThreadSearch).not.toHaveBeenCalled();
         expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['t-2', 't-3']);
         expect(zipName).toBe('general-threads');
+      });
+
+      it('leaves out the threads unticked in the dialog, and makes no call for them', async () => {
+        const { fetchMessageData, entries, shellCalls } = await runBulkForumExport({
+          exportChannels: [general],
+          threadExport: { ...all, excludedIds: ['t-2'] },
+          forumPages: [
+            { threads: [thread('t-1', 'One'), thread('t-2', 'Two')], has_more: true },
+            { threads: [thread('t-3', 'Three')], has_more: false },
+          ],
+        });
+        expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['t-1', 't-3']);
+        expect(shellCalls[0][0].channels.map((c: { name: string }) => c.name)).toEqual(['One', 'Three']);
+        const messages = entries.map((e) => e.message);
+        expect(messages).toContain('Bulk export: Found 2 threads in general');
+        expect(messages).toContain('Bulk export: Finished, 2 of 2 threads exported, 0 failed');
       });
 
       it('a listing that stops part way exports what it has and says so', async () => {

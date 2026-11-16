@@ -293,6 +293,55 @@ describe('ThreadLoadModal', () => {
       expect(onExport).toHaveBeenCalledWith({ all: false, threads: [thread('1'), thread('3')], total: 2 });
     });
 
+    it('unticking a row after the heading box, with pages left, exports every thread but that one', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2'), thread('3')], 3030, true));
+      open();
+      await screen.findByText('t1');
+      const box = () => screen.getByTestId('thread-select-all').querySelector('input') as HTMLInputElement;
+      fireEvent.click(box());
+      fireEvent.click(screen.getByTestId('thread-tick-2').querySelector('input')!);
+      // The box stays on for the rest, the other rows stay ticked.
+      expect(box().getAttribute('data-indeterminate')).toBe('true');
+      expect((screen.getByTestId('thread-tick-1').querySelector('input') as HTMLInputElement).checked).toBe(true);
+      expect((screen.getByTestId('thread-tick-2').querySelector('input') as HTMLInputElement).checked).toBe(false);
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Export 3,029 threads');
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onExport).toHaveBeenCalledWith({ all: true, threads: [thread('1'), thread('3')], total: 3029, excludedIds: ['2'] });
+    });
+
+    it('ticking the row again puts it back, and the heading box returns to every thread', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2')], 60, true));
+      open();
+      await screen.findByText('t1');
+      const box = () => screen.getByTestId('thread-select-all').querySelector('input') as HTMLInputElement;
+      fireEvent.click(box());
+      fireEvent.click(screen.getByTestId('thread-tick-2').querySelector('input')!);
+      fireEvent.click(screen.getByTestId('thread-tick-2').querySelector('input')!);
+      expect(box().checked).toBe(true);
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Export all threads (60)');
+      // From the part ticked state, the box goes back to every thread, then clears.
+      fireEvent.click(screen.getByTestId('thread-tick-1').querySelector('input')!);
+      fireEvent.click(box());
+      expect(box().checked).toBe(true);
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onExport).toHaveBeenCalledWith({ all: true, threads: [thread('1'), thread('2')], total: 60 });
+      fireEvent.click(box());
+      expect((screen.getByTestId('thread-tick-1').querySelector('input') as HTMLInputElement).checked).toBe(false);
+    });
+
+    it('unticking every row by hand is the same as none ticked', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2')], 2, false));
+      open();
+      await screen.findByText('t1');
+      const box = () => screen.getByTestId('thread-select-all').querySelector('input') as HTMLInputElement;
+      fireEvent.click(box());
+      fireEvent.click(screen.getByTestId('thread-tick-1').querySelector('input')!);
+      fireEvent.click(screen.getByTestId('thread-tick-2').querySelector('input')!);
+      expect(box().checked).toBe(false);
+      expect(box().getAttribute('data-indeterminate')).toBe('false');
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Export all threads (2)');
+    });
+
     it('scrolling to the end of the list loads the next page once', async () => {
       mockSearch.mockResolvedValueOnce(page([thread('1')], 30, true));
       mockSearch.mockResolvedValueOnce(page([thread('2')], 30, false));

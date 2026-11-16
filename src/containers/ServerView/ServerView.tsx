@@ -1379,7 +1379,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
         channels={threadExport ? threadExport.threads : forumThreads}
         mode="channels"
         guildId={selectedGuild?.id}
-        threadExport={threadExport && selectedChannel ? { parent: selectedChannel, all: threadExport.all, total: threadExport.total } : null}
+        threadExport={threadExport && selectedChannel ? { parent: selectedChannel, all: threadExport.all, total: threadExport.total, excludedIds: threadExport.excludedIds } : null}
       />
 
       <LoadAllDialog
