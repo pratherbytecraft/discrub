@@ -2159,6 +2159,8 @@
       "searchBatch_other": "搜索批次{{batch}}：找到{{count}}条待处理的消息{{denom}}",
       "leavingArchivedThread": "不处理已归档子区{{id}}，“不唤醒已归档的子区”已开启",
       "unarchivedMessages": "已取消归档子区{{id}}以处理其中的消息（之后会重新归档）",
+      "unarchiveDenied": "没有取消归档子区{{id}}的权限，将跳过其中的消息",
+      "unarchiveFailed": "无法取消归档子区{{id}}（HTTP {{status}}），将跳过其中的消息",
       "deleteAttachmentOnlyFailed": "无法删除仅含附件的消息（{{reason}}） · 消息{{id}}",
       "stripFailed": "无法移除附件（{{reason}}） · 消息{{id}}",
       "clearTextFailed": "无法清空消息文字（{{reason}}） · 消息{{id}}",

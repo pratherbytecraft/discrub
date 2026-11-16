@@ -2159,6 +2159,8 @@
       "searchBatch_other": "Search batch {{batch}}: found {{count}} messages to process{{denom}}",
       "leavingArchivedThread": "Leaving archived thread {{id}} untouched, \"Don't wake archived threads\" is on",
       "unarchivedMessages": "Un-archived thread {{id}} to process its messages (will re-archive after)",
+      "unarchiveDenied": "Missing permission to un-archive thread {{id}}; its messages will be skipped",
+      "unarchiveFailed": "Failed to un-archive thread {{id}} (HTTP {{status}}); its messages will be skipped",
       "deleteAttachmentOnlyFailed": "Couldn't delete attachment-only message ({{reason}}) · message {{id}}",
       "stripFailed": "Couldn't strip attachments ({{reason}}) · message {{id}}",
       "clearTextFailed": "Couldn't clear message text ({{reason}}) · message {{id}}",

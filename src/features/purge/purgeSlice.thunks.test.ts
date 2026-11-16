@@ -824,6 +824,86 @@ describe('purgeSlice thunks', () => {
       expect(entries.some((e) => e.message.includes('Re-archived thread'))).toBe(true);
     });
 
+    // 2.2.10: two r/discrub reports of every delete in a thread failing
+    // with HTTP 400. The thread list had not marked the thread archived
+    // (or the thread itself was the conversation), so nothing reopened it.
+    describe('an archived thread the thread list did not mark (400 code 50083)', () => {
+      const lateThread = { id: 'thread-late', parent_id: 'ch1', thread_metadata: { archived: false } } as unknown as Channel;
+      const inThread = (id: string) => ({ ...mockMessage(id, 0), channel_id: 'thread-late', content: `text ${id}` }) as Message;
+      const refuseUntilReopened = () => {
+        let open = false;
+        mockEditChannel.mockImplementation(async (_t: string, _id: string, body: { archived: boolean }) => {
+          open = !body.archived;
+          return { success: true, status: 200 };
+        });
+        mockDeleteMessage.mockImplementation(async () => (open ? { success: true, status: 204 } : { success: false, status: 400, code: 50083 }));
+      };
+
+      it('reopens the thread on the first refusal, deletes every message, and archives it again', async () => {
+        setupThreadDiscovery({ ch1: [lateThread] });
+        setupSearchResults([[inThread('m1'), inThread('m2')]]);
+        refuseUntilReopened();
+
+        await store.dispatch(bulkPurgeChannels({ channels: [mockChannel('ch1', 'general')], config: messagesConfig([CURRENT_USER.id]), guildId: 'guild1' }));
+
+        // m1 refused, m1 again after the reopen, then m2.
+        expect(mockDeleteMessage.mock.calls.map((c) => c[1])).toEqual(['m1', 'm1', 'm2']);
+        expect(mockEditChannel.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+          ['thread-late', { archived: false }],
+          ['thread-late', { archived: true }],
+        ]);
+        const entries = store.getState().status.entries;
+        expect(entries.some((e) => e.message.includes('Un-archived thread thread-late'))).toBe(true);
+        expect(entries.some((e) => e.message.includes('Re-archived thread thread-late'))).toBe(true);
+        expect(entries.some((e) => e.level === 'warning')).toBe(false);
+      });
+
+      it('with "Don\'t wake archived threads" the thread stays archived and its messages are skipped with one line', async () => {
+        setupThreadDiscovery({ ch1: [lateThread] });
+        setupSearchResults([[inThread('m1'), inThread('m2')]]);
+        refuseUntilReopened();
+
+        await store.dispatch(bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: { ...messagesConfig([CURRENT_USER.id]), skipArchivedThreads: true },
+          guildId: 'guild1',
+        }));
+
+        expect(mockEditChannel).not.toHaveBeenCalled();
+        // Only the call that found out. m2 is skipped without one.
+        expect(mockDeleteMessage.mock.calls.map((c) => c[1])).toEqual(['m1']);
+        const leaving = store.getState().status.entries.filter((e) => e.message.includes('Leaving archived thread thread-late'));
+        expect(leaving).toHaveLength(1);
+        expect(store.getState().status.entries.some((e) => e.level === 'warning')).toBe(false);
+      });
+
+      it('without permission to reopen, its messages are skipped with one warning and no more calls', async () => {
+        setupThreadDiscovery({ ch1: [lateThread] });
+        setupSearchResults([[inThread('m1'), inThread('m2')]]);
+        mockDeleteMessage.mockResolvedValue({ success: false, status: 400, code: 50083 });
+        mockEditChannel.mockResolvedValue({ success: false, status: 403 });
+
+        await store.dispatch(bulkPurgeChannels({ channels: [mockChannel('ch1', 'general')], config: messagesConfig([CURRENT_USER.id]), guildId: 'guild1' }));
+
+        expect(mockDeleteMessage.mock.calls.map((c) => c[1])).toEqual(['m1']);
+        expect(mockEditChannel).toHaveBeenCalledTimes(1);
+        const warnings = store.getState().status.entries.filter((e) => e.level === 'warning');
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0].message).toContain('Missing permission to un-archive thread thread-late');
+      });
+
+      it('a 400 with another code is still a failed delete, with no reopen', async () => {
+        setupThreadDiscovery({ ch1: [lateThread] });
+        setupSearchResults([[inThread('m1')]]);
+        mockDeleteMessage.mockResolvedValue({ success: false, status: 400, code: 50021 });
+
+        await store.dispatch(bulkPurgeChannels({ channels: [mockChannel('ch1', 'general')], config: messagesConfig([CURRENT_USER.id]), guildId: 'guild1' }));
+
+        expect(mockEditChannel).not.toHaveBeenCalled();
+        expect(mockDeleteMessage).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('skips archived-thread messages when user lacks un-archive permission', async () => {
       const archivedThread = {
         id: 'thread-archived',

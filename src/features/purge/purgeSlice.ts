@@ -10,6 +10,7 @@ import { selectAuthToken } from '@features/auth/authSlice';
 import { selectSearchDelay, selectDeleteDelay, selectDelayModifier, setDiscrubPaused } from '@features/app/appSlice';
 import { getDiscordService } from '@services/discordService';
 import { addStatusEntry, showOperationTip } from '@features/status/statusSlice';
+import { isArchivedThreadRefusal } from '@services/archivedThreads';
 import { buildFailure, type DeleteFailure } from '@features/failures/deleteFailures';
 import { failureNoted, failureRunStarted, finishFailureRun } from '@features/failures/failuresSlice';
 import {
@@ -852,6 +853,17 @@ async function purgeChannelMessages(
   // #233 — threads we've already announced skipping under the opt-out,
   // so a busy thread logs once instead of once per message.
   const optOutLoggedThreads = new Set<string>();
+  // 2.2.10: the archived threads this run knows about. It starts as the
+  // thread list's set and grows when Discord itself refuses a call with
+  // 400 code 50083: a thread opened as the conversation, or one the list
+  // did not mark. The message is then taken again, through the same
+  // reopen, opt out and no permission handling as a listed thread.
+  const knownArchivedThreads = new Set<string>(archivedThreadIds ?? []);
+  const foundArchived = (response: { success: boolean; status?: number; code?: number }, threadId: string): boolean => {
+    if (!isArchivedThreadRefusal(response) || knownArchivedThreads.has(threadId)) return false;
+    knownArchivedThreads.add(threadId);
+    return true;
+  };
   // #233/F18 — archived threads the deleted-account scan excluded from
   // its walk under the opt-out. The scan never sees their messages (the
   // filter exists to protect the scan's budget), so the option's
@@ -1163,11 +1175,10 @@ async function purgeChannelMessages(
         // re-archive in the finally block. Without MANAGE_THREADS or
         // thread ownership the un-archive PATCH returns 403 — skip
         // messages in that thread with a single info log and move on.
-        const isArchivedThread =
-          !!message.channel_id && !!archivedThreadIds?.has(message.channel_id);
+        const isArchivedThread = knownArchivedThreads.has(targetChannelId);
 
-        if (isArchivedThread && message.channel_id) {
-          const threadId = message.channel_id;
+        if (isArchivedThread) {
+          const threadId = targetChannelId;
 
           // #233: the user opted out of waking archived threads. Skip the
           // message without attempting the un-archive PATCH — the whole
@@ -1212,8 +1223,8 @@ async function purgeChannelMessages(
               dispatch(addStatusEntry({
                 level: 'warning',
                 message: status === 403
-                  ? `Missing permission to un-archive thread ${threadId}; its messages will be skipped`
-                  : `Failed to un-archive thread ${threadId} (HTTP ${status ?? '?'}); its messages will be skipped`,
+                  ? t('status.purge.unarchiveDenied', { id: threadId })
+                  : t('status.purge.unarchiveFailed', { id: threadId, status: status ?? '?' }),
               }));
             }
           }
@@ -1259,6 +1270,7 @@ async function purgeChannelMessages(
               failureStreak = 0;
               noteLiveDeletion(targetChannelId, message.id);
             } else {
+              if (foundArchived(response, targetChannelId)) { mi--; continue; }
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
               totalFailed++;
@@ -1282,6 +1294,7 @@ async function purgeChannelMessages(
             } else {
               // Don't count as "stripped". Log once per miss so the user
               // can audit; keep Discord's status for diagnostics.
+              if (foundArchived(response, targetChannelId)) { mi--; continue; }
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
               if (response.status === 404) {
@@ -1317,6 +1330,7 @@ async function purgeChannelMessages(
               failureStreak = 0;
               noteLiveEdit(targetChannelId, response.data as Message | undefined);
             } else {
+              if (foundArchived(response, targetChannelId)) { mi--; continue; }
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
               if (response.status === 404) {
@@ -1354,6 +1368,7 @@ async function purgeChannelMessages(
             noteLiveDeletion(targetChannelId, message.id);
             if (finalPassIds.has(message.id)) totalFinalPass++;
           } else {
+            if (foundArchived(response, targetChannelId)) { mi--; continue; }
             throwIfSignInExpired(response);
             throwIfChannelGone(response);
             if (response.status === 404) {
@@ -1559,6 +1574,12 @@ type ThreadMutationGuard = {
    * caller should skip the mutation and treat it as a failure.
    */
   ensureUnarchived: () => Promise<boolean>;
+  /**
+   * 2.2.10: Discord refused a call with 400 code 50083 for a thread this
+   * guard did not know was archived. Reopens it (or leaves it, when the
+   * run does not wake archived threads). True when the call can be repeated.
+   */
+  refused: () => Promise<boolean>;
   /** Re-archive the thread if (and only if) we un-archived it. Safe to
    *  call even when we didn't — it's a no-op in that case. Always
    *  invoke in a `finally` block. */
@@ -1588,55 +1609,58 @@ function createThreadMutationGuard(
   // without ever PATCHing, announced calmly (a choice, not an error).
   skipWaking = false,
 ): ThreadMutationGuard {
-  if (!isArchivedThread) {
-    return { ensureUnarchived: async () => true, cleanup: async () => {} };
-  }
-
-  if (skipWaking) {
-    let logged = false;
-    return {
-      ensureUnarchived: async () => {
-        if (!logged) {
-          logged = true;
-          dispatch(addStatusEntry({
-            level: 'info',
-            message: t('status.purge.leavingArchivedReactions', { id: channelId }),
-          }));
-        }
-        return false;
-      },
-      cleanup: async () => {},
-    };
-  }
+  // 2.2.10: not final. `refused()` turns it on when Discord says the
+  // thread is archived and the thread list had not marked it.
+  let archived = isArchivedThread;
+  let optOutLogged = false;
 
   // Three-state cache — pending = not attempted yet, unarchived = success,
   // denied = attempted and blocked. Captured in closure.
   type GuardState = 'pending' | 'unarchived' | 'denied';
   let state: GuardState = 'pending';
 
-  return {
-    ensureUnarchived: async () => {
-      if (state === 'unarchived') return true;
-      if (state === 'denied') return false;
-
-      const discordService = getDiscordService();
-      const resp = await discordService.editChannel(token, channelId, { archived: false });
-      if (resp.success) {
-        state = 'unarchived';
+  const ensureUnarchived = async (): Promise<boolean> => {
+    if (!archived) return true;
+    if (skipWaking) {
+      if (!optOutLogged) {
+        optOutLogged = true;
         dispatch(addStatusEntry({
           level: 'info',
-          message: t('status.purge.unarchivedReactions', { id: channelId }),
+          message: t('status.purge.leavingArchivedReactions', { id: channelId }),
         }));
-        return true;
       }
-      state = 'denied';
-      dispatch(addStatusEntry({
-        level: 'warning',
-        message: resp.status === 403
-          ? `Missing permission to un-archive thread ${channelId}; its reactions will be skipped`
-          : `Failed to un-archive thread ${channelId} (HTTP ${resp.status ?? '?'}); its reactions will be skipped`,
-      }));
       return false;
+    }
+    if (state === 'unarchived') return true;
+    if (state === 'denied') return false;
+
+    const discordService = getDiscordService();
+    const resp = await discordService.editChannel(token, channelId, { archived: false });
+    if (resp.success) {
+      state = 'unarchived';
+      dispatch(addStatusEntry({
+        level: 'info',
+        message: t('status.purge.unarchivedReactions', { id: channelId }),
+      }));
+      return true;
+    }
+    state = 'denied';
+    dispatch(addStatusEntry({
+      level: 'warning',
+      message: resp.status === 403
+        ? `Missing permission to un-archive thread ${channelId}; its reactions will be skipped`
+        : `Failed to un-archive thread ${channelId} (HTTP ${resp.status ?? '?'}); its reactions will be skipped`,
+    }));
+    return false;
+  };
+
+  return {
+    ensureUnarchived,
+
+    refused: async () => {
+      if (archived) return false;
+      archived = true;
+      return ensureUnarchived();
     },
 
     cleanup: async () => {
@@ -1816,7 +1840,11 @@ async function purgeChannelClearAllReactions(
             level: 'info',
             message: t('status.purge.clearingReactions', { count: emojiCount }),
           }));
-          const delResp = await discordService.deleteAllReactionsFromMessage(token, targetChannelId, msg.id);
+          let delResp = await discordService.deleteAllReactionsFromMessage(token, targetChannelId, msg.id);
+          // 2.2.10: an archived thread the thread list did not mark.
+          if (isArchivedThreadRefusal(delResp) && await effectiveGuard.refused()) {
+            delResp = await discordService.deleteAllReactionsFromMessage(token, targetChannelId, msg.id);
+          }
           if (delResp.success) {
             totalCleared++;
           } else {
@@ -2015,7 +2043,11 @@ async function purgeChannelReactions(
                   continue;
                 }
 
-                const delResp = await discordService.deleteReaction(token, targetChannelId, message.id, emojiStr, reactor.id);
+                let delResp = await discordService.deleteReaction(token, targetChannelId, message.id, emojiStr, reactor.id);
+                // 2.2.10: an archived thread the thread list did not mark.
+                if (isArchivedThreadRefusal(delResp) && await effectiveGuard.refused()) {
+                  delResp = await discordService.deleteReaction(token, targetChannelId, message.id, emojiStr, reactor.id);
+                }
                 if (delResp.success) {
                   totalReactionsRemoved++;
                   dispatch(addStatusEntry({

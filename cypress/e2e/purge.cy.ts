@@ -2535,6 +2535,72 @@ describe('Bulk Purge Operations', () => {
       // Single per-thread warning in the status log.
       verifyStatusEntry(/Missing permission to un-archive/);
     });
+
+    // 2.2.10: two r/discrub reports of every delete in a thread failing with
+    // HTTP 400. Discord refuses a delete in an archived thread with code
+    // 50083, and the thread list had not marked this one archived.
+    it('reopens a thread the list did not mark when Discord refuses the delete, then archives it again', () => {
+      const LATE_THREAD = '802000000000000555';
+      const inThread = (id: string) => ({
+        id,
+        channel_id: LATE_THREAD,
+        author: { id: '111222333444555666', username: 'discrub_tester', discriminator: '0', avatar: 'abc123avatar', global_name: 'Discrub Tester' },
+        content: `Message ${id}`,
+        timestamp: '2025-10-01T10:00:00.000Z',
+        edited_timestamp: null,
+        tts: false,
+        mention_everyone: false,
+        mentions: [],
+        attachments: [],
+        embeds: [],
+        reactions: [],
+        pinned: false,
+        type: 0,
+      });
+      let searches = 0;
+      cy.intercept('GET', `${API}/guilds/*/messages/search*`, (req) => {
+        searches++;
+        req.reply({
+          statusCode: 200,
+          body: searches === 1
+            ? { messages: [[inThread('780000000000005551')], [inThread('780000000000005552')]], total_results: 2, threads: [] }
+            : { messages: [], total_results: 0, threads: [] },
+        });
+      });
+
+      let open = false;
+      const toggles: boolean[] = [];
+      const deletes: number[] = [];
+      cy.intercept('PATCH', `${API}/channels/${LATE_THREAD}`, (req) => {
+        toggles.push(req.body.archived);
+        open = !req.body.archived;
+        req.reply({ statusCode: 200, body: {} });
+      });
+      cy.intercept('DELETE', `${API}/channels/${LATE_THREAD}/messages/*`, (req) => {
+        deletes.push(open ? 204 : 400);
+        if (open) req.reply({ statusCode: 204, body: {} });
+        else req.reply({ statusCode: 400, body: { message: 'Thread is archived', code: 50083 } });
+      });
+
+      selectChannelsForPurge('general');
+      openPurgeDialog();
+      addUserById('111222333444555666');
+      cy.wait('@lookupUser');
+      confirmPurge();
+      cy.get('[role="dialog"]').should('not.exist');
+      waitForPurgeComplete();
+
+      cy.then(() => {
+        expect(deletes, 'refused once, then both deleted').to.deep.eq([400, 204, 204]);
+        expect(toggles, 'reopened once, archived again at the end').to.deep.eq([false, true]);
+      });
+      verifyStatusEntry(/Un-archived thread 802000000000000555/);
+      verifyStatusEntry(/Re-archived thread 802000000000000555/);
+      cy.window().then((win) => {
+        const entries = (win as any).__store__.getState().status.entries as { message: string }[];
+        expect(entries.some((e) => /HTTP 400/.test(e.message)), 'no failed delete line').to.eq(false);
+      });
+    });
   });
 
   describe("Don't Wake Archived Threads Option (#233)", () => {

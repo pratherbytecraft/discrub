@@ -44,6 +44,7 @@ import {
 import { countRows, scan, searchCid } from '@services/workspaceStore';
 import { selectCurrentWid } from '@features/workspace/workspaceSlice';
 import { getDiscordService } from '@services/discordService';
+import { callInThread, createArchivedThreadReopener } from '@services/archivedThreads';
 import type { RootState } from '@/app/store';
 import { selectSearchDelay, selectDeleteDelay, selectDelayModifier, selectSettings, selectDiscrubPaused, setDiscrubPaused, setOperationHold } from '@features/app/appSlice';
 import { calculateRandomDelay } from '@/utils/delayUtils';
@@ -170,7 +171,8 @@ export const deleteMessage = createAsyncThunk(
   ) => {
     try {
       const discordService = getDiscordService();
-      const response = await discordService.deleteMessage(token, messageId, channelId);
+      // 2.2.10: an archived thread is reopened for the delete and archived again.
+      const response = await callInThread(token, dispatch, channelId, () => discordService.deleteMessage(token, messageId, channelId));
 
       if (!response.success) {
         return rejectWithValue(withHttpStatus('Failed to delete message', response.status));
@@ -250,6 +252,8 @@ export const deleteMessages = createAsyncThunk(
         pendingRemovals = [];
       };
 
+      // 2.2.10: an archived thread is reopened once for the run and archived again at the end.
+      const reopener = createArchivedThreadReopener({ token, dispatch });
       try {
         for (let i = 0; i < messages.length; i++) {
           const message = messages[i];
@@ -265,7 +269,9 @@ export const deleteMessages = createAsyncThunk(
             // single-message `deleteMessage` thunk — its fulfilled reducer
             // rewrites all three message arrays per message, which is exactly
             // the per-deletion O(N) work this batch path exists to avoid.
-            const response = await discordService.deleteMessage(token, message.id, channelId);
+            const response = await reopener.call(channelId, () => discordService.deleteMessage(token, message.id, channelId));
+            // The thread could not be reopened: one line is in the log, and nothing was sent for this message.
+            if (reopener.leftArchived(response)) continue;
             if (!response.success) {
               throw new Error(withHttpStatus('Failed to delete message', response.status));
             }
@@ -294,6 +300,7 @@ export const deleteMessages = createAsyncThunk(
         }
       } finally {
         flushPendingRemovals();
+        await reopener.finish();
       }
 
       // #271: a loaded package for this channel learns about the deletions.
@@ -332,12 +339,12 @@ export const editMessage = createAsyncThunk(
   ) => {
     try {
       const discordService = getDiscordService();
-      const response = await discordService.editMessage(
+      const response = await callInThread(token, dispatch, channelId, () => discordService.editMessage(
         token,
         messageId,
         { content },
         channelId
-      );
+      ));
 
       if (!response.success || !response.data) {
         // Row 166 (pass 3): an edit says so in the log, like deletes and reactions do.
@@ -401,6 +408,8 @@ export const editMessages = createAsyncThunk(
         pendingEdits = [];
       };
 
+      // 2.2.10: an archived thread is reopened once for the run and archived again at the end.
+      const reopener = createArchivedThreadReopener({ token, dispatch });
       try {
         for (let i = 0; i < messages.length; i++) {
           const message = messages[i];
@@ -415,12 +424,13 @@ export const editMessages = createAsyncThunk(
             // path exists to avoid (and it flickers isEditing off between
             // messages; the editMessages pending/fulfilled cases now hold
             // it stable for the whole run).
-            const response = await discordService.editMessage(
+            const response = await reopener.call(channelId, () => discordService.editMessage(
               token,
               message.id,
               { content },
               channelId
-            );
+            ));
+            if (reopener.leftArchived(response)) continue;
             if (!response.success || !response.data) {
               throw new Error(withHttpStatus('Failed to edit message', response.status));
             }
@@ -440,6 +450,7 @@ export const editMessages = createAsyncThunk(
         }
       } finally {
         flushPendingEdits();
+        await reopener.finish();
       }
 
       if (editedMessages.length > 0) {
@@ -498,6 +509,8 @@ const executeBulkEdit = async (
   const delayModifier = selectDelayModifier(initialState);
   const isDm = !guildId;
   const stats: BulkEditStats = { edited: 0, skipped: 0, failed: 0 };
+  // 2.2.10: archived threads are reopened once for the run and archived again at the end.
+  const reopener = createArchivedThreadReopener({ token, dispatch });
   let signInExpiredAt: number | null = null;
   let cancelled = false;
 
@@ -567,15 +580,19 @@ const executeBulkEdit = async (
             // every fulfilled, which would flicker the operation indicator
             // and pause/cancel controls off between messages. bulkEdit holds
             // isEditing stable across the whole run via its own reducer cases.
-            const response = await getDiscordService().editMessage(
+            const targetId = message.channel_id ?? channel.id;
+            const response = await reopener.call(targetId, () => getDiscordService().editMessage(
               token,
               message.id,
               { content },
-              message.channel_id ?? channel.id,
-            );
+              targetId,
+            ));
             if (response.success) {
               stats.edited++;
               channelEdited++;
+            } else if (reopener.leftArchived(response)) {
+              // The thread could not be reopened; one line is in the log.
+              stats.skipped++;
             } else {
               throwIfSignInExpired(response);
               stats.failed++;
@@ -610,6 +627,7 @@ const executeBulkEdit = async (
     if (cancelled) break;
   }
 
+  await reopener.finish();
   return { stats, cancelled, signInExpiredAt };
 };
 
@@ -907,13 +925,13 @@ export const deleteReaction = createAsyncThunk(
   ) => {
     try {
       const discordService = getDiscordService();
-      const response = await discordService.deleteReaction(
+      const response = await callInThread(token, dispatch, channelId, () => discordService.deleteReaction(
         token,
         channelId,
         messageId,
         emoji,
         userId
-      );
+      ));
 
       if (!response.success) {
         return rejectWithValue(withHttpStatus('Failed to delete reaction', response.status));
@@ -1112,6 +1130,8 @@ export const batchRemoveReactions = createAsyncThunk(
 
       dispatch(addStatusEntry({ level: 'info', message: t('status.msg.processingReactions', { count: total }) }));
 
+      // 2.2.10: an archived thread is reopened once for the run and archived again at the end.
+      const reopener = createArchivedThreadReopener({ token, dispatch });
       for (const msg of messagesWithReactions) {
         await waitWhilePaused(getState as () => RootState);
         if (checkCancelled(getState as () => RootState)) break;
@@ -1120,7 +1140,7 @@ export const batchRemoveReactions = createAsyncThunk(
 
         if (mode === 'all') {
           try {
-            await discordService.deleteAllReactionsFromMessage(token, channelId, msg.id);
+            await reopener.call(channelId, () => discordService.deleteAllReactionsFromMessage(token, channelId, msg.id));
             didRemove = true;
           } catch {
             // Continue on failure — partial success is acceptable
@@ -1134,7 +1154,7 @@ export const batchRemoveReactions = createAsyncThunk(
               if (await cancellableDelay(delayMs, getState as () => RootState)) break;
             }
             try {
-              await discordService.deleteAllReactionsForEmoji(token, channelId, msg.id, emoji);
+              await reopener.call(channelId, () => discordService.deleteAllReactionsForEmoji(token, channelId, msg.id, emoji));
               didRemove = true;
             } catch {
               // Continue on failure
@@ -1154,7 +1174,7 @@ export const batchRemoveReactions = createAsyncThunk(
               if (await cancellableDelay(delayMs, getState as () => RootState)) break;
             }
             try {
-              await discordService.deleteReaction(token, channelId, msg.id, emojiKey, userId);
+              await reopener.call(channelId, () => discordService.deleteReaction(token, channelId, msg.id, emojiKey, userId));
               didRemove = true;
             } catch {
               // User may not have reacted with this emoji — continue
@@ -1175,6 +1195,7 @@ export const batchRemoveReactions = createAsyncThunk(
           if (wasCancelled) break;
         }
       }
+      await reopener.finish();
 
       if (removed > 0) {
         dispatch(addStatusEntry({ level: 'success', message: t('status.msg.removedReactionsFrom', { count: removed }) }));
@@ -1363,7 +1384,7 @@ export const deleteAttachment = createAsyncThunk(
 
       // If no attachments remain and no content, delete the entire message
       if (remainingAttachments.length === 0 && !freshMessage.content?.trim()) {
-        const deleteResponse = await discordService.deleteMessage(token, message.id, channelId);
+        const deleteResponse = await callInThread(token, dispatch, channelId, () => discordService.deleteMessage(token, message.id, channelId));
         if (!deleteResponse.success) {
           return rejectWithValue(withHttpStatus('Failed to delete message', deleteResponse.status));
         }
@@ -1372,12 +1393,12 @@ export const deleteAttachment = createAsyncThunk(
       }
 
       // Otherwise, edit the message to remove the attachment
-      const editResponse = await discordService.editMessage(
+      const editResponse = await callInThread(token, dispatch, channelId, () => discordService.editMessage(
         token,
         message.id,
         { attachments: remainingAttachments },
         channelId
-      );
+      ));
 
       if (!editResponse.success || !editResponse.data) {
         return rejectWithValue(withHttpStatus('Failed to remove attachment', editResponse.status));
@@ -1415,7 +1436,7 @@ export const deleteAllAttachments = createAsyncThunk(
 
       // If no content, delete the entire message
       if (!message.content?.trim()) {
-        const deleteResponse = await discordService.deleteMessage(token, message.id, channelId);
+        const deleteResponse = await callInThread(token, dispatch, channelId, () => discordService.deleteMessage(token, message.id, channelId));
         if (!deleteResponse.success) {
           return rejectWithValue(withHttpStatus('Failed to delete message', deleteResponse.status));
         }
@@ -1424,12 +1445,12 @@ export const deleteAllAttachments = createAsyncThunk(
       }
 
       // Otherwise, edit message to remove all attachments
-      const editResponse = await discordService.editMessage(
+      const editResponse = await callInThread(token, dispatch, channelId, () => discordService.editMessage(
         token,
         message.id,
         { attachments: [] },
         channelId
-      );
+      ));
 
       if (!editResponse.success || !editResponse.data) {
         return rejectWithValue(withHttpStatus('Failed to remove attachments', editResponse.status));

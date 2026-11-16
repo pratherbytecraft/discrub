@@ -619,6 +619,61 @@ describe('messageSlice', () => {
   });
 
   describe('deleteMessages async thunk', () => {
+    // 2.2.10: deletes inside an archived thread (400 code 50083).
+    describe('inside an archived thread', () => {
+      const archivedService = (reopenAnswer: { success: boolean; status: number }) => {
+        let open = false;
+        const editChannel = vi.fn(async (_t: string, _id: string, body: { archived: boolean }) => {
+          if (reopenAnswer.success) open = !body.archived;
+          return reopenAnswer;
+        });
+        const deleteMessage = vi.fn(async () => (open ? { success: true, status: 204 } : { success: false, status: 400, code: 50083 }));
+        vi.mocked(discordService.getDiscordService).mockReturnValue({ deleteMessage, editChannel } as any);
+        return { deleteMessage, editChannel };
+      };
+
+      it('the bulk delete reopens the thread once, deletes everything, and archives it again', async () => {
+        const { deleteMessage, editChannel } = archivedService({ success: true, status: 200 });
+        const messages = [createMockMessage({ id: 'msg-1' }), createMockMessage({ id: 'msg-2' }), createMockMessage({ id: 'msg-3' })];
+        const appStore = await createStoreWithApp({ ...initialMessageState, ...loaded(messages, messages) });
+
+        const action = await appStore.dispatch(deleteMessages({ messages, channelId: 'thread-1', token: 'token' }));
+
+        expect(action.payload).toEqual(['msg-1', 'msg-2', 'msg-3']);
+        expect(deleteMessage.mock.calls.map((c: unknown[]) => c[1])).toEqual(['msg-1', 'msg-1', 'msg-2', 'msg-3']);
+        expect(editChannel.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+          ['thread-1', { archived: false }],
+          ['thread-1', { archived: true }],
+        ]);
+      });
+
+      it('a thread that cannot be reopened gets one line, not one failure per message', async () => {
+        const { deleteMessage, editChannel } = archivedService({ success: false, status: 403 });
+        const messages = [createMockMessage({ id: 'msg-1' }), createMockMessage({ id: 'msg-2' }), createMockMessage({ id: 'msg-3' })];
+        const appStore = await createStoreWithApp({ ...initialMessageState, ...loaded(messages, messages) });
+
+        const action = await appStore.dispatch(deleteMessages({ messages, channelId: 'thread-1', token: 'token' }));
+
+        expect(action.payload).toEqual([]);
+        expect(deleteMessage).toHaveBeenCalledTimes(1);
+        expect(editChannel).toHaveBeenCalledTimes(1);
+        // No console failure per message either: the two after the first were never tried.
+        expect(editChannel).toHaveBeenCalledWith('token', 'thread-1', { archived: false });
+      });
+
+      it('a single delete reopens the thread, deletes, and archives it again', async () => {
+        const { deleteMessage: deleteCall, editChannel } = archivedService({ success: true, status: 200 });
+        const messages = [createMockMessage({ id: 'msg-1' })];
+        const appStore = await createStoreWithApp({ ...initialMessageState, ...loaded(messages, messages) });
+
+        const action = await appStore.dispatch(deleteMessage({ messageId: 'msg-1', channelId: 'thread-1', token: 'token' }));
+
+        expect(action.type).toBe('message/deleteMessage/fulfilled');
+        expect(deleteCall).toHaveBeenCalledTimes(2);
+        expect(editChannel.mock.calls.map((c) => c[2])).toEqual([{ archived: false }, { archived: true }]);
+      });
+    });
+
     it('should set isDeleting when pending', async () => {
       const mockDiscordService = {
         deleteMessage: vi.fn().mockImplementation(() => new Promise(() => {})),

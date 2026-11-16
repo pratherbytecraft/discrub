@@ -2159,6 +2159,8 @@
       "searchBatch_other": "Suchpaket {{batch}}: {{count}} Nachrichten zu verarbeiten gefunden{{denom}}",
       "leavingArchivedThread": "Archivierter Thread {{id}} bleibt unberührt, „Archivierte Threads nicht aufwecken“ ist aktiv",
       "unarchivedMessages": "Thread {{id}} zur Verarbeitung seiner Nachrichten entarchiviert (wird danach erneut archiviert)",
+      "unarchiveDenied": "Keine Berechtigung, Thread {{id}} zu entarchivieren; seine Nachrichten werden übersprungen",
+      "unarchiveFailed": "Thread {{id}} konnte nicht entarchiviert werden (HTTP {{status}}); seine Nachrichten werden übersprungen",
       "deleteAttachmentOnlyFailed": "Reine Anhang-Nachricht konnte nicht gelöscht werden ({{reason}}) · Nachricht {{id}}",
       "stripFailed": "Anhänge konnten nicht entfernt werden ({{reason}}) · Nachricht {{id}}",
       "clearTextFailed": "Nachrichtentext konnte nicht gelöscht werden ({{reason}}) · Nachricht {{id}}",

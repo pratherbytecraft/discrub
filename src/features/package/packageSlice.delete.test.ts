@@ -32,10 +32,12 @@ import { externalDeletionsRecorded } from './packageDeletedCache';
 import type { RootState } from '@/app/store';
 
 const mockDeleteMessage = vi.fn();
+const mockEditChannel = vi.fn();
 
 vi.mock('@services/discordService', () => ({
   getDiscordService: vi.fn(() => ({
     deleteMessage: mockDeleteMessage,
+    editChannel: mockEditChannel,
   })),
 }));
 
@@ -174,6 +176,48 @@ describe('packageSlice — deletePackageMessages', () => {
     expect(state.deleteResult?.deleted).toBe(3);
     expect(state.deleteResult?.failed).toBe(0);
     expect(state.selectedMessageIds['200']).toBeUndefined();
+  });
+
+  // 2.2.10: a package channel that is an archived thread (400 code 50083).
+  it('reopens an archived thread once, deletes every message, and archives it again', async () => {
+    let open = false;
+    mockEditChannel.mockReset();
+    mockEditChannel.mockImplementation(async (_t: string, _id: string, body: { archived: boolean }) => {
+      open = !body.archived;
+      return { success: true, status: 200 };
+    });
+    mockDeleteMessage.mockImplementation(async () => (open ? { success: true, status: 204 } : { success: false, status: 400, code: 50083 }));
+    const store = await primedStore();
+
+    await store.dispatch(deletePackageMessages({ channelId: '200' }));
+
+    const result = store.getState().package.deleteResult;
+    expect(result?.deleted).toBe(3);
+    expect(result?.failed).toBe(0);
+    expect(result?.forbidden).toBe(0);
+    expect(mockDeleteMessage).toHaveBeenCalledTimes(4);
+    expect(mockEditChannel.mock.calls.map((c) => [c[1], c[2]])).toEqual([
+      ['200', { archived: false }],
+      ['200', { archived: true }],
+    ]);
+  });
+
+  it('an archived thread that cannot be reopened counts as no permission, with one call and one line', async () => {
+    mockEditChannel.mockReset();
+    mockEditChannel.mockResolvedValue({ success: false, status: 403 });
+    mockDeleteMessage.mockResolvedValue({ success: false, status: 400, code: 50083 });
+    const store = await primedStore();
+
+    await store.dispatch(deletePackageMessages({ channelId: '200' }));
+
+    const result = store.getState().package.deleteResult;
+    expect(result?.deleted).toBe(0);
+    expect(result?.failed).toBe(0);
+    expect(result?.forbidden).toBe(3);
+    expect(mockDeleteMessage).toHaveBeenCalledTimes(1);
+    expect(mockEditChannel).toHaveBeenCalledTimes(1);
+    const lines = (store.getState() as RootState).status.entries.filter((e) => e.message.includes('un-archive thread 200'));
+    expect(lines).toHaveLength(1);
   });
 
   it('tolerates 404 as alreadyGone', async () => {

@@ -10,6 +10,7 @@ import {
   findStoredPackageOwner,
 } from '@/services/packageStreamService';
 import { getDiscordService } from '@/services/discordService';
+import { createArchivedThreadReopener } from '@services/archivedThreads';
 import { getExportService } from '@/services/exportService';
 import {
   CancelledError,
@@ -832,6 +833,9 @@ async function runChannelDelete({ ids, channelId, token, getState, dispatch, onP
   const deleteDelay = selectDeleteDelay(state);
   const delayModifier = selectDelayModifier(state);
   const discordService = getDiscordService();
+  // 2.2.10: a package channel can be an archived thread. It is reopened
+  // once for the run and archived again at the end.
+  const reopener = createArchivedThreadReopener({ token, dispatch });
 
   const result: DeleteResult = {
     deleted: 0,
@@ -874,13 +878,20 @@ async function runChannelDelete({ ids, channelId, token, getState, dispatch, onP
         // `{ success, status }` object. We inspect that. The catch is
         // kept for genuinely-thrown exceptions (CancelledError surfacing
         // through the await chain, programming errors, etc.).
-        const apiResult = await discordService.deleteMessage(token, messageId, channelId);
+        const apiResult = await reopener.call(channelId, () => discordService.deleteMessage(token, messageId, channelId));
         if (apiResult.success) {
           result.deleted += 1;
           result.deletedIds.push(messageId);
         } else if (apiResult.status === 404) {
           noteAlreadyGone(i + 1);
           result.alreadyGoneIds.push(messageId);
+          wasAlreadyGone = true;
+        } else if (reopener.leftArchived(apiResult)) {
+          // The thread could not be reopened: one line is in the log, and
+          // the message counts with the ones this account may not delete.
+          // Nothing was sent for it, so it pays the short floor, not the Delete Delay.
+          result.forbidden += 1;
+          onFailure?.(messageId, apiResult.status, (apiResult as { code?: number }).code);
           wasAlreadyGone = true;
         } else if (apiResult.status === 403) {
           result.forbidden += 1;
@@ -937,6 +948,7 @@ async function runChannelDelete({ ids, channelId, token, getState, dispatch, onP
     }
   }
 
+  await reopener.finish();
   flushPending(result, flushed, onFlush, true);
   onProgress(ids.length, ids.length);
   return result;
