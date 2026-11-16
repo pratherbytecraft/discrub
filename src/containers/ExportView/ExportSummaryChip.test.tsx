@@ -61,6 +61,23 @@ describe('ExportSummaryChip', () => {
     expect(screen.queryByText(/\/page/)).toBeNull();
   });
 
+  it('names Other files when it is ticked and another type is not', () => {
+    renderChip({
+      includeMedia: true,
+      mediaConfig: { images: false, videos: true, audio: true, other: true },
+    });
+    expect(screen.getByText(/Media: Videos, Audio, Other files/)).toBeInTheDocument();
+  });
+
+  it('lists the three types, not "All media", when Other files is unticked', () => {
+    renderChip({
+      includeMedia: true,
+      mediaConfig: { images: true, videos: true, audio: true, other: false },
+    });
+    expect(screen.getByText(/Media: Images, Videos, Audio/)).toBeInTheDocument();
+    expect(screen.queryByText(/All media/)).toBeNull();
+  });
+
   it('shows "All media" when all enabled', () => {
     renderChip({
       includeMedia: true,

@@ -39,14 +39,15 @@ const ExportSummaryChip = memo(({ hideThreads = false }: { hideThreads?: boolean
   if (!mediaEnabled) {
     parts.push(t('export.summary.noMedia'));
   } else {
-    const { images, videos, audio } = exportState.mediaConfig;
-    if (images && videos && audio) {
+    const { images, videos, audio, other } = exportState.mediaConfig;
+    if (images && videos && audio && other) {
       parts.push(t('export.summary.allMedia'));
     } else {
       const types: string[] = [];
       if (images) types.push(t('export.mediaImages'));
       if (videos) types.push(t('export.mediaVideos'));
       if (audio) types.push(t('export.mediaAudio'));
+      if (other) types.push(t('export.mediaOtherFiles'));
       if (types.length > 0) {
         parts.push(t('export.summary.media', { types: types.join(', ') }));
       }

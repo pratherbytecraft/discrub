@@ -507,10 +507,15 @@ export class MediaDownloadService {
         }
       });
 
-      // Also get media from embeds
+      // Also get media from embeds. 2.2.10: an embed's image and thumbnail
+      // follow the Images option and its video follows Videos, the same as
+      // attachments. Before, every embed file was downloaded whatever was
+      // ticked, so an export with Images off still filled with thumbnails.
+      const wantImages = mediaConfig ? mediaConfig.images : true;
+      const wantVideos = mediaConfig ? mediaConfig.videos : true;
       const embeds = source.embeds || [];
       embeds.forEach((embed) => {
-        if (embed.image?.url) {
+        if (wantImages && embed.image?.url) {
           attachmentUrls.push({
             url: embed.image.url,
             ...resolveLegs(embed.image.url, embed.image.proxy_url),
@@ -521,7 +526,7 @@ export class MediaDownloadService {
             timestamp,
           });
         }
-        if (embed.video?.url) {
+        if (wantVideos && embed.video?.url) {
           attachmentUrls.push({
             url: embed.video.url,
             ...resolveLegs(embed.video.url, embed.video.proxy_url),
@@ -537,7 +542,7 @@ export class MediaDownloadService {
         // downloading it just plants a dead file in the zip. Skip it
         // whenever the gifv's video is being downloaded instead.
         const isGifvWithVideo = embed.type === EmbedType.GIFV && !!embed.video?.url;
-        if (embed.thumbnail?.url && !isGifvWithVideo) {
+        if (wantImages && embed.thumbnail?.url && !isGifvWithVideo) {
           attachmentUrls.push({
             url: embed.thumbnail.url,
             ...resolveLegs(embed.thumbnail.url, embed.thumbnail.proxy_url),

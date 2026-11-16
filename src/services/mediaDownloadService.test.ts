@@ -1387,6 +1387,50 @@ describe('mediaDownloadService', () => {
   });
 
   describe('mediaConfig filtering', () => {
+    const embedMessage = () => [
+      {
+        ...createMockMessage(),
+        embeds: [
+          {
+            image: { url: 'https://cdn.discordapp.com/e-image.png' },
+            video: { url: 'https://cdn.discordapp.com/e-video.mp4' },
+            thumbnail: { url: 'https://cdn.discordapp.com/e-thumb.png' },
+          },
+        ],
+      } as any,
+    ] as Message[];
+    const embedCalls = () =>
+      mockDiscordService.downloadFile.mock.calls.map((c: any[]) => c[0]).filter((u: string) => u.includes('/e-'));
+
+    it('leaves embed images and thumbnails out when Images is unticked', async () => {
+      mockDiscordService.downloadFile.mockResolvedValue({ success: true, data: new Blob(['data'], { type: 'video/mp4' }) });
+      await service.downloadAllMedia(
+        embedMessage(), null, 'test-channel', mockZipService, mockOnProgress,
+        { images: false, videos: true, audio: true, other: true }
+      );
+      expect(embedCalls()).toEqual(['https://cdn.discordapp.com/e-video.mp4']);
+    });
+
+    it('leaves embed videos out when Videos is unticked', async () => {
+      mockDiscordService.downloadFile.mockResolvedValue({ success: true, data: new Blob(['data'], { type: 'image/png' }) });
+      await service.downloadAllMedia(
+        embedMessage(), null, 'test-channel', mockZipService, mockOnProgress,
+        { images: true, videos: false, audio: true, other: true }
+      );
+      expect(embedCalls()).toEqual(['https://cdn.discordapp.com/e-image.png', 'https://cdn.discordapp.com/e-thumb.png']);
+    });
+
+    it('downloads no embed file from a forwarded message when Images and Videos are unticked', async () => {
+      const [message] = embedMessage();
+      const forwarded = [{ ...createMockMessage(), message_snapshots: [{ message: { embeds: message.embeds } }] } as any] as Message[];
+      mockDiscordService.downloadFile.mockResolvedValue({ success: true, data: new Blob(['data'], { type: 'image/png' }) });
+      await service.downloadAllMedia(
+        forwarded, null, 'test-channel', mockZipService, mockOnProgress,
+        { images: false, videos: false, audio: true, other: true }
+      );
+      expect(embedCalls()).toEqual([]);
+    });
+
     it('should skip image attachments when mediaConfig.images is false', async () => {
       const messages: Message[] = [
         {
