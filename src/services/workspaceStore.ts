@@ -620,9 +620,36 @@ async function readWorkspace(tx: IDBTransaction, wid: string): Promise<Workspace
   return withGuilds(record);
 }
 
-/** A record written before the `guilds` map existed reads as an empty map. */
+const CRITERIA_DATE_KEYS = ['searchAfterDate', 'searchBeforeDate'] as const;
+
+/**
+ * A workspace file is JSON, so a date filter came back from an import as
+ * text, and the filter dialog and the filter itself expect dates (2.2.5
+ * to 2.2.9 stored the text). They read back as dates; text that is no
+ * date reads as no bound.
+ */
+function withCriteriaDates(conversation: Conversation): Conversation {
+  const sets = [conversation.searchCriteria, conversation.refineCriteria] as (Record<string, unknown> | null | undefined)[];
+  for (const criteria of sets) {
+    if (!criteria) continue;
+    for (const key of CRITERIA_DATE_KEYS) {
+      const value = criteria[key];
+      if (typeof value !== 'string') continue;
+      const date = new Date(value);
+      criteria[key] = Number.isNaN(date.getTime()) ? null : date;
+    }
+  }
+  return conversation;
+}
+
+/**
+ * Old and imported shapes read as today's: a record written before the
+ * `guilds` map existed reads as an empty map, and date filters kept as
+ * text read as dates.
+ */
 function withGuilds(record: WorkspaceRecord): WorkspaceRecord {
   if (!record.guilds) record.guilds = {};
+  for (const conversation of Object.values(record.conversations ?? {})) withCriteriaDates(conversation);
   return record;
 }
 
@@ -992,7 +1019,8 @@ function resetConversationRows(conversation: Conversation): void {
 export function getConversation(wid: string, cid: string): Promise<Conversation | null> {
   return withTx('readonly', [STORE_WORKSPACES], { wid, cid }, async (tx) => {
     const record = await req<WorkspaceRecord | undefined>(tx.objectStore(STORE_WORKSPACES).get(wid));
-    return record?.conversations[cid] ?? null;
+    const conversation = record?.conversations[cid];
+    return conversation ? withCriteriaDates(conversation) : null;
   });
 }
 

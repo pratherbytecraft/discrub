@@ -331,6 +331,28 @@ describe('refreshConversationNames (ws-conv-names)', () => {
     expect((await getWorkspace(WID))?.guilds).toEqual({});
     expect((await listWorkspaces())[0].guilds).toEqual({});
   });
+
+  it('a date filter kept as text by an imported workspace file reads as a date', async () => {
+    await writePage(WID, CID, [msg('1')], seed);
+    await updateWorkspace(WID, (r) => {
+      const conversation = r.conversations[CID] as unknown as { searchCriteria: unknown; refineCriteria: unknown };
+      conversation.searchCriteria = { searchAfterDate: '2026-06-22T12:00:00.000Z', searchBeforeDate: 'not a date' };
+      conversation.refineCriteria = { searchBeforeDate: '2026-10-20T12:00:00.000Z', searchAfterDate: null };
+    });
+    const read = [
+      await getConversation(WID, CID),
+      (await getWorkspace(WID))?.conversations[CID],
+      (await listWorkspaces())[0].conversations[CID],
+    ];
+    for (const conversation of read) {
+      const search = conversation?.searchCriteria as unknown as Record<string, unknown>;
+      const refine = conversation?.refineCriteria as unknown as Record<string, unknown>;
+      expect(search.searchAfterDate).toEqual(new Date('2026-06-22T12:00:00.000Z'));
+      expect(search.searchBeforeDate).toBeNull();
+      expect(refine.searchBeforeDate).toEqual(new Date('2026-10-20T12:00:00.000Z'));
+      expect(refine.searchAfterDate).toBeNull();
+    }
+  });
 });
 
 describe('reads', () => {
