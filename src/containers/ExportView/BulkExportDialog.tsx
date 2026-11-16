@@ -61,13 +61,15 @@ interface BulkExportDialogProps {
    * With `all`, `channels` holds the threads loaded so far for show, and
    * the run lists every thread of `parent` itself.
    */
-  threadExport?: { parent: Channel; all: boolean; total: number } | null;
+  threadExport?: { parent: Channel; all: boolean; total: number; kind?: 'thread' | 'post' } | null;
+  /** The close animation has finished. The owner clears its selection here, so the dialog keeps its wording while it closes. */
+  onExited?: () => void;
 }
 
 /**
  * BulkExportDialog - configure and export multiple channels/DMs
  */
-const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guildId, threadExport = null }: BulkExportDialogProps) => {
+const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guildId, threadExport = null, onExited }: BulkExportDialogProps) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { t } = useTranslation();
@@ -160,8 +162,9 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
   const threadRun: ThreadExportRef | null = resuming
     ? resumeThreadExport
     : threadExport
-      ? { parentId: threadExport.parent.id, parentName: threadExport.parent.name || threadExport.parent.id, all: threadExport.all }
+      ? { parentId: threadExport.parent.id, parentName: threadExport.parent.name || threadExport.parent.id, all: threadExport.all, ...(threadExport.kind === 'post' ? { kind: 'post' as const } : {}) }
       : null;
+  const unitKind = threadRun ? threadRun.kind ?? 'thread' : null;
   const unitCount = resuming
     ? (threadRun && bulkResume ? Math.max(bulkResume.total, channels.length) : channels.length)
     : threadExport
@@ -197,7 +200,8 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
       token,
       format: exportState.exportFormat,
       messagesPerPage: exportState.messagesPerPage,
-      separateThreads: exportState.separateThreads,
+      // A thread has no threads of its own to fetch.
+      separateThreads: threadRun ? false : exportState.separateThreads,
       includeMedia: isMediaOnly ? true : exportState.includeMedia,
       guildId: guildId || null,
       mediaConfig: (isMediaOnly || exportState.includeMedia) ? exportState.mediaConfig : undefined,
@@ -223,9 +227,9 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
 
   const fullScreen = useFullScreenDialog();
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth fullScreen={fullScreen}>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth fullScreen={fullScreen} TransitionProps={{ onExited }}>
       <DialogTitle sx={{ pr: 5 }}>
-        {threadRun ? t('export.bulkTitleThreads') : mode === 'channels' ? t('export.bulkTitleChannels') : t('export.bulkTitleDms')}
+        {unitKind === 'post' ? t('export.bulkTitlePosts') : threadRun ? t('export.bulkTitleThreads') : mode === 'channels' ? t('export.bulkTitleChannels') : t('export.bulkTitleDms')}
         <Chip
           label={t('export.selectedCount', { count: unitCount })}
           size="small"
@@ -243,14 +247,14 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           {resuming && bulkResume && (
             <Typography variant="body2" data-testid="bulk-export-resume-note">
-              {t('workspace.resumeBulkExportNote', { done: bulkResume.doneCount, count: bulkResume.total, context: [mode === 'dms' ? 'dm' : '', bulkResume.signInExpired ? 'signin' : ''].filter(Boolean).join('_') || undefined })}
+              {t('workspace.resumeBulkExportNote', { done: bulkResume.doneCount, count: bulkResume.total, context: [mode === 'dms' ? 'dm' : unitKind ?? '', bulkResume.signInExpired ? 'signin' : ''].filter(Boolean).join('_') || undefined })}
             </Typography>
           )}
           {resuming && bulkResume?.signInExpired && <SignInAgainRow testId="bulk-export-sign-in-again" />}
           <SelectedChannelsPill
             channels={channels}
             mode={mode}
-            threads={!!threadRun && !(resuming && threadRun.all)}
+            threads={threadRun && !(resuming && threadRun.all) ? (unitKind === 'post' ? 'post' : true) : false}
             totalCount={!resuming && threadExport ? unitCount : undefined}
           />
 
@@ -267,7 +271,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
             />
           </Box>
 
-          <ExportSettingsAccordion isBulk={true} />
+          <ExportSettingsAccordion isBulk={true} hideThreads={!!threadRun} />
 
           <Typography variant="caption" color="text.secondary" data-testid="long-run-note">
             {t('longRun.note')}
@@ -282,7 +286,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
       </DialogContent>
       {/* The top padding keeps the summary strip off the scrolled options above it; the theme draws the divider. */}
       <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 2, pt: 1.5, pb: 1 }}>
-        <ExportSummaryChip />
+        <ExportSummaryChip hideThreads={!!threadRun} />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
           {resuming && (
             <Button onClick={handleStartOver} color="inherit" sx={{ mr: 'auto' }} data-testid="bulk-export-start-over">
@@ -299,7 +303,7 @@ const BulkExportDialog = ({ open, onClose, channels: selectedTargets, mode, guil
             disabled={channels.length === 0 || isOperationRunning}
             data-testid="bulk-export-confirm"
           >
-            {resuming ? t('workspace.resume') : threadRun ? t('export.exportThreads', { count: unitCount }) : mode === 'channels' ? t('export.exportChannels', { count: channels.length }) : t('export.exportDms', { count: channels.length })}
+            {resuming ? t('workspace.resume') : unitKind === 'post' ? t('export.exportPosts', { count: unitCount }) : threadRun ? t('export.exportThreads', { count: unitCount }) : mode === 'channels' ? t('export.exportChannels', { count: channels.length }) : t('export.exportDms', { count: channels.length })}
           </Button>
         </Box>
       </DialogActions>

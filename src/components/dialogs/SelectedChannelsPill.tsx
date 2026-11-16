@@ -14,8 +14,8 @@ interface SelectedChannelsPillProps {
    * 'servers'  = whole servers (#255 multi-server purge)
    */
   mode: 'channels' | 'dms' | 'servers';
-  /** The entries are threads of one channel: counted and named as threads. */
-  threads?: boolean;
+  /** The entries are threads of one channel, or a forum's posts: counted and named as such, with no # mark. */
+  threads?: boolean | 'post';
   /** How many the run covers when the list holds only the ones loaded so far. */
   totalCount?: number;
 }
@@ -33,7 +33,7 @@ const SelectedChannelsPill = ({ channels = [], guilds = [], mode, threads = fals
 
   const isDmMode = mode === 'dms';
   const isServerMode = mode === 'servers';
-  const pillContext = isServerMode ? 'server' : isDmMode ? 'dm' : threads ? 'thread' : 'channel';
+  const pillContext = isServerMode ? 'server' : isDmMode ? 'dm' : threads === 'post' ? 'post' : threads ? 'thread' : 'channel';
 
   const getChannelName = (channel: Channel) => {
     if (isDmMode) {
@@ -43,7 +43,7 @@ const SelectedChannelsPill = ({ channels = [], guilds = [], mode, threads = fals
   };
 
   const getChannelLabel = (channel: Channel) =>
-    isDmMode ? getChannelName(channel) : `# ${getChannelName(channel)}`;
+    isDmMode || threads ? getChannelName(channel) : `# ${getChannelName(channel)}`;
 
   // Servers and channels share one label list so the rest of the pill
   // (count, summary, expanded list) needs no mode branches.
@@ -59,7 +59,7 @@ const SelectedChannelsPill = ({ channels = [], guilds = [], mode, threads = fals
     const joined = visible.join(', ');
     return remaining > 0 ? t('pill.more', { names: joined, count: remaining }) : joined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channels, guilds, isDmMode, isServerMode, totalCount, t]);
+  }, [channels, guilds, isDmMode, isServerMode, threads, totalCount, t]);
 
   return (
     <Box>
@@ -74,7 +74,7 @@ const SelectedChannelsPill = ({ channels = [], guilds = [], mode, threads = fals
           }
         }}
         aria-expanded={expanded}
-        aria-label={isServerMode ? t('pill.selectedServers') : isDmMode ? t('pill.selectedConversations') : threads ? t('pill.selectedThreads') : t('pill.selectedChannels')}
+        aria-label={isServerMode ? t('pill.selectedServers') : isDmMode ? t('pill.selectedConversations') : threads === 'post' ? t('pill.selectedPosts') : threads ? t('pill.selectedThreads') : t('pill.selectedChannels')}
         sx={{
           display: 'flex',
           alignItems: 'center',

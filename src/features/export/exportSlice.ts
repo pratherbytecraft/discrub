@@ -1454,6 +1454,8 @@ export interface ThreadExportRef {
   parentName: string;
   /** Every thread of the parent: the parent is the only entry in `channels` and is listed here first. */
   all: boolean;
+  /** What the units are called. A forum's are posts. Left out means threads. */
+  kind?: 'thread' | 'post';
 }
 
 interface BulkExportParams {
@@ -1522,6 +1524,9 @@ export const bulkExportChannels = createAsyncThunk<
 
     const threadExport = params.threadExport ?? null;
     const threadParentId = threadExport?.all ? threadExport.parentId : null;
+    // A thread export says threads (or posts) where a channel run says channels, and names them without the # mark.
+    const unitContext = threadExport ? threadExport.kind ?? 'thread' : undefined;
+    const unitMark = threadExport ? '' : '#';
     const zipService = new StreamingZipService(
       threadExport ? `${exportSlug(threadExport.parentName) || 'channel'}-threads` : 'bulk-export',
       buildZipOptions(getState, dispatch),
@@ -1642,19 +1647,19 @@ export const bulkExportChannels = createAsyncThunk<
 
         dispatch(addStatusEntry({
           level: 'info',
-          message: t('status.export.bulkStartingChannel', { index: i + 1, total: expandedChannels.length, name: channelName }),
+          message: t('status.export.bulkStartingChannel', { index: i + 1, total: expandedChannels.length, name: channelName, context: unitContext }),
         }));
 
         const onProgress = (progress: number | MediaDownloadProgress) => {
           if (typeof progress === 'number') return;
           dispatch(setExportProgress({ ...progress, bulk: bulkContext }));
-          logMediaProgress(progress, dispatch as ExportDispatch, ` in #${channelName}`);
+          logMediaProgress(progress, dispatch as ExportDispatch, ` in ${unitMark}${channelName}`);
         };
 
         const net = { made: false };
         try {
           const outcome = await exportUnit({
-            unit: { id: channel.id, name: channelName, label: `#${channelName}`, kind: 'channel', guildId: guildId || null },
+            unit: { id: channel.id, name: channelName, label: `${unitMark}${channelName}`, kind: 'channel', guildId: guildId || null },
             folderName, format, messagesPerPage, separateThreads, includeMedia, mediaConfig, exportConfig, searchCriteria,
             token, getState, dispatch: dispatch as ExportDispatch, searchDelay, delayModifier,
             selectedGuild, cachedUserMap, guildId: guildId || null, guildRoles, textOptions: initialState.export.textOptions,
@@ -1695,7 +1700,7 @@ export const bulkExportChannels = createAsyncThunk<
       if (exportedChannels.length === 0 && !checkCancelled(getState) && signInExpiredAt === null) {
         dispatch(addStatusEntry({
           level: 'warning',
-          message: t('status.export.zeroChannels'),
+          message: t('status.export.zeroChannels', { context: unitContext }),
         }));
       }
 
@@ -1788,7 +1793,7 @@ export const bulkExportChannels = createAsyncThunk<
       if (signInExpiredAt === null && !checkCancelled(getState) && exportedChannels.length > 0) {
         dispatch(addStatusEntry({
           level: errors.length > 0 ? 'warning' : 'success',
-          message: t('status.export.bulkFinished', { done: exportedChannels.length, total: expandedChannels.length, failed: errors.length }),
+          message: t('status.export.bulkFinished', { done: exportedChannels.length, total: expandedChannels.length, failed: errors.length, context: unitContext }),
         }));
       }
 

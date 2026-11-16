@@ -174,6 +174,38 @@ describe('BulkExportDialog', () => {
       expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Export 1 Thread');
       expect(screen.getByText('1 thread')).toBeInTheDocument();
     });
+
+    it('lists the threads by name with no # mark, and leaves the threads option out', () => {
+      renderWithProviders(
+        <BulkExportDialog open channels={threads} mode="channels" onClose={mockOnClose} guildId="g1" threadExport={{ parent, all: false, total: 2 }} />,
+        { preloadedState: createBaseState({ auth }) }
+      );
+      expect(screen.getByText('Roadmap, Bugs')).toBeInTheDocument();
+      expect(screen.queryByText(/# Roadmap/)).toBeNull();
+      // The Content panel holds only the option to fetch a channel's threads.
+      expect(screen.queryByText('Content')).toBeNull();
+      expect(document.body.textContent).not.toContain('Separate threads');
+    });
+
+    it('a channel run keeps the # mark and the threads option', () => {
+      renderWithProviders(
+        <BulkExportDialog open channels={[parent]} mode="channels" onClose={mockOnClose} guildId="g1" />,
+        { preloadedState: createBaseState({ auth }) }
+      );
+      expect(screen.getAllByText('# general').length).toBeGreaterThan(0);
+      expect(screen.getByText('Content')).toBeInTheDocument();
+    });
+
+    it("a forum's posts are called posts", () => {
+      const forum = { id: 'f1', name: 'help', type: ChannelType.GUILD_FORUM } as Channel;
+      renderWithProviders(
+        <BulkExportDialog open channels={threads} mode="channels" onClose={mockOnClose} guildId="g1" threadExport={{ parent: forum, all: true, total: 300, kind: 'post' }} />,
+        { preloadedState: createBaseState({ auth }) }
+      );
+      expect(screen.getByText('Export Posts')).toBeInTheDocument();
+      expect(screen.getByText('300 posts')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Export 300 Posts');
+    });
   });
 
   describe('DM mode', () => {

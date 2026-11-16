@@ -64,9 +64,11 @@ interface ExportSettingsAccordionProps {
    * rehydration handles reactions via its own API loop.
    */
   packageMode?: boolean;
+  /** The run exports threads themselves, so the option to fetch a channel's threads is left out. */
+  hideThreads?: boolean;
 }
 
-const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, packageMode = false }: ExportSettingsAccordionProps) => {
+const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, packageMode = false, hideThreads = false }: ExportSettingsAccordionProps) => {
   const dispatch = useAppDispatch();
   const { t } = useTranslation();
   const exportState = useAppSelector(selectExport);
@@ -341,7 +343,7 @@ const ExportSettingsAccordion = ({ isBulk, mediaSummary, onFormatChange, package
 
       {/* Content — live channels only. Package CSVs don't carry thread
           refs, so the separate-threads pipeline has nothing to fetch. */}
-      {!packageMode && (
+      {!packageMode && !hideThreads && (
         <Accordion
           expanded={expandedPanels.content}
           onChange={handlePanelChange('content')}

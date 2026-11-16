@@ -1374,7 +1374,8 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
 
       <BulkExportDialog
         open={forumExportDialogOpen}
-        onClose={() => { closeDialog('forumExport'); setThreadExport(null); }}
+        onClose={() => closeDialog('forumExport')}
+        onExited={() => setThreadExport(null)}
         channels={threadExport ? threadExport.threads : forumThreads}
         mode="channels"
         guildId={selectedGuild?.id}

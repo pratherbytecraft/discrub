@@ -2107,7 +2107,7 @@ describe('exportSlice', () => {
       forumResponses?: Array<Record<string, unknown>>;
       emptyMessageChannels?: string[];
       sliceChannels?: any[];
-      threadExport?: { parentId: string; parentName: string; all: boolean };
+      threadExport?: { parentId: string; parentName: string; all: boolean; kind?: 'thread' | 'post' };
     }) {
       zipNames.length = 0;
       const { configureStore } = await import('@reduxjs/toolkit');
@@ -2233,6 +2233,21 @@ describe('exportSlice', () => {
         expect(entries.find((e) => e.message.includes('Found 3 threads in general'))).toBeDefined();
         expect(shellCalls[0][0].channels.map((c: { name: string }) => c.name)).toEqual(['One', 'Two', 'Three']);
         expect(zipName).toBe('general-threads');
+        // The log counts threads, not channels.
+        const messages = entries.map((e) => e.message);
+        expect(messages).toContain('Bulk export: Starting thread 1/3: One');
+        expect(messages).toContain('Bulk export: Finished, 3 of 3 threads exported, 0 failed');
+        expect(messages.some((m) => /channel/i.test(m))).toBe(false);
+      });
+
+      it("a forum's run counts posts in the log", async () => {
+        const { entries } = await runBulkForumExport({
+          exportChannels: [thread('t-2', 'Two')],
+          threadExport: { parentId: 'c-1', parentName: 'help', all: false, kind: 'post' },
+        });
+        const messages = entries.map((e) => e.message);
+        expect(messages).toContain('Bulk export: Starting post 1/1: Two');
+        expect(messages).toContain('Bulk export: Finished, 1 of 1 posts exported, 0 failed');
       });
 
       it('exports the ticked threads with no listing call', async () => {

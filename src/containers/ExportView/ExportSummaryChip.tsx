@@ -7,7 +7,8 @@ import { selectSettings } from '@features/app/appSlice';
 import { DiscrubSetting } from 'discrub-core/discrub-enum';
 import { useTranslation } from 'react-i18next';
 
-const ExportSummaryChip = memo(() => {
+/** `hideThreads`: the run exports threads themselves, so the threads option is left out of the line. */
+const ExportSummaryChip = memo(({ hideThreads = false }: { hideThreads?: boolean }) => {
   const { t } = useTranslation();
   const exportState = useAppSelector(selectExport);
   const settings = useAppSelector(selectSettings);
@@ -27,7 +28,7 @@ const ExportSummaryChip = memo(() => {
   parts.push(exportState.sortOrder === 'ascending' ? t('export.summary.oldestFirst') : t('export.summary.newestFirst'));
 
   // Separate threads
-  if (exportState.separateThreads) {
+  if (exportState.separateThreads && !hideThreads) {
     parts.push(t('export.summary.separateThreads'));
   }
 
