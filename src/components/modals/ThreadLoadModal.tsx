@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -154,18 +154,24 @@ const ThreadLoadModal = ({
   };
 
   const isTicked = (id: string) => allTicked || picked.has(id);
-  const toggleThread = (id: string) => {
-    if (allTicked) {
+  // The row handlers keep one identity so a tick redraws its own row and
+  // not the whole list (a tick took half a second at 1,000 rows).
+  const latest = useRef({ allTicked, discovered, onLoad });
+  latest.current = { allTicked, discovered, onLoad };
+  const toggleThread = useCallback((id: string) => {
+    if (latest.current.allTicked) {
       // Leaving "all": what is loaded stays ticked, minus this one.
       setAllTicked(false);
-      setPicked(new Set(discovered.filter((thread) => thread.id !== id).map((thread) => thread.id)));
+      setPicked(new Set(latest.current.discovered.filter((thread) => thread.id !== id).map((thread) => thread.id)));
       return;
     }
-    const next = new Set(picked);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setPicked(next);
-  };
+    setPicked((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
   const toggleAll = () => {
     setPicked(new Set());
     setAllTicked((value) => !value);
@@ -189,10 +195,10 @@ const ThreadLoadModal = ({
     }
   };
 
-  const handlePickThread = (thread: Channel) => {
-    onLoad(thread.id);
+  const handlePickThread = useCallback((thread: Channel) => {
+    latest.current.onLoad(thread.id);
     setThreadId('');
-  };
+  }, []);
 
   const handleClose = () => {
     setThreadId('');
@@ -388,7 +394,7 @@ export const describeThread = (thread: Channel): string => {
   return parts.length > 0 ? parts.join(' · ') : `ID ${thread.id}`;
 };
 
-const ThreadRow = ({
+const ThreadRow = memo(({
   thread,
   last,
   onPick,
@@ -473,6 +479,7 @@ const ThreadRow = ({
       />
     </ListItemButton>
   );
-};
+});
+ThreadRow.displayName = 'ThreadRow';
 
 export default ThreadLoadModal;
