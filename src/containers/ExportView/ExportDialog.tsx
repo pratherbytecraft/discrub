@@ -28,7 +28,7 @@ import { hydrateMessages, useHydratedAll } from '@features/message/messageCache'
 import { forEachMessage, storeSourceOf } from '@services/messageSource';
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
-import { selectSelectedGuild } from '@features/guild/guildSlice';
+import { selectConversationGuild } from '@features/guild/guildSlice';
 import { selectSettings } from '@features/app/appSlice';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import {
@@ -114,7 +114,7 @@ const ExportDialog = ({ open, onClose, exportContext = { source: 'live' } }: Exp
   const { messages: liveMessages, loading: liveLoading } = useHydratedAll(containerKey, hydrationSource, liveIds, open && !isPackageContext && !storeRef);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
-  const selectedGuild = useAppSelector(selectSelectedGuild);
+  const selectedGuild = useAppSelector(selectConversationGuild);
   const exportState = useAppSelector(selectExport);
   const settings = useAppSelector(selectSettings);
   const isOperationRunning = useAppSelector(selectIsHeavyOperationRunning);

@@ -8,6 +8,7 @@ import guildReducer, {
   fetchGuildEmojis,
   selectGuildEmojis,
   selectGuild,
+  selectConversationGuild,
   selectGuilds,
   selectSelectedGuild,
   selectSelectedGuilds,
@@ -529,6 +530,15 @@ describe('guildSlice', () => {
             isLoading: false,
             error: 'Test error',
           } });
+    });
+
+    it('selectConversationGuild is the selected Server for a Channel and nothing for a DM', () => {
+      const guild = store.getState().guild;
+      const selected = guild.selectedGuild;
+      expect(selectConversationGuild({ guild, channel: { selectedChannel: { id: 'c1' } }, dm: { selectedDm: null } } as any)).toBe(selected);
+      expect(selectConversationGuild({ guild, channel: { selectedChannel: null }, dm: { selectedDm: null } } as any)).toBe(selected);
+      // A DM is open and the Server is still selected in the sidebar.
+      expect(selectConversationGuild({ guild, channel: { selectedChannel: null }, dm: { selectedDm: { id: 'd1' } } } as any)).toBeNull();
     });
 
     it('selectGuild should return entire guild state', () => {

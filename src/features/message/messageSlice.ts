@@ -2929,9 +2929,10 @@ export const applyUserFilter = createAsyncThunk(
         searchCriteria: newCriteria,
       }));
     } else {
-      const channelId = (state as any).channel?.selectedChannel?.id
-        ?? (state as any).dm?.selectedDm?.id;
-      const guildId = (state as any).guild?.selectedGuild?.id;
+      const openChannelId = (state as any).channel?.selectedChannel?.id;
+      const channelId = openChannelId ?? (state as any).dm?.selectedDm?.id;
+      // A DM has no Server, even when one is still selected in the sidebar.
+      const guildId = openChannelId ? (state as any).guild?.selectedGuild?.id : undefined;
       if (!channelId) return { skipped: 'no-channel' as const };
       await dispatch(searchMessages({
         guildId,

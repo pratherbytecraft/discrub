@@ -26,7 +26,7 @@ import { useHotkey } from '@features/hotkeys/HotkeyProvider';
 import { selectSelectedChannel, selectChannels, fetchChannelById } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { getDmDisplayName, getDmName } from '@/utils/dmListUtils';
-import { selectSelectedGuild, selectRoles, selectCurrentMemberRoles, selectGuildEmojis, fetchGuildEmojis } from '@features/guild/guildSlice';
+import { selectConversationGuild, selectRoles, selectCurrentMemberRoles, selectGuildEmojis, fetchGuildEmojis } from '@features/guild/guildSlice';
 import type { SelectableEmoji } from '@/utils/emojiDataset';
 import { selectAuthToken, signInAgain, type SignInAgainResult } from '@features/auth/authSlice';
 import { isExtensionMode } from '@/extension/messaging';
@@ -159,7 +159,8 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
-  const selectedGuild = useAppSelector(selectSelectedGuild);
+  // The open conversation's Server: none while a DM is open, even when a Server is still selected in the sidebar.
+  const selectedGuild = useAppSelector(selectConversationGuild);
   const guildEmojis = useAppSelector(selectGuildEmojis);
   const mainMessages = useAppSelector(selectRows);
   const allMessages = useAppSelector(selectActiveRows);

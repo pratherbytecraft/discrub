@@ -33,7 +33,7 @@ import {
 import { selectSelectedChannel } from '@features/channel/channelSlice';
 import { selectSelectedDm } from '@features/dm/dmSlice';
 import { selectAuthToken } from '@features/auth/authSlice';
-import { selectSelectedGuild, selectRoles } from '@features/guild/guildSlice';
+import { selectConversationGuild, selectRoles } from '@features/guild/guildSlice';
 import { selectCachedUserMap } from '@features/cache/cacheSlice';
 import { selectSettings, setFeedScrollAnchor, selectFeedScrollAnchor } from '@features/app/appSlice';
 import { feedAnchorMoved } from '@features/workspace/workspaceSlice';
@@ -159,7 +159,7 @@ const MessageFeed = ({
   const token = useAppSelector(selectAuthToken);
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
-  const selectedGuild = useAppSelector(selectSelectedGuild);
+  const selectedGuild = useAppSelector(selectConversationGuild);
   const cachedUserMap = useAppSelector(selectCachedUserMap);
   const guildRoles = useAppSelector(selectRoles);
   const settings = useAppSelector(selectSettings);

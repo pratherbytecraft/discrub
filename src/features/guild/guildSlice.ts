@@ -235,6 +235,15 @@ export const {
 export const selectGuild = (state: RootState) => state.guild;
 export const selectGuilds = (state: RootState) => state.guild.guilds;
 export const selectSelectedGuild = (state: RootState) => state.guild.selectedGuild;
+/**
+ * The Server the open conversation belongs to: none while a DM is open.
+ * Opening a DM leaves the Server selected so its channel list stays in the
+ * sidebar, and anything that acts on the open conversation with
+ * `selectSelectedGuild` then sends the DM to that Server (a DM search went
+ * to the Server search and Discord answered 403, found on the VM 2026-11-16).
+ */
+export const selectConversationGuild = (state: RootState) =>
+  state.dm?.selectedDm && !state.channel?.selectedChannel ? null : state.guild.selectedGuild;
 export const selectSelectedGuilds = (state: RootState) => state.guild.selectedGuilds ?? [];
 export const selectRoles = (state: RootState) => state.guild.roles;
 export const selectGuildEmojis = (state: RootState) => state.guild.guildEmojis ?? [];

@@ -309,6 +309,31 @@ describe('Search & Filters', () => {
       cy.get('@guildSearch.all').should('have.length', 0);
     });
 
+    // Found on the VM 2026-11-16: opening a DM leaves the Server selected in
+    // the sidebar, and the search then went to that Server with the DM's id
+    // (403 Missing Access on a real account).
+    it('a DM opened while a Server is selected still searches the DM endpoint', () => {
+      cy.contains('button', 'Servers').click();
+      cy.contains('Cypress Test Server').click();
+      cy.contains('[data-testid="channel-row"]', 'general').click();
+      cy.get('[data-testid="context-title"]').should('have.text', 'general');
+      cy.contains('button', 'DMs').click();
+      cy.contains('alice_dev').click();
+      cy.get('[data-testid="context-title"]').should('have.text', 'Alice');
+      cy.window().its('__store__').invoke('getState').its('guild.selectedGuild.name').should('eq', 'Cypress Test Server');
+      cy.intercept('GET', `${API}/guilds/*/messages/search*`, {
+        fixture: 'search-results-empty.json',
+      }).as('guildSearch');
+      cy.intercept('GET', `${API}/channels/*/messages/search*`, {
+        fixture: 'dm-search-results.json',
+      }).as('dmSearch');
+
+      searchViaModal('looks');
+      cy.wait('@dmSearch').its('request.url').should('include', 'content=looks');
+      cy.wait(500);
+      cy.get('@guildSearch.all').should('have.length', 0);
+    });
+
     it('displays DM search results in the message table', () => {
       cy.intercept('GET', `${API}/channels/*/messages/search*`, {
         fixture: 'dm-search-results.json',
