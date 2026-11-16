@@ -146,7 +146,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       // Intercept thread-scoped search (channels endpoint, not guilds)
       cy.fixture('thread-search-results.json').then((results) => {
-        cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, {
+        cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, {
           statusCode: 200,
           body: results,
         }).as('searchThread');
@@ -168,7 +168,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       cy.fixture('thread-search-results.json').then((results) => {
         let call = 0;
-        cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, (req) => {
+        cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, (req) => {
           call += 1;
           if (call === 1) {
             req.reply({ statusCode: 202, body: { retry_after: 1 } });
@@ -227,7 +227,7 @@ describe('Thread Tabs — Comprehensive', () => {
       });
 
       const offsets: string[] = [];
-      cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, (req) => {
+      cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, (req) => {
         const offset = new URL(req.url).searchParams.get('offset') ?? '0';
         offsets.push(offset);
         req.reply({ statusCode: 200, body: offset === '0' ? page(0, 20) : page(20, 10) });
@@ -255,7 +255,7 @@ describe('Thread Tabs — Comprehensive', () => {
     it('logs the HTTP status when Discord refuses the thread search', () => {
       loadThread();
 
-      cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, {
+      cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, {
         statusCode: 403,
         body: { message: 'Missing Access', code: 50001 },
       }).as('searchThread');
@@ -765,7 +765,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       // Perform server search on thread
       cy.fixture('thread-search-results.json').then((results) => {
-        cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, {
+        cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, {
           statusCode: 200,
           body: results,
         }).as('searchThread');
@@ -858,7 +858,7 @@ describe('Thread Tabs — Comprehensive', () => {
       loadThread();
 
       // Intercept thread search with delay to keep loading state visible
-      cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, {
+      cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, {
         statusCode: 200,
         body: { messages: [], total_results: 0 },
         delay: 5000,
@@ -876,7 +876,7 @@ describe('Thread Tabs — Comprehensive', () => {
       loadThread();
 
       // Intercept search with delay
-      cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, {
+      cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, {
         statusCode: 200,
         body: { messages: [], total_results: 0 },
         delay: 5000,
@@ -1128,7 +1128,7 @@ describe('Thread Tabs — Comprehensive', () => {
     it('should allow server search and refine simultaneously on same tab', () => {
       // Server search on thread
       cy.fixture('thread-search-results.json').then((results) => {
-        cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, {
+        cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, {
           statusCode: 200,
           body: results,
         }).as('searchThread');
@@ -1172,7 +1172,7 @@ describe('Thread Tabs — Comprehensive', () => {
 
       // Server search on thread
       cy.fixture('thread-search-results.json').then((results) => {
-        cy.intercept('GET', `**/api/v10/channels/${THREAD_ID}/messages/search*`, {
+        cy.intercept('GET', `**/api/v10/guilds/*/messages/search*channel_id=${THREAD_ID}*`, {
           statusCode: 200,
           body: results,
         }).as('searchThread');

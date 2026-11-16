@@ -4565,6 +4565,33 @@ describe('messageSlice', () => {
     });
 
     describe('searchThreadMessages', () => {
+      it('searches a thread through its Server with the thread as the channel (a channel search answers 400 for a thread)', async () => {
+        const fetchSearchMessageData = vi.fn().mockResolvedValue({
+          success: true,
+          data: { messages: [createMockMessages(1)], total_results: 1 },
+        });
+        vi.mocked(discordService.getDiscordService).mockReturnValue({ fetchSearchMessageData } as any);
+        const { configureStore } = await import('@reduxjs/toolkit');
+        const appReducer = (await import('@features/app/appSlice')).default;
+        const guildReducer = (await import('@features/guild/guildSlice')).default;
+        const base = (await createStoreWithApp()).getState();
+        const testStore = configureStore({
+          reducer: { message: messageReducer, app: appReducer, guild: guildReducer } as any,
+          preloadedState: {
+            app: base.app,
+            message: { ...initialMessageState, activeTab: 'thread-100', threadTabs: { 'thread-100': threadTab('thread-100') } },
+            guild: { ...guildReducer(undefined, { type: 'init' }), selectedGuild: { id: 'guild-1', name: 'Server' } },
+          } as any,
+        });
+
+        await testStore.dispatch(searchThreadMessages({ threadId: 'thread-100', token: 'token', searchCriteria: { searchContent: 'test' } as any }));
+
+        expect(fetchSearchMessageData).toHaveBeenCalled();
+        const [, , channelId, guildId] = fetchSearchMessageData.mock.calls[0];
+        expect(channelId).toBe('thread-100');
+        expect(guildId).toBe('guild-1');
+      });
+
       it('should search and populate thread tab with results', async () => {
         const searchResults = createMockMessages(2);
         const mockDiscordService = {

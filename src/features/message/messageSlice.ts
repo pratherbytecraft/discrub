@@ -3257,6 +3257,7 @@ export const searchThreadMessages = createAsyncThunk(
       // thread's plain rows stay.
       const api = { dispatch, getState: getState as () => RootState };
       const threadSeed = threadSeedFromState(state, threadId);
+      const threadGuildId = threadSeed?.guildId ?? state.guild?.selectedGuild?.id ?? null;
       await dropSavedSearch(api, threadId);
 
       // 2.2.5 fix B: counts, not arrays; each page goes to the tab as it
@@ -3327,15 +3328,18 @@ export const searchThreadMessages = createAsyncThunk(
             break;
           }
 
-          // Threads are channels — search by channelId. #262: the same
-          // 202 wait + transient retry as the initial channel search, and
-          // the failure line carries what Discord answered.
+          // A thread is searched through its Server with the thread as
+          // channel_id. The channel search path answers 400 "Cannot execute
+          // action on this channel type" for a thread on a real account
+          // (found on the VM 2026-11-16; the mocks accepted it). #262: the
+          // same 202 wait + transient retry as the initial channel search,
+          // and the failure line carries what Discord answered.
           const response = await fetchSearchPageWithRetry(
             () => discordService.fetchSearchMessageData(
               token,
               offset,
               threadId,
-              null,
+              threadGuildId,
               currentCriteria
             ),
             { ...searchPageRetryHooks(dispatch, getState as () => RootState), signal },
