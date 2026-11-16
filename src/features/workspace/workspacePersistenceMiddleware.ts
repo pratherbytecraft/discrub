@@ -65,7 +65,7 @@ import { fetchDMs, setSelectedDm } from '@features/dm/dmSlice';
 import { getDmName } from '@utils/dmListUtils';
 import type { ActionKind, BulkKind, BulkMode, ConversationSeed, NameRefresh, WorkspaceBulk, WorkspaceScope } from './workspaceTypes';
 import { actionRecorded, bulkOf, bulkRecorded, feedAnchorMoved, initializeWorkspaces, scopeRestoreFinished, selectCurrentWid, workspaceSwitched } from './workspaceSlice';
-import { buildConfigSnapshot, bulkExportChannels, bulkExportDMs, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
+import { buildConfigSnapshot, bulkExportChannels, bulkExportDMs, bulkThreadsListed, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
 import { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
 
 /**
@@ -617,6 +617,36 @@ function recordBulkStart(persistApi: PersistApi, start: BulkStart): void {
   });
 }
 
+/**
+ * A thread export read its whole list. The record trades the parent for
+ * the threads themselves, so a resume is handed them and makes no listing
+ * call, and the dialog can name and count them.
+ */
+function recordBulkThreads(persistApi: PersistApi, threads: Array<{ id: string; name?: string | null; type?: number; parent_id?: string | null }>): void {
+  const wid = selectCurrentWid(persistApi.getState());
+  if (!wid || persistApi.getState().workspace?.bulk?.kind !== 'bulkExport') return;
+  void chained(async () => {
+    try {
+      const record = await updateWorkspace(wid, (workspace) => {
+        const bulk = workspace.bulk;
+        const settings = bulk?.settings as { threadExport?: { all?: boolean; excludedIds?: string[] }; threadTargets?: unknown } | undefined;
+        if (!bulk || bulk.kind !== 'bulkExport' || !settings?.threadExport?.all) return;
+        const { excludedIds: _left, ...ref } = settings.threadExport;
+        settings.threadExport = { ...ref, all: false };
+        settings.threadTargets = threads.map((thread) => ({ id: thread.id, name: thread.name, type: thread.type, parent_id: thread.parent_id ?? null }));
+        bulk.queue = threads.map((thread) => thread.id);
+        bulk.total = threads.length;
+        bulk.inHand = bulk.queue.find((id) => !bulk.done.includes(id)) ?? null;
+      });
+      if (selectCurrentWid(persistApi.getState()) === wid && persistApi.getState().workspace?.bulk) {
+        persistApi.dispatch(bulkRecorded(bulkOf(record)));
+      }
+    } catch (error) {
+      console.error('[workspace] could not keep the thread list', error);
+    }
+  });
+}
+
 /** A Bulk Export unit rendered into the zip; a resumed run skips it (2.2.5 WP6c). */
 function recordBulkUnitDone(persistApi: PersistApi, id: string): void {
   const wid = selectCurrentWid(persistApi.getState());
@@ -742,6 +772,13 @@ listen({
       queue: idsOf(arg.channels),
       keepDone: arg.resume === true,
     });
+  },
+});
+
+listen({
+  actionCreator: bulkThreadsListed,
+  effect: (action, listenerApi) => {
+    recordBulkThreads(api(listenerApi), action.payload.threads);
   },
 });
 

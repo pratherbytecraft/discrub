@@ -224,6 +224,73 @@ describe('Thread Load', () => {
       });
     });
 
+    it('an export cut by a reload is found again from Load Thread and resumes with no listing call', () => {
+      cy.task('downloads:clean');
+      const urls: string[] = [];
+      const fetched: string[] = [];
+      interceptThreadPages(27, urls);
+      cy.contains('button', 'Load Thread').click();
+      cy.wait('@getThreads');
+      // The third thread hangs, so the run is two threads in when the page reloads.
+      cy.fixture('messages.json').then((messages) => {
+        cy.intercept('GET', `${API}/channels/*/messages?*`, (req) => {
+          const id = req.url.match(/channels\/(\d+)\/messages/)![1];
+          fetched.push(id);
+          req.reply({ statusCode: 200, delay: id === thread(3).id && !req.url.includes('before=') ? 60000 : 0, body: req.url.includes('before=') ? [] : messages.map((m: object) => ({ ...m, channel_id: id })) });
+        });
+      });
+      cy.intercept('GET', `${API}/channels/*/messages/*/reactions/*`, { statusCode: 200, body: [] });
+      cy.get('[data-testid="export-threads"]').click();
+      cy.get('[data-testid="bulk-export-confirm"]').click();
+      const record = () => (cy.window({ log: false }).its('__workspace__') as unknown as Cypress.Chainable<{ get: (wid: string) => Promise<any> }>).then((h) => h.get('default'));
+      // The record is read once, so wait until the run is on its third thread first.
+      cy.window({ timeout: 30000 }).should((win) => {
+        const messages = ((win as any).__store__.getState().status.entries as { message: string }[]).map((e) => e.message);
+        expect(messages).to.include('Bulk export: Starting thread 3/27: thread-3');
+      });
+      cy.wait(1500);
+      record().should((saved) => {
+        expect(saved?.bulk?.queue, 'the record keeps the listed threads').to.have.length(27);
+        expect(saved?.bulk?.done, 'two threads finished').to.have.length(2);
+        expect(saved?.bulk?.settings?.threadTargets).to.have.length(27);
+        expect(saved?.bulk?.settings?.threadExport?.all).to.eq(false);
+      });
+
+      cy.reload();
+      cy.get('[aria-label="Your profile, Discrub Tester"]', { timeout: 15000 }).should('be.visible');
+      cy.window({ timeout: 15000 }).should((win) => {
+        const messages = ((win as any).__store__.getState().status.entries as { message: string }[]).map((e) => e.message);
+        expect(messages.filter((m) => m.includes('stopped before it finished')), 'the line at open').to.deep.eq(['An export of the threads in general stopped before it finished, 2 of 27 done. Open that channel and press Resume thread export.']);
+      });
+      cy.selectServer('Cypress Test Server');
+      // The channel comes back from the workspace, so no message call is made to wait on.
+      cy.contains('[data-testid="channel-row"]', 'general').click({ force: true });
+      cy.get('[data-testid="load-thread-button"]', { timeout: 20000 }).should('exist');
+      zeroDelays();
+      cy.then(() => { urls.length = 0; fetched.length = 0; });
+      cy.then(() => interceptThreadMessages(fetched));
+      cy.get('[data-testid="load-thread-button"]').should('have.text', 'Resume thread export').click();
+      cy.get('[data-testid="export-threads"]').should('have.text', 'Resume export (2 of 27 done)').click();
+      cy.get('[data-testid="bulk-export-resume-note"]').should('contain.text', '2 of 27 threads finished before Discrub closed');
+      cy.get('[role="dialog"]').should('contain.text', 'Export Threads').and('contain.text', '27 threads');
+      cy.get('[data-testid="bulk-export-confirm"]').should('have.text', 'Resume').click();
+      cy.waitForDownload(/^general-threads\.zip$/i, 90000).then((fileName) => {
+        cy.then(() => {
+          // The Load Thread dialog read its first page when it opened. The run itself listed nothing.
+          expect(urls.map((url) => new URL(url).searchParams.get('offset')), 'listing calls after the reload').to.deep.eq(['0']);
+          const read = [...new Set(fetched)];
+          expect(read, 'the first finished thread is not read again').to.not.include(thread(1).id);
+          expect(read, 'the second finished thread is not read again').to.not.include(thread(2).id);
+          expect(read.filter((id) => id !== PARENT_ID).sort(), 'the 25 threads that were left').to.deep.eq(Array.from({ length: 25 }, (_, i) => thread(i + 3).id).sort());
+        });
+        cy.task<{ name: string }[]>('zip:list', fileName).then((entries) => {
+          const pages = entries.map((e) => e.name).filter((name) => /^thread_\d+\/thread_\d+-page-1\.html$/.test(name));
+          expect(pages, 'the new zip has every thread').to.have.length(27);
+        });
+      });
+      cy.get('[data-testid="load-thread-button"]', { timeout: 20000 }).should('have.text', 'Load Thread');
+    });
+
     it('scrolling the list to its end loads the next page', () => {
       const urls: string[] = [];
       interceptThreadPages(27, urls);

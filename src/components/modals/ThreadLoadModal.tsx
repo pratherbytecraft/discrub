@@ -61,6 +61,13 @@ interface ThreadLoadModalProps {
   onExport?: (selection: ThreadExportSelection) => void;
   /** Another long job is running, so an export cannot start. */
   exportDisabled?: boolean;
+  /**
+   * An export of this channel's threads did not finish. The export button
+   * then reads Resume and calls `onResume`. `listed` is false when the run
+   * stopped before it had its thread list, so there are no counts to show.
+   */
+  resume?: { done: number; total: number; listed: boolean } | null;
+  onResume?: () => void;
 }
 
 export interface ThreadExportSelection {
@@ -83,6 +90,8 @@ const ThreadLoadModal = ({
   guildId,
   onExport,
   exportDisabled = false,
+  resume = null,
+  onResume,
 }: ThreadLoadModalProps) => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
@@ -383,16 +392,19 @@ const ThreadLoadModal = ({
           </Box>
         </Box>
       </DialogContent>
-      <DialogActions>
+      {/* In a narrow window the export button takes its own row; its label stays on one line. */}
+      <DialogActions sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
         {onExport && showDiscoveryList && (
           <Button
-            onClick={handleExport}
+            onClick={resume && onResume ? onResume : handleExport}
             startIcon={<DownloadIcon />}
-            disabled={exportDisabled || total === 0 || (discovering && discovered.length === 0)}
+            disabled={exportDisabled || (!resume && (total === 0 || (discovering && discovered.length === 0)))}
             data-testid="export-threads"
-            sx={{ mr: 'auto' }}
+            sx={{ mr: 'auto', whiteSpace: 'nowrap' }}
           >
-            {exportsAll
+            {resume && onResume
+              ? (resume.listed ? t('threadLoad.resumeExportCounts', { done: resume.done, total: resume.total }) : t('threadLoad.resumeExport'))
+              : exportsAll
               ? t('threadLoad.exportAll', { count: total })
               : t('threadLoad.exportPicked', { count: tickedCount })}
           </Button>

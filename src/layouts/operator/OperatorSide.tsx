@@ -1,3 +1,4 @@
+import { useResumeLabels } from '@/hooks/useResume';
 import { Box, Button, Typography } from '@mui/material';
 import { FilterList as FiltersIcon, BarChart as AnalyticsIcon, Forum as ThreadIcon, OpenInFull as OpenIcon, CloseFullscreen as BackIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +15,7 @@ import { getDmName } from '@/utils/dmListUtils';
 /** The row above the peek (Operator): Filters, Analytics and Load Thread, and the Open feed / Back switch. */
 export const OperatorFeedToolbar = ({ feedOpen, onToggleFeed }: { feedOpen: boolean; onToggleFeed: () => void }) => {
   const { t } = useTranslation();
+  const { loadThreadLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -28,7 +30,7 @@ export const OperatorFeedToolbar = ({ feedOpen, onToggleFeed }: { feedOpen: bool
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
       {hasContext && !isForum && <Button size="small" startIcon={<FiltersIcon />} onClick={() => open('filters')} data-testid="op-filters" sx={{ textTransform: 'none', py: 0 }}>{t('serverView.filters')}</Button>}
       {hasContext && <Button size="small" startIcon={<AnalyticsIcon />} disabled={messages.length === 0} onClick={() => open('analytics')} data-testid="op-analytics" sx={{ textTransform: 'none', py: 0 }}>{t('serverView.analytics')}</Button>}
-      {channel && <Button size="small" startIcon={<ThreadIcon />} onClick={() => open('threadLoad')} data-testid="op-load-thread" sx={{ textTransform: 'none', py: 0 }}>{t('serverView.loadThread')}</Button>}
+      {channel && <Button size="small" startIcon={<ThreadIcon />} onClick={() => open('threadLoad')} data-testid="op-load-thread" sx={{ textTransform: 'none', py: 0 }}>{loadThreadLabel}</Button>}
       {hasContext && <Button size="small" variant="outlined" color="inherit" startIcon={feedOpen ? <BackIcon /> : <OpenIcon />} onClick={onToggleFeed} data-testid="op-open-feed" sx={{ textTransform: 'none', py: 0, borderColor: 'divider', ml: 'auto' }}>{feedOpen ? t('operator.backToRun') : t('operator.openFeed')}</Button>}
       </Box>
     </Box>

@@ -3,6 +3,7 @@ import { useAppSelector } from '@/app/hooks';
 import { selectSelectedGuild } from '@features/guild/guildSlice';
 import { selectIsHeavyOperationRunning } from '@features/app/operationSelectors';
 import { selectActiveCid } from '@features/message/messageSlice';
+import { selectSelectedChannel } from '@features/channel/channelSlice';
 import {
   selectConversationAction,
   selectUnfinishedBulk,
@@ -46,7 +47,12 @@ export function useResumeLabels(listMode?: 'channels' | 'dms') {
   const editResume = useBulkResume('bulkEdit', mode, guildId);
   const running = useAppSelector(selectIsHeavyOperationRunning);
   const resume = t('workspace.resume');
+  // An unfinished export of the open channel's threads is resumed from Load Thread.
+  const openChannelId = useAppSelector(selectSelectedChannel)?.id ?? null;
+  const threadExportResume = !running && bulkExportResume?.thread && bulkExportResume.thread.parentId === openChannelId ? bulkExportResume : null;
   return {
+    threadExportResume,
+    loadThreadLabel: threadExportResume?.thread?.kind === 'thread' ? t('serverView.resumeThreadExport') : t('serverView.loadThread'),
     exportResumable: !running && exportResume !== null,
     purgeResumable: !running && purgeResume !== null,
     bulkExportResumable: !running && bulkExportResume !== null,

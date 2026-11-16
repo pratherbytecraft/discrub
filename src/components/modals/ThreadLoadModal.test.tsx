@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
 import ThreadLoadModal, { describeThread, sortThreadsForList } from './ThreadLoadModal';
 import { initialAppState } from '@features/app/appTypes';
@@ -225,6 +225,28 @@ describe('ThreadLoadModal', () => {
       render(<ThreadLoadModal {...defaultProps} channel={textChannel} guildId="g1" onExport={onExport} {...extra} />);
 
     beforeEach(() => onExport.mockClear());
+
+    it('an unfinished export of this channel turns the button into Resume with how far it got', async () => {
+      mockSearch.mockResolvedValue(page([thread('1'), thread('2')], 3030, true));
+      const onResume = vi.fn();
+      open({ resume: { done: 412, total: 3030, listed: true }, onResume });
+      await screen.findByText('t1');
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Resume export (412 of 3,030 done)');
+      fireEvent.click(screen.getByTestId('thread-tick-1').querySelector('input')!);
+      expect(screen.getByTestId('export-threads')).toHaveTextContent('Resume export (412 of 3,030 done)');
+      fireEvent.click(screen.getByTestId('export-threads'));
+      expect(onResume).toHaveBeenCalledTimes(1);
+      expect(onExport).not.toHaveBeenCalled();
+    });
+
+    it('a run that stopped before it had its thread list resumes without counts, even when the list fails to load', async () => {
+      mockSearch.mockRejectedValue(new Error('nope'));
+      const onResume = vi.fn();
+      open({ resume: { done: 0, total: 1, listed: false }, onResume });
+      await waitFor(() => expect(screen.getByTestId('export-threads')).toHaveTextContent('Resume export'));
+      expect(screen.getByTestId('export-threads')).not.toHaveTextContent('of');
+      expect(screen.getByTestId('export-threads')).not.toBeDisabled();
+    });
 
     it('reads the list with one thread search call, first page, no archived filter', async () => {
       mockSearch.mockResolvedValue(page([thread('1')], 1, false));

@@ -29,7 +29,7 @@ const WorkbenchToolbar = () => {
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const loadAllAvailable = useLoadAllAvailable();
-  const { exportLabel, bulkExportLabel, purgeLabel } = useResumeLabels();
+  const { exportLabel, bulkExportLabel, purgeLabel, loadThreadLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -53,7 +53,7 @@ const WorkbenchToolbar = () => {
           {btn(isForum ? bulkExportLabel : exportLabel, <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), 'wb-export', { disabled: running || (!isForum && messages.length === 0), tour: 'export-button' })}
           {!isForum && btn(purgeLabel, <PurgeIcon />, () => open('purge'), 'wb-purge', { disabled: running, color: 'error' })}
           {!isForum && btn(t('serverView.filters'), <FilterIcon />, () => open('filters'), 'wb-filters', { tour: 'search-filters' })}
-          {channel && btn(t('serverView.loadThread'), <ThreadIcon />, () => open('threadLoad'), 'wb-load-thread', { disabled: running })}
+          {channel && btn(loadThreadLabel, <ThreadIcon />, () => open('threadLoad'), 'wb-load-thread', { disabled: running })}
           {!isForum && btn(t('serverView.analytics'), <AnalyticsIcon />, () => open('analytics'), 'wb-analytics', { disabled: messages.length === 0, tour: 'analytics-button' })}
         </>
       ) : (

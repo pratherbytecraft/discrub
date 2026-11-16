@@ -39,7 +39,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const loadAllAvailable = useLoadAllAvailable();
-  const { exportLabel, bulkExportLabel, purgeLabel } = useResumeLabels();
+  const { exportLabel, bulkExportLabel, purgeLabel, loadThreadLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const channel = useAppSelector(selectSelectedChannel);
@@ -85,7 +85,7 @@ const NativeInspector = ({ onOpenLog }: { onOpenLog: () => void }) => {
             {actionBtn(isForum ? bulkExportLabel : exportLabel, <ExportIcon />, () => open(isForum ? 'forumExport' : 'export'), { disabled: running || (isForum ? false : messages.length === 0), testId: 'inspector-export' })}
             {!isForum && actionBtn(purgeLabel, <PurgeIcon />, startPurge, { disabled: running, color: 'error', testId: 'inspector-purge' })}
             {!isForum && actionBtn(t('serverView.analytics'), <AnalyticsIcon />, () => open('analytics'), { disabled: messages.length === 0, testId: 'inspector-analytics' })}
-            {channel && <Box sx={{ gridColumn: '1 / -1', display: 'grid' }}>{actionBtn(t('serverView.loadThread'), <ThreadIcon />, () => open('threadLoad'), { disabled: running, testId: 'inspector-load-thread' })}</Box>}
+            {channel && <Box sx={{ gridColumn: '1 / -1', display: 'grid' }}>{actionBtn(loadThreadLabel, <ThreadIcon />, () => open('threadLoad'), { disabled: running, testId: 'inspector-load-thread' })}</Box>}
           </Box>
           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>{isForum ? t('native.forumHint') : t('native.actionsHint')}</Typography>
         </Card>

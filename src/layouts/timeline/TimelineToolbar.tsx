@@ -26,7 +26,7 @@ const TimelineToolbar = ({ phone, showMonths, onOpenMonths }: { phone: boolean; 
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const loadAllAvailable = useLoadAllAvailable();
-  const { exportLabel, bulkExportLabel, purgeLabel } = useResumeLabels();
+  const { exportLabel, bulkExportLabel, purgeLabel, loadThreadLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const channel = useAppSelector(selectSelectedChannel);
   const dm = useAppSelector(selectSelectedDm);
@@ -43,7 +43,7 @@ const TimelineToolbar = ({ phone, showMonths, onOpenMonths }: { phone: boolean; 
   items.push({ key: 'export', label: isForum ? bulkExportLabel : exportLabel, icon: <ExportIcon fontSize="small" />, onClick: () => open(isForum ? 'forumExport' : 'export'), disabled: running || (!isForum && messages.length === 0), tour: 'export-button' });
   if (!isForum) items.push({ key: 'purge', label: purgeLabel, icon: <PurgeIcon fontSize="small" />, onClick: () => open('purge'), disabled: running, color: 'error' });
   if (!isForum) items.push({ key: 'filters', label: t('serverView.filters'), icon: <FilterIcon fontSize="small" />, onClick: () => open('filters'), tour: 'search-filters' });
-  if (channel) items.push({ key: 'load-thread', label: t('serverView.loadThread'), icon: <ThreadIcon fontSize="small" />, onClick: () => open('threadLoad'), disabled: running });
+  if (channel) items.push({ key: 'load-thread', label: loadThreadLabel, icon: <ThreadIcon fontSize="small" />, onClick: () => open('threadLoad'), disabled: running });
   if (showMonths && !isForum) items.push({ key: 'months', label: t('timeline.months'), icon: <MonthsIcon fontSize="small" />, onClick: () => { setAnchor(null); onOpenMonths(); } });
 
   if (phone) {

@@ -54,6 +54,44 @@ describe('Resume labels', () => {
   });
 });
 
+// 2.2.10: an unfinished export of the open channel's threads is resumed from Load Thread.
+function ThreadLabel() {
+  const { loadThreadLabel, threadExportResume } = useResumeLabels();
+  return <div data-testid="thread-label">{`${loadThreadLabel}|${threadExportResume ? `${threadExportResume.doneCount}/${threadExportResume.total}` : 'none'}`}</div>;
+}
+const threadRun = (parentId: string, kind: 'thread' | 'post' = 'thread'): UnfinishedBulk => ({
+  kind: 'bulkExport', mode: 'channels', guildId: GUILD_ID, total: 3030, doneCount: 412, remaining: 2618,
+  thread: { parentId, parentName: 'general', kind, listed: true },
+});
+
+describe('Load Thread label', () => {
+  it('reads Load Thread with nothing recorded', () => {
+    renderWithProviders(<ThreadLabel />, { preloadedState: stateWith({}) });
+    expect(screen.getByTestId('thread-label').textContent).toBe('Load Thread|none');
+  });
+
+  it('reads Resume thread export for an unfinished export of the open channel', () => {
+    renderWithProviders(<ThreadLabel />, { preloadedState: stateWith({ bulk: threadRun(CID) }) });
+    expect(screen.getByTestId('thread-label').textContent).toBe('Resume thread export|412/3030');
+  });
+
+  it('keeps its name for a run on another channel, a channel run, and while a run is going', () => {
+    renderWithProviders(<ThreadLabel />, { preloadedState: stateWith({ bulk: threadRun('another-channel') }) });
+    expect(screen.getByTestId('thread-label').textContent).toBe('Load Thread|none');
+    cleanup();
+    renderWithProviders(<ThreadLabel />, { preloadedState: stateWith({ bulk: { kind: 'bulkExport', mode: 'channels', guildId: GUILD_ID, total: 3, doneCount: 1, remaining: 2 } }) });
+    expect(screen.getByTestId('thread-label').textContent).toBe('Load Thread|none');
+    cleanup();
+    renderWithProviders(<ThreadLabel />, { preloadedState: stateWith({ bulk: threadRun(CID), running: true }) });
+    expect(screen.getByTestId('thread-label').textContent).toBe('Load Thread|none');
+  });
+
+  it("a forum's unfinished post export leaves Load Thread alone (its Export button reads Resume)", () => {
+    renderWithProviders(<ThreadLabel />, { preloadedState: stateWith({ bulk: threadRun(CID, 'post') }) });
+    expect(screen.getByTestId('thread-label').textContent).toBe('Load Thread|412/3030');
+  });
+});
+
 // 2.2.5 B: every layout's Load All button reads this.
 function Available() {
   const available = useLoadAllAvailable();

@@ -1236,6 +1236,8 @@ async function keepStoppedMessages(opts: {
 
 /** One channel, forum post or DM finished rendering in a bulk export; the record's done list grows by it. */
 export const bulkUnitFinished = createAction<{ id: string }>('export/bulkUnitFinished');
+/** A thread export listed its threads; the run's record keeps them so a resume lists nothing. */
+export const bulkThreadsListed = createAction<{ threads: Channel[] }>('export/bulkThreadsListed');
 
 /** What an export renders for one unit, with the array shape kept when everything is in memory. */
 interface UnitMaterial {
@@ -1574,6 +1576,7 @@ export const bulkExportChannels = createAsyncThunk<
             continue;
           }
           dispatch(addStatusEntry({ level: 'info', message: t('status.export.expandedThreads', { name: forumName, count: threads.length }) }));
+          dispatch(bulkThreadsListed({ threads }));
           expandedChannels.push(...threads);
         } catch (error) {
           if (error instanceof CancelledError) break;

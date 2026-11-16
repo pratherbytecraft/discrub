@@ -23,7 +23,7 @@ const SimpleSearchCard = () => {
   const { t } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const loadAllAvailable = useLoadAllAvailable();
-  const { exportLabel, bulkExportLabel, purgeLabel } = useResumeLabels();
+  const { exportLabel, bulkExportLabel, purgeLabel, loadThreadLabel } = useResumeLabels();
   const dispatch = useAppDispatch();
   const theme = useTheme();
   const channel = useAppSelector(selectSelectedChannel);
@@ -63,7 +63,7 @@ const SimpleSearchCard = () => {
         {!isForum && <Button size="small" variant="contained" startIcon={<LoadAllIcon />} disabled={running || !loadAllAvailable} onClick={() => open('loadAll')} data-testid="simple-load-all" sx={{ textTransform: 'none' }}>{loadAllLabel}</Button>}
         <Button size="small" variant="outlined" color="inherit" startIcon={<ExportIcon />} disabled={running || (!isForum && messages.length === 0)} onClick={() => open(isForum ? 'forumExport' : 'export')} data-testid="simple-export" data-tour="export-button" sx={{ textTransform: 'none', borderColor: 'divider' }}>{isForum ? bulkExportLabel : exportLabel}</Button>
         {!isForum && <Button size="small" variant="outlined" color="error" startIcon={<PurgeIcon />} disabled={running} onClick={() => open('purge')} data-testid="simple-purge" sx={{ textTransform: 'none' }}>{purgeLabel}</Button>}
-        {channel && <Button size="small" variant="outlined" color="inherit" startIcon={<ThreadIcon />} disabled={running} onClick={() => open('threadLoad')} data-testid="simple-load-thread" sx={{ textTransform: 'none', borderColor: 'divider' }}>{t('serverView.loadThread')}</Button>}
+        {channel && <Button size="small" variant="outlined" color="inherit" startIcon={<ThreadIcon />} disabled={running} onClick={() => open('threadLoad')} data-testid="simple-load-thread" sx={{ textTransform: 'none', borderColor: 'divider' }}>{loadThreadLabel}</Button>}
       </Box>
     </Box>
   );

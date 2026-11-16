@@ -37,6 +37,12 @@ export interface UnfinishedBulk {
   remaining: number;
   /** Row 134: the run stopped on a 401; the dialog offers Sign in again beside Resume. */
   signInExpired?: boolean;
+  /**
+   * The run exports one channel's threads (or a forum's posts). `listed`
+   * is false while the record still holds only the parent: the run stopped
+   * before its thread list was complete, so the counts say nothing yet.
+   */
+  thread?: { parentId: string; parentName: string; kind: 'thread' | 'post'; listed: boolean };
 }
 
 /**
@@ -133,7 +139,24 @@ export function bulkOf(record: WorkspaceRecord | null | undefined): UnfinishedBu
     doneCount: bulk.doneCount ?? bulk.done.length,
     signInExpired: bulk.signInExpired === true,
     remaining: bulk.queue.filter((id) => !bulk.done.includes(id)).length,
+    ...(threadOf(bulk.settings) ? { thread: threadOf(bulk.settings)! } : {}),
   };
+}
+
+function threadOf(settings: unknown): UnfinishedBulk['thread'] | null {
+  const ref = (settings as { threadExport?: { parentId?: string; parentName?: string; all?: boolean; kind?: 'thread' | 'post' } } | null | undefined)?.threadExport;
+  if (!ref?.parentId) return null;
+  return { parentId: ref.parentId, parentName: ref.parentName || ref.parentId, kind: ref.kind ?? 'thread', listed: ref.all !== true };
+}
+
+/** One status log line for a run that was unfinished when the workspace opened: what it was, how far it got, where to resume. */
+export function unfinishedBulkLine(bulk: UnfinishedBulk): string {
+  const counts = { done: bulk.doneCount, total: bulk.total };
+  if (bulk.thread) {
+    const context = [bulk.thread.kind === 'post' ? 'post' : '', bulk.thread.listed ? '' : 'unlisted'].filter(Boolean).join('_') || undefined;
+    return t('workspace.unfinishedThreadExport', { ...counts, name: bulk.thread.parentName, context });
+  }
+  return t('workspace.unfinishedBulk', { ...counts, context: bulk.kind === 'bulkExport' ? 'export' : bulk.kind === 'bulkPurge' ? 'purge' : 'edit' });
 }
 
 export interface OpenedWorkspace {
@@ -187,7 +210,9 @@ export const initializeWorkspaces = createAsyncThunk<BootResult, void, { rejectV
       if (wid !== defaultWid) {
         dispatch(showToast({ level: 'info', message: t('workspace.openedToast', { name }) }));
       }
-      return { opened: { wid, name, actions: actionsOf(record), bulk: bulkOf(record) }, defaultWid, heldElsewhere: null, skipScope };
+      const bulk = bulkOf(record);
+      if (bulk) dispatch(addStatusEntry({ level: 'info', message: unfinishedBulkLine(bulk) }));
+      return { opened: { wid, name, actions: actionsOf(record), bulk }, defaultWid, heldElsewhere: null, skipScope };
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Could not open workspaces');
     }

@@ -17,7 +17,7 @@ import dmReducer from '@features/dm/dmSlice';
 import guildReducer from '@features/guild/guildSlice';
 import appReducer from '@features/app/appSlice';
 import statusReducer from '@features/status/statusSlice';
-import exportReducer, { bulkExportChannels, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
+import exportReducer, { bulkExportChannels, bulkThreadsListed, bulkUnitFinished, exportMessages, setExportProgress } from '@features/export/exportSlice';
 import purgeReducer, { bulkPurgeChannels, purgeGuilds, setPurgeProgress } from '@features/purge/purgeSlice';
 import type { PurgeConfig } from '@features/purge/purgeTypes';
 import { LEGACY_DEFAULT_WORKSPACE_ID } from './workspaceTypes';
@@ -289,6 +289,84 @@ describe('boot and lookup', () => {
     ]);
     // With nothing loaded but the channel list, the queue still resolves in order.
     expect(resolveQueue(record!.queue, [settings.threadTargets as never, CHANNELS]).map((c) => c.id)).toEqual(['t1', 't2', CHANNELS[0].id]);
+  });
+
+  it('an export of every thread keeps the list it read, so a resume is handed the threads and lists nothing', async () => {
+    const store = await openDefault();
+    const parent = CHANNELS[0];
+    const threadExport = { parentId: parent.id, parentName: 'one', all: true, excludedIds: ['t9'] };
+    const arg = { channels: [parent], token: 't', format: 'html' as const, messagesPerPage: 1000, separateThreads: false, includeMedia: false, guildId: '42', searchCriteria: null, threadExport };
+    store.dispatch(bulkExportChannels.pending('e1', arg));
+    await flush(store);
+    // Stopped before the list was read: the record holds the parent and no counts worth showing.
+    expect(selectUnfinishedBulk(store.getState() as never)?.thread).toEqual({ parentId: parent.id, parentName: 'one', kind: 'thread', listed: false });
+
+    const threads = [
+      { id: 't1', name: 'One', type: 11, parent_id: parent.id, topic: 'not kept' },
+      { id: 't2', name: 'Two', type: 11, parent_id: parent.id },
+      { id: 't3', name: 'Three', type: 12, parent_id: parent.id },
+    ];
+    store.dispatch(bulkThreadsListed({ threads: threads as never }));
+    store.dispatch(bulkUnitFinished({ id: 't1' }));
+    await flush(store);
+
+    const record = await readBulkRecord(store.getState() as never);
+    const settings = record?.settings as { threadExport?: Record<string, unknown>; threadTargets?: Array<{ id: string }> };
+    expect(record?.queue).toEqual(['t1', 't2', 't3']);
+    expect(record?.done).toEqual(['t1']);
+    // No longer "all": the resumed run gets the threads and its own list call is skipped.
+    expect(settings.threadExport).toEqual({ parentId: parent.id, parentName: 'one', all: false });
+    expect(settings.threadTargets).toEqual([
+      { id: 't1', name: 'One', type: 11, parent_id: parent.id },
+      { id: 't2', name: 'Two', type: 11, parent_id: parent.id },
+      { id: 't3', name: 'Three', type: 12, parent_id: parent.id },
+    ]);
+    expect(resolveQueue(record!.queue, [settings.threadTargets as never]).map((c) => c.id)).toEqual(['t1', 't2', 't3']);
+    expect(selectUnfinishedBulk(store.getState() as never)).toMatchObject({ total: 3, remaining: 2, thread: { parentId: parent.id, kind: 'thread', listed: true } });
+  });
+
+  it('a resumed run keeps its finished threads when it starts again', async () => {
+    const store = await openDefault();
+    const parent = CHANNELS[0];
+    const threads = [{ id: 't1', name: 'One', type: 11, parent_id: parent.id }, { id: 't2', name: 'Two', type: 11, parent_id: parent.id }];
+    const base = { token: 't', format: 'html' as const, messagesPerPage: 1000, separateThreads: false, includeMedia: false, guildId: '42', searchCriteria: null };
+    store.dispatch(bulkExportChannels.pending('e1', { ...base, channels: [parent], threadExport: { parentId: parent.id, parentName: 'one', all: true } }));
+    store.dispatch(bulkThreadsListed({ threads: threads as never }));
+    store.dispatch(bulkUnitFinished({ id: 't1' }));
+    await flush(store);
+    store.dispatch(bulkExportChannels.pending('e2', { ...base, channels: threads as never, threadExport: { parentId: parent.id, parentName: 'one', all: false }, resume: true }));
+    await flush(store);
+    const record = await readBulkRecord(store.getState() as never);
+    expect(record?.queue).toEqual(['t1', 't2']);
+    expect(record?.done).toEqual(['t1']);
+  });
+
+  it('opening with an unfinished run writes one status line that says what it was and where to resume', async () => {
+    const first = await openDefault();
+    const parent = CHANNELS[0];
+    first.dispatch(bulkExportChannels.pending('e1', { channels: [parent], token: 't', format: 'html' as const, messagesPerPage: 1000, separateThreads: false, includeMedia: false, guildId: '42', searchCriteria: null, threadExport: { parentId: parent.id, parentName: 'one', all: true } }));
+    first.dispatch(bulkThreadsListed({ threads: [{ id: 't1', name: 'One', type: 11, parent_id: parent.id }, { id: 't2', name: 'Two', type: 11, parent_id: parent.id }] as never }));
+    first.dispatch(setExportProgress({ stage: 'avatars', current: 0, total: 0, bulk: bulk(1, 2) } as never));
+    await flush(first);
+    releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
+    const store = makeStore();
+    await store.dispatch(initializeWorkspaces());
+    const lines = (store.getState().status.entries as Array<{ message: string }>).map((e) => e.message);
+    expect(lines).toContain('An export of the threads in one stopped before it finished, 1 of 2 done. Open that channel and press Resume thread export.');
+  });
+
+  it('an unfinished Purge gets its own line at open, and a clean workspace gets none', async () => {
+    const clean = makeStore();
+    await ensureTestDefaultWorkspace();
+    await clean.dispatch(initializeWorkspaces());
+    expect((clean.getState().status.entries as Array<{ message: string }>).some((e) => /stopped before it finished/.test(e.message))).toBe(false);
+    clean.dispatch(bulkPurgeChannels.pending('p1', purgeArg()));
+    await flush(clean);
+    releaseWorkspaceLock(LEGACY_DEFAULT_WORKSPACE_ID);
+    const store = makeStore();
+    await store.dispatch(initializeWorkspaces());
+    const lines = (store.getState().status.entries as Array<{ message: string }>).map((e) => e.message);
+    expect(lines).toContain('A Purge stopped before it finished, 0 of 3 done. The button it was started from reads Resume.');
   });
 
   it('a run of plain channels keeps no thread list', async () => {

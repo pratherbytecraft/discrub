@@ -155,7 +155,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   const { t, i18n } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const loadAllAvailable = useLoadAllAvailable();
-  const { exportLabel } = useResumeLabels();
+  const { exportLabel, loadThreadLabel, threadExportResume } = useResumeLabels();
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
@@ -834,6 +834,13 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
     openDialog('forumExport');
   };
 
+  // The unfinished thread export of this channel: the export dialog picks its record up by itself.
+  const handleThreadExportResume = () => {
+    closeDialog('threadLoad');
+    setThreadExport(null);
+    openDialog('forumExport');
+  };
+
   const handleThreadLoad = async (threadId: string) => {
     if (!token) return;
 
@@ -1085,8 +1092,9 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
                 size="small"
                 startIcon={<ThreadIcon />}
                 onClick={() => openDialog('threadLoad')}
+                data-testid="load-thread-button"
               >
-                {t('serverView.loadThread')}
+                {loadThreadLabel}
               </Button>
             </HotkeyTooltip>
             {!isForumChannel && (
@@ -1396,6 +1404,8 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
         onClose={() => closeDialog('threadLoad')}
         onLoad={handleThreadLoad}
         onExport={handleThreadExport}
+        onResume={handleThreadExportResume}
+        resume={threadExportResume ? { done: threadExportResume.doneCount, total: threadExportResume.total, listed: threadExportResume.thread?.listed === true } : null}
         exportDisabled={isOperationRunning}
         channel={selectedChannel}
         guildId={selectedGuild?.id ?? null}
