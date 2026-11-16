@@ -11,7 +11,7 @@ import { loadStatusLog } from '@features/status/statusSlice';
 import { loadHotkeys } from '@features/hotkeys/hotkeysSlice';
 import { initializeSupporter } from '@features/supporter/supporterSlice';
 import { loadSeasonalNotice } from '@features/appearance/noticeSlice';
-import { requestPersistentStorage } from '@/utils/persistentStorage';
+import { requestPersistentStorageAtLaunch } from '@/utils/persistentStorage';
 import { onStorageFallback } from '@/extension/storage';
 import { addStatusEntry, showToast } from '@features/status/statusSlice';
 import { t } from '@/i18n';
@@ -46,7 +46,8 @@ function App() {
     initialized.current = true;
     // Fire-and-forget: upgrade the origin to persistent storage so the
     // per-purpose IDB databases can't be evicted under disk pressure.
-    void requestPersistentStorage();
+    // Not on Firefox, where the request is a popup (2.2.10).
+    void requestPersistentStorageAtLaunch();
     // 2.2.9: a browser that refuses IndexedDB (a private window in some browsers)
     // runs on memory; say so once instead of losing settings and history quietly.
     onStorageFallback(() => {

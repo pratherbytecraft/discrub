@@ -16,3 +16,19 @@ export async function requestPersistentStorage(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The request made when Discrub opens (2.2.10). Firefox answers a
+ * request with a permission popup, and one shown before the user has
+ * done anything reads as Discrub asking for more access, so Firefox is
+ * not asked here. It is still asked once a data package has been loaded
+ * (`packageStreamService`). Chromium grants without a prompt.
+ */
+export async function requestPersistentStorageAtLaunch(): Promise<boolean> {
+  try {
+    if (/\bFirefox\//.test(navigator.userAgent || '')) return false;
+  } catch {
+    return false;
+  }
+  return requestPersistentStorage();
+}
