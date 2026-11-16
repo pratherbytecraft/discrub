@@ -750,6 +750,9 @@ async function purgeChannelMessages(
   const discordService = getDiscordService();
   const skipMessageIds = extras?.skipMessageIds;
   let totalSkippedListed = 0;
+  // 2.2.10: a delete or edit answered 404, so the message was already gone
+  // (search can still list one for a while). Counted as skipped, not failed.
+  let totalSkippedAlreadyGone = 0;
   const noteFailure = (messageId: string, failedChannelId: string, response: { status?: number; code?: number }) => {
     // A 404 means the message is already gone; there is nothing to save or to skip next time.
     if (response.status === 404) return;
@@ -1281,13 +1284,20 @@ async function purgeChannelMessages(
               // can audit; keep Discord's status for diagnostics.
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
-              totalFailed++;
-              noteFailure(message.id, targetChannelId, response);
-              dispatch(addStatusEntry({
-                level: 'warning',
-                message: t('status.purge.stripFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
-              }));
-              await pauseOnFailureStreak(++failureStreak, dispatch, getState);
+              if (response.status === 404) {
+                totalSkipped++;
+                totalSkippedAlreadyGone++;
+                failureStreak = 0;
+                noteLiveDeletion(targetChannelId, message.id);
+              } else {
+                totalFailed++;
+                noteFailure(message.id, targetChannelId, response);
+                dispatch(addStatusEntry({
+                  level: 'warning',
+                  message: t('status.purge.stripFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
+                }));
+                await pauseOnFailureStreak(++failureStreak, dispatch, getState);
+              }
             }
           }
         } else if (retainAttachedMedia && hasAttachments) {
@@ -1309,13 +1319,20 @@ async function purgeChannelMessages(
             } else {
               throwIfSignInExpired(response);
               throwIfChannelGone(response);
-              totalFailed++;
-              noteFailure(message.id, targetChannelId, response);
-              dispatch(addStatusEntry({
-                level: 'warning',
-                message: t('status.purge.clearTextFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
-              }));
-              await pauseOnFailureStreak(++failureStreak, dispatch, getState);
+              if (response.status === 404) {
+                totalSkipped++;
+                totalSkippedAlreadyGone++;
+                failureStreak = 0;
+                noteLiveDeletion(targetChannelId, message.id);
+              } else {
+                totalFailed++;
+                noteFailure(message.id, targetChannelId, response);
+                dispatch(addStatusEntry({
+                  level: 'warning',
+                  message: t('status.purge.clearTextFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
+                }));
+                await pauseOnFailureStreak(++failureStreak, dispatch, getState);
+              }
             }
           }
         } else if (message.author?.id !== userId) {
@@ -1339,13 +1356,20 @@ async function purgeChannelMessages(
           } else {
             throwIfSignInExpired(response);
             throwIfChannelGone(response);
-            totalFailed++;
-            noteFailure(message.id, targetChannelId, response);
-            dispatch(addStatusEntry({
-              level: 'warning',
-              message: t('status.purge.deleteFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
-            }));
-            await pauseOnFailureStreak(++failureStreak, dispatch, getState);
+            if (response.status === 404) {
+              totalSkipped++;
+              totalSkippedAlreadyGone++;
+              failureStreak = 0;
+              noteLiveDeletion(targetChannelId, message.id);
+            } else {
+              totalFailed++;
+              noteFailure(message.id, targetChannelId, response);
+              dispatch(addStatusEntry({
+                level: 'warning',
+                message: t('status.purge.deleteFailed', { reason: t('status.purge.httpStatus', { status: response.status ?? '?' }), id: message.id }),
+              }));
+              await pauseOnFailureStreak(++failureStreak, dispatch, getState);
+            }
           }
         }
 
@@ -1432,6 +1456,13 @@ async function purgeChannelMessages(
     dispatch(addStatusEntry({
       level: 'info',
       message: t('status.purge.skippedListed', { count: totalSkippedListed }),
+    }));
+  }
+
+  if (totalSkippedAlreadyGone > 0) {
+    dispatch(addStatusEntry({
+      level: 'info',
+      message: t('status.purge.alreadyGone', { count: totalSkippedAlreadyGone }),
     }));
   }
 

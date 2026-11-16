@@ -725,7 +725,7 @@ describe('purgeSlice thunks', () => {
       const msg = mockMessage('m1', 0, [attachment]);
 
       setupSearchResults([[msg]]);
-      mockEditMessage.mockResolvedValue({ success: false, status: 404 });
+      mockEditMessage.mockResolvedValue({ success: false, status: 403 });
 
       await store.dispatch(
         bulkPurgeChannels({
@@ -737,7 +737,7 @@ describe('purgeSlice thunks', () => {
 
       const entries = store.getState().status.entries;
       const warning = entries.find(
-        (e) => e.level === 'warning' && e.message.includes("Couldn't strip attachments") && e.message.includes('404'),
+        (e) => e.level === 'warning' && e.message.includes("Couldn't strip attachments") && e.message.includes('403'),
       );
       expect(warning).toBeDefined();
       // Summary line should show failed count, not stripped.
@@ -1235,10 +1235,10 @@ describe('purgeSlice thunks', () => {
       expect(mockDeleteMessage).toHaveBeenCalledTimes(1);
     });
 
-    it('logs a warning when deleteMessage returns non-success (fixes silent 404 DELETE)', async () => {
+    it('logs a warning when deleteMessage returns non-success (a failed DELETE is never silent)', async () => {
       const msg = mockMessage('m1');
       setupSearchResults([[msg]]);
-      mockDeleteMessage.mockResolvedValue({ success: false, status: 404 });
+      mockDeleteMessage.mockResolvedValue({ success: false, status: 403 });
 
       await store.dispatch(
         bulkPurgeChannels({
@@ -1250,9 +1250,50 @@ describe('purgeSlice thunks', () => {
 
       const entries = store.getState().status.entries;
       const warning = entries.find(
-        (e) => e.level === 'warning' && e.message.includes("Couldn't delete") && e.message.includes('404'),
+        (e) => e.level === 'warning' && e.message.includes("Couldn't delete") && e.message.includes('403'),
       );
       expect(warning).toBeDefined();
+    });
+
+    it('counts a 404 on delete as already gone, not as a failure (2.2.10)', async () => {
+      // More in a row than the failure streak pause allows, so a pause would show.
+      const msgs = Array.from({ length: 30 }, (_, i) => mockMessage(`m${i + 1}`));
+      setupSearchResults([msgs]);
+      mockDeleteMessage.mockResolvedValue({ success: false, status: 404, code: 10008 });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id]),
+          guildId: 'guild1',
+        }),
+      );
+
+      const entries = store.getState().status.entries;
+      expect(entries.some((e) => e.message.includes("Couldn't delete"))).toBe(false);
+      expect(entries.some((e) => e.level === 'info' && e.message === '30 messages were already gone on Discord')).toBe(true);
+      expect(entries.some((e) => e.message === 'Purge: Complete · 1 channel, 0 messages deleted, 30 skipped')).toBe(true);
+      expect(entries.some((e) => e.level === 'warning')).toBe(false);
+      expect((store.getState() as any).failures.purge).toHaveLength(0);
+    });
+
+    it('counts a 404 on an attachment strip as already gone too (2.2.10)', async () => {
+      const attachment = { id: 'att1', filename: 'photo.png', url: 'https://cdn.example.com/photo.png' };
+      setupSearchResults([[mockMessage('m1', 0, [attachment])]]);
+      mockEditMessage.mockResolvedValue({ success: false, status: 404, code: 10008 });
+
+      await store.dispatch(
+        bulkPurgeChannels({
+          channels: [mockChannel('ch1', 'general')],
+          config: messagesConfig([CURRENT_USER.id], false, true),
+          guildId: 'guild1',
+        }),
+      );
+
+      const entries = store.getState().status.entries;
+      expect(entries.some((e) => e.message.includes("Couldn't strip attachments"))).toBe(false);
+      expect(entries.some((e) => e.message === '1 message was already gone on Discord')).toBe(true);
+      expect(entries.some((e) => e.message.includes('failed'))).toBe(false);
     });
 
     it('stops the channel at the first Unknown Channel and records it as a channel error (pass 3, row 135)', async () => {
@@ -1656,7 +1697,7 @@ describe('purgeSlice thunks', () => {
         .mockResolvedValue({ success: true, data: { messages: [], total_results: 0 } });
       mockDeleteMessage
         .mockResolvedValueOnce({ success: true })
-        .mockResolvedValueOnce({ success: false, status: 404 });
+        .mockResolvedValueOnce({ success: false, status: 500 });
 
       const result = await store.dispatch(
         bulkPurgeChannels({
@@ -7204,9 +7245,10 @@ describe('purgeSlice thunks', () => {
       expect(failures).toHaveLength(2);
       expect(failures[0]).toMatchObject({ messageId: 'm1', channelId: 'ch1', guildId: 'guild1', channelName: '#general', status: 403, code: 50013, kind: 'permanent' });
       expect(failures[1]).toMatchObject({ messageId: 'm2', status: 500, kind: 'retryable' });
-      // The counts still say three failed; the 404 is counted but has nothing to save.
+      // Two failed; the 404 was already gone, so it is skipped and has nothing to save.
       const messages = store.getState().status.entries.map((e: any) => e.message);
-      expect(messages).toContain('Purge: Complete · 1 channel, 1 message deleted, 3 failed');
+      expect(messages).toContain('Purge: Complete · 1 channel, 1 message deleted, 1 skipped, 2 failed');
+      expect(messages).toContain('1 message was already gone on Discord');
     });
 
     it('ends on a warning line and writes the list for the user', async () => {

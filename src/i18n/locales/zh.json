@@ -2139,6 +2139,8 @@
       "skippedOtherAuthors_other": "已跳过{{count}}条其他用户发送的消息。Discord 只允许您编辑自己的消息。",
       "skippedListed_one": "已跳过{{count}}条在跳过列表中的消息",
       "skippedListed_other": "已跳过{{count}}条在跳过列表中的消息",
+      "alreadyGone_one": "{{count}}条消息在 Discord 上已不存在",
+      "alreadyGone_other": "{{count}}条消息在 Discord 上已不存在",
       "skippedUnexpectedAuthor_one": "已跳过{{count}}条搜索返回但作者与目标不符的消息，可能是 API 异常。",
       "skippedUnexpectedAuthor_other": "已跳过{{count}}条搜索返回但作者与目标不符的消息，可能是 API 异常。",
       "preservedPinned_one": "已保留{{count}}条置顶消息。您的筛选条件排除了置顶消息。",

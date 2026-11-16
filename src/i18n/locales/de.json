@@ -2139,6 +2139,8 @@
       "skippedOtherAuthors_other": "{{count}} Nachrichten anderer Benutzer übersprungen. Discord erlaubt nur das Bearbeiten eigener Nachrichten.",
       "skippedListed_one": "{{count}} Nachricht auf der Überspringliste übersprungen",
       "skippedListed_other": "{{count}} Nachrichten auf der Überspringliste übersprungen",
+      "alreadyGone_one": "{{count}} Nachricht war auf Discord bereits weg",
+      "alreadyGone_other": "{{count}} Nachrichten waren auf Discord bereits weg",
       "skippedUnexpectedAuthor_one": "{{count}} Nachricht aus der Suche übersprungen, deren Autor nicht zum Ziel passte, vermutlich eine API-Anomalie.",
       "skippedUnexpectedAuthor_other": "{{count}} Nachrichten aus der Suche übersprungen, deren Autor nicht zum Ziel passte, vermutlich eine API-Anomalie.",
       "preservedPinned_one": "{{count}} angepinnte Nachricht erhalten. Dein Filter schließt angepinnte Nachrichten aus.",

@@ -2139,6 +2139,8 @@
       "skippedOtherAuthors_other": "Skipped {{count}} messages authored by other users. Discord only lets you edit your own messages.",
       "skippedListed_one": "Skipped {{count}} message on the skip list",
       "skippedListed_other": "Skipped {{count}} messages on the skip list",
+      "alreadyGone_one": "{{count}} message was already gone on Discord",
+      "alreadyGone_other": "{{count}} messages were already gone on Discord",
       "skippedUnexpectedAuthor_one": "Skipped {{count}} message returned by search whose author didn't match the target, likely an API anomaly.",
       "skippedUnexpectedAuthor_other": "Skipped {{count}} messages returned by search whose author didn't match the target, likely an API anomaly.",
       "preservedPinned_one": "Preserved {{count}} pinned message. Your filter excludes pinned messages.",
