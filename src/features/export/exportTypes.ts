@@ -222,7 +222,7 @@ export const BUILT_IN_PRESETS: ExportPreset[] = [
     category: 'Data',
     format: 'json',
     messagesPerPage: 1000,
-    separateThreads: false,
+    separateThreads: true,
     includeMedia: false,
     mediaConfig: { images: false, videos: false, audio: false, other: false },
     artistMode: false,

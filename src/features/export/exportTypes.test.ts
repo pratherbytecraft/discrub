@@ -66,6 +66,11 @@ describe('exportTypes — Plain Text (#184)', () => {
     expect(initialExportState.exportFormat).toBe('html');
   });
 
+  it('the Data analysis preset downloads threads, so thread replies are in the data', () => {
+    const data = BUILT_IN_PRESETS.find((p) => p.id === 'builtin-data-analysis');
+    expect(data).toMatchObject({ format: 'json', separateThreads: true, includeMedia: false });
+  });
+
   it('includes a builtin Plain Text preset with the agreed shape', () => {
     const plain = BUILT_IN_PRESETS.find((p) => p.id === 'builtin-plain-text');
     expect(plain).toBeDefined();
