@@ -61,6 +61,8 @@ describe('Workspace file (2.2.5 WP6b)', () => {
       cy.get('[data-testid="workspace-confirm"]').should('contain', 'Export Default').and('contain', 'Saves 200 messages').and('contain', 'It holds message content.');
       cy.get('[data-testid="workspace-confirm-button"]').click();
       cy.contains('Saved Default to a workspace file', { timeout: 15000 }).should('exist');
+      // The toast shows when the browser has the bytes; the file gets its name a moment later.
+      cy.waitForDownload(/^Default\.discrub-workspace$/);
       cy.task('downloads:list', null, { timeout: 15000 }).should((files) => {
         expect((files as Array<{ name: string }>).map((f) => f.name)).to.include('Default.discrub-workspace');
       });
@@ -97,6 +99,8 @@ describe('Workspace file (2.2.5 WP6b)', () => {
       cy.get('[data-testid="workspace-export"]').click();
       cy.get('[data-testid="workspace-confirm-button"]').click();
       cy.contains('Saved Default to a workspace file', { timeout: 15000 }).should('exist');
+      // The toast shows when the browser has the bytes; the file gets its name a moment later.
+      cy.waitForDownload(/^Default\.discrub-workspace$/);
       cy.task('downloads:list', null, { timeout: 15000 }).should((files) => {
         expect((files as Array<{ name: string }>).map((f) => f.name)).to.include('Default.discrub-workspace');
       });
@@ -126,6 +130,8 @@ describe('Workspace file (2.2.5 WP6b)', () => {
       cy.get('[data-testid="workspace-export"]').click();
       cy.get('[data-testid="workspace-confirm-button"]').click();
       cy.contains('Saved Raid archive to a workspace file', { timeout: 15000 }).should('exist');
+      // The toast shows when the browser has the bytes; the file gets its name a moment later.
+      cy.waitForDownload(/^Raid_archive\.discrub-workspace$/);
       cy.task('downloads:list', null, { timeout: 15000 }).should((files) => {
         expect((files as Array<{ name: string }>).map((f) => f.name)).to.include('Raid_archive.discrub-workspace');
       });
