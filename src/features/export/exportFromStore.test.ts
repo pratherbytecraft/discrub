@@ -239,6 +239,37 @@ describe('Bulk Export through the workspace', () => {
     expect((seen[1].input as ExportSourceSet).main.count).toBe(2);
   });
 
+  it('a resumed run does not wait after a unit it read from disk', async () => {
+    const { cancellableDelay } = await import('@/utils/operationLoopUtils');
+    vi.mocked(cancellableDelay).mockClear();
+    const store = await openDefault();
+    await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c1', pages.c1, seed);
+    await updateConversation(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c1', (c) => {
+      c.complete = true;
+    });
+    await updateWorkspace(LEGACY_DEFAULT_WORKSPACE_ID, (w) => {
+      w.bulk = { kind: 'bulkExport', mode: 'channels', guildId: '42', settings: null, queue: ['c1', 'c2'], done: ['c1'], inHand: 'c2', total: 2, doneCount: 1 };
+    });
+    store.dispatch(bulkRecorded({ kind: 'bulkExport', mode: 'channels', guildId: '42', total: 2, doneCount: 1, remaining: 1 }));
+
+    await store.dispatch(bulkExportChannels(bulkArg({ resume: true })));
+    // c1 came from the workspace with no call, so nothing waited before c2 was read.
+    const firstFetch = fetchMessageData.mock.invocationCallOrder[0];
+    const waitsBefore = vi.mocked(cancellableDelay).mock.invocationCallOrder.filter((order) => order < firstFetch);
+    expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['c2']);
+    expect(waitsBefore).toEqual([]);
+  });
+
+  it('a fresh run waits between its units', async () => {
+    const { cancellableDelay } = await import('@/utils/operationLoopUtils');
+    vi.mocked(cancellableDelay).mockClear();
+    const store = await openDefault();
+    await store.dispatch(bulkExportChannels(bulkArg()));
+    const [first, second] = fetchMessageData.mock.invocationCallOrder;
+    const waitsBetween = vi.mocked(cancellableDelay).mock.invocationCallOrder.filter((order) => order > first && order < second);
+    expect(waitsBetween.length).toBeGreaterThan(0);
+  });
+
   it('a unit the earlier run was in the middle of starts over', async () => {
     const store = await openDefault();
     await writePage(LEGACY_DEFAULT_WORKSPACE_ID, 'run:c2', pages.c2.slice(0, 1), seed);

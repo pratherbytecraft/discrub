@@ -1329,6 +1329,13 @@ interface ExportUnitOptions {
   wid: string | null;
   /** The unit finished in the run being resumed, so it renders from the workspace with no fetch. */
   resumeDone: boolean;
+  /**
+   * Set when the unit asked Discord for anything. The run waits between
+   * units only after one that did: a resumed run reads its finished units
+   * from the workspace, and waiting after each of those was idle time
+   * (36 s for 27 threads in the 2.2.10 VM pass).
+   */
+  net: { made: boolean };
   onStorageFull: () => void;
 }
 
@@ -1349,6 +1356,7 @@ async function gatherUnit(o: ExportUnitOptions, onSink: (sink: PageSink) => void
       return materialOf(main, null, threads);
     }
   }
+  o.net.made = true;
   // A unit the earlier run was in the middle of starts over.
   if (wid) await deleteConversation(wid, bulkRunCid(unit.id)).catch(() => undefined);
   const sink = sinkFor(wid, bulkRunCid(unit.id), { kind: unit.kind, guildId: unit.guildId, name: unit.name }, o.onStorageFull);
@@ -1400,6 +1408,8 @@ async function exportUnit(o: ExportUnitOptions): Promise<UnitOutcome> {
       return 'empty';
     }
 
+    // Files are downloaded again even for a unit read from the workspace.
+    if (format === 'media' || o.includeMedia) o.net.made = true;
     const exportService = getExportService();
     if (format === 'media') {
       // Media only never fetches threads, so the main source is everything.
@@ -1411,6 +1421,7 @@ async function exportUnit(o: ExportUnitOptions): Promise<UnitOutcome> {
       if (format === 'html') {
         const runCid = bulkRunCid(unit.id);
         const saved = o.wid ? await getReactionDetail<ExportReactionMap>(o.wid, runCid).catch(() => null) : null;
+        if (!saved) o.net.made = true;
         reactionMap = saved ?? await fetchReactionData(material.everything, o.token, getState, dispatch);
         if (!saved && reactionMap && o.wid) await setReactionDetail(o.wid, runCid, reactionMap).catch(() => undefined);
       }
@@ -1640,15 +1651,15 @@ export const bulkExportChannels = createAsyncThunk<
           logMediaProgress(progress, dispatch as ExportDispatch, ` in #${channelName}`);
         };
 
+        const net = { made: false };
         try {
           const outcome = await exportUnit({
             unit: { id: channel.id, name: channelName, label: `#${channelName}`, kind: 'channel', guildId: guildId || null },
             folderName, format, messagesPerPage, separateThreads, includeMedia, mediaConfig, exportConfig, searchCriteria,
             token, getState, dispatch: dispatch as ExportDispatch, searchDelay, delayModifier,
             selectedGuild, cachedUserMap, guildId: guildId || null, guildRoles, textOptions: initialState.export.textOptions,
-            zipService, shouldContinue, onProgress, wid, resumeDone: doneUnits.has(channel.id), onStorageFull,
+            zipService, shouldContinue, onProgress, wid, resumeDone: doneUnits.has(channel.id), onStorageFull, net,
           });
-          if (outcome === 'empty') continue;
           if (outcome === 'kept' || outcome === 'exported') {
             exportedChannels.push({
               id: channel.id,
@@ -1656,8 +1667,9 @@ export const bulkExportChannels = createAsyncThunk<
               filename: `${folderName}/${folderName}-page-1.html`,
             });
           }
-          if (outcome !== 'exported') break;
-          dispatch(bulkUnitFinished({ id: channel.id }));
+          if (outcome === 'kept' || outcome === 'stopped') break;
+          // An empty unit was still read, so it waits like any other before the next one.
+          if (outcome === 'exported') dispatch(bulkUnitFinished({ id: channel.id }));
         } catch (error) {
           if (error instanceof CancelledError) break;
           if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
@@ -1671,7 +1683,7 @@ export const bulkExportChannels = createAsyncThunk<
         }
 
         // Delay between channels
-        if (i < expandedChannels.length - 1) {
+        if (i < expandedChannels.length - 1 && net.made) {
           const delayCalc = calculateRandomDelay(searchDelay, delayModifier);
           const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState);
           if (wasCancelled) break;
@@ -1881,15 +1893,15 @@ export const bulkExportDMs = createAsyncThunk<
           logMediaProgress(progress, dispatch as ExportDispatch, ` in DM with ${dmName}`);
         };
 
+        const net = { made: false };
         try {
           const outcome = await exportUnit({
             unit: { id: dm.id, name: dmName, label: `DM with ${dmName}`, kind: 'dm', guildId: null },
             folderName, format, messagesPerPage, separateThreads, includeMedia, mediaConfig, exportConfig, searchCriteria,
             token, getState, dispatch: dispatch as ExportDispatch, searchDelay, delayModifier,
             selectedGuild: null, cachedUserMap, guildId: null, guildRoles: [], textOptions: initialState.export.textOptions,
-            zipService, shouldContinue, onProgress, wid, resumeDone: doneUnits.has(dm.id), onStorageFull,
+            zipService, shouldContinue, onProgress, wid, resumeDone: doneUnits.has(dm.id), onStorageFull, net,
           });
-          if (outcome === 'empty') continue;
           if (outcome === 'kept' || outcome === 'exported') {
             exportedDMs.push({
               id: dm.id,
@@ -1897,8 +1909,9 @@ export const bulkExportDMs = createAsyncThunk<
               filename: `${folderName}/${folderName}-page-1.html`,
             });
           }
-          if (outcome !== 'exported') break;
-          dispatch(bulkUnitFinished({ id: dm.id }));
+          if (outcome === 'kept' || outcome === 'stopped') break;
+          // An empty unit was still read, so it waits like any other before the next one.
+          if (outcome === 'exported') dispatch(bulkUnitFinished({ id: dm.id }));
         } catch (error) {
           if (error instanceof CancelledError) break;
           if (isSignInExpiredError(error)) { signInExpiredAt = i; break; }
@@ -1910,7 +1923,7 @@ export const bulkExportDMs = createAsyncThunk<
           }));
         }
 
-        if (i < channels.length - 1) {
+        if (i < channels.length - 1 && net.made) {
           const delayCalc = calculateRandomDelay(searchDelay, delayModifier);
           const wasCancelled = await cancellableDelay(delayCalc.delayMs, getState);
           if (wasCancelled) break;

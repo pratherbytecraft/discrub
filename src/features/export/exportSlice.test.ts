@@ -2286,6 +2286,22 @@ describe('exportSlice', () => {
         expect(fetchForumThreadSearch).toHaveBeenCalledTimes(2);
       });
 
+      it('an empty thread still waits before the next one is read', async () => {
+        const { cancellableDelay } = await import('@/utils/operationLoopUtils');
+        const waits = async (emptyMessageChannels: string[]) => {
+          vi.mocked(cancellableDelay).mockClear();
+          await runBulkForumExport({
+            exportChannels: [thread('t-1', 'One'), thread('t-2', 'Two'), thread('t-3', 'Three')],
+            threadExport: { parentId: 'c-1', parentName: 'general', all: false },
+            emptyMessageChannels,
+          });
+          return vi.mocked(cancellableDelay).mock.calls.length;
+        };
+        const allFull = await waits([]);
+        expect(allFull).toBeGreaterThanOrEqual(2);
+        expect(await waits(['t-1', 't-2'])).toBe(allFull);
+      });
+
       it('without a thread export a text channel is exported as itself, in the usual zip', async () => {
         const { fetchForumThreadSearch, fetchMessageData, zipName } = await runBulkForumExport({ exportChannels: [general] });
         expect(fetchForumThreadSearch).not.toHaveBeenCalled();
