@@ -175,6 +175,46 @@ describe('Content Script', () => {
   });
 
   describe('Floating Button', () => {
+    // Discord's title bar as read on 2026-11-15: a trailing group holding Inbox (in two wrappers) and the Help link.
+    const titleBar = (inboxLabel: string, helpLabel: string) => `
+      <div class="bar_3zSH5d">
+        <div class="trailing_3zSH5d">
+          <div class="iconWrapper_8_fPij"><div class="pulse_8_fPij" id="inbox-parent">
+            <div class="clickable_fErCLM" role="button" aria-label="${inboxLabel}"></div>
+          </div></div>
+          <a class="anchor_R6ReNl" href="https://support.discord.com">
+            <div class="clickable_fErCLM" role="button" aria-label="${helpLabel}"></div>
+          </a>
+        </div>
+      </div>`;
+    const reinjectInto = async (html: string) => {
+      document.body.innerHTML = html;
+      vi.resetModules();
+      vi.useFakeTimers();
+      await import('./content');
+      vi.runAllTimers();
+      vi.useRealTimers();
+      return document.getElementById('discrub-floating-button');
+    };
+
+    it('sits beside Inbox on an English Discord', async () => {
+      const button = await reinjectInto(titleBar('Inbox', 'Help'));
+      expect(button?.parentElement?.id).toBe('inbox-parent');
+      expect(button?.style.position).not.toBe('fixed');
+    });
+
+    it('sits beside Inbox on a Discord in another language (2.2.10)', async () => {
+      const button = await reinjectInto(titleBar('收件箱', '帮助'));
+      expect(button?.parentElement?.id).toBe('inbox-parent');
+      expect(button?.style.position).not.toBe('fixed');
+    });
+
+    it('ignores a support link in a message and falls back to the fixed button', async () => {
+      const button = await reinjectInto('<div class="markup_abc"><a href="https://support.discord.com/hc/x">help</a><div><div role="button"></div></div></div>');
+      expect(button?.parentElement).toBe(document.body);
+      expect(button?.style.position).toBe('fixed');
+    });
+
     it('should not inject duplicate button', async () => {
       // Import again (a re-injection, #251): the old button is replaced,
       // never doubled.

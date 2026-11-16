@@ -939,6 +939,30 @@ function getDiscordTokenFromLocalStorage(): string | null {
 }
 
 /**
+ * Where the Discrub button goes in Discord's title bar: beside Inbox.
+ * The English labels come first. A Discord client in any other language
+ * names them differently, so there the Help link is found by its address
+ * (support.discord.com, in the bar's trailing group) and Inbox is the
+ * button in the same group (2.2.10).
+ */
+function findToolbarParent(doc: Document = document): HTMLElement | null {
+  const byLabel =
+    doc.querySelector<HTMLElement>('[aria-label="Inbox"]')?.parentElement ||
+    doc.querySelector<HTMLElement>('[aria-label="Help"]')?.parentElement;
+  if (byLabel) return byLabel;
+  for (const help of doc.querySelectorAll<HTMLAnchorElement>('a[href*="support.discord.com"]')) {
+    const group = help.parentElement;
+    if (!group || !/(^|\s)trailing_/.test(String(group.className))) continue;
+    for (const child of Array.from(group.children)) {
+      if (child === help) continue;
+      const inbox = child.querySelector<HTMLElement>('[role="button"]');
+      if (inbox?.parentElement) return inbox.parentElement;
+    }
+  }
+  return null;
+}
+
+/**
  * Inject Discrub button into Discord's toolbar (matching Classic's placement)
  * Falls back to a fixed-position button if toolbar elements aren't found.
  */
@@ -995,9 +1019,7 @@ function injectFloatingButton(): void {
    * Discord's SPA renders asynchronously, so retry if toolbar isn't found yet.
    */
   function tryInjectIntoToolbar(retries: number): void {
-    const toolbarParent =
-      document.querySelector('[aria-label="Inbox"]')?.parentElement ||
-      document.querySelector('[aria-label="Help"]')?.parentElement;
+    const toolbarParent = findToolbarParent();
 
     if (toolbarParent) {
       button.style.cssText = `
