@@ -142,3 +142,28 @@ function watchForClassicClose() {
 // Boot
 loadClassic();
 watchForClassicClose();
+
+/**
+ * An open Discrub page holds an extension update until it closes (2.2.10,
+ * see src/extension/updateHold.ts). This page answers the background's
+ * check and says when it goes away.
+ */
+(function () {
+  if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id || !chrome.runtime.onMessage) return;
+  var closing = false;
+  chrome.runtime.onMessage.addListener(function (message, _sender, sendResponse) {
+    if (!message || message.action !== 'pageOpenCheck' || closing) return false;
+    sendResponse({ open: true });
+    return false;
+  });
+  window.addEventListener('pageshow', function () { closing = false; });
+  window.addEventListener('pagehide', function () {
+    closing = true;
+    try {
+      var sent = chrome.runtime.sendMessage({ action: 'pageClosed' });
+      if (sent && sent.catch) sent.catch(function () {});
+    } catch (e) {
+      // The extension is already gone.
+    }
+  });
+})();

@@ -6,14 +6,17 @@
  * 2. Inject overlay on Discord tabs
  * 3. Forward token requests between content script and app
  * 4. Handle streaming downloads via setupStreamingDownloads()
+ * 5. Hold an extension update while a Discrub page is open (updateHold.ts)
  *
  * The background acts as the service worker controller for all extension pages,
  * enabling streaming downloads for both Discrub 2.0 and Discrub Classic.
  */
 
 import { setupStreamingDownloads } from 'drip-fs/background';
+import { setupUpdateHold } from './updateHold';
 
 setupStreamingDownloads();
+setupUpdateHold();
 
 console.log('[Discrub Background] Background script initialized');
 

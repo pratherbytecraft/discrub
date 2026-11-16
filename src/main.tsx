@@ -9,6 +9,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { addStatusEntry, installUnloadFlushListener } from './features/status/statusSlice';
 import { setSleepImplementation } from 'discrub-core/common-utils';
 import { throttleImmuneSleep } from './utils/workerTimers';
+import { announcePageOpen } from './extension/updateHold';
 
 // Log session start
 store.dispatch(addStatusEntry({ level: 'session', message: 'New session established' }));
@@ -19,6 +20,9 @@ store.dispatch(addStatusEntry({ level: 'session', message: 'New session establis
 // installed for the lifetime of the page; no uninstaller bookkeeping
 // needed at the app root.
 installUnloadFlushListener();
+
+// 2.2.10: an open Discrub page holds an extension update until it closes.
+announcePageOpen();
 
 // #247: drive discrub-core's pacing waits (per-request delays, 429/202
 // sleeps) from a worker timer so background-tab throttling cannot stall
