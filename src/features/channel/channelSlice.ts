@@ -7,6 +7,8 @@ import type { RootState } from '@/app/store';
 import { addStatusEntry } from '@features/status/statusSlice';
 import { setSelectedGuild } from '@features/guild/guildSlice';
 import { t } from '@/i18n';
+import { selectDelayModifier, selectSearchDelay } from '@features/app/appSlice';
+import { calculateRandomDelay } from '@/utils/delayUtils';
 
 /**
  * Channel slice - manages channel state
@@ -95,7 +97,22 @@ export interface ChannelThreadPage {
 
 const THREAD_PAGE = 25;
 
+/** When the last page of a thread list was asked for, so the next one can keep its distance. */
+let lastThreadPageAt = 0;
+
+/**
+ * Waits until the Search Delay has passed since the last thread list page.
+ * A list scrolled to its end asks for page after page, and without this
+ * they went out as fast as Discord answered (2.2.10 VM pass).
+ */
+const waitForThreadPageTurn = async (state: RootState): Promise<void> => {
+  const { delayMs } = calculateRandomDelay(selectSearchDelay(state), selectDelayModifier(state));
+  const wait = lastThreadPageAt + delayMs - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+};
+
 const readThreadPage = async (token: string, channelId: string, offset: number) => {
+  lastThreadPageAt = Date.now();
   const response = await getDiscordService().fetchForumThreadSearch(token, channelId, {
     sort_by: 'last_message_time',
     sort_order: 'desc',
@@ -161,6 +178,7 @@ export const loadMoreChannelThreads = createAsyncThunk(
   ): Promise<ChannelThreadPage> => {
     const meta = (getState() as RootState).channel.discoveredThreadMeta?.[channel.id];
     const offset = meta?.nextOffset ?? 0;
+    await waitForThreadPageTurn(getState() as RootState);
     const data = await readThreadPage(token, channel.id, offset);
     const threads = data.threads as Channel[];
     return {

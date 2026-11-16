@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import { renderWithProviders } from '@/test/test-utils';
 import ThreadLoadModal, { describeThread, sortThreadsForList } from './ThreadLoadModal';
+import { initialAppState } from '@features/app/appTypes';
 
 // Modal now uses Redux for the discovered-threads thunk (#150). All
 // non-discovery tests below should still work with a default store and
@@ -10,6 +11,8 @@ const render = (ui: React.ReactElement) =>
   renderWithProviders(ui, {
     preloadedState: {
       auth: { token: 'tok', isAuthenticated: true, isLoading: false, error: null, manuallyLoggedOut: false, isRestoring: false, tokenRemembered: false, guestMode: false },
+      // No wait between thread list pages, so a scroll test does not sit out the Search Delay.
+      app: { ...initialAppState, settings: { searchDelay2: '0', delayModifier2: '0' } },
     } as any,
   });
 

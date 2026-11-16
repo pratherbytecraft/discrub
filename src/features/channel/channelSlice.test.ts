@@ -21,6 +21,8 @@ import channelReducer, {
   selectSelectedChannels,
 } from './channelSlice';
 import statusReducer from '@features/status/statusSlice';
+import appReducer from '@features/app/appSlice';
+import { initialAppState } from '@features/app/appTypes';
 import { initialChannelState } from './channelTypes';
 import * as discordService from '@services/discordService';
 import type { Channel } from 'discrub-core/types/discord-types';
@@ -662,6 +664,38 @@ describe('channelSlice', () => {
 
     describe('loadMoreChannelThreads', () => {
       const more = () => store.dispatch(loadMoreChannelThreads({ channel: textChannel, token: 't' }));
+      const storeWithDelay = (searchDelay: string) => createTestStore(
+        { channel: channelReducer, app: appReducer },
+        { app: { ...initialAppState, settings: { searchDelay2: searchDelay, delayModifier2: '0' } } } as any,
+      );
+
+      beforeEach(() => {
+        store = storeWithDelay('0');
+      });
+
+      it('waits out the Search Delay since the last page before it asks for the next', async () => {
+        vi.useFakeTimers();
+        try {
+          store = storeWithDelay('2');
+          const search = useSearch(page([thread('1')], 60, true), page([thread('2')], 60, true), page([thread('3')], 60, true));
+          await get();
+          const next = more();
+          await vi.advanceTimersByTimeAsync(1900);
+          expect(search).toHaveBeenCalledOnce();
+          await vi.advanceTimersByTimeAsync(200);
+          await next;
+          expect(search).toHaveBeenCalledTimes(2);
+          // The page after that waits again.
+          const third = more();
+          await vi.advanceTimersByTimeAsync(1500);
+          expect(search).toHaveBeenCalledTimes(2);
+          await vi.advanceTimersByTimeAsync(600);
+          await third;
+          expect(search).toHaveBeenCalledTimes(3);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
 
       it('reads the next page from where the list ends and adds it', async () => {
         const search = useSearch(page([thread('1')], 51, true), page([thread('2')], 51, true), page([thread('3')], 51, false));
