@@ -135,7 +135,7 @@ describe('archived thread reopener', () => {
     const reopener = createArchivedThreadReopener({ token: TOKEN, dispatch });
     await reopener.call('t1', vi.fn().mockResolvedValueOnce(archived).mockResolvedValue(ok));
     await reopener.finish();
-    expect(lines(dispatch).at(-1)).toEqual({
+    expect(lines(dispatch).slice(-1)[0]).toEqual({
       level: 'warning',
       message: 'Could not re-archive thread t1 (HTTP 403). You may need to re-archive it manually.',
     });
