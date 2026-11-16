@@ -201,6 +201,42 @@ describe('Thread Load', () => {
       cy.then(() => expect(urls.map((url) => new URL(url).searchParams.get('offset'))).to.deep.eq(['0', '25']));
     });
 
+    // The list gives up height in a short window so the ID field and the
+    // buttons stay on screen, and only the list scrolls.
+    ([[1280, 520], [1280, 600], [1280, 720], [1280, 900], [360, 640]] as const).forEach(([width, height]) => {
+      it(`keeps the ID field and the buttons in view at ${width} by ${height}`, () => {
+        cy.viewport(width, height);
+        interceptThreadPages(60, []);
+        cy.contains('button', 'Load Thread').click({ force: true });
+        cy.wait('@getThreads');
+        cy.get('[data-testid="discovered-threads"]').should('be.visible');
+        cy.window().then((win) => {
+          const dialog = win.document.querySelector('[role="dialog"]') as HTMLElement;
+          const inView = (el: Element, name: string) => {
+            const box = el.getBoundingClientRect();
+            expect(box.top, `${name} top`).to.be.at.least(0);
+            expect(box.bottom, `${name} bottom`).to.be.at.most(height);
+          };
+          inView(dialog.querySelector('input[inputmode="numeric"]')!, 'ID field');
+          inView(dialog.querySelector('[data-testid="export-threads"]')!, 'export button');
+          const content = dialog.querySelector('.MuiDialogContent-root') as HTMLElement;
+          expect(content.scrollHeight, 'the dialog body does not scroll').to.be.at.most(content.clientHeight + 1);
+          const list = dialog.querySelector('[data-testid="discovered-threads"]') as HTMLElement;
+          expect(list.clientHeight, 'list height').to.be.at.least(119);
+          expect(list.scrollHeight, 'the list scrolls').to.be.greaterThan(list.clientHeight);
+        });
+      });
+    });
+
+    it('a window tall enough to show a whole page still loads the next one', () => {
+      cy.viewport(1280, 2400);
+      const urls: string[] = [];
+      interceptThreadPages(27, urls);
+      cy.contains('button', 'Load Thread').click({ force: true });
+      cy.get('[data-testid^="discovered-thread-"]').should('have.length', 27);
+      cy.get('[data-testid="threads-loading-more"]').should('not.exist');
+    });
+
     it('a listing Discord refuses says so and leaves the ID field usable', () => {
       cy.intercept('GET', `${API}/channels/${PARENT_ID}/threads/search*`, { statusCode: 403, body: { message: 'Missing Access' } }).as('getThreads');
       cy.contains('button', 'Load Thread').click();

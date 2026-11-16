@@ -153,6 +153,17 @@ const ThreadLoadModal = ({
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 64) loadMore();
   };
 
+  // A tall window can show a whole page with nothing left to scroll, so
+  // the next page is asked for whenever the end of the list is in view.
+  const loadedCount = discovered.length;
+  useEffect(() => {
+    const el = listRef.current;
+    if (!open || !el || !hasMore || loadingMore) return;
+    // A list with no height has not been laid out, and says nothing about its end.
+    if (el.clientHeight === 0) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 64) loadMore();
+  }, [open, loadedCount, hasMore, loadingMore, loadMore]);
+
   const isTicked = (id: string) => allTicked || picked.has(id);
   // The row handlers keep one identity so a tick redraws its own row and
   // not the whole list (a tick took half a second at 1,000 rows).
@@ -220,10 +231,12 @@ const ThreadLoadModal = ({
         {t('threadLoad.title')}
         <DialogCloseIcon onClose={handleClose} />
       </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+      {/* The list takes the height the window has left and is the only part
+          that scrolls, so the ID field and the buttons stay in view. */}
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, flex: '1 1 auto', minHeight: 0 }}>
           {showDiscoveryList && (
-            <Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
                   {onExport && discovered.length > 0 && (
@@ -286,7 +299,8 @@ const ThreadLoadModal = ({
                   onScroll={handleListScroll}
                   data-testid="discovered-threads"
                   sx={{
-                    maxHeight: 264,
+                    flex: '1 1 auto',
+                    minHeight: rows.length > 2 ? 120 : 0,
                     overflowY: 'auto',
                     border: '1px solid',
                     borderColor: 'divider',
@@ -317,9 +331,9 @@ const ThreadLoadModal = ({
             </Box>
           )}
 
-          {showDiscoveryList && <Divider>{t('threadLoad.or')}</Divider>}
+          {showDiscoveryList && <Divider sx={{ flexShrink: 0 }}>{t('threadLoad.or')}</Divider>}
 
-          <Box>
+          <Box sx={{ flexShrink: 0 }}>
             <Typography variant="body2" color="text.secondary" gutterBottom>
               {t('threadLoad.enterId')}
             </Typography>
