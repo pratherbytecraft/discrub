@@ -2240,6 +2240,26 @@ describe('exportSlice', () => {
         expect(messages.some((m) => /channel/i.test(m))).toBe(false);
       });
 
+      it("every post of a forum goes into a zip named after it, in folders named after the posts", async () => {
+        const forum = { id: 'f-1', name: 'help', type: 15 };
+        const forumPost = (id: string, name: string) => ({ id, name, type: 11, parent_id: 'f-1' });
+        const { fetchForumThreadSearch, fetchMessageData, entries, zipName, shellCalls } = await runBulkForumExport({
+          exportChannels: [forum],
+          threadExport: { parentId: 'f-1', parentName: 'help', all: true, kind: 'post', excludedIds: ['p-2'] },
+          forumPages: [
+            { threads: [forumPost('p-1', 'One'), forumPost('p-2', 'Two')], has_more: true },
+            { threads: [forumPost('p-3', 'Three')], has_more: false },
+          ],
+        });
+        expect(fetchForumThreadSearch).toHaveBeenCalledTimes(2);
+        expect(fetchMessageData.mock.calls.map((call) => call[2])).toEqual(['p-1', 'p-3']);
+        expect(zipName).toBe('help-posts');
+        expect(shellCalls[0][0].channels.map((c: { name: string }) => c.name)).toEqual(['One', 'Three']);
+        const messages = entries.map((e) => e.message);
+        expect(messages).toContain('Bulk export: Expanded forum help into 2 posts');
+        expect(messages).toContain('Bulk export: Finished, 2 of 2 posts exported, 0 failed');
+      });
+
       it("a forum's run counts posts in the log", async () => {
         const { entries } = await runBulkForumExport({
           exportChannels: [thread('t-2', 'Two')],

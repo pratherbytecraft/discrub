@@ -1313,9 +1313,28 @@ describe('ServerView', () => {
       const user = userEvent.setup();
       renderWithProviders(<ServerView />, { preloadedState: forumState });
 
-      await user.click(screen.getByRole('button', { name: /Export/ }));
-      expect(screen.getByText(/Bulk Export Channels/)).toBeInTheDocument();
+      await user.click(screen.getByTestId('forum-export-button'));
+      expect(screen.getByText('Export Posts')).toBeInTheDocument();
       expect(screen.getByText('2 selected')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Export 2 Posts');
+    });
+
+    it('the Export button says what it covers: every post, or the ticked ones', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<ServerView />, { preloadedState: forumState });
+      const button = screen.getByTestId('forum-export-button');
+      expect(button).toHaveTextContent('Export all posts (2)');
+      await user.click(screen.getByTestId(`forum-tick-${forumThreads[0].id}`).querySelector('input')!);
+      expect(button).toHaveTextContent('Export 1 post');
+      await user.click(button);
+      expect(screen.getByText('1 selected')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-export-confirm')).toHaveTextContent('Export 1 Post');
+    });
+
+    it('a forum with more posts than are loaded counts all of them', () => {
+      const bigForum = { ...forumState, channel: { ...forumState.channel, hasMoreForumThreads: true, forumThreadsTotalResults: 300 } };
+      renderWithProviders(<ServerView />, { preloadedState: bigForum as never });
+      expect(screen.getByTestId('forum-export-button')).toHaveTextContent('Export all posts (300)');
     });
   });
 

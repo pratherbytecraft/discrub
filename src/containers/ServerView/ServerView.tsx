@@ -121,7 +121,7 @@ import { selectUser } from '@features/user/userSlice';
 import EmptyState from '@components/ui/EmptyState';
 import MessageTableSkeleton from '@components/message/MessageTableSkeleton';
 import ThreadTabBar from '@components/message/ThreadTabBar';
-import ForumThreadList from '@components/message/ForumThreadList';
+import ForumThreadList, { type ForumExportSelection } from '@components/message/ForumThreadList';
 import { ChannelType } from 'discrub-core/discord-enum';
 import {
   selectForumThreads,
@@ -155,7 +155,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   const { t, i18n } = useTranslation();
   const loadAllLabel = useLoadAllLabel();
   const loadAllAvailable = useLoadAllAvailable();
-  const { exportLabel, loadThreadLabel, threadExportResume } = useResumeLabels();
+  const { exportLabel, loadThreadLabel, threadExportResume, bulkExportLabel, bulkExportResumable } = useResumeLabels();
   const dispatch = useAppDispatch();
   const selectedChannel = useAppSelector(selectSelectedChannel);
   const selectedDm = useAppSelector(selectSelectedDm);
@@ -205,6 +205,8 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   const forumThreads = useAppSelector(selectForumThreads);
   const discoveredThreads = useAppSelector(selectDiscoveredThreadsForChannel(selectedChannel?.id));
   const [threadExport, setThreadExport] = useState<ThreadExportSelection | null>(null);
+  // What the open forum's Export covers: every post, or the ticked ones.
+  const [forumSelection, setForumSelection] = useState<ForumExportSelection | null>(null);
   const isLoadingForumThreads = useAppSelector(selectIsLoadingForumThreads);
   const forumFirstMessages = useAppSelector(selectForumFirstMessages);
   const hasMoreForumThreads = useAppSelector(selectHasMoreForumThreads);
@@ -213,6 +215,8 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
   const isForumChannelType = selectedChannel?.type === ChannelType.GUILD_FORUM || selectedChannel?.type === ChannelType.GUILD_MEDIA;
   // Show forum thread list only when on the main tab (not when viewing a thread tab's messages)
   const isForumChannel = isForumChannelType && !activeTab;
+  // The forum's own list decides what its Export covers; with a thread tab open the list is not on screen.
+  const forumExport = isForumChannel ? forumSelection : null;
   // Server search criteria live in the message slice (main and per thread
   // tab), the same place the search thunks write them, so they survive a
   // layout swap (2.2.0 foundation) and the chips, the Filters dialog and the
@@ -1133,10 +1137,17 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
                   size="small"
                   startIcon={<ExportIcon />}
                   onClick={() => openDialog('forumExport')}
-                  disabled={forumThreads.length === 0 || isOperationRunning}
+                  disabled={(forumThreads.length === 0 && !bulkExportResumable) || isOperationRunning}
                   data-tour="export-button"
+                  data-testid="forum-export-button"
                 >
-                  {t('serverView.export')}
+                  {bulkExportResumable
+                    ? bulkExportLabel
+                    : !forumExport || forumExport.total === 0
+                      ? t('serverView.export')
+                      : forumExport.everything
+                        ? t('forum.exportAll', { count: forumExport.total })
+                        : t('forum.exportPicked', { count: forumExport.total })}
                 </Button>
               </HotkeyTooltip>
             ) : (
@@ -1318,6 +1329,7 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
           isLoading={isLoadingForumThreads}
           hasMore={hasMoreForumThreads}
           forumChannel={selectedChannel}
+          onExportSelectionChange={setForumSelection}
           onThreadClick={handleOpenForumThread}
           onLoadMore={() => {
             if (token && selectedChannel) {
@@ -1384,10 +1396,14 @@ const ServerView = ({ variant = 'classic' }: ServerViewProps) => {
         open={forumExportDialogOpen}
         onClose={() => closeDialog('forumExport')}
         onExited={() => setThreadExport(null)}
-        channels={threadExport ? threadExport.threads : forumThreads}
+        channels={threadExport ? threadExport.threads : forumExport ? forumExport.posts : forumThreads}
         mode="channels"
         guildId={selectedGuild?.id}
-        threadExport={threadExport && selectedChannel ? { parent: selectedChannel, all: threadExport.all, total: threadExport.total, excludedIds: threadExport.excludedIds } : null}
+        threadExport={threadExport && selectedChannel
+          ? { parent: selectedChannel, all: threadExport.all, total: threadExport.total, excludedIds: threadExport.excludedIds }
+          : forumExport && selectedChannel
+            ? { parent: selectedChannel, all: forumExport.all, total: forumExport.total, excludedIds: forumExport.excludedIds, kind: 'post' }
+            : null}
       />
 
       <LoadAllDialog

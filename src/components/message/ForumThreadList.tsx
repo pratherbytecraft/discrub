@@ -1,8 +1,9 @@
-import { useRef, useCallback, useState, useMemo } from 'react';
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import {
   Typography,
   Box,
   Chip,
+  Checkbox,
   TextField,
   InputAdornment,
   Skeleton,
@@ -77,6 +78,24 @@ interface ForumThreadListProps {
   onLoadMore?: () => void;
   onSearch?: (query: string) => void;
   onClearSearch?: () => void;
+  /**
+   * Given, the posts get tick boxes and the count gets one for all of
+   * them, and this is told what an Export covers each time it changes.
+   */
+  onExportSelectionChange?: (selection: ForumExportSelection) => void;
+}
+
+/** What the forum's Export covers. The same shape the Load Thread dialog hands over. */
+export interface ForumExportSelection {
+  /** The run lists every post itself: nothing narrows the list and it has pages left. */
+  all: boolean;
+  /** The posts to export, or with `all` the ones loaded so far. */
+  posts: Channel[];
+  total: number;
+  /** With `all`: posts unticked after the box for all of them was ticked. */
+  excludedIds?: string[];
+  /** Nothing is ticked, so the Export covers everything listed. */
+  everything: boolean;
 }
 
 /**
@@ -85,7 +104,7 @@ interface ForumThreadListProps {
  */
 const ForumThreadList = ({
   threads, firstMessages, totalResults, isLoading, hasMore,
-  forumChannel, onThreadClick, onLoadMore, onSearch, onClearSearch,
+  forumChannel, onThreadClick, onLoadMore, onSearch, onClearSearch, onExportSelectionChange,
 }: ForumThreadListProps) => {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -160,6 +179,68 @@ const ForumThreadList = ({
     });
   }, [threads, selectedTags]);
 
+  // Ticks. `allTicked` is the box beside the count: every post the list
+  // stands for, loaded or not, minus the ones unticked after it.
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [allTicked, setAllTicked] = useState(false);
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
+  const forumId = forumChannel?.id;
+  const tagKey = [...selectedTags].sort().join(',');
+  const narrowed = isSearchActive || selectedTags.size > 0;
+  // A new forum, search or tag filter is a new list, and the ticks go with the old one.
+  useEffect(() => {
+    setPicked(new Set());
+    setAllTicked(false);
+    setExcluded(new Set());
+  }, [forumId, isSearchActive, tagKey]);
+  // What the box for all stands for: the whole forum, or what a search or tag filter left.
+  const scopeTotal = narrowed ? filteredThreads.length : Math.max(totalResults, threads.length);
+  const isTicked = (id: string) => (allTicked ? !excluded.has(id) : picked.has(id));
+  const togglePost = (id: string) => {
+    if (allTicked) {
+      const next = new Set(excluded);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (next.size >= scopeTotal) {
+        setAllTicked(false);
+        setExcluded(new Set());
+      } else {
+        setExcluded(next);
+      }
+      return;
+    }
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPicked(next);
+  };
+  const toggleAll = () => {
+    const clearing = allTicked && excluded.size === 0;
+    setPicked(new Set());
+    setExcluded(new Set());
+    setAllTicked(!clearing);
+  };
+  const pickedCount = useMemo(() => filteredThreads.filter((thread) => picked.has(thread.id)).length, [filteredThreads, picked]);
+  const selection = useMemo<ForumExportSelection>(() => {
+    if (!allTicked && pickedCount > 0) {
+      const posts = filteredThreads.filter((thread) => picked.has(thread.id));
+      return { all: false, posts, total: posts.length, everything: false };
+    }
+    const kept = allTicked && excluded.size > 0 ? filteredThreads.filter((thread) => !excluded.has(thread.id)) : filteredThreads;
+    const everything = !allTicked || excluded.size === 0;
+    // Only the plain list with pages left makes the run read the forum itself.
+    if (!narrowed && hasMore) {
+      return { all: true, posts: kept, total: Math.max(scopeTotal - (allTicked ? excluded.size : 0), 0), everything, ...(allTicked && excluded.size > 0 ? { excludedIds: [...excluded] } : {}) };
+    }
+    return { all: false, posts: kept, total: kept.length, everything };
+  }, [allTicked, excluded, picked, pickedCount, filteredThreads, narrowed, hasMore, scopeTotal]);
+  const reportSelection = useRef(onExportSelectionChange);
+  reportSelection.current = onExportSelectionChange;
+  useEffect(() => {
+    reportSelection.current?.(selection);
+  }, [selection]);
+  const tickable = !!onExportSelectionChange;
+
   // Full skeletons: initial load or search (no existing results to show)
   const showFullSkeletons = isLoading && filteredThreads.length === 0;
   // Load-more skeleton: appending to existing list
@@ -200,6 +281,17 @@ const ForumThreadList = ({
 
       {/* Search and count */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+        {tickable && filteredThreads.length > 0 && (
+          <Checkbox
+            size="small"
+            checked={allTicked && excluded.size === 0}
+            indeterminate={allTicked ? excluded.size > 0 : pickedCount > 0}
+            onChange={toggleAll}
+            inputProps={{ 'aria-label': t('forum.selectAll') }}
+            data-testid="forum-select-all"
+            sx={{ p: 0.5, ml: 0.75, mr: -0.25 }}
+          />
+        )}
         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, flexShrink: 0 }}>
           {searchText || selectedTags.size > 0
             ? `${filteredThreads.length} of ${totalResults || threads.length}`
@@ -278,7 +370,7 @@ const ForumThreadList = ({
             >
               {/* Tag chips row */}
               {appliedTags.length > 0 && (
-                <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5, pl: 3.5 }}>
+                <Box sx={{ display: 'flex', gap: 0.5, mb: 0.5, pl: tickable ? 6.75 : 3.5 }}>
                   {appliedTags.map((tagId) => {
                     const tag = tagMap[tagId];
                     if (!tag) return null;
@@ -297,6 +389,17 @@ const ForumThreadList = ({
 
               {/* Title row */}
               <Box className="forum-title-row" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                {tickable && (
+                  <Checkbox
+                    size="small"
+                    checked={isTicked(thread.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => togglePost(thread.id)}
+                    inputProps={{ 'aria-label': t('forum.selectNamed', { name: thread.name || t('forum.untitledPost') }) }}
+                    data-testid={`forum-tick-${thread.id}`}
+                    sx={{ p: 0.5, my: -0.75, ml: -0.75, mr: -0.5 }}
+                  />
+                )}
                 {isLocked ? (
                   <LockedIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
                 ) : (
@@ -333,7 +436,7 @@ const ForumThreadList = ({
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden',
                     lineHeight: 1.4,
-                    pl: 3.5,
+                    pl: tickable ? 6.75 : 3.5,
                     mb: 0.5,
                   }}
                 >
@@ -342,7 +445,7 @@ const ForumThreadList = ({
               )}
 
               {/* Meta row */}
-              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', pl: 3.5 }}>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', pl: tickable ? 6.75 : 3.5 }}>
                 {messageCount != null && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <RepliesIcon sx={{ fontSize: 13, color: 'text.disabled' }} />

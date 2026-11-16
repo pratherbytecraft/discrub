@@ -1531,8 +1531,9 @@ export const bulkExportChannels = createAsyncThunk<
     // A thread export says threads (or posts) where a channel run says channels, and names them without the # mark.
     const unitContext = threadExport ? threadExport.kind ?? 'thread' : undefined;
     const unitMark = threadExport ? '' : '#';
+    const postRun = threadExport?.kind === 'post';
     const zipService = new StreamingZipService(
-      threadExport ? `${exportSlug(threadExport.parentName) || 'channel'}-threads` : 'bulk-export',
+      threadExport ? `${exportSlug(threadExport.parentName) || 'channel'}-${threadExport.kind === 'post' ? 'posts' : 'threads'}` : 'bulk-export',
       buildZipOptions(getState, dispatch),
     );
     // Row 134: the unit the sign in expired on; the run stops there and keeps its record.
@@ -1544,8 +1545,9 @@ export const bulkExportChannels = createAsyncThunk<
     // endpoint and match nothing on search, so exporting them verbatim
     // used to yield a README-only zip that read as success.
     const expandedChannels: Channel[] = [];
+    // A run on one forum's posts names its folders after the posts alone; the zip already carries the forum's name.
     const selectedForumById = new Map<string, Channel>(
-      channels.filter((ch) => FORUM_CHANNEL_TYPES.includes(ch.type as number)).map((ch) => [ch.id, ch])
+      threadExport ? [] : channels.filter((ch) => FORUM_CHANNEL_TYPES.includes(ch.type as number)).map((ch) => [ch.id, ch])
     );
     for (const channel of channels) {
       if (checkCancelled(getState)) break;
@@ -1565,24 +1567,24 @@ export const bulkExportChannels = createAsyncThunk<
           const listed = await fetchAllForumThreads(channel, token, getState, dispatch as ExportDispatch, searchDelay, delayModifier, (count, reason) => {
             dispatch(addStatusEntry({
               level: 'warning',
-              message: t('status.export.threadListingStopped', { name: forumName, count, error: reason }),
+              message: t('status.export.threadListingStopped', { name: forumName, count, error: reason, context: postRun ? 'post' : undefined }),
             }));
           });
           if (checkCancelled(getState)) break;
           const excludedIds = new Set(threadExport?.excludedIds ?? []);
           const threads = excludedIds.size > 0 ? listed.filter((thread) => !excludedIds.has(thread.id)) : listed;
           if (threads.length === 0) {
-            dispatch(addStatusEntry({ level: 'warning', message: t('status.export.noThreads', { name: forumName }) }));
+            dispatch(addStatusEntry({ level: 'warning', message: t(postRun ? 'status.export.noPosts' : 'status.export.noThreads', { name: forumName }) }));
             continue;
           }
-          dispatch(addStatusEntry({ level: 'info', message: t('status.export.expandedThreads', { name: forumName, count: threads.length }) }));
+          dispatch(addStatusEntry({ level: 'info', message: t(postRun ? 'status.export.expandedForum' : 'status.export.expandedThreads', { name: forumName, count: threads.length }) }));
           dispatch(bulkThreadsListed({ threads }));
           expandedChannels.push(...threads);
         } catch (error) {
           if (error instanceof CancelledError) break;
           const errorMsg = error instanceof Error ? error.message : t('status.export.unknownError');
           errors.push(`${forumName}: ${errorMsg}`);
-          dispatch(addStatusEntry({ level: 'error', message: t('status.export.threadListingFailed', { name: forumName, error: errorMsg }) }));
+          dispatch(addStatusEntry({ level: 'error', message: t(postRun ? 'status.export.expandForumFailed' : 'status.export.threadListingFailed', { name: forumName, error: errorMsg }) }));
         }
         continue;
       }
