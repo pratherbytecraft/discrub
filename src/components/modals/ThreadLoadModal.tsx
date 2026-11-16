@@ -277,7 +277,10 @@ const ThreadLoadModal = ({
       <DialogContent sx={{ display: 'flex', flexDirection: 'column' }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, flex: '1 1 auto', minHeight: 0 }}>
           {showDiscoveryList && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+            // The floor is the heading row plus the list's own minimum. Under it
+            // the dialog body scrolls; without it the list slid over the "or"
+            // line and the hint in a window under about 500 px tall.
+            <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: rows.length > 2 ? 156 : 0 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
                   {onExport && discovered.length > 0 && (

@@ -329,6 +329,26 @@ describe('Thread Load', () => {
       });
     });
 
+    // Found in the VM 2026-11-17: under about 500 px the list kept its
+    // minimum and slid over the "or" line and the hint below it.
+    it('in a window too short for everything, the body scrolls and nothing overlaps the list', () => {
+      cy.viewport(1280, 420);
+      interceptThreadPages(60, []);
+      cy.contains('button', 'Load Thread').click({ force: true });
+      cy.wait('@getThreads');
+      cy.get('[data-testid="discovered-threads"]').should('be.visible');
+      cy.window().then((win) => {
+        const dialog = win.document.querySelector('[role="dialog"]') as HTMLElement;
+        const list = dialog.querySelector('[data-testid="discovered-threads"]') as HTMLElement;
+        const divider = dialog.querySelector('.MuiDivider-root') as HTMLElement;
+        // The list is at its minimum here: 120 px with its border.
+        expect(list.getBoundingClientRect().height, 'list height').to.be.at.least(119);
+        expect(divider.getBoundingClientRect().top, 'the "or" line starts under the list').to.be.at.least(list.getBoundingClientRect().bottom - 1);
+        const exportButton = dialog.querySelector('[data-testid="export-threads"]')!.getBoundingClientRect();
+        expect(exportButton.bottom, 'export button bottom').to.be.at.most(420);
+      });
+    });
+
     it('a window tall enough to show a whole page still loads the next one', () => {
       cy.viewport(1280, 2400);
       const urls: string[] = [];
